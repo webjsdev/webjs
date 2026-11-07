@@ -1284,6 +1284,47 @@ suite('ui-message-scroller', () => {
     assert.ok(el.visibleMessageIds.includes('m5'));
     root.remove();
   });
+
+  // shadcn's scrollEdgeThreshold: how near the end still counts as at it.
+  test('scroll-edge-threshold decides how near the end still counts as at it', async () => {
+    for (const [threshold, active] of [[null, 'true'], ['40', 'false']]) {
+      const root = await mount(html`${LAYOUT}
+        <ui-message-scroller default-scroll-position="start" scroll-edge-threshold=${threshold}>
+          <ui-message-scroller-viewport><ui-message-scroller-content aria-label="C">${messages(8)}</ui-message-scroller-content></ui-message-scroller-viewport>
+          <ui-message-scroller-button></ui-message-scroller-button>
+        </ui-message-scroller>`);
+      const { viewport, button } = parts(root);
+      await until(() => !viewport.hasAttribute('data-pending-scroll'));
+      // 20px short of the end: past shadcn's 8, inside a threshold of 40.
+      viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight - 20;
+      // The button was already active at the top, so wait for the scroll to
+      // be measured rather than for a state it may already be in.
+      await new Promise((r) => viewport.addEventListener('scroll', r, { once: true }));
+      await tick();
+      assert.equal(button.getAttribute('data-active'), active, `threshold ${threshold ?? 'default (8)'}`);
+      root.remove();
+    }
+  });
+
+  test('a label names the scroll button, and children replace its arrow', async () => {
+    const root = await mount(html`${LAYOUT}
+      <ui-message-scroller default-scroll-position="start">
+        <ui-message-scroller-viewport><ui-message-scroller-content aria-label="C">${messages(8)}</ui-message-scroller-content></ui-message-scroller-viewport>
+        <ui-message-scroller-button label="Zum Ende"></ui-message-scroller-button>
+        <ui-message-scroller-button direction="start"><span class="own-icon">Up</span><span class="sr-only">Nach oben</span></ui-message-scroller-button>
+      </ui-message-scroller>`);
+    try {
+      await tick();
+      const [end, start] = root.querySelectorAll('[data-slot="message-scroller-button"]');
+      assert.equal(end.getAttribute('aria-label'), 'Zum Ende');
+      assert.equal(end.textContent.includes('Scroll to end'), false, 'the default name is not read beside the label');
+      assert.ok(start.querySelector('.own-icon'), 'authored children render in the button');
+      assert.equal(start.querySelector('svg'), null, 'in place of the arrow');
+      assert.equal(start.textContent.includes('Scroll to start'), false);
+    } finally {
+      root.remove();
+    }
+  });
 });
 
 suite('ui-code-block-copy-button', () => {
@@ -2069,6 +2110,75 @@ suite('ui-sonner: a toast from markup, and a toast with its own position', () =>
       assert.equal(globalThis.__webjsSonnerClicks ?? 0, 0, 'no viewport holds the listener');
     } finally {
       btn.remove();
+    }
+  });
+});
+
+// --------------------------------------------------------------------------
+// The message scroller's served transcript reads with JavaScript off, and its
+// peek distance is the author's.
+// --------------------------------------------------------------------------
+
+suite('ui-message-scroller: served visible, and the peek is configurable', () => {
+  let renderToString;
+  suiteSetup(async () => {
+    ({ renderToString } = await import('../../../../core/src/render-server.js'));
+    await import(`${COMPONENTS_DIR}/message-scroller.ts`);
+  });
+
+  const until = async (fn, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    return fn();
+  };
+  const style = (h) => `<style>.sv-box { height: ${h}px; } .sv-box .contents { display: contents; } .sv-box [data-slot="message-scroller"] { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; } .sv-box [data-slot="message-scroller-viewport"] { height: 100%; min-height: 0; overflow-y: auto; } .sv-box [data-slot="message-scroller-viewport"][data-pending-scroll] { visibility: hidden; } .sv-box [data-slot="message-scroller-content"] { display: flex; flex-direction: column; } .sv-row { height: 100px; }</style>`;
+
+  test('a server-rendered transcript is never hidden while it hydrates, and still moves to the end', async () => {
+    const rows = Array.from({ length: 6 }, (_, i) => html`<ui-message-scroller-item message-id=${`s${i}`}><div class="sv-row">Row ${i}</div></ui-message-scroller-item>`);
+    const out = await renderToString(html`<div class="sv-box"><ui-message-scroller><ui-message-scroller-viewport><ui-message-scroller-content aria-label="Log">${rows}</ui-message-scroller-content></ui-message-scroller-viewport></ui-message-scroller></div>`);
+    assert.equal(out.includes('data-pending-scroll'), false, 'served visible');
+    const root = document.createElement('div');
+    const hidden = [];
+    const watch = new MutationObserver((records) => {
+      for (const r of records) if (r.target.hasAttribute('data-pending-scroll')) hidden.push(r.target.getAttribute('data-slot'));
+    });
+    watch.observe(root, { subtree: true, attributes: true, attributeFilter: ['data-pending-scroll'] });
+    root.innerHTML = style(200) + out;
+    document.body.appendChild(root);
+    try {
+      const el = root.querySelector('ui-message-scroller');
+      const viewport = root.querySelector('[data-slot="message-scroller-viewport"]');
+      assert.ok(await until(() => el._opened && viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 2), 'placed at the end once its script runs');
+      assert.deepEqual(hidden, [], 'and never hidden on the way');
+    } finally {
+      watch.disconnect();
+      root.remove();
+    }
+  });
+
+  test('scroll-previous-item-peek sets how much of the previous turn stays above a new anchored one', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = style(300) + '<div class="sv-box"><ui-message-scroller scroll-previous-item-peek="32"><ui-message-scroller-viewport><ui-message-scroller-content aria-label="C">'
+      + '<ui-message-scroller-item message-id="q1" scroll-anchor><div class="sv-row">Q</div></ui-message-scroller-item>'
+      + '<ui-message-scroller-item message-id="a1"><div class="sv-row">A</div></ui-message-scroller-item>'
+      + '</ui-message-scroller-content></ui-message-scroller-viewport></ui-message-scroller></div>';
+    document.body.appendChild(root);
+    try {
+      const el = root.querySelector('ui-message-scroller');
+      await until(() => el._opened);
+      const viewport = el.querySelector('[data-slot="message-scroller-viewport"]');
+      const item = document.createElement('ui-message-scroller-item');
+      item.setAttribute('message-id', 'q2');
+      item.setAttribute('scroll-anchor', '');
+      item.innerHTML = '<div class="sv-row">Q2</div>';
+      root.querySelector('ui-message-scroller-content').append(item);
+      const top = () => Math.round(item.getBoundingClientRect().top - viewport.getBoundingClientRect().top);
+      assert.ok(await until(() => top() === 32), `the new turn sits 32px below the top (at ${top()})`);
+    } finally {
+      root.remove();
     }
   });
 });

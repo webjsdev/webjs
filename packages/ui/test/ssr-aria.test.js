@@ -367,15 +367,27 @@ test('ui-resizable: the server draws each panel at its default share and each ha
   }
 });
 
-test('ui-message-scroller: the served transcript is a log, held invisible until it is placed', { skip }, async () => {
+// The served transcript is VISIBLE: with JavaScript off nothing would ever lift
+// a pending flag, so the conversation would never show. Only a scroller built
+// in the browser, which has not painted, waits for its opening position.
+test('ui-message-scroller: the served transcript is a visible log', { skip }, async () => {
   const out = await ssr(
     ['message-scroller.ts'],
     (html) => html`<ui-message-scroller><ui-message-scroller-viewport><ui-message-scroller-content aria-label="Chat"><ui-message-scroller-item message-id="a">Hi</ui-message-scroller-item></ui-message-scroller-content></ui-message-scroller-viewport><ui-message-scroller-button></ui-message-scroller-button></ui-message-scroller>`,
   );
-  assert.match(out, /data-slot="message-scroller-viewport"\s+data-pending-scroll/, 'the viewport waits for its opening position');
+  assert.doesNotMatch(out, /data-pending-scroll/, 'nothing in the served transcript is held invisible');
   assert.match(out, /role="log"[\s\S]*?aria-relevant="additions"[\s\S]*?aria-label="Chat"/, 'a labelled log that announces additions');
   assert.match(out, /<ui-message-scroller-item message-id="a"[^>]* class="[^"]*shrink-0[^"]*"[^>]* data-slot="message-scroller-item"/, 'an item carries its own classes');
   assert.match(out, /<span class="sr-only">Scroll to end<\/span>/);
+});
+
+test('ui-message-scroller-button: a label names the button in place of the default text', { skip }, async () => {
+  const out = await ssr(
+    ['message-scroller.ts'],
+    (html) => html`<ui-message-scroller><ui-message-scroller-viewport><ui-message-scroller-content aria-label="Chat"></ui-message-scroller-content></ui-message-scroller-viewport><ui-message-scroller-button label="Zum Ende"></ui-message-scroller-button></ui-message-scroller>`,
+  );
+  assert.match(out, /data-slot="message-scroller-button"[^>]*aria-label="Zum Ende"/);
+  assert.doesNotMatch(out, /Scroll to end/, 'the default name is not served beside it');
 });
 
 test('code-block: codeBlockLines draws one line span per line, keeps blank lines, and marks variants', { skip }, async () => {

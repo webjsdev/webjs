@@ -7,13 +7,15 @@
  *
  * shadcn parity:
  *   MessageScroller.Provider + MessageScroller
- *                            → <ui-message-scroller auto-scroll default-scroll-position>
+ *                            → <ui-message-scroller auto-scroll default-scroll-position
+ *                                scroll-edge-threshold scroll-previous-item-peek>
  *   MessageScrollerViewport  → <ui-message-scroller-viewport>
  *   MessageScrollerContent   → <ui-message-scroller-content> (a role="log")
  *   MessageScrollerItem (messageId, scrollAnchor)
  *                            → <ui-message-scroller-item message-id scroll-anchor>
- *   MessageScrollerButton direction
- *                            → <ui-message-scroller-button direction="end" | "start">
+ *   MessageScrollerButton direction, children
+ *                            → <ui-message-scroller-button direction="end" | "start" label>,
+ *                              its children in place of the arrow
  *   useMessageScroller()     → the element: scrollToEnd(), scrollToStart(), scrollToMessage(id)
  *   useMessageScrollerScrollable()
  *                            → `scrollable` ({ start, end }) and `ui-scrollable-change`
@@ -22,19 +24,26 @@
  *
  * `default-scroll-position` is where it opens: "end" (the default), "start",
  * or "last-anchor", the last item marked `scroll-anchor` at the top (a new
- * question with the answer streaming in under it). The viewport stays
- * invisible until that position applies, so the reader never sees a jump.
+ * question with the answer streaming in under it). The transcript is always
+ * served visible, so it reads with JavaScript off (the opening position is
+ * then the start, the browser's own). A scroller the browser builds on the
+ * client, which has never painted, is held invisible until that position
+ * applies, so the reader never sees a jump; one the server rendered moves
+ * to it once its script runs.
  * After that, an item that ARRIVES marked `scroll-anchor` (the question a
- * reader just sent) settles near the top with 64px of the previous turn
- * still in view, and stays there while the reply streams in below it: a
+ * reader just sent) settles near the top with `scroll-previous-item-peek`
+ * pixels (64 by default, shadcn's) of the previous turn still in view, and stays there while the reply streams in below it: a
  * tail spacer at the end of the list makes the room, and shrinks as the
  * reply grows. Once the reply fills the viewport, `auto-scroll` follows it.
  * Messages added at the top keep the reader's place through the browser's
- * own scroll anchoring.
+ * own scroll anchoring. `scroll-edge-threshold` (8 pixels by default,
+ * shadcn's) is how near an edge counts as being at it: what keeps the
+ * scroller following, and what shows the button.
  *
  * A11y (handled by the element, plus your part): the content is a
  * `role="log"` that announces additions, and the button is named "Scroll to
- * end" / "Scroll to start" and is inert while there is nowhere to go. Your
+ * end" / "Scroll to start" (or its `label`) and is inert while there is
+ * nowhere to go. Your
  * part: label the transcript (`aria-label` on `<ui-message-scroller-content>`).
  *
  * @example
@@ -71,9 +80,10 @@ export const messageScrollerButtonClass = (): string =>
   'cn-message-scroller-button absolute inset-s-1/2 -translate-x-1/2 border-border bg-background text-foreground transition-[translate,scale,opacity] duration-200 hover:bg-muted hover:text-foreground data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-400 data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)] data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)] data-[direction=end]:bottom-4 data-[direction=end]:data-[active=false]:translate-y-full data-[direction=start]:top-4 data-[direction=start]:data-[active=false]:-translate-y-full rtl:translate-x-1/2 data-[direction=start]:[&_svg]:rotate-180';
 
 const ROOT = 'ui-message-scroller';
-// How near an edge counts as being at it, in pixels.
-const EDGE = 24;
-// How much of the previous turn stays in view above a newly anchored one.
+// How near an edge counts as being at it, in pixels, and how much of the
+// previous turn stays in view above a newly anchored one: shadcn's defaults
+// (DEFAULT_SCROLL_EDGE_THRESHOLD and DEFAULT_SCROLL_PREVIOUS_ITEM_PEEK).
+const EDGE = 8;
 const PEEK = 64;
 
 // shadcn's className lands on the element each part renders (the frame, the
@@ -96,6 +106,8 @@ function rootOf(el: Element): UiMessageScroller | null {
 export class UiMessageScroller extends WebComponent({
   autoScroll: prop(Boolean, { attribute: 'auto-scroll' }),
   defaultScrollPosition: prop<'end' | 'start' | 'last-anchor'>(String, { attribute: 'default-scroll-position' }),
+  scrollEdgeThreshold: prop(Number, { attribute: 'scroll-edge-threshold' }),
+  scrollPreviousItemPeek: prop(Number, { attribute: 'scroll-previous-item-peek' }),
   pending: prop<boolean>({ state: true }),
 }) {
   /** The edges the viewport can still scroll toward. */
@@ -119,12 +131,30 @@ export class UiMessageScroller extends WebComponent({
     super();
     this.autoScroll = false;
     this.defaultScrollPosition = 'end';
-    this.pending = true;
+    this.scrollEdgeThreshold = EDGE;
+    this.scrollPreviousItemPeek = PEEK;
+    // Served visible: a transcript must read with JavaScript off.
+    this.pending = false;
   }
 
   connectedCallback(): void {
+    // A scroller built in the browser has not painted yet, so it is held
+    // invisible until its opening position applies. One the server rendered
+    // has painted already (its frame is in the markup), and hiding it now
+    // would blank text the reader can see, so it moves in place instead.
+    if (!this._opened && typeof this.querySelector === 'function' && !this.querySelector('[data-slot="message-scroller"]')) this.pending = true;
     super.connectedCallback?.();
     queueMicrotask(() => this._setup());
+  }
+
+  _edge(): number {
+    const n = Number(this.scrollEdgeThreshold);
+    return Number.isFinite(n) && n >= 0 ? n : EDGE;
+  }
+
+  _peek(): number {
+    const n = Number(this.scrollPreviousItemPeek);
+    return Number.isFinite(n) && n >= 0 ? n : PEEK;
   }
 
   disconnectedCallback(): void {
@@ -205,7 +235,7 @@ export class UiMessageScroller extends WebComponent({
 
   _atEnd(): boolean {
     const v = this.viewport();
-    return !!v && v.scrollHeight - v.scrollTop - v.clientHeight <= EDGE;
+    return !!v && v.scrollHeight - v.scrollTop - v.clientHeight <= this._edge();
   }
 
   _onScroll = (): void => {
@@ -231,7 +261,8 @@ export class UiMessageScroller extends WebComponent({
   _measure(): void {
     const v = this.viewport();
     if (!v) return;
-    const next = { start: v.scrollTop > EDGE, end: v.scrollHeight - v.scrollTop - v.clientHeight > EDGE };
+    const edge = this._edge();
+    const next = { start: v.scrollTop > edge, end: v.scrollHeight - v.scrollTop - v.clientHeight > edge };
     if (next.start !== this.scrollable.start || next.end !== this.scrollable.end) {
       this.scrollable = next;
       this.dispatchEvent(new CustomEvent('ui-scrollable-change', { bubbles: true, detail: { ...next } }));
@@ -267,7 +298,7 @@ export class UiMessageScroller extends WebComponent({
     return this.querySelector<HTMLElement>('[data-message-scroller-spacer]');
   }
 
-  // Scroll a new anchored turn to the top, keeping PEEK pixels of the turn
+  // Scroll a new anchored turn to the top, keeping the peek of the turn
   // before it, with room made below by the tail spacer when the conversation
   // is still too short to scroll that far.
   _anchorTurn(item: Element): void {
@@ -280,7 +311,7 @@ export class UiMessageScroller extends WebComponent({
     const listTop = v.scrollTop + content.getBoundingClientRect().top - v.getBoundingClientRect().top;
     const top = listTop + (item as HTMLElement).offsetTop - content.offsetTop;
     this._held = item;
-    this._heldTop = Math.max(0, top - pad - PEEK);
+    this._heldTop = Math.max(0, top - pad - this._peek());
     this._fitSpacer();
     v.scrollTo({ top: this._heldTop, behavior: this._behavior() });
   }
@@ -357,7 +388,7 @@ UiMessageScroller.register('ui-message-scroller');
 
 export class UiMessageScrollerViewport extends WebComponent {
   render() {
-    const pending = rootOf(this)?.pending ?? true;
+    const pending = rootOf(this)?.pending ?? false;
     return html`<div data-slot="message-scroller-viewport" ?data-pending-scroll=${!!pending} class=${cn(messageScrollerViewportClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }
@@ -406,6 +437,8 @@ UiMessageScrollerItem.register('ui-message-scroller-item');
 
 export class UiMessageScrollerButton extends WebComponent({
   direction: prop<'end' | 'start'>(String),
+  // The button's accessible name, for a transcript in another language.
+  label: String,
   variant: String,
   size: String,
 }) {
@@ -431,7 +464,8 @@ export class UiMessageScrollerButton extends WebComponent({
       aria-hidden=${active ? null : 'true'}
       class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), messageScrollerButtonClass(), takeAuthored(this))}
       @click=${() => (toStart ? root?.scrollToStart() : root?.scrollToEnd())}
-    ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg><span class="sr-only">${toStart ? 'Scroll to start' : 'Scroll to end'}</span></button>`;
+      aria-label=${this.label || null}
+    ><slot><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>${this.label ? '' : html`<span class="sr-only">${toStart ? 'Scroll to start' : 'Scroll to end'}</span>`}</slot></button>`;
   }
 }
 UiMessageScrollerButton.register('ui-message-scroller-button');
