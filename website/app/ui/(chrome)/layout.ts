@@ -124,9 +124,7 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
          exactly the viewport with no footer, shadcn's app layout rule
          (has-data-[slot=designer]:h-svh, the footer hidden). -->
     <div data-slot="layout" class="group/layout relative z-10 flex min-h-[calc(100svh-var(--header-h))] flex-col bg-background has-data-[slot=designer]:h-[calc(100svh-var(--header-h))] has-data-[slot=designer]:overflow-hidden">
-      <!-- A div, not main: each page renders the one main landmark, id="main",
-           itself (the interim gallery's shell does it in components/docs-drawer.ts,
-           and the home page wraps its own content). -->
+      <!-- A div, not main: each page renders its one main landmark itself. -->
       <div class="flex min-h-0 flex-1 flex-col">
         ${children}
       </div>

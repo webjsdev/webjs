@@ -158,12 +158,15 @@ export class UiCommand extends WebComponent({
     this._id ||= `ui-command-${++uid}`;
   }
 
-  get listId(): string {
-    return `${this._id}-list`;
+  // The ids exist once the root has connected. The server never connects an
+  // element, so it serves none rather than a `-list` every box would share;
+  // hydration renders them in.
+  get listId(): string | null {
+    return this._id ? `${this._id}-list` : null;
   }
 
-  get labelId(): string {
-    return `${this._id}-label`;
+  get labelId(): string | null {
+    return this._id ? `${this._id}-label` : null;
   }
 
   // The root never hides itself, so its host can be display: contents: the
@@ -174,7 +177,7 @@ export class UiCommand extends WebComponent({
     const authored = takeAuthored(this);
     if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
     return html`<div data-slot="command" cmdk-root="" class=${cn(commandClass(), authored)} @keydown=${this._onKeyDown}>${this.label
-      ? html`<label id=${this.labelId} cmdk-label="" class="sr-only">${this.label}</label>`
+      ? html`<label id=${this.labelId || null} cmdk-label="" class="sr-only">${this.label}</label>`
       : ''}<slot></slot></div>`;
   }
 
@@ -339,7 +342,7 @@ export class UiCommandInput extends WebComponent({
 
   render() {
     const root = this._root();
-    const named = root?.label ? root.labelId : null;
+    const named = root?.label ? root.labelId || null : null;
     return html`<div data-slot="command-input-wrapper" cmdk-input-wrapper="" class=${commandInputWrapperClass()}><div
       data-slot="input-group" class=${cn(inputGroupClass(), commandInputGroupClass())}
     ><input
@@ -352,7 +355,7 @@ export class UiCommandInput extends WebComponent({
       spellcheck="false"
       aria-autocomplete="list"
       aria-expanded="true"
-      aria-controls=${root?.listId ?? null}
+      aria-controls=${root?.listId || null}
       aria-labelledby=${named}
       aria-label=${named ? null : this.getAttribute?.('aria-label') || this.placeholder || null}
       aria-activedescendant=${this.activeId || null}
@@ -382,7 +385,7 @@ export class UiCommandList extends WebComponent {
       data-slot="command-list"
       cmdk-list=""
       role="listbox"
-      id=${root?.listId ?? null}
+      id=${root?.listId || null}
       aria-label=${this.getAttribute?.('aria-label') || 'Suggestions'}
       class=${cn(commandListClass(), takeAuthored(this))}
     ><slot></slot></div>`;
@@ -444,10 +447,12 @@ export class UiCommandGroup extends WebComponent({
   }
 
   render() {
-    const headingId = `${this._id}-heading`;
+    // No id before connect (the server never connects an element), so the
+    // served group is named by aria-label instead of a shared `-heading` id.
+    const headingId = this.heading && this._id ? `${this._id}-heading` : null;
     return html`<div data-slot="command-group" cmdk-group="" role="presentation" class=${cn(commandGroupClass(), takeAuthored(this))}>${this.heading
       ? html`<div cmdk-group-heading="" aria-hidden="true" id=${headingId}>${this.heading}</div>`
-      : ''}<div cmdk-group-items="" role="group" aria-labelledby=${this.heading ? headingId : null} class="flex flex-col"><slot></slot></div></div>`;
+      : ''}<div cmdk-group-items="" role="group" aria-labelledby=${headingId} aria-label=${this.heading && !headingId ? this.heading : null} class="flex flex-col"><slot></slot></div></div>`;
   }
 }
 UiCommandGroup.register('ui-command-group');

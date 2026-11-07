@@ -4,7 +4,7 @@ import { inputClass } from '#modules/ui/components/input.ts';
 export default function InputOTPDisabled() {
   return html`
     <ui-input-otp>
-      <input id="disabled" aria-label="One-time code" value="123456" disabled class=${inputClass()} maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+      <input aria-label="One-time code" value="123456" disabled class=${inputClass()} maxlength="6" inputmode="numeric" autocomplete="one-time-code">
       <ui-input-otp-group>
         <ui-input-otp-slot index="0"></ui-input-otp-slot>
         <ui-input-otp-slot index="1"></ui-input-otp-slot>

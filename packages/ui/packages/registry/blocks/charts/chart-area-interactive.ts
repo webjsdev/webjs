@@ -126,12 +126,14 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const gradients = svg`
-  <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
+// Gradient ids are per range, since all three charts sit on one page and an
+// id must be unique in the document.
+const gradients = (days: number) => svg`
+  <linearGradient id=${`fillDesktop-${days}d`} x1="0" y1="0" x2="0" y2="1">
     <stop offset="5%" stop-color="var(--color-desktop)" stop-opacity="0.8"></stop>
     <stop offset="95%" stop-color="var(--color-desktop)" stop-opacity="0.1"></stop>
   </linearGradient>
-  <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
+  <linearGradient id=${`fillMobile-${days}d`} x1="0" y1="0" x2="0" y2="1">
     <stop offset="5%" stop-color="var(--color-mobile)" stop-opacity="0.8"></stop>
     <stop offset="95%" stop-color="var(--color-mobile)" stop-opacity="0.1"></stop>
   </linearGradient>`;
@@ -159,7 +161,7 @@ function chart(days: number) {
     height: 250,
     data: rangeData(days),
     title: `Visitors, the last ${days} days`,
-    defs: gradients,
+    defs: gradients(days),
     grid: { vertical: false },
     xAxis: {
       dataKey: 'date',
@@ -172,8 +174,8 @@ function chart(days: number) {
     tooltip: { cursor: false, indicator: 'dot', labelFormatter: (value) => day(value, { month: 'short', day: 'numeric' }) },
     legend: {},
     areas: [
-      { dataKey: 'mobile', type: 'natural', fill: 'url(#fillMobile)', stroke: 'var(--color-mobile)', stackId: 'a' },
-      { dataKey: 'desktop', type: 'natural', fill: 'url(#fillDesktop)', stroke: 'var(--color-desktop)', stackId: 'a' },
+      { dataKey: 'mobile', type: 'natural', fill: `url(#fillMobile-${days}d)`, stroke: 'var(--color-mobile)', stackId: 'a' },
+      { dataKey: 'desktop', type: 'natural', fill: `url(#fillDesktop-${days}d)`, stroke: 'var(--color-desktop)', stackId: 'a' },
     ],
   });
 }

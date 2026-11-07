@@ -35,11 +35,11 @@ const chartConfig = {
 const TrendingUp = (cls = '') => svg`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class=${'lucide lucide-trending-up ' + cls}><path d="M16 7h6v6"></path><path d="m22 7-8.5 8.5-5-5L2 17"></path></svg>`;
 
 const gradients = svg`
-  <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
+  <linearGradient id="fillDesktopGradient" x1="0" y1="0" x2="0" y2="1">
     <stop offset="5%" stop-color="var(--color-desktop)" stop-opacity="0.8"></stop>
     <stop offset="95%" stop-color="var(--color-desktop)" stop-opacity="0.1"></stop>
   </linearGradient>
-  <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
+  <linearGradient id="fillMobileGradient" x1="0" y1="0" x2="0" y2="1">
     <stop offset="5%" stop-color="var(--color-mobile)" stop-opacity="0.8"></stop>
     <stop offset="95%" stop-color="var(--color-mobile)" stop-opacity="0.1"></stop>
   </linearGradient>`;
@@ -62,8 +62,8 @@ export default function ChartAreaGradient() {
           xAxis: { dataKey: 'month', tickLine: false, axisLine: false, tickMargin: 8, tickFormatter: (value) => String(value).slice(0, 3) },
           tooltip: { cursor: false },
           areas: [
-            { dataKey: 'mobile', type: 'natural', fill: 'url(#fillMobile)', fillOpacity: 0.4, stroke: 'var(--color-mobile)', stackId: 'a' },
-            { dataKey: 'desktop', type: 'natural', fill: 'url(#fillDesktop)', fillOpacity: 0.4, stroke: 'var(--color-desktop)', stackId: 'a' },
+            { dataKey: 'mobile', type: 'natural', fill: 'url(#fillMobileGradient)', fillOpacity: 0.4, stroke: 'var(--color-mobile)', stackId: 'a' },
+            { dataKey: 'desktop', type: 'natural', fill: 'url(#fillDesktopGradient)', fillOpacity: 0.4, stroke: 'var(--color-desktop)', stackId: 'a' },
           ],
         })}
       </div>

@@ -62,7 +62,8 @@
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
-import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
+import { positionFloating } from './floating.ts';
+import type { PopoverSide, PopoverAlign } from './popover.ts';
 import { buttonClass } from './button.ts';
 import { inputGroupClass, inputGroupInputClass, inputGroupAddonClass, inputGroupButtonClass } from './input-group.ts';
 
@@ -146,8 +147,10 @@ export class UiCombobox extends WebComponent({
     this._id ||= `ui-combobox-${++uid}`;
   }
 
-  get listId(): string {
-    return `${this._id}-list`;
+  // Empty before connect (the server never connects an element), so the
+  // served markup carries no `-list` id that every combobox would share.
+  get listId(): string | null {
+    return this._id ? `${this._id}-list` : null;
   }
 
   // The initial choice, read from the attribute once.
@@ -461,7 +464,7 @@ export class UiComboboxInput extends WebComponent({
       autocomplete="off"
       aria-autocomplete="list"
       aria-expanded=${s.open ? 'true' : 'false'}
-      aria-controls=${root?.listId ?? null}
+      aria-controls=${root?.listId || null}
       aria-activedescendant=${s.activeId || null}
       aria-label=${this.getAttribute?.('aria-label') || null}
       aria-invalid=${this.invalid === 'true' ? 'true' : null}
@@ -555,7 +558,7 @@ export class UiComboboxList extends WebComponent({
     return html`<div
       data-slot="combobox-list"
       role="listbox"
-      id=${root?.listId ?? null}
+      id=${root?.listId || null}
       aria-multiselectable=${root?.multiple ? 'true' : null}
       ?data-empty=${this.empty}
       class=${comboboxListClass()}
@@ -787,7 +790,7 @@ export class UiComboboxChipsInput extends WebComponent({
       autocomplete="off"
       aria-autocomplete="list"
       aria-expanded=${s.open ? 'true' : 'false'}
-      aria-controls=${root?.listId ?? null}
+      aria-controls=${root?.listId || null}
       aria-activedescendant=${s.activeId || null}
       aria-label=${this.getAttribute?.('aria-label') || null}
       placeholder=${this.placeholder || null}

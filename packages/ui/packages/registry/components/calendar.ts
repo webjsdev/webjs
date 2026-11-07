@@ -383,7 +383,9 @@ export class UiCalendar extends WebComponent({
       class=${cn(buttonClass({ variant: 'ghost' }), NAV_BUTTON, 'rdp-button-next')}
       @click=${() => this._turn(1)}
     ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="cn-rtl-flip size-4 rtl:rotate-180"><path d="m9 18 6-6-6-6"></path></svg></button></nav>${months.map((mo, mi) => {
-      const captionId = `${this._id}-caption-${mi}`;
+      // No id before connect (the server never connects an element): a served
+      // `-caption-0` would be shared by every calendar on the page.
+      const captionId = this._id ? `${this._id}-caption-${mi}` : null;
       return html`<div class="flex w-full flex-col gap-4"><div class="flex h-(--cell-size) w-full items-center justify-center px-(--cell-size)">${dropdown && mi === 0
         ? this._dropdowns(mo, captionId)
         : html`<span id=${captionId} role="status" aria-live="polite" class=${cn('font-medium select-none', calendarCaptionClass())}>${caption.format(toUTC(mo))}</span>`}</div><table
@@ -449,7 +451,7 @@ export class UiCalendar extends WebComponent({
   }
 
   // Month and year selects over the caption, as react-day-picker draws them.
-  _dropdowns(mo: CalendarDate, captionId: string): unknown {
+  _dropdowns(mo: CalendarDate, captionId: string | null): unknown {
     const monthName = this._fmt({ month: 'short' });
     const lo = this._min() ?? { y: mo.y - 100, m: 0, d: 1 };
     const hi = this._max() ?? { y: mo.y + 10, m: 11, d: 31 };
