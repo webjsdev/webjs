@@ -383,13 +383,27 @@ export function segmentValue(src, seg) {
   });
 }
 
-/** Escape a cooked value back into the delimiter it sits inside. */
+/**
+ * Write a cooked value back inside the delimiter it sits in.
+ *
+ * The result must read right TWICE: as JavaScript (or an HTML attribute), and
+ * as the raw text Tailwind's scanner reads, which never unescapes anything. So
+ * a quote is never escaped with a backslash or an entity if it can be helped:
+ * `[class*=\'size-\']` is valid JavaScript, but Tailwind compiles the
+ * backslashes into the selector and the rule never matches. bakeSource()
+ * avoids it for a JS string by changing the string's delimiter (see there).
+ * In an HTML attribute a double quote becomes a single one, which means the
+ * same in a CSS string or attribute value. Escaping is the last resort, for a
+ * value carrying both quotes, which no style emits.
+ */
 function escapeFor(value, quote) {
-  if (quote === 'attr') return value.replace(/"/g, '&quot;');
+  if (quote === 'attr') {
+    if (!value.includes('"')) return value;
+    return value.includes("'") ? value.replace(/"/g, '&quot;') : value.replace(/"/g, "'");
+  }
   let out = value.replace(/\\/g, '\\\\');
-  if (quote === '`') out = out.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-  else out = out.replace(new RegExp(quote, 'g'), `\\${quote}`);
-  return out;
+  if (quote === '`') return out.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  return out.replace(new RegExp(quote, 'g'), `\\${quote}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +461,18 @@ export function bakeSource(src, styleMap) {
     const value = segmentValue(src, seg);
     if (!/(^|\s)cn-[\w-]/.test(value)) continue;
     const baked = bakeClassList(value, styleMap);
-    out += src.slice(last, seg.start) + escapeFor(baked, seg.quote);
+    // A class that carries the string's own quote (the styles' `[class*='size-']`
+    // inside a single-quoted string) moves the string to the other quote, the
+    // way a person writes it, rather than escaping: Tailwind reads the raw
+    // text and would keep the backslashes.
+    const q = seg.quote;
+    const other = q === "'" ? '"' : q === '"' ? "'" : '';
+    if (other && baked.includes(q) && !baked.includes(other)) {
+      out += src.slice(last, seg.start - 1) + other + escapeFor(baked, other) + other;
+      last = seg.end + 1;
+      continue;
+    }
+    out += src.slice(last, seg.start) + escapeFor(baked, q);
     last = seg.end;
   }
   return out + src.slice(last);

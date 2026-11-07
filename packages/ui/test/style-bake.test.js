@@ -137,10 +137,13 @@ test('bakeSource: a file with no cn- name is byte-identical', () => {
   assert.equal(bakeSource(src, MAP), src);
 });
 
-test('bakeSource: rewrites single-quoted, double-quoted and template literals, escaping what the map adds', () => {
+// A class carrying the string's own quote moves the string to the other quote
+// rather than being escaped: Tailwind reads the raw source and would compile
+// the backslashes into the selector (style-bake-quotes.test.js).
+test('bakeSource: rewrites single-quoted, double-quoted and template literals, never escaping a quote the map adds', () => {
   const src = `const a = 'cn-svg flex'; const b = "cn-button-variant-default"; const c = \`cn-svg\`;`;
   const out = bakeSource(src, MAP);
-  assert.equal(out, `const a = '[&_svg:not([class*=\\'size-\\'])]:size-4 flex'; const b = "bg-primary text-primary-foreground"; const c = \`[&_svg:not([class*='size-'])]:size-4\`;`);
+  assert.equal(out, `const a = "[&_svg:not([class*='size-'])]:size-4 flex"; const b = "bg-primary text-primary-foreground"; const c = \`[&_svg:not([class*='size-'])]:size-4\`;`);
   // And the result is still valid JavaScript that evaluates to the baked lists.
   const fn = new Function(out.replace(/const /g, 'var ') + '; return [a, b, c];');
   assert.deepEqual(fn(), ["[&_svg:not([class*='size-'])]:size-4 flex", 'bg-primary text-primary-foreground', "[&_svg:not([class*='size-'])]:size-4"]);

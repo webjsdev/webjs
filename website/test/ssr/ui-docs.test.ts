@@ -45,7 +45,10 @@ test('componentSource refuses a path, and serves a component baked for an app', 
   assert.ok(files?.length, 'button has a source file');
   // A comment may still name the base form; no CLASS STRING may.
   assert.doesNotMatch(files![0].content, /'[^'\n]*\bcn-button[\w-]*[^'\n]*'/, 'baked: no base-form cn-* name survives in a class string');
-  assert.match(files![0].content, /'[^'\n]*\binline-flex\b[^'\n]*'/, 'and the style\'s classes are inlined');
+  // Either quote: the bake moves a class string carrying a single quote
+  // (`[class*='size-']`) into double quotes rather than escaping it.
+  assert.match(files![0].content, /"[^"\n]*\binline-flex\b[^"\n]*"|'[^'\n]*\binline-flex\b[^'\n]*'/, 'and the style\'s classes are inlined');
+  assert.doesNotMatch(files![0].content, /\\'|\\"/, 'with no escaped quote, which Tailwind would read literally');
 });
 
 test('the Manual tab shows every file of a component, each under the path add writes it to', async () => {
@@ -65,8 +68,22 @@ test('the Sidebar page\'s View RTL Sidebar opens the right-to-left sidebar full 
   const res = await handle('/ui/view/sidebar-rtl');
   assert.equal(res.status, 200);
   const view = await res.text();
-  assert.match(view, /<div class="relative" dir="rtl" lang="ar"/, 'it reads right to left, in Arabic');
+  assert.match(view, /<example-bind class="relative block" dir="rtl" lang="ar"/, 'it reads right to left, in Arabic by default');
   assert.match(view, /<ui-sidebar collapsible="icon" side="right"/, 'with the sidebar on the right');
+  assert.match(view, /<link rel="stylesheet" href="\/public\/rtl-fonts\.css[^"]*"/, 'and the Arabic and Hebrew faces');
+  // The language selector is a GET form the frame lets through, so it works with JS off.
+  assert.match(view, /<form method="get" data-view-submit[^>]*>/);
+  assert.match(view, /<select id="sidebar-rtl-language" name="lang" data-autosubmit/);
+  assert.match(view, /<option value="ar" selected="">Arabic/);
+  const he = await (await handle('/ui/view/sidebar-rtl?lang=he')).text();
+  assert.match(he, /dir="rtl" lang="he"/);
+  assert.match(he, /<option value="he" selected="">Hebrew/);
+  assert.ok(he.includes('פלטפורמה'), 'the strings follow the language');
+  const en = await (await handle('/ui/view/sidebar-rtl?lang=en')).text();
+  assert.match(en, /dir="ltr" lang="en"/);
+  assert.match(en, /<ui-sidebar collapsible="icon" side="left"/, 'left to right puts the sidebar on the left');
+  assert.ok(en.includes('Platform'));
+  assert.match(await (await handle('/ui/view/sidebar-rtl?lang=xx')).text(), /dir="rtl" lang="ar"/, 'an unknown language falls back to Arabic');
   // Only the whole-page demos open there; any other demo stays a 404.
   assert.equal((await handle('/ui/view/button-demo')).status, 404);
 });
