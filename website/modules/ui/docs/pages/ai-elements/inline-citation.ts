@@ -46,9 +46,9 @@ export default async function body(toc: TocEntry[]) {
     <p>A <code>source-url</code> part is the citation. Set <code>sendSources: true</code> on <code>toUIMessageStream()</code> in the <code>'use server'</code> action that streams the reply, or yield the part yourself.</p>
     ${codeFigure(`yield {
   type: 'source-url',
-  sourceId: 'shadcn',
-  url: 'https://ui.shadcn.com',
-  title: 'shadcn/ui',
+  sourceId: 'webjs-ui',
+  url: 'https://webjs.dev/ui',
+  title: 'WebJs UI',
 };`, { title: 'modules/chat/actions/chat.server.ts', lineNumbers: true })}
     ${codeFigure(`const sources = message.parts.filter((part) => part.type === 'source-url');`, { lineNumbers: true })}
     <p><code>title</code> is optional. Fall back to the URL's hostname. See <a href="/ui/docs/helpers/ai-sdk">AI SDK</a> for streaming the parts to a component.</p>

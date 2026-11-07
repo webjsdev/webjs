@@ -53,7 +53,7 @@ export async function installation(toc: TocEntry[], opts: { prose: unknown; add:
 export function migrating(toc: TocEntry[], opts: { name: string; file: string; parts: [string, unknown][] }) {
   return html`
     ${heading(toc, 2, 'Migrating from AI SDK Elements')}
-    <p>If you used ${opts.name} from <a href="https://elements.ai-sdk.dev">AI SDK Elements</a>, it lives in <code>components/ai-elements/${opts.file}</code> as a React component, so it does not run in a WebJs app. Rebuild it as this pattern. Each export of the wrapper maps onto a part:</p>
+    <p>If you used ${opts.name} from <a href="https://elements.ai-sdk.dev">AI SDK Elements</a>, its wrapper lives in <code>components/ai-elements/${opts.file}</code>. In a WebJs app it becomes this pattern, built from WebJs UI components. Each export of the wrapper maps onto a part:</p>
     ${table(['AI SDK Elements', 'WebJs UI'], opts.parts.map(([from, to]) => [html`<code>${from}</code>`, to]))}
   `;
 }

@@ -116,7 +116,7 @@ export default async function body(toc: TocEntry[]) {
     <p>If you used AI SDK Elements from <a href="https://elements.ai-sdk.dev">elements.ai-sdk.dev</a>, here is what changes.</p>
 
     ${heading(toc, 3, 'Existing projects')}
-    <p>When you installed components from elements.ai-sdk.dev, the code was copied into your project as React components. They keep working in a React app, but a WebJs app does not run React, so moving to WebJs means rebuilding each one on WebJs UI components.</p>
+    <p>When you installed components from elements.ai-sdk.dev, the code was copied into your project under <code>components/ai-elements</code>. In a WebJs app each of them is a pattern built from WebJs UI components, so moving to WebJs means rebuilding each one on those components.</p>
     <p>Each pattern page has a <strong>Migrating from AI SDK Elements</strong> section that maps every export of the wrapper in <code>components/ai-elements</code> onto the parts of the pattern, so you can rebuild it on Trace, Code Block and the other WebJs UI components one export at a time.</p>
     <p>For example, the <a href="/ui/docs/ai-elements/queue#migrating-from-ai-sdk-elements">Queue</a> section rebuilds <code>queue.tsx</code> on Trace, and the <a href="/ui/docs/ai-elements/inline-citation#migrating-from-ai-sdk-elements">Inline Citation</a> section rebuilds <code>inline-citation.tsx</code> on Hover Card.</p>
 
