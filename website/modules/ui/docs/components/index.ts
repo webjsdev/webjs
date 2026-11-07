@@ -36,6 +36,7 @@ export const COMPONENT_DOCS: Record<string, () => Promise<ComponentDocModule>> =
   'calendar': () => import('./calendar.ts'),
   'card': () => import('./card.ts'),
   'carousel': () => import('./carousel.ts'),
+  'chart': () => import('./chart.ts'),
   'checkbox': () => import('./checkbox.ts'),
   'code-block': () => import('./code-block.ts'),
   'collapsible': () => import('./collapsible.ts'),

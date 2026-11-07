@@ -282,6 +282,19 @@ test('a legend renders the series from the config, as an HTML row over the chart
   assert.match(out, />Mobile<\/div>/);
 });
 
+test('a reversed category axis runs the rows from the far end', async () => {
+  const opts = (reversed) => ({
+    config: CONFIG, data: MONTHS, xAxis: { dataKey: 'month', reversed },
+    bars: [{ dataKey: 'desktop', fill: 'var(--color-desktop)' }],
+  });
+  const xs = (out) => [...out.matchAll(/data-coord="([\d.]+)"/g)].map((m) => Number(m[1]));
+  const ltr = xs(await ssr(c.barChart(opts(false))));
+  const rtl = xs(await ssr(c.barChart(opts(true))));
+  assert.equal(rtl.length, MONTHS.length);
+  assert.ok(ltr[0] < ltr[ltr.length - 1], 'January is on the left by default');
+  assert.deepEqual(rtl, [...ltr].reverse(), 'reversed puts January on the right');
+});
+
 test('an authored aspect ratio replaces the default one', async () => {
   const out = await ssr(c.pieChart({ config: BROWSER_CONFIG, data: BROWSERS, class: 'mx-auto aspect-square', pies: [{ dataKey: 'visitors' }] }));
   assert.doesNotMatch(out, /aspect-video/);
