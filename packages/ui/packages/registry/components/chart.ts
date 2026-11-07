@@ -200,10 +200,14 @@ function sortLegend(items: ChartPayloadItem[]): ChartPayloadItem[] {
 
 function legendLayer(o: ChartBaseOptions, f: Frame) {
   if (!o.legend) return '';
-  const h = o.legend.height ?? 28;
-  const top = o.legend.verticalAlign === 'top';
-  const y = top ? f.margin.top : f.height - f.margin.bottom - h;
-  return svg`<foreignObject class="ui-chart-legend-wrapper" overflow="visible" x=${fmt(f.margin.left)} y=${fmt(y)} width=${fmt(f.width - f.margin.left - f.margin.right)} height=${fmt(h)}>${chartLegendContent(o.config, sortLegend(f.legend), o.legend)}</foreignObject>`;
+  // An HTML row over the chart rather than a foreignObject inside it, as
+  // Recharts' legend wrapper is: anchored at the margin, as wide as the area
+  // between the side margins, as tall as its content (a wrapping legend grows
+  // away from the edge), and in real pixels, since WebKit misplaces the
+  // content of a scaled foreignObject and Firefox does not scale its font.
+  const pct = (v: number, of: number) => `${fmt((v / of) * 100)}%`;
+  const edge = o.legend.verticalAlign === 'top' ? `top: ${pct(f.margin.top, f.height)}` : `bottom: ${pct(f.margin.bottom, f.height)}`;
+  return html`<div class="ui-chart-legend-wrapper absolute" style=${`left: ${pct(f.margin.left, f.width)}; right: ${pct(f.margin.right, f.width)}; ${edge}`}>${chartLegendContent(o.config, sortLegend(f.legend), o.legend)}</div>`;
 }
 
 function frame(o: ChartBaseOptions, f: Frame) {
@@ -218,7 +222,7 @@ function frame(o: ChartBaseOptions, f: Frame) {
   const views = t ? f.points.map((p) => chartTooltipView(o.config, p.label, p.payload, t)) : [];
   // cn() keeps both aspect utilities, so an authored one replaces the default here.
   const base = /(^|\s)aspect-/.test(o.class ?? '') ? chartContainerClass().replace(' aspect-video', '') : chartContainerClass();
-  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null} data-plot=${t ? [f.plot.x, f.plot.y, f.plot.w, f.plot.h].map((v) => fmt(v)).join(' ') : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}${legendLayer(o, f)}</svg>${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
+  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null} data-plot=${t ? [f.plot.x, f.plot.y, f.plot.w, f.plot.h].map((v) => fmt(v)).join(' ') : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}</svg>${legendLayer(o, f)}${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
       ? html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)} data-tip=${JSON.stringify(v)}></div>`
       : html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)}>${chartTooltipMarkup(v, look)}</div>`))}</div><span data-slot="chart-live" class="sr-only" aria-live="polite"></span>` : ''}</div></ui-chart>`;
 }
@@ -257,6 +261,8 @@ export interface ChartAxisOptions {
   domain?: [number | 'auto' | 'dataMin' | 'dataMax', number | 'auto' | 'dataMin' | 'dataMax'];
   allowDecimals?: boolean;
   padding?: { left?: number; right?: number; top?: number; bottom?: number };
+  /** Run the axis the other way, Recharts' `reversed` (a right-to-left chart's x axis). */
+  reversed?: boolean;
   class?: string;
 }
 
@@ -374,15 +380,18 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
   for (const s of series) if (s.stackId == null) bands[s.dataKey] = data.map((d) => [0, num(d[s.dataKey])]);
   const flat = series.flatMap((s) => bands[s.dataKey].flat());
   const { domain, ticks: valueTicks } = valueDomain(valSpec, flat.length ? Math.min(...flat) : 0, flat.length ? Math.max(...flat) : 0, offsetMode === 'expand');
-  const vScale = vertical ? linearScale(domain, [plot.x, plot.x + plot.w]) : linearScale(domain, [plot.y + plot.h, plot.y]);
+  const vRange: [number, number] = vertical ? [plot.x, plot.x + plot.w] : [plot.y + plot.h, plot.y];
+  const vScale = linearScale(domain, valSpec?.reversed ? [vRange[1], vRange[0]] : vRange);
 
   // Categories: bands under bars, points under lines and areas.
   const pad = catSpec?.padding ?? {};
   const c0 = vertical ? plot.y + (pad.top ?? 0) : plot.x + (pad.left ?? 0);
   const c1 = vertical ? plot.y + plot.h - (pad.bottom ?? 0) : plot.x + plot.w - (pad.right ?? 0);
+  // A reversed category axis lays the rows out from the far end.
+  const slot = (i: number) => (catSpec?.reversed ? data.length - 1 - i : i);
   const band = bandScale(data.length, c0, c1);
   const point = pointScale(data.length, c0, c1);
-  const catAt = (i: number) => (family === 'bar' ? band.at(i) + band.bandwidth / 2 : point(i));
+  const catAt = (i: number) => (family === 'bar' ? band.at(slot(i)) + band.bandwidth / 2 : point(slot(i)));
   const color = (s: ChartSeriesOptions) => (family === 'bar' ? s.fill : s.stroke ?? s.fill) ?? '#808080';
   const defaultIndex = o.tooltip ? o.tooltip.defaultIndex : undefined;
 
@@ -400,7 +409,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
   const cursors = cursorOn
     ? data.map((_, i) => {
       if (family === 'bar') {
-        const a = band.at(i);
+        const a = band.at(slot(i));
         return vertical
           ? svg`<path class="ui-chart-rectangle ui-chart-tooltip-cursor" fill="#ccc" d=${rectanglePath(plot.x, a, plot.w, band.bandwidth)}></path>`
           : svg`<path class="ui-chart-rectangle ui-chart-tooltip-cursor" fill="#ccc" d=${rectanglePath(a, plot.y, band.bandwidth, plot.h)}></path>`;
@@ -424,7 +433,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
       const pos = positions[slotIds.indexOf(s.stackId != null ? `stack:${s.stackId}` : `bar:${s.dataKey}`)];
       const boxes = data.map((d, i) => {
         const [lo, hi] = sb[i];
-        const a = band.at(i) + pos.offset;
+        const a = band.at(slot(i)) + pos.offset;
         const box = vertical
           ? { x: vScale(lo), y: a, width: vScale(hi) - vScale(lo), height: pos.size }
           : { x: a, y: vScale(hi), width: pos.size, height: vScale(lo) - vScale(hi) };

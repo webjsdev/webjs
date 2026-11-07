@@ -270,12 +270,14 @@ test('radialBarChart: banded rings over a background', async () => {
   assert.equal(out.match(/<textPath/g).length, 5, 'insideStart labels follow the ring');
 });
 
-test('a legend renders the series from the config, inside the chart', async () => {
+test('a legend renders the series from the config, as an HTML row over the chart', async () => {
   const out = await ssr(c.barChart({
     config: CONFIG, data: MONTHS, legend: {},
     bars: [{ dataKey: 'desktop', fill: 'var(--color-desktop)' }, { dataKey: 'mobile', fill: 'var(--color-mobile)' }],
   }));
-  assert.match(out, /<foreignObject class="ui-chart-legend-wrapper"/);
+  // An HTML row after the svg, anchored at the bottom margin (5px of 253).
+  assert.match(out, /<\/svg><div class="ui-chart-legend-wrapper absolute" style="left: [\d.]+%; right: [\d.]+%; bottom: 1\.9763%">/);
+  assert.doesNotMatch(out, /foreignObject/);
   assert.match(out, /background-color: var\(--color-desktop\)"><\/div>Desktop/);
   assert.match(out, />Mobile<\/div>/);
 });
