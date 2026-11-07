@@ -184,7 +184,7 @@ export default async function body(toc: TocEntry[], ctx: DocPageContext = {}) {
     ${heading(toc, 2, 'Demo')}
     <p>We are going to build the following form with a simple text input and a textarea. On submit, a server action validates the form data, and the page re-renders with the errors when it is invalid.</p>
     ${await liveDemo(formState(ctx.actionData))}
-    ${callout(html`<strong>Note:</strong> The examples on this page intentionally set <code>novalidate</code> on the form, to show how validation and form errors work in a server action. The demo is live: submit it with short values to see the errors, with or without JavaScript.`)}
+    ${callout(html`<p><strong>Note:</strong> The examples on this page intentionally set <code>novalidate</code> on the form, to show how validation and form errors work in a server action. The demo is live: submit it with short values to see the errors, with or without JavaScript.</p>`)}
 
     ${heading(toc, 2, 'Approach')}
     <p>This form leverages WebJs's built-in form handling. We'll build our form with the Field helpers, which give you <strong>complete flexibility over the markup and styling</strong>.</p>

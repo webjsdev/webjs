@@ -109,7 +109,7 @@ export function brandButtonClass(opts: { className?: string } = {}): string {
     opts.className,
   );
 }`, { title: 'components/brand-button.ts', lineNumbers: true })}
-    ${callout(html`<strong>Note:</strong> This example places the component in the <code>components</code> directory and imports <code>cn()</code> as <code>../lib/utils.ts</code>, the layout the kit's own registry uses. On install, the CLI rewrites that import to the <code>cn()</code> file in the user's project, wherever their <code>components.json</code> puts it. See <a href="#guidelines">Guidelines</a>.`)}
+    ${callout(html`<p><strong>Note:</strong> This example places the component in the <code>components</code> directory and imports <code>cn()</code> as <code>../lib/utils.ts</code>, the layout the kit's own registry uses. On install, the CLI rewrites that import to the <code>cn()</code> file in the user's project, wherever their <code>components.json</code> puts it. See <a href="#guidelines">Guidelines</a>.</p>`)}
     ${codeFigure(`components
 └── brand-button.ts
 lib
@@ -129,7 +129,7 @@ lib
     <p>Run the build command to generate static registry JSON files.</p>
     ${commandBlock(packageCommands('build'))}
     <p><code>build</code> reads <code>registry.json</code>, inlines the content of every file it lists, and writes one <code>&lt;name&gt;.json</code> per item, the <code>index.json</code> the CLI lists from, and a copy of the manifest as <code>registry.json</code>.</p>
-    ${callout(html`<strong>Note:</strong> By default, the build command writes the registry JSON files to <code>./r</code>, e.g. <code>r/brand-button.json</code>. You can change the output directory by passing the <code>--output</code> option. See the <a href="/ui/docs/cli#build">build command</a> for more information.`)}
+    ${callout(html`<p><strong>Note:</strong> By default, the build command writes the registry JSON files to <code>./r</code>, e.g. <code>r/brand-button.json</code>. You can change the output directory by passing the <code>--output</code> option. See the <a href="/ui/docs/cli#build">build command</a> for more information.</p>`)}
     <p>A WebJs app serves everything under <code>public/</code> at <code>/public/</code>, so build into it:</p>
     ${commandBlock(packageCommands('build --output public/r'))}
     <p>Then run the app.</p>

@@ -18,7 +18,7 @@ export const description = 'Use more than one registry, one registry per command
 
 export default async function body(toc: TocEntry[]) {
   return html`
-    ${callout(html`The WebJs UI CLI has no namespaces. There is no <code>@acme/button</code> address, no <code>registry add</code> command, and no URL template. Each command reads one registry: the one <code>--registry</code> names, else the one the <code>REGISTRY_URL</code> environment variable names, else the WebJs UI registry. This page covers how to work with several registries under that model.`, { title: 'Namespaces are not supported.' })}
+    ${callout(html`<p>The WebJs UI CLI has no namespaces. There is no <code>@acme/button</code> address, no <code>registry add</code> command, and no URL template. Each command reads one registry: the one <code>--registry</code> names, else the one the <code>REGISTRY_URL</code> environment variable names, else the WebJs UI registry. This page covers how to work with several registries under that model.</p>`, { title: 'Namespaces are not supported.' })}
 
     ${heading(toc, 2, 'Overview')}
     <p>In shadcn/ui, a namespace such as <code>@acme</code> maps a short prefix to a registry URL template, so <code>@acme/auth-utils</code> installs from Acme's registry and <code>button</code> from the default one, in one command.</p>

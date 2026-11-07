@@ -24,7 +24,7 @@ export default async function body(toc: TocEntry[]) {
     <p>You can turn <strong>a public GitHub repository into a registry.</strong></p>
     <p>Add a <code>registry.json</code> file to the repository, build it, commit the output, and users can install from the repository's raw file URL with the WebJs UI CLI.</p>
     ${commandBlock(packageCommands(`add <item> --registry ${RAW}`))}
-    ${callout(html`<strong>Note:</strong> shadcn's CLI reads a repository's <code>registry.json</code> directly through an <code>owner/repo/item</code> address. This CLI has no such address. It fetches built item files from a base URL, so the repository has to contain the <code>build</code> output, and the address is the URL of the folder that holds it.`)}
+    ${callout(html`<p><strong>Note:</strong> shadcn's CLI reads a repository's <code>registry.json</code> directly through an <code>owner/repo/item</code> address. This CLI has no such address. It fetches built item files from a base URL, so the repository has to contain the <code>build</code> output, and the address is the URL of the folder that holds it.</p>`)}
 
     ${heading(toc, 2, 'Distribute Anything')}
     <p>Registry items are <strong>not limited to components.</strong> They can include any text file from your repository: source files, configuration, docs, templates, agent rules or project conventions. Each file names where it lands in the user's project with a <code>target</code>.</p>

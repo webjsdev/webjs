@@ -20,7 +20,7 @@ export const description = 'Keep a registry private when the CLI sends no creden
 export default async function body(toc: TocEntry[]) {
   return html`
     <p>A private registry keeps internal components to the people allowed to install them. This guide shows what the WebJs UI CLI can and cannot send, and how to protect a registry within that.</p>
-    ${callout(html`The CLI fetches <code>&lt;url&gt;/&lt;name&gt;.json</code> with a plain <code>fetch</code>. It sends no <code>Authorization</code> header, no API key header, no cookie, and it does not expand environment variables into a request. shadcn's token, API key and query parameter patterns therefore do not apply. Protection has to come from where the registry is reachable, or from the URL itself.`, { title: 'The CLI sends no credentials.' })}
+    ${callout(html`<p>The CLI fetches <code>&lt;url&gt;/&lt;name&gt;.json</code> with a plain <code>fetch</code>. It sends no <code>Authorization</code> header, no API key header, no cookie, and it does not expand environment variables into a request. shadcn's token, API key and query parameter patterns therefore do not apply. Protection has to come from where the registry is reachable, or from the URL itself.</p>`, { title: 'The CLI sends no credentials.' })}
 
     ${heading(toc, 2, 'Common Patterns')}
 

@@ -19,7 +19,7 @@ export const description = 'How AI assistants find and install items from your r
 export default async function body(toc: TocEntry[]) {
   return html`
     <p>Every WebJs app ships a read-only <a href="/docs/ai-first" data-no-router>MCP server</a>, reachable as <code>webjs mcp</code> or <code>npx @webjsdev/mcp</code>. Its <code>ui</code> tool lists the WebJs UI components, blocks and charts, and returns one item's helpers, example, install command and files.</p>
-    ${callout(html`The <code>ui</code> tool reads the registry that ships inside the installed <code>@webjsdev/ui</code> package. It takes no registry URL and does not read <code>components.json</code>, so it does not see a custom registry. An agent reaches your registry through the CLI instead, which has a JSON output for exactly this.`, { title: 'The MCP server reads the WebJs UI registry only.' })}
+    ${callout(html`<p>The <code>ui</code> tool reads the registry that ships inside the installed <code>@webjsdev/ui</code> package. It takes no registry URL and does not read <code>components.json</code>, so it does not see a custom registry. An agent reaches your registry through the CLI instead, which has a JSON output for exactly this.</p>`, { title: 'The MCP server reads the WebJs UI registry only.' })}
 
     ${heading(toc, 2, 'Prerequisites')}
     <p>The CLI reads your registry's index to list it. Make sure <code>&lt;url&gt;/index.json</code> is served, as a JSON array of your items. <code>webjsui build</code> writes it beside the item files.</p>

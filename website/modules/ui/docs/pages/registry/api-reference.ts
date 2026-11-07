@@ -36,7 +36,7 @@ export default async function body(toc: TocEntry[]) {
       <li><code>@webjsdev/ui/registry/extract</code> for the projector that turns the packaged registry into the view the CLI and the MCP server print.</li>
       <li><code>@webjsdev/ui/utils</code> for reading and writing <code>components.json</code>.</li>
     </ul>
-    ${callout(html`The bare <code>@webjsdev/ui</code> entry is the CLI itself and runs it when imported, so import a subpath. There is no API that fetches, resolves or installs items, and no preset codec: those happen inside the CLI commands.`)}
+    ${callout(html`<p>The bare <code>@webjsdev/ui</code> entry is the CLI itself and runs it when imported, so import a subpath. There is no API that fetches, resolves or installs items, and no preset codec: those happen inside the CLI commands.</p>`)}
 
     ${heading(toc, 2, '@webjsdev/ui/registry/schema')}
     <p>The schemas are <a href="https://zod.dev">zod</a> schemas, a wire-compatible port of shadcn's registry schema. Use them to validate registry files or a project's config.</p>

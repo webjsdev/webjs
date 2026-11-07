@@ -19,7 +19,7 @@ export const description = 'How the CLI searches a registry, and what a large re
 export default async function body(toc: TocEntry[]) {
   return html`
     <p><code>search</code> is another name for <code>list</code>. It fetches your registry's <code>index.json</code> and filters the items locally. This works for any registry and requires nothing more than a static file.</p>
-    ${callout(html`The CLI sends no search parameters to the registry, and it does not read a <code>pagination</code> object. A registry cannot filter results on the server for the CLI, so there is nothing to implement and every registry is a static registry as far as search is concerned.`, { title: 'Server-side search is not supported.' })}
+    ${callout(html`<p>The CLI sends no search parameters to the registry, and it does not read a <code>pagination</code> object. A registry cannot filter results on the server for the CLI, so there is nothing to implement and every registry is a static registry as far as search is concerned.</p>`, { title: 'Server-side search is not supported.' })}
 
     ${heading(toc, 2, 'How It Works')}
     <p>When you run <code>search</code>, the CLI requests the index once and filters what comes back:</p>

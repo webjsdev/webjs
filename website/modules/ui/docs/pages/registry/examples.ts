@@ -20,7 +20,7 @@ const json = (text: string, title: string) => codeFigure(text, { lang: 'json', t
 export default async function body(toc: TocEntry[]) {
   return html`
     ${heading(toc, 2, 'registry:style')}
-    ${callout(html`<strong>Note:</strong> The look of the WebJs UI components is chosen by the <code>style</code> field of <code>components.json</code>, which the CLI bakes into every file it writes. A <code>registry:style</code> item does not change that. It installs like any other item: its files, its dependencies and its CSS variables.`)}
+    ${callout(html`<p><strong>Note:</strong> The look of the WebJs UI components is chosen by the <code>style</code> field of <code>components.json</code>, which the CLI bakes into every file it writes. A <code>registry:style</code> item does not change that. It installs like any other item: its files, its dependencies and its CSS variables.</p>`)}
 
     ${heading(toc, 3, 'Custom style that builds on the kit')}
     <p>The following registry item bundles a starting point for Acme apps. On <code>add</code>, it will:</p>
@@ -375,7 +375,7 @@ export default async function body(toc: TocEntry[]) {
     }
   ]
 }`, 'example-item.json')}
-    ${callout(html`<strong>IMPORTANT:</strong> Ship development or example variables only. Do NOT put production values or secrets in a registry item.`)}
+    ${callout(html`<p><strong>IMPORTANT:</strong> Ship development or example variables only. Do NOT put production values or secrets in a registry item.</p>`)}
 
     ${heading(toc, 2, 'Universal Items')}
     <p>An item whose files all name a <code>target</code> installs the same way in any project, whatever its <code>components.json</code> aliases say. The project still needs a <code>components.json</code>, since <code>add</code> stops without one.</p>

@@ -136,7 +136,7 @@ export default async function body(toc: TocEntry[]) {
   "registryDependencies": ["brand-button", "brand-card"]
 }`)}
     <p>The CLI resolves them transitively and installs the deepest dependency first. A name it has already visited is skipped, so a cycle cannot loop.</p>
-    ${callout(html`<strong>Note:</strong> There is no address for an item in another registry. shadcn's <code>@namespace/item</code>, <code>owner/repo/item</code>, URL and file path forms are not supported. A bare name such as <code>button</code> means <code>button.json</code> in your registry, not the WebJs UI button.`)}
+    ${callout(html`<p><strong>Note:</strong> There is no address for an item in another registry. shadcn's <code>@namespace/item</code>, <code>owner/repo/item</code>, URL and file path forms are not supported. A bare name such as <code>button</code> means <code>button.json</code> in your registry, not the WebJs UI button.</p>`)}
 
     ${heading(toc, 3, 'files')}
     <p>The <code>files</code> property is used to specify the files of your registry item. Each file has a <code>path</code>, <code>type</code>, <code>content</code> and an optional <code>target</code>.</p>
