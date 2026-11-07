@@ -249,6 +249,10 @@ test('the dashboard-01 sidebar and header take the example dashboard\'s shape', 
   assert.match(header, /<ui-sidebar-trigger/);
   assert.doesNotMatch(header, />Quick Create</);
   assert.doesNotMatch(header, /sticky/);
+  // shadcn's ghost "GitHub" link at the end, to the block's source.
+  assert.match(header, /<div class="ml-auto flex items-center gap-2">\s*<a href="https:\/\/github\.com\/webjsdev\/webjs\/tree\/main\/packages\/ui\/packages\/registry\/blocks\/dashboard-01" rel="noopener noreferrer" target="_blank" data-slot="button" data-variant="ghost"[^>]*>GitHub<\/a>/);
+  assert.doesNotMatch(await render(siteHeader({ github: false })), />GitHub</);
+  assert.match(await render(siteHeader({ github: 'https://example.com/repo' })), /<a href="https:\/\/example\.com\/repo"[^>]*>GitHub<\/a>/);
 
   // shadcn's examples/dashboard: a fixed column with a Home group and no
   // Quick Create row, a sticky header with the button and no trigger.

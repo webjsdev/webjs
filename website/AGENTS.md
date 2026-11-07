@@ -120,11 +120,20 @@ website/
                        scripts/shoot-home-cards.mjs), as shadcn's does
         docs/          /ui/docs, shadcn's docs (#1666, D15). layout.ts is the
                        sticky sidebar (lib/ui/docs/sidebar.ts, kept current on
-                       a soft navigation by components/ui-docs-sidebar.ts) and
+                       a soft navigation by components/ui-docs-sidebar.ts,
+                       which scrolls to the active link shadcn's
+                       getActiveItem picks: the longest href, then the one
+                       nearest the middle, only when out of view) and
                        every page renders through lib/ui/docs/page.ts (title,
                        previous / next, typeset body, On This Page). The nav,
                        its order and the component records live in ONE
-                       module, modules/ui/docs/nav.ts
+                       module, modules/ui/docs/nav.ts. No /ui page may be
+                       wider than a 390px phone: the repo-root
+                       test/e2e/ui-phone-overflow.test.mjs loads every page
+                       /ui/llms.txt lists and checks, and
+                       test/ssr/ui-docs-phone.test.ts pins the shell's phone
+                       shape (shadcn's title row, callout paragraphs, copy
+                       buttons)
           page.ts      /ui/docs, the introduction
           components/page.ts
                        /ui/docs/components, every component page as a link
@@ -329,11 +338,23 @@ website/
                        swatch copies its value in the chosen format (with a
                        toast), the format menus share one choice, and the
                        choice persists in localStorage under shadcn's key
-    docs-copy-page.ts  the /ui docs pages' Copy Page button: fetches the page's
-                       /ui/llm markdown on the click and copies it. Hidden
-                       until defined, since the View as Markdown link beside
-                       it covers JS off (test/components/browser/
-                       docs-copy-page.test.js)
+    docs-copy-page.ts  the /ui docs pages' Copy Page button and its menu,
+                       shadcn's DocsCopyPage: Copy Page fetches the page's
+                       /ui/llm markdown on the click and copies it, and the
+                       chevron menu holds View as Markdown, Open in ChatGPT
+                       and Open in Claude. Like shadcn's it sits in a
+                       `hidden sm:block` wrapper, so a phone's title row holds
+                       only the arrows. Rendered whole by the server; with
+                       scripting off (`noscript:`) the copy button and menu
+                       give way to a View as Markdown link in their place
+                       (test/components/browser/docs-copy-page.test.js)
+    docs-copy-code.ts  shadcn's CopyButton on every /ui docs code block
+                       (lib/ui/docs/code.ts and the package-manager block in
+                       lib/ui/docs/install.ts): copies the figure's code, or
+                       the selected tab's command, read from the figure, so
+                       the source is in the HTML once. Hidden until defined;
+                       the code reads the same with JS off
+                       (test/components/browser/docs-copy-code.test.js)
                        (components/ui/ is intentionally EMPTY here, left free
                        for `webjs ui add` to own, exactly as the scaffold
                        expects, and gitignored so it stays that way. The

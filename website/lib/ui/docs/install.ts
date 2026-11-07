@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import { codeFigure } from './code.ts';
+import { codeFigure, copyButton } from './code.ts';
 
 /**
  * shadcn's package-manager command block (apps/v4/components/code-block-command.tsx)
@@ -40,6 +40,7 @@ export function commandBlock(commands: Record<string, string>) {
           </div>
         </ui-tabs>
       </div>
+      ${copyButton('command')}
     </figure>`;
 }
 

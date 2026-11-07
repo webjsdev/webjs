@@ -221,7 +221,7 @@ export async function blockViewer(name: string, opts: BlockViewerOptions = {}) {
                 <button type="button" data-block-copy-file=${i} class=${`group/copy ${GHOST_ICON} size-7`} title="Copy Code"><span class="sr-only">Copy Code</span>${copyFaces(ClipboardIcon())}</button>
               </div>
             </div>
-            ${codeFigure(file.source, { lineNumbers: true })}
+            ${codeFigure(file.source, { lineNumbers: true, copy: false })}
           </div>
         </div>`)}
       </div>

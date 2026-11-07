@@ -93,6 +93,35 @@ suite('docs-copy-page', () => {
     assert.ok(el.querySelector('button path[d="M20 6 9 17l-5-5"]'), 'the icon flips to a check');
   });
 
+  test('the menu opens the page as markdown and in ChatGPT or Claude', async () => {
+    const el = await mount();
+    el.setAttribute('url', 'https://webjs.dev/ui/docs/components/button');
+    await el.updateComplete;
+    const trigger = el.querySelector('#docs-copy-page-menu');
+    assert.ok(trigger, 'the chevron trigger');
+    assert.ok(trigger.querySelector('.sr-only').textContent.trim(), 'the trigger is named');
+    const links = [...el.querySelectorAll('ui-dropdown-menu-item a')];
+    assert.equal(links.length, 3);
+    assert.equal(links[0].getAttribute('href'), '/ui/llm/docs/components/button', 'View as Markdown is the page markdown');
+    assert.ok(links[0].textContent.includes('View as Markdown'));
+    assert.ok(links[1].href.startsWith('https://chatgpt.com/?q='), 'Open in ChatGPT');
+    assert.ok(decodeURIComponent(links[1].href).includes('https://webjs.dev/ui/docs/components/button'), 'the prompt names the page');
+    assert.ok(links[2].href.startsWith('https://claude.ai/new?q='), 'Open in Claude');
+    assert.equal(fetched.length, 0, 'opening nothing fetches nothing');
+  });
+
+  test('Enter on a menu item follows its link', async () => {
+    const el = await mount();
+    // The menu's items are slotted a microtask after the element renders.
+    await until(() => el.querySelector('ui-dropdown-menu-item [role="menuitem"] a'), 'the menu items rendered');
+    const link = el.querySelector('ui-dropdown-menu-item a');
+    let followed = 0;
+    link.addEventListener('click', (e) => { e.preventDefault(); followed++; });
+    const item = link.closest('ui-dropdown-menu-item').querySelector('[role="menuitem"]');
+    item.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    assert.equal(followed, 1, 'the keyboard reaches the link the item holds');
+  });
+
   test('a failed fetch copies nothing and announces nothing', async () => {
     fetchStatus = 404;
     const el = await mount('/ui/llm/docs/components/nope');

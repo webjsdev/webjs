@@ -4,9 +4,11 @@ import { buttonClass } from '#modules/ui/components/button.ts';
 import { neighbours } from '#modules/ui/docs/nav.ts';
 import { extraStyleLinks } from '#lib/ui/style-links.ts';
 import { uiMarkdownHref } from '#lib/ui/llm-path.ts';
-// The Copy Page button. A page never hydrates, so the shell its markup lives
-// in registers the element.
+import { siteUrl } from '#lib/env.ts';
+// The Copy Page button and the code blocks' copy buttons (lib/ui/docs/code.ts).
+// A page never hydrates, so the shell its markup lives in registers them.
 import '#components/docs-copy-page.ts';
+import '#components/docs-copy-code.ts';
 
 /**
  * The frame of every /ui docs page, shadcn's apps/v4/app/(app)/docs/[[...slug]]/page.tsx
@@ -32,16 +34,18 @@ export function slug(text: string): string {
 }
 
 const arrow = (d: string) => html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${d}></path></svg>`;
-// shadcn's markdown mark (components/docs-copy-page.tsx), for View as Markdown.
-const markdownIcon = () => html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M19.5 2.25H2.5C1.81 2.25 1.25 2.81 1.25 3.5V12.5C1.25 13.19 1.81 13.75 2.5 13.75H19.5C20.19 13.75 20.75 13.19 20.75 12.5V3.5C20.75 2.81 20.19 2.25 19.5 2.25ZM2.5 1C1.12 1 0 2.12 0 3.5V12.5C0 13.88 1.12 15 2.5 15H19.5C20.88 15 22 13.88 22 12.5V3.5C22 2.12 20.88 1 19.5 1H2.5ZM3 4.5H4.69L7 7.02L9.31 4.5H11V11.5H9V7.8L7 9.98L5 7.8V11.5H3V4.5ZM15 8V4.5H17V8H19.5L16 11.5L12.5 8H15Z"></path></svg>`;
 const LEFT = 'M5 12l14 0 M5 12l6 6 M5 12l6 -6';
 const RIGHT = 'M5 12l14 0 M13 18l6 -6 M13 6l6 6';
 
 /**
  * A docs heading with shadcn's anchor link, recorded in `toc` so the page's
- * table of contents lists it.
+ * table of contents lists it. A slug the page already used gets a `-1`, `-2`
+ * suffix, github-slugger's rule (shadcn slugs its headings with rehype-slug),
+ * so "FieldSet" and "Fieldset" on one page are two anchors, not one id twice.
  */
-export function heading(toc: TocEntry[], depth: 2 | 3, title: string, id = slug(title)) {
+export function heading(toc: TocEntry[], depth: 2 | 3, title: string, base = slug(title)) {
+  let id = base;
+  for (let n = 1; toc.some((e) => e.id === id); n++) id = `${base}-${n}`;
   toc.push({ id, title, depth });
   const inner = html`<a href=${`#${id}`} class="no-underline">${title}</a>`;
   return depth === 2 ? html`<h2 id=${id}>${inner}</h2>` : html`<h3 id=${id}>${inner}</h3>`;
@@ -62,8 +66,9 @@ export function docsPage(opts: { href: string; title: string; description?: stri
   const { previous, next } = neighbours(opts.href);
   const iconButton = cn(buttonClass({ variant: 'secondary', size: 'icon' }), 'extend-touch-target size-8 shadow-none no-underline md:size-7');
   const textButton = cn(buttonClass({ variant: 'secondary', size: 'sm' }), 'shadow-none no-underline');
-  // The page as markdown (app/ui/llm), for the Copy Page button and the link
-  // beside it, shadcn's DocsCopyPage.
+  // The page as markdown (app/ui/llm), for shadcn's DocsCopyPage: Copy Page
+  // and its menu, which shadcn hides below sm. With JS off a plain View as
+  // Markdown link stands in for it.
   const markdown = uiMarkdownHref(opts.href);
   return html`
     ${extraStyleLinks(opts.href)}
@@ -75,9 +80,9 @@ export function docsPage(opts: { href: string; title: string; description?: stri
             <div class="flex items-center justify-between md:items-start">
               <h1 class="scroll-m-24 text-3xl font-semibold tracking-tight sm:text-3xl">${opts.title}</h1>
               <div class="docs-nav flex items-center gap-2">
-                ${markdown ? html`
-                  <docs-copy-page href=${markdown} class="hidden [&:defined]:block"></docs-copy-page>
-                  <a href=${markdown} data-slot="button" data-no-router target="_blank" rel="noopener" class=${iconButton} title="View as Markdown">${markdownIcon()}<span class="sr-only">View as Markdown (opens in a new tab)</span></a>` : ''}
+                ${markdown ? html`<div class="hidden sm:block">
+                  <docs-copy-page href=${markdown} url=${siteUrl() + opts.href}></docs-copy-page>
+                </div>` : ''}
                 <div class="ml-auto flex gap-2">
                   ${previous ? html`<a href=${previous.href} data-slot="button" class=${iconButton}>${arrow(LEFT)}<span class="sr-only">Previous</span></a>` : ''}
                   ${next ? html`<a href=${next.href} data-slot="button" class=${iconButton}><span class="sr-only">Next</span>${arrow(RIGHT)}</a>` : ''}

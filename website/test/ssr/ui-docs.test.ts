@@ -55,7 +55,7 @@ test('the Manual tab shows every file of a component, each under the path add wr
   const manualTitles = async (slug: string) => {
     const page = await (await handle(`/ui/docs/components/${slug}`)).text();
     const tab = page.slice(page.indexOf('<ui-tabs-content value="manual"'));
-    return [...tab.slice(0, tab.indexOf('</ui-tabs-content>')).matchAll(/<figcaption[^>]*>([^<]+)<\/figcaption>/g)].map((m) => m[1]);
+    return [...tab.slice(0, tab.indexOf('</ui-tabs-content>')).matchAll(/<figcaption[^>]*>(?:<svg[\s\S]*?<\/svg>)?\s*([^<]+?)\s*<\/figcaption>/g)].map((m) => m[1]);
   };
   assert.deepEqual(await manualTitles('button'), ['components/ui/button.ts']);
   // chart is three registry files, and add installs all three.
