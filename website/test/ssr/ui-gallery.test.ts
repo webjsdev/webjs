@@ -65,9 +65,11 @@ test('a /ui page renders the /ui chrome, not the marketing chrome', async () => 
   const marketingHeader = headerOf(marketing);
   assert.notEqual(uiHeader, marketingHeader, 'the two sections have different headers');
   assert.match(uiHeader, /WebJs UI/, 'the /ui header names the section');
-  for (const label of ['>Blog<', '>Compare<', '>Changelog<']) {
-    assert.ok(!uiHeader.includes(label), `the marketing nav item ${label} is not in the /ui header`);
-    assert.ok(marketingHeader.includes(label), `and it IS in the marketing header`);
+  // By href, not label: the /ui menu has a Changelog of its own (the docs
+  // Sections' /ui/docs/changelog), which is not the marketing one.
+  for (const href of ['href="/blog"', 'href="/compare"', 'href="/changelog"']) {
+    assert.ok(!uiHeader.includes(href), `the marketing nav item ${href} is not in the /ui header`);
+    assert.ok(marketingHeader.includes(href), `and it IS in the marketing header`);
   }
   const uiFooter = footerOf(ui);
   assert.match(uiFooter, /ported from <a[^>]*>shadcn\/ui/, 'the /ui footer carries the one credit line');
@@ -85,15 +87,18 @@ test('the links that cross between the sections take a full page load', async ()
   assert.match(headerOf(ui), /href="\/"[^>]*data-no-router/, 'the /ui header links back with a full load');
 });
 
-test('there is exactly one header, one footer, and one theme toggle', async () => {
+test('there is exactly one header, one footer, and one theme control', async () => {
   // The real regression to guard is a SECOND set of chrome, which comparing
   // the first match cannot see: the marketing chrome rendered around the /ui
   // chrome, say, because a page landed outside the route groups.
-  for (const path of [UI_COMPONENT, MARKETING_PATH]) {
+  // The /ui header carries shadcn's two-state <ui-mode-switcher>, the
+  // marketing one the three-state <theme-toggle>, and neither carries both.
+  for (const [path, control, other] of [[UI_COMPONENT, '<ui-mode-switcher', '<theme-toggle'], [MARKETING_PATH, '<theme-toggle', '<ui-mode-switcher']]) {
     const html = await bodyOf(path);
     assert.equal(html.split('<div class="site-top').length - 1, 1, `${path}: one header`);
     assert.equal(html.split('<footer').length - 1, 1, `${path}: one footer`);
-    assert.equal(html.split('<theme-toggle').length - 1, 1, `${path}: one theme toggle`);
+    assert.equal(html.split(control).length - 1, 1, `${path}: one theme control`);
+    assert.ok(!html.includes(other), `${path}: and not the other section's`);
   }
 });
 
@@ -138,7 +143,7 @@ test('/ui is the shadcn-shaped home page, and the introduction moved to /ui/docs
   const home = await bodyOf(UI_INDEX);
   assert.match(home, /<h1[^>]*>The Foundation for your Design System<\/h1>/, 'the hero heading');
   assert.match(home, /data-slot="demo"/, 'the card grid');
-  assert.match(home, /class="style-rhea"/, 'rendered in the rhea style, as shadcn renders it');
+  assert.match(home, /class="style-rhea[\s"]/, 'rendered in the rhea style, as shadcn renders it');
   assert.ok(!home.includes('id="docs-sidebar"'), 'with no docs sidebar');
   assert.equal(home.split('<main').length - 1, 1, 'and one main landmark');
   const docs = await bodyOf('/ui/docs');

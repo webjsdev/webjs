@@ -170,8 +170,10 @@ website/
                        rtl}, shadcn's five example apps, each a whole page built
                        from the kit inside lib/ui/examples-shell.ts (header,
                        examples nav, frame). Their parts live in
-                       modules/ui/example-apps/<name>/. dashboard reuses the
-                       dashboard-01 block's mirror; tasks is a server-rendered
+                       modules/ui/example-apps/<name>/. dashboard is the
+                       dashboard-01 block's mirror called with the options
+                       that give it the example's shape, plus the example's
+                       Tabler icons and nav data; tasks is a server-rendered
                        table whose filters, sort, hidden columns and page are
                        the query string (one GET form plus links, so it works
                        with JS off; <tasks-table> adds live submit and the row
@@ -373,7 +375,11 @@ website/
                        for the /ui header: cached an hour, a stale value
                        served while one refresh runs, a 2s timeout, a failure
                        retried after five minutes, `GITHUB_TOKEN` used when
-                       set. Not an action (the reset is for tests); the layout
+                       set. It makes no request under `node --test` (or with
+                       `WEBJS_GITHUB_STARS=off`), since every test file that
+                       renders a /ui page would otherwise spend one of the 60
+                       unauthenticated requests an hour. Not an action (its
+                       reset and fetcher swap are for tests); the layout
                        reaches it through modules/ui/queries/github-stars.server.ts
     escape-target.ts   the one rule deciding whether an Escape press belongs to
                        the field the reader is editing. Shared, because every
@@ -706,7 +712,8 @@ TWICE, deliberately. The root layout emits it in its leading head run for a
 `app/ui/layout.ts` emits it again, which covers a soft navigation into `/ui`,
 where the root layout is not re-rendered and the router's head merge only
 adds. The links that commonly cross sections (the marketing header and footer
-UI links, the docs sidebar link, the `/ui` header's link back) also carry
+UI links, the docs sidebar link, the `/ui` links back in the menu drawer
+and the footer) also carry
 `data-no-router`, so the usual path is a full load. Both stylesheets declare
 the same `dark:` variant on `data-theme`, so a theme choice holds across the
 two sections. `test/e2e/ui-chrome-swap.test.mjs` proves the swap in a browser.

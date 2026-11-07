@@ -66,10 +66,10 @@ export class SiteNavMenu extends WebComponent({
   };
 
   /** The summary, for focus restoration after an Escape dismiss. */
-  private _summaryRef = createRef<HTMLElement>();
+  protected _summaryRef = createRef<HTMLElement>();
 
   /** The details, needed for the synchronous close on webjs:before-cache. */
-  private _detailsRef = createRef<HTMLDetailsElement>();
+  protected _detailsRef = createRef<HTMLDetailsElement>();
 
   constructor() {
     super();

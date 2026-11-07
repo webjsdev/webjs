@@ -3,6 +3,7 @@ import { uiElements } from './cards/ui-elements.ts';
 import { sidebarNav } from './cards/sidebar-nav.ts';
 import { savingsTargets, contributionHistory, claimableBalance, dividendIncome } from './cards/finance.ts';
 import { newMilestone, payoutThreshold, accountAccess, qrConnect, payments } from './cards/forms.ts';
+import { emptyDistributeTrack, analyticsCard, notificationSettings, powerUsage } from './cards/insights.ts';
 
 /**
  * The home page's card grid, shadcn's CardsDemo
@@ -38,6 +39,12 @@ export function cardsDemo() {
             <message-scroller-demo></message-scroller-demo>
           </div>
           ${payments()}
+        </div>
+        <div class="hidden flex-col gap-(--gap) min-[1900px]:flex">
+          ${emptyDistributeTrack()}
+          ${analyticsCard()}
+          ${notificationSettings()}
+          ${powerUsage()}
         </div>
       </div>
       <div class="absolute inset-x-0 top-0 z-1 h-120 bg-linear-to-b from-background via-muted to-transparent dark:hidden"></div>

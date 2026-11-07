@@ -11,10 +11,12 @@ import { Card, CardContent, Button, Badge, FieldGroup, Field, Textarea } from '.
 
 /** shadcn's UIElements card (apps/v4/app/(app)/(root)/cards/ui-elements.tsx). */
 export function uiElements() {
-  const toggle = (label: string, cls: string) => html`<ui-switch checked aria-label=${label} class=${cls}></ui-switch>`;
+  // The switch host is display: contents (switch.ts), so a visibility class on
+  // it does nothing. The breakpoint class rides a wrapper instead.
+  const toggle = (label: string, cls: string) => html`<span class=${cn(cls, 'items-center')}><ui-switch checked aria-label=${label}></ui-switch></span>`;
   return Card('w-full', CardContent('flex flex-col gap-6', html`
     <div class="flex gap-2">
-      ${Button({}, html`Button ${ArrowRight02Icon('', 2)}`)}
+      ${Button({}, html`Button ${ArrowRight02Icon('', 2, { icon: 'inline-end' })}`)}
       ${Button({ variant: 'secondary' }, 'Secondary')}
       ${Button({ variant: 'outline' }, 'Outline')}
     </div>

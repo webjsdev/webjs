@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, asset } from '@webjsdev/core';
 import type { Metadata, PageProps } from '@webjsdev/core';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { badgeClass } from '#modules/ui/components/badge.ts';
@@ -47,22 +47,29 @@ export default function UiHome({ url }: Pick<PageProps, 'url'>) {
         <div class="container-wrapper">
           <div class="container flex flex-col items-center gap-2 px-6 py-8 text-center md:py-16 lg:py-20 xl:gap-4">
             <span class="style-new-york contents">
-              <a href="/changelog" data-slot="badge" class=${cn(badgeClass({ variant: 'secondary' }), 'bg-muted no-underline')}>
+              <a href="/ui/docs/changelog" data-slot="badge" class=${cn(badgeClass({ variant: 'secondary' }), 'bg-muted no-underline')}>
                 Sidebar, Carousel and Code Block ${arrowRight}
               </a>
             </span>
             <h1 class="leading-tighter max-w-4xl text-3xl font-semibold tracking-tight text-balance text-primary lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">${TITLE}</h1>
             <p class="max-w-4xl text-base text-balance text-foreground sm:text-lg">${DESCRIPTION}</p>
             <div class="style-luma flex w-full items-center justify-center gap-2 pt-2 **:data-[slot=button]:shadow-none">
-              <a href="/ui/docs" data-slot="button" class=${cn(buttonClass(), 'h-[35px] no-underline')}>Get Started</a>
-              <a href="/ui/docs" data-slot="button" class=${cn(buttonClass({ variant: 'secondary' }), 'no-underline')}>View Components</a>
+              <a href="/ui/docs/installation" data-slot="button" class=${cn(buttonClass(), 'h-[35px] no-underline')}>Get Started</a>
+              <a href="/ui/docs/components" data-slot="button" class=${cn(buttonClass({ variant: 'secondary' }), 'no-underline')}>View Components</a>
             </div>
           </div>
         </div>
       </section>
       <div class="container-wrapper flex-1 p-0">
         <div class="container overflow-hidden md:px-0 lg:max-w-none">
-          <section class="style-rhea">
+          <!-- Below md shadcn shows a picture of the grid rather than the
+               grid itself, wider than the screen and cropped, in each
+               theme (scripts/shoot-home-cards.mjs takes it from this page). -->
+          <section class="-mx-4 w-[140vw] overflow-hidden md:hidden">
+            <img src=${asset('/public/images/home-cards-light.png')} width="2560" height="2764" alt="WebJs UI components in a dashboard" class="block h-auto w-full dark:hidden">
+            <img src=${asset('/public/images/home-cards-dark.png')} width="2560" height="2764" alt="WebJs UI components in a dashboard" class="hidden h-auto w-full dark:block">
+          </section>
+          <section class="style-rhea hidden md:block">
             ${cardsDemo()}
           </section>
         </div>
