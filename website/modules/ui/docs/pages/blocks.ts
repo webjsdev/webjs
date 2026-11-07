@@ -55,6 +55,7 @@ Files:
 
       ${heading(toc, 3, 'Open the page')}
       <p>The page lands at its route under <code>app/</code>, so <code>login-03</code> is served at <code>/login</code> as soon as <code>npm run dev</code> picks it up.</p>
+      <p>A block page renders inside your root layout, like every page. The root layout <code>webjs create</code> writes puts every page in a centered <code>max-w-3xl</code> column, both with the gallery and after <code>npm run gallery:clear</code>, and a full-screen block (the login, signup, sidebar and dashboard blocks) needs the whole viewport. Let the root layout render <code>\${children}</code> bare, and move the column into a route group's layout, such as <code>app/(site)/layout.ts</code>, for the pages that want it.</p>
 
       ${heading(toc, 3, 'Wire the form')}
       <p>A block ships no server action, so its <code>&lt;form&gt;</code> has no <code>action</code> yet. Bind your own <code>'use server'</code> action to it:</p>
@@ -78,11 +79,23 @@ export function loginForm(opts: { class?: string } = {}) {
     <ul>
       <li><strong>Every file has a target.</strong> Each one lands at its own path under the app (<code>app/...</code>, <code>components/...</code>, <code>modules/...</code>, <code>public/...</code>) rather than in your <code>components/ui</code> folder.</li>
       <li><strong>Imports are rewritten.</strong> A block's files import with registry-relative paths. <code>add</code> rewrites every one to where the imported file landed: a kit component to your <code>ui</code> alias, the <code>cn()</code> helper to your <code>utils</code> alias, another file of the same block to its own target.</li>
-      <li><strong>Existing files are kept.</strong> A file that already exists is never replaced without <code>--overwrite</code>, not even under <code>--yes</code>. Blocks of one family share targets (every login block writes <code>app/login/page.ts</code>), so installing a second one keeps the first one's files unless you ask.</li>
+      <li><strong>Existing files are kept.</strong> A file that already exists is never replaced without <code>--overwrite</code>, not even under <code>--yes</code>. Blocks of one family share targets (every login block writes <code>app/login/page.ts</code>), so installing a second one keeps the first one's files unless you ask. Families can overlap too: every sidebar block and <code>dashboard-01</code> write <code>app/dashboard/page.ts</code>, <code>components/app-sidebar.ts</code>, <code>components/nav-main.ts</code> and <code>components/nav-user.ts</code>, so adding <code>dashboard-01</code> after <code>sidebar-07</code> keeps the sidebar block's page and parts and leaves the dashboard's other files unused. Install one app shell per app, or pass <code>--overwrite</code> to switch.</li>
       <li><strong>Missing tokens are added.</strong> A block that needs design tokens your theme may lack carries them, and <code>add</code> adds only the ones your stylesheet's <code>:root</code>, <code>.dark</code> or <code>@theme inline</code> block does not define. A token you already set is left alone.</li>
       <li><strong>Nothing is stripped.</strong> A block's files are written whole, with no example removed.</li>
     </ul>
     <p><code>diff</code> includes installed blocks, so <code>npx @webjsdev/ui diff login-03</code> shows how your copy has moved from the registry's.</p>
+
+    ${heading(toc, 2, 'Charts')}
+    <p>A chart installs the same way and writes one file, <code>components/charts/&lt;name&gt;.ts</code>, plus the <code>chart</code> and <code>card</code> components it uses. Its default export renders the chart's card, so render it from any page:</p>
+    ${commandBlock(packageCommands('add chart-bar-interactive'))}
+    ${codeFigure(`import { html } from '@webjsdev/core';
+import ChartBarInteractive from '#components/charts/chart-bar-interactive.ts';
+
+export default function Page() {
+  return html\`<main class="p-8">\${ChartBarInteractive()}</main>\`;
+}`, { title: 'app/stats/page.ts', lineNumbers: true })}
+    <p>Browse every chart in the <a href="/ui/charts/area">Charts Library</a>.</p>
+
 
     ${heading(toc, 2, 'Add a block to the kit')}
     <p>We'd love to see all types of blocks: applications, marketing, products, and more. A block is contributed to the kit's registry in the WebJs repository.</p>

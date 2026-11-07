@@ -35,7 +35,7 @@ export default async function body(toc: TocEntry[]) {
     ${codeFigure(`{
   "style": "new-york"
 }`, { title: 'components.json', lang: 'json' })}
-    <p>The styles are <code>new-york</code>, <code>vega</code>, <code>nova</code>, <code>maia</code>, <code>lyra</code>, <code>mira</code>, <code>luma</code>, <code>sera</code> and <code>rhea</code>. <code>init</code> writes <code>"default"</code>, which means <code>new-york</code>, and so does a name the kit does not ship.</p>
+    <p>The styles are <code>new-york</code>, <code>vega</code>, <code>nova</code>, <code>maia</code>, <code>lyra</code>, <code>mira</code>, <code>luma</code>, <code>sera</code> and <code>rhea</code>. <code>init</code> writes <code>"default"</code>, which means <code>new-york</code>, and so does a name the kit does not ship. <code>init --style &lt;name&gt;</code>, or a preset from <a href="/ui/create">Create</a> (<code>init --preset &lt;code&gt;</code>), writes another.</p>
     <p>The style is read each time you run <code>add</code>, so changing it later affects only the components you add afterwards. The ones already in your project keep the classes they were baked with until you add them again with <code>--overwrite</code>, and <code>diff</code> reports them as out of date in the meantime.</p>
 
     ${heading(toc, 2, 'tailwind')}
@@ -61,7 +61,7 @@ export default async function body(toc: TocEntry[]) {
     "baseColor": "neutral" | "stone" | "zinc" | "mauve" | "olive" | "mist" | "taupe"
   }
 }`, { title: 'components.json', lang: 'json' })}
-    <p>The tokens are written once. <code>init</code> marks the theme block it appends, and a later run, or an <code>add</code>, leaves a marked block as it is. Changing <code>baseColor</code> afterwards therefore does not repaint an existing project: edit the variables in your stylesheet by hand, or delete the marked block and run <code>init</code> again. See the <a href="/ui/docs/theming">theming docs</a>.</p>
+    <p>The tokens are written once. <code>init</code> marks where the theme block it appends starts and ends, and a later plain run, or an <code>add</code>, leaves the block as it is. Changing <code>baseColor</code> in this file therefore does not repaint an existing project. To repaint it, run <code>init --base-color &lt;name&gt; --overwrite</code> or <code>init --preset &lt;code&gt;</code>, which replace the marked block in place (<code>--overwrite</code> also resets the aliases and the helper files), or edit the variables by hand. A block written before the end marker existed is never replaced, only reported. See the <a href="/ui/docs/theming">theming docs</a>.</p>
 
     ${heading(toc, 3, 'tailwind.cssVariables', 'tailwindcssvariables')}
     <p>The kit uses CSS variables for theming, and only CSS variables. Every component is written against semantic tokens like <code>background</code>, <code>foreground</code> and <code>primary</code>.</p>
@@ -134,7 +134,10 @@ export default async function body(toc: TocEntry[]) {
     <p>There is no <code>hooks</code> alias. WebJs components keep state in signals and reactive properties rather than hooks, and no registry item installs a hook.</p>
 
     ${heading(toc, 2, 'iconLibrary')}
-    <p><code>init</code> writes <code>"lucide"</code>. The components draw their icons as inline SVG, so the CLI installs no icon package and does not read this key today.</p>
+    <p>The icon library the components and blocks draw with: <code>lucide</code> (the default), <code>tabler</code>, <code>hugeicons</code>, <code>phosphor</code> or <code>remixicon</code>. The icons are inline SVG, so no icon package is installed. An item that draws icons depends on the kit's icon module, and <code>add</code> installs the one for this library at <code>lib/utils/icons.ts</code>, beside <code>cn.ts</code>. <code>init --icons &lt;library&gt;</code>, or a preset, sets the key and writes that file.</p>
+    ${codeFigure(`{
+  "iconLibrary": "lucide"
+}`, { title: 'components.json', lang: 'json' })}
 
     ${heading(toc, 2, 'lint')}
     <p>The opt-in design-system linter, <code>webjs ui lint</code>, reads its configuration from here. With no <code>lint</code> block it reports nothing and exits 0.</p>

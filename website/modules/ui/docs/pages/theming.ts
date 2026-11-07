@@ -42,7 +42,7 @@ export default async function body(toc: TocEntry[]) {
 }`, { title: 'components.json', lang: 'json', lineNumbers: true })}
     <p>Tailwind maps these tokens into utilities like <code>bg-background</code>, <code>text-foreground</code>, <code>border-border</code>, and <code>ring-ring</code>.</p>
     <p>Dark mode works by overriding the same tokens inside a <code>.dark</code> selector. See the <a href="/ui/docs/dark-mode">dark mode docs</a> for setting and toggling the <code>.dark</code> class.</p>
-    ${callout(html`The tokens only take effect in a stylesheet your app compiles. An app made with <code>webjs create</code> compiles <code>public/input.css</code>, which carries its own copy of the theme, so edit the tokens there. <code>styles/globals.css</code> is the copy the CLI reads and appends to.`, { className: 'mt-4' })}
+    ${callout(html`An app made with <code>webjs create</code> compiles <code>public/input.css</code>, which imports <code>styles/globals.css</code>, so the tokens there are the ones the page uses. Until you run <code>npm run gallery:clear</code>, though, the gallery's root layout sets its own values for most color tokens and the fonts on <code>:root</code> in <code>app/layout.ts</code>, and those win. Clear the gallery, or delete those values from the layout, before you theme the kit.`, { className: 'mt-4' })}
 
     ${heading(toc, 2, 'Token Convention')}
     <p>We use semantic background and foreground pairs. The base token controls the surface color and the <code>-foreground</code> token controls the text and icon color that sits on that surface.</p>
@@ -126,7 +126,10 @@ export default async function body(toc: TocEntry[]) {
     <p><code>tailwind.baseColor</code> controls the default token values generated for your project when you run <code>init</code>.</p>
     <p>The available base colors are: <strong>Neutral</strong>, <strong>Stone</strong>, <strong>Zinc</strong>, <strong>Mauve</strong>, <strong>Olive</strong>, <strong>Mist</strong>, and <strong>Taupe</strong>.</p>
     ${commandBlock(packageCommands('init --base-color zinc'))}
-    <p><code>init</code> writes the theme once, marked with a <code>/* @webjsdev/ui theme */</code> comment, and leaves it alone on every later run, since the tokens are yours to edit. To switch the base color of an existing project, change the values by hand, or delete the theme block and run <code>init --base-color &lt;name&gt;</code> again.</p>
+    <p><code>init</code> writes the theme once, between a <code>/* @webjsdev/ui theme */</code> and a <code>/* @webjsdev/ui theme end */</code> comment, and a later plain run leaves it alone, since the tokens are yours to edit. To switch the base color of an existing project, run <code>init --base-color &lt;name&gt; --overwrite</code>, which replaces the block in place (and also resets the aliases and helper files), or change the values by hand. A block without the end comment, written by an older version, is never replaced, only reported.</p>
+    ${heading(toc, 2, 'Presets')}
+    <p>To choose the style, the colors, the radius, the fonts and the icon library together, build a design system in <a href="/ui/create">Create</a> and apply the code it prints. <code>init --preset</code> replaces the theme block with the preset's tokens and records the rest in <code>components.json</code>.</p>
+    ${commandBlock(packageCommands('init --preset <code>'))}
 
     ${heading(toc, 2, 'Default Theme CSS')}
     <p>The following is the full default <code>neutral</code> theme, exactly as <code>init</code> installs it. Copy it into your global CSS file and adjust the tokens as needed.</p>

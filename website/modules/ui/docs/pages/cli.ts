@@ -35,12 +35,21 @@ Options:
   -y, --yes             skip confirmation prompts (default: false)
   --base-color <color>  base color (neutral|stone|zinc|mauve|olive|mist|taupe)
   --css <path>          path to the project Tailwind CSS file
-  -o, --overwrite       replace an existing alias map and existing helper files
-                        (default: false)
+  -o, --overwrite       replace an existing alias map, existing helper files and
+                        the theme block (default: false)
+  --preset <code>       apply a design-system preset code from
+                        webjs.dev/ui/create (style, colors, font, radius, icons)
+  --style <name>        component style
+                        (new-york|vega|nova|maia|lyra|mira|luma|sera|rhea)
+  --icons <library>     icon library
+                        (lucide|tabler|hugeicons|phosphor|remixicon)
   --registry <url>      registry base URL (default:
                         "https://webjs.dev/ui/registry")
   -h, --help            display help for command`)}
-    <p>Running <code>init</code> again is safe. An existing <code>components.json</code> keeps its aliases, stylesheet path and base color, and an existing <code>cn.ts</code> or <code>dom.ts</code> is left as you edited it. Pass <code>--overwrite</code> to reset them. The command exits with an error when it cannot write the theme tokens, so a clean exit means the components are styled.</p>
+    <p>To start from a design system, build one in <a href="/ui/create">Create</a> and pass the code it prints. A preset sets the style, the colors, the radius, the fonts and the icon library in one go: it writes them to <code>components.json</code>, replaces the theme block in your stylesheet with the preset's tokens, writes the chosen icon library to <code>lib/utils/icons.ts</code>, and prints the stylesheet URL for the preset's fonts, which you load yourself. <code>--style</code> and <code>--icons</code> set one of those on their own, and also override what a preset names.</p>
+    ${commandBlock(packageCommands('init --preset <code>'))}
+    <p>A style or icon library applies to what <code>add</code> writes from then on. Components you added before keep the classes they were baked with until you add them again with <code>--overwrite</code>.</p>
+    <p>Running <code>init</code> again is safe. An existing <code>components.json</code> keeps its aliases, stylesheet path and base color, and an existing <code>cn.ts</code> or <code>dom.ts</code> is left as you edited it. Pass <code>--overwrite</code> to reset them, the theme block included. A theme block written before the kit marked where it ends is never replaced, only reported, since <code>init</code> cannot tell where it stops. The command exits with an error when it cannot write the theme tokens, so a clean exit means the components are styled.</p>
 
     <hr>
 

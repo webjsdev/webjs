@@ -1,4 +1,6 @@
 import { html } from '@webjsdev/core';
+import { cn } from '#lib/utils/cn.ts';
+import { buttonClass } from '#modules/ui/components/button.ts';
 import { heading, type TocEntry } from '#lib/ui/docs/page.ts';
 import { codeFigure } from '#lib/ui/docs/code.ts';
 import { callout } from '#lib/ui/docs/callout.ts';
@@ -33,24 +35,34 @@ export default async function body(toc: TocEntry[]) {
 
   return html`
     <p>WebJs UI is the component library for WebJs apps. Choose the setup that matches your starting point.</p>
-    <div class="not-typeset mt-6 grid gap-4 sm:grid-cols-3 sm:gap-6">
+    <div class="not-typeset mt-6 grid gap-4 sm:grid-cols-2 sm:gap-6">
+      ${card('#use-create', 'Use Create', 'Build your design system visually and get the command that applies it.')}
       ${card('#use-the-cli', 'Use the CLI', 'Scaffold a new WebJs app with the kit already set up.')}
       ${card('#existing-project', 'Existing Project', 'Add WebJs UI to a WebJs app you already created.')}
       ${card('#manual-installation', 'Manual Installation', 'Set up every file by hand.')}
     </div>
 
+    ${heading(toc, 2, 'Use Create', 'use-create')}
+    <p>Build your design system visually: pick the style, the colors, the radius, the fonts and the icons, and preview them on real components. Create prints an <code>init --preset</code> command that applies your choices to a WebJs app in one step.</p>
+    <a href="/ui/create" data-slot="button" class=${cn(buttonClass({ size: 'sm' }), 'mt-6 no-underline!')}>Open Create</a>
+    ${commandBlock(packageCommands('init --preset <code>'))}
+
     ${heading(toc, 2, 'Use the CLI')}
     <p>Use the CLI to scaffold a new project directly from the terminal:</p>
     ${codeFigure(`npm create webjs@latest my-app
 cd my-app && npm run dev`, { lang: 'bash' })}
-    <p>A new app is ready for the kit. <code>webjs create</code> writes the same <code>components.json</code>, <code>lib/utils/cn.ts</code> and theme that <code>init</code> would, and leaves <code>components/ui/</code> empty for you to fill. Add the components you need:</p>
+    <p>A new app is ready for the kit. <code>webjs create</code> writes the same <code>components.json</code>, <code>lib/utils/cn.ts</code> and theme that <code>init</code> would.</p>
+    <p>It also ships a browsable feature gallery, whose demos import a small example design system of their own from <code>components/ui/</code> (<code>badge</code>, <code>button</code>, <code>card</code> and <code>input</code>) and whose root layout sets its own colors and fonts. Clear it before you add the kit's components. The reset removes the demos, that example design system and the layout's palette, and keeps <code>cn.ts</code> and the theme:</p>
+    ${codeFigure(`npm run gallery:clear`, { lang: 'bash' })}
+    <p>Then add the components you need:</p>
     ${commandBlock(packageCommands('add button card dialog'))}
+    <p>Without the reset, <code>add</code> asks before replacing one of the gallery's files, and <code>--yes</code> replaces it, which breaks the demos that import it.</p>
     <p>Inside a WebJs app, <code>webjs ui</code> runs the same commands, since <code>@webjsdev/ui</code> ships with the WebJs CLI: <code>webjs ui add button card dialog</code>.</p>
 
     ${heading(toc, 2, 'Existing Project')}
     <p>Run <code>init</code> in the app's root. It asks for a base color and the path of your Tailwind CSS file, then writes <code>components.json</code>, copies the <code>cn()</code> helper to <code>lib/utils/cn.ts</code> (with <code>lib/utils/dom.ts</code> beside it), and appends the theme tokens to the stylesheet.</p>
     ${commandBlock(packageCommands('init'))}
-    <p>Point it at the stylesheet your app compiles. Its default, <code>styles/globals.css</code>, is the path <code>webjs create</code> uses for the CLI's copy of the theme. Running <code>init</code> again is safe: it keeps an existing <code>components.json</code> and helper files as they are unless you pass <code>--overwrite</code>.</p>
+    <p>Point it at the stylesheet your app compiles. Its default, <code>styles/globals.css</code>, is where <code>webjs create</code> puts the theme, imported from <code>public/input.css</code>, the stylesheet the app compiles. Running <code>init</code> again is safe: it keeps an existing <code>components.json</code> and helper files as they are unless you pass <code>--overwrite</code>.</p>
     <p>Then add components:</p>
     ${commandBlock(packageCommands('add button'))}
     ${callout(html`The kit is copied into your app, not imported from a package at runtime. Tier-2 elements import <code>@webjsdev/core</code>, which every WebJs app already depends on, and <code>add</code> installs it when you add a Tier-2 component.`, { className: 'mt-6' })}
