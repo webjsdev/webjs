@@ -3,7 +3,7 @@ import { cn } from '#lib/utils/cn.ts';
 import { cardClass, cardContentClass, cardFooterClass, cardHeaderClass } from '#modules/ui/components/card.ts';
 import { fieldGroupClass, fieldSeparatorClass } from '#modules/ui/components/field.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
-import { CheckIcon, CopyIcon } from '#lib/utils/icons.ts';
+import { CheckIcon } from '#lib/utils/icons.ts';
 import {
   MENU_ACCENT_OPTIONS,
   MENU_COLOR_OPTIONS,
@@ -14,7 +14,6 @@ import {
   radiusOptions,
   themeOptions,
   createHref,
-  initCommand,
   optionLabel,
   presetCode,
   shuffleConfig,
@@ -34,12 +33,13 @@ import { Menu09Icon, SquareLock01Icon, SquareUnlock01Icon } from '#modules/ui/ty
  * It is a real GET form on /ui/create, so it works with JavaScript off: each
  * picker is a button opening a native `popover` of radio inputs named after
  * the field, with an Apply button that submits. Shuffle and Reset are links.
- * The footer shows the preset code and the one command that installs it.
+ * The footer is shadcn's: the preset code as a copyable `--preset` flag, Open
+ * Preset (a GET form in a dialog, ./open-preset.ts), Shuffle and Get Code.
  *
  * <create-customizer> (components/create-customizer.ts) wraps this and adds
  * what a form cannot: a choice applies the moment it is made (the preview
- * frame repaints in place, the URL, the code and the command follow), the
- * theme lists follow the base color, and the copy buttons. The Apply buttons
+ * frame repaints in place, the URL and the code follow), the theme lists
+ * follow the base color, and the copy button. The Apply buttons
  * hide once it is defined.
  */
 
@@ -77,8 +77,8 @@ function lockButton(field: CreateField) {
 }
 
 /**
- * shadcn's MainMenu: Navigate (the item explorer), Shuffle, Light/Dark, Undo,
- * Redo, Reset. Shuffle and Reset are links, so they work with JavaScript off;
+ * shadcn's MainMenu: Navigate (the item explorer), Open Preset, Shuffle,
+ * Light/Dark, Undo, Redo, Reset. Shuffle and Reset are links, so they work with JavaScript off;
  * the rest need the element and are disabled until it enables them.
  */
 function mainMenu(params: CreateParams) {
@@ -91,6 +91,7 @@ function mainMenu(params: CreateParams) {
     </button>
     <div popover id="create-menu" role="menu" aria-label="Menu" data-picker-content="menu" data-align-offset="-8" data-slot="dropdown-menu-content" class=${CONTENT}>
       ${button('Navigate...', 'navigate', 'Ctrl+P')}
+      ${button('Open Preset...', 'open-preset', 'O')}
       ${link('Shuffle', 'shuffle', 'R', createHref({ config: shuffleConfig(params.config), item: params.item }))}
       ${button('Light/Dark', 'theme', 'D')}
       <div role="separator" class=${SEPARATOR}></div>
@@ -183,13 +184,6 @@ function fontPicker(field: 'font' | 'fontHeading', label: string, params: Create
   );
 }
 
-function copyButton(action: string, label: string) {
-  return html`<button type="button" data-action=${action} aria-label=${label} title=${label} class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground [create-customizer:not(:defined)_&]:hidden">
-    <span class="contents [[data-copied]>&]:hidden">${CopyIcon('size-3.5')}</span>
-    <span class="hidden [[data-copied]>&]:contents">${CheckIcon('size-3.5')}</span>
-  </button>`;
-}
-
 export function customizer(params: CreateParams) {
   const separator = html`<div data-slot="field-separator" role="none" class=${cn(fieldSeparatorClass(), 'hidden md:block')}></div>`;
   const code = presetCode(params.config);
@@ -218,27 +212,25 @@ export function customizer(params: CreateParams) {
           <div aria-hidden="true" class="w-0.5 shrink-0 md:hidden"></div>
         </div>
       </div>
-      <div data-slot="card-footer" class=${cn(cardFooterClass(), 'flex min-w-0 flex-col gap-2 border-t md:*:w-full')}>
-        <div class="flex w-full items-center gap-1 rounded-lg px-2.5 py-1.5 ring-1 ring-foreground/10" data-copy-source="preset">
-          <span class="text-xs text-muted-foreground">Preset</span>
-          <code class="ml-auto font-mono text-sm" data-preset-code>${code}</code>
-          ${copyButton('copy-preset', 'Copy preset code')}
-        </div>
-        <div class="flex w-full items-start gap-1 rounded-lg bg-muted/50 px-2.5 py-1.5" data-copy-source="command">
-          <code class="min-w-0 flex-1 font-mono text-xs leading-5 break-all" data-init-command>${initCommand(params.config)}</code>
-          ${copyButton('copy-command', 'Copy the init command')}
-        </div>
-        <div class="flex w-full gap-2">
-          <a href=${createHref({ config: shuffleConfig(params.config), item: params.item })} data-action="shuffle" data-prefetch="false" data-slot="button" class=${footerButton()}>
-            <span class="w-full truncate text-center font-medium">Shuffle</span>
-          </a>
-          <a href=${`/ui/init/md?preset=${code}`} data-init-md target="_blank" rel="noreferrer" data-slot="button" class=${footerButton()}>
-            <span class="w-full truncate text-center font-medium">Instructions</span>
-          </a>
-        </div>
-        <!-- shadcn's Get Code: the project dialog (modules/ui/create/project-form.ts).
-             The invoker command opens it with no script where the browser
-             supports one, and the element opens it everywhere else. -->
+      <!-- shadcn's footer: Copy Preset (the code as a --preset flag), Open
+           Preset (./open-preset.ts) and Shuffle in one row on a phone, a
+           column from md, then Get Code (from md; on a phone shadcn has none). -->
+      <div data-slot="card-footer" class=${cn(cardFooterClass(), 'flex min-w-0 gap-2 border-t md:flex-col md:rounded-b-none md:**:[button,a]:w-full')}>
+        <button type="button" data-action="copy-preset" data-slot="button" title=${`--preset ${code}`} class=${cn(footerButton(), 'min-w-0 flex-1 md:flex-none')}>
+          <span class="block min-w-0 truncate [[data-copied]>&]:hidden">--preset <span data-preset-code>${code}</span></span>
+          <span class="hidden [[data-copied]>&]:block">Copied</span>
+        </button>
+        <button type="button" commandfor="create-open-preset" command="show-modal" data-action="open-preset" data-slot="button" class=${cn(footerButton(), 'max-w-20 min-w-0 flex-1 sm:max-w-none md:flex-none')}>
+          <span class="w-full truncate text-center font-medium"><span class="md:hidden">Open</span><span class="hidden md:inline">Open Preset</span></span>
+        </button>
+        <a href=${createHref({ config: shuffleConfig(params.config), item: params.item })} data-action="shuffle" data-prefetch="false" data-slot="button" class=${cn(footerButton(), 'max-w-20 min-w-0 flex-1 sm:max-w-none md:flex-none')}>
+          <span class="w-full truncate text-center font-medium">Shuffle</span>
+        </a>
+      </div>
+      <!-- shadcn's Get Code: the project dialog (modules/ui/create/project-form.ts).
+           The invoker command opens it with no script where the browser
+           supports one, and the element opens it everywhere else. -->
+      <div data-slot="card-footer" class=${cn(cardFooterClass(), '-mt-3 hidden min-w-0 gap-2 md:flex md:flex-col md:**:[button,a]:w-full')}>
         <button type="button" commandfor="create-project" command="show-modal" data-action="get-code" data-slot="button" class=${cn(buttonClass(), 'h-9 w-full')}>Get Code</button>
       </div>
     </form>`;

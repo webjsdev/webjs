@@ -180,11 +180,24 @@ function reader(search: Search) {
   };
 }
 
+/**
+ * A pasted preset, shadcn's parsePresetInput: the bare code or the
+ * `--preset <code>` flag the Copy Preset button copies. `null` when it is
+ * not a preset code.
+ */
+export function parsePresetInput(value: string): string | null {
+  const input = value.trim();
+  if (!input) return null;
+  const preset = input.match(/^--preset\b\s+(.+)$/i)?.[1]?.trim() ?? input;
+  return isPresetCode(preset) ? preset : null;
+}
+
 /** The configurator's state from a query string. Never throws: nonsense reads as the default. */
 export function parseCreateParams(search: Search): CreateParams {
   const read = reader(search);
-  const code = read('preset');
-  const decoded = code && isPresetCode(code) ? decodePreset(code) : null;
+  // Read as pasted, so the Open Preset form submits with no script too.
+  const code = parsePresetInput(read('preset') || '');
+  const decoded = code ? decodePreset(code) : null;
   const input: Partial<Record<CreateField, string | null>> = { ...(decoded || {}) };
   for (const field of FIELDS) {
     const value = read(field);

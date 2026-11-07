@@ -15,6 +15,7 @@ import { customizer } from '#modules/ui/create/customizer.ts';
 import { previewFrame } from '#modules/ui/create/preview-frame.ts';
 import { projectForm } from '#modules/ui/create/project-form.ts';
 import { welcomeDialog, WELCOME_STORAGE_KEY } from '#modules/ui/create/welcome-dialog.ts';
+import { openPreset } from '#modules/ui/create/open-preset.ts';
 import { DEFAULT_ITEM, normalizeConfig, presetCode } from '#modules/ui/create/params.ts';
 import { buildThemeVars } from '#modules/ui/design-system/themes.js';
 import { decodePreset } from '#modules/ui/design-system/preset.js';
@@ -45,7 +46,7 @@ const mount = async (config = normalizeConfig({}), { welcome = false } = {}) => 
   const box = document.createElement('div');
   document.body.append(box);
   const params = { config, item: DEFAULT_ITEM };
-  render(html`<create-customizer data-slot="designer">${previewFrame(params, GROUPS)}${customizer(params)}${projectForm(params)}${welcomeDialog()}</create-customizer>`, box);
+  render(html`<create-customizer data-slot="designer">${previewFrame(params, GROUPS)}${customizer(params)}${projectForm(params)}${openPreset(params)}${welcomeDialog()}</create-customizer>`, box);
   // The markup is projected into the element's slot a microtask after it connects.
   await wait(50);
   const frame = box.querySelector('iframe');
@@ -83,13 +84,12 @@ suite('create-customizer', () => {
       const code = box.querySelector('[data-preset-code]').textContent;
       assert.equal(decodePreset(code).theme, 'blue', 'the code carries the theme');
       assert.equal(code, presetCode(normalizeConfig({ theme: 'blue', chartColor: 'neutral' })));
-      assert.equal(box.querySelector('[data-init-command]').textContent, `npx @webjsdev/ui init --preset ${code}`);
+      assert.equal(box.querySelector('button[data-action="copy-preset"]').title, `--preset ${code}`, 'Copy Preset copies the flag');
       assert.equal(location.pathname, '/ui/create');
       assert.equal(urlCode(), code, 'the URL carries the code');
       const { light, dark } = buildThemeVars({ baseColor: 'neutral', theme: 'blue', chartColor: 'neutral' });
       assert.equal(wrapper(box).style.getPropertyValue('--primary').trim(), `light-dark(${light.primary}, ${dark.primary})`, 'the frame repaints in place');
       assert.equal(box.querySelector('[data-picker="theme"] [data-current]').textContent, 'Blue');
-      assert.ok(box.querySelector('a[data-init-md]').getAttribute('href').endsWith(code));
     } finally {
       box.remove();
     }
@@ -331,6 +331,74 @@ suite('create-customizer', () => {
       assert.equal(new URLSearchParams(location.search).get('item'), 'button-demo');
       assert.ok(!explorer.matches(':popover-open'), 'the explorer closes');
     } finally {
+      box.remove();
+    }
+  });
+
+  test('8. Open Preset: O opens it, Open waits for a real code, and a pasted flag applies in place', async () => {
+    const box = await mount();
+    try {
+      key('o');
+      const dialog = box.querySelector('#create-open-preset');
+      assert.ok(dialog.matches(':modal'), 'O opens it as a modal');
+      const input = dialog.querySelector('#preset-code');
+      const submit = dialog.querySelector('[data-open-preset-submit]');
+      assert.ok(submit.disabled, 'Open is disabled while the input is empty');
+      input.value = 'open sesame';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      assert.ok(submit.disabled, 'and while it is not a preset');
+      assert.equal(input.getAttribute('aria-invalid'), 'true', 'which is marked invalid');
+      const code = presetCode(normalizeConfig({ style: 'lyra', theme: 'blue' }));
+      input.value = `--preset ${code}`;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      assert.ok(!submit.disabled, 'a pasted flag enables Open');
+      assert.ok(!input.hasAttribute('aria-invalid'));
+      let submitted;
+      const seen = (e) => { submitted = e; };
+      document.addEventListener('submit', seen);
+      submit.click();
+      document.removeEventListener('submit', seen);
+      await tick();
+      assert.ok(submitted?.defaultPrevented, 'in place: the GET form is not sent');
+      assert.equal(urlCode(), code, 'the preset applies');
+      assert.equal(box.querySelector('[data-picker="style"] [data-current]').textContent, 'Lyra');
+      assert.ok(!dialog.open, 'the dialog closes');
+      assert.equal(input.value, '', 'and forgets the input');
+      key('z', { ctrlKey: true });
+      assert.equal(current().style, 'nova', 'opening a preset is one undo step');
+    } finally {
+      box.remove();
+    }
+  });
+
+  test('9. the header Get Code, outside the element, opens the project form', async () => {
+    const box = await mount();
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.dataset.action = 'get-code';
+    document.body.append(header);
+    try {
+      header.click();
+      assert.ok(box.querySelector('#create-project').matches(':modal'));
+    } finally {
+      header.remove();
+      box.remove();
+    }
+  });
+
+  test('Copy Preset copies the --preset flag', async () => {
+    const box = await mount();
+    const original = navigator.clipboard.writeText;
+    let copied = '';
+    navigator.clipboard.writeText = async (text) => { copied = text; };
+    try {
+      const button = box.querySelector('button[data-action="copy-preset"]');
+      button.click();
+      await tick();
+      assert.equal(copied, `--preset ${urlCode() || presetCode(normalizeConfig({}))}`);
+      assert.ok(button.hasAttribute('data-copied'), 'and reads Copied for a moment');
+    } finally {
+      navigator.clipboard.writeText = original;
       box.remove();
     }
   });

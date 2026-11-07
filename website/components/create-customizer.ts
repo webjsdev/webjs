@@ -6,11 +6,11 @@ import {
   FIELDS,
   ITEM_NAME,
   createHref,
-  initCommand,
   isTranslucentMenuColor,
   normalizeConfig,
   optionLabel,
   parseCreateParams,
+  parsePresetInput,
   presetCode,
   previewHref,
   shuffleConfig,
@@ -95,6 +95,7 @@ export class CreateCustomizer extends WebComponent {
     this.addEventListener('change', this._onChange);
     this.addEventListener('input', this._onInput);
     this.addEventListener('click', this._onClick);
+    this.addEventListener('submit', this._onSubmit);
     this.addEventListener('pointerover', this._onPointerOver);
     this.addEventListener('keydown', this._onMenuKey);
     // toggle, pointerleave, load and close do not bubble, so these listen in
@@ -105,6 +106,9 @@ export class CreateCustomizer extends WebComponent {
     this.addEventListener('close', this._onDialogClose, true);
     this.addEventListener('slotchange', this._enhance);
     document.addEventListener('keydown', this._onKey);
+    // The header's Get Code (app/ui/(chrome)/layout.ts) sits outside this
+    // element, so its click is caught on the document.
+    document.addEventListener('click', this._onDocClick);
     this._enhance();
     // After the markup is projected into the slot (a microtask after
     // connecting): moving a modal dialog takes it out of the top layer.
@@ -115,6 +119,7 @@ export class CreateCustomizer extends WebComponent {
     this.removeEventListener('change', this._onChange);
     this.removeEventListener('input', this._onInput);
     this.removeEventListener('click', this._onClick);
+    this.removeEventListener('submit', this._onSubmit);
     this.removeEventListener('pointerover', this._onPointerOver);
     this.removeEventListener('keydown', this._onMenuKey);
     this.removeEventListener('toggle', this._onToggle, true);
@@ -123,6 +128,7 @@ export class CreateCustomizer extends WebComponent {
     this.removeEventListener('close', this._onDialogClose, true);
     this.removeEventListener('slotchange', this._enhance);
     document.removeEventListener('keydown', this._onKey);
+    document.removeEventListener('click', this._onDocClick);
     this._detachFrame();
     clearTimeout(this._previewTimer);
     clearTimeout(this._welcomeTimer);
@@ -214,6 +220,13 @@ export class CreateCustomizer extends WebComponent {
     this._closePopups();
   }
 
+  /** shadcn's Open Preset, from the footer, the menu and the O key. */
+  openPreset(): void {
+    this._closePopups();
+    this._openDialog('create-open-preset');
+    this.querySelector<HTMLInputElement>('#preset-code')?.focus();
+  }
+
   openExplorer(): void {
     const explorer = this.querySelector<HTMLElement>('[data-explorer]');
     if (!explorer) return;
@@ -231,6 +244,7 @@ export class CreateCustomizer extends WebComponent {
     this._sync();
     this._syncLocks();
     this._syncProject();
+    this._checkPresetInput();
     const frame = this._frame();
     if (!this._frameDoc && frame?.contentDocument?.readyState === 'complete') this._onFrameLoad();
   };
@@ -266,6 +280,7 @@ export class CreateCustomizer extends WebComponent {
   private _onInput = (e: Event): void => {
     const input = e.target as HTMLInputElement;
     if (input.matches('[data-explorer-filter]')) this._filterExplorer(input.value);
+    else if (input.id === 'preset-code') this._checkPresetInput();
     else if (input.dataset.projectField === 'name') this._readProject();
   };
 
@@ -292,6 +307,7 @@ export class CreateCustomizer extends WebComponent {
         redo: () => this.redo(),
         theme: () => this.toggleTheme(),
         navigate: () => { this._closePopups(); this.openExplorer(); },
+        'open-preset': () => this.openPreset(),
         'get-code': () => this._openDialog('create-project'),
       };
       const fn = run[action.dataset.action || ''];
@@ -338,8 +354,42 @@ export class CreateCustomizer extends WebComponent {
     } else if (key === 'd') {
       e.preventDefault();
       this.toggleTheme();
+    } else if (key === 'o' && !e.shiftKey) {
+      e.preventDefault();
+      this.openPreset();
     }
   };
+
+  /** The header's Get Code, outside this element. */
+  private _onDocClick = (e: MouseEvent): void => {
+    const button = (e.target as Element).closest?.<HTMLElement>('[data-action="get-code"]');
+    if (!button || this.contains(button) || e.button !== 0) return;
+    e.preventDefault();
+    this._openDialog('create-project');
+  };
+
+  /** Open Preset applies a pasted code in place rather than reloading. */
+  private _onSubmit = (e: SubmitEvent): void => {
+    const form = e.target as HTMLFormElement;
+    if (!form.closest('#create-open-preset')) return;
+    e.preventDefault();
+    const input = form.querySelector<HTMLInputElement>('#preset-code');
+    const code = parsePresetInput(input?.value || '');
+    if (!code) return;
+    this.apply(parseCreateParams(new URLSearchParams({ preset: code })).config);
+    form.closest('dialog')?.close();
+  };
+
+  /** shadcn's Open stays disabled until the input is a preset, and an unparseable one is marked invalid. */
+  private _checkPresetInput(): void {
+    const input = this.querySelector<HTMLInputElement>('#preset-code');
+    if (!input) return;
+    const valid = parsePresetInput(input.value) !== null;
+    const submit = this.querySelector<HTMLButtonElement>('[data-open-preset-submit]');
+    if (submit) submit.disabled = !valid;
+    if (input.value.trim() && !valid) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  }
 
   /** Arrow keys walk a menu's items, as a menu's do. */
   private _onMenuKey = (e: KeyboardEvent): void => {
@@ -447,6 +497,10 @@ export class CreateCustomizer extends WebComponent {
     if (dialog.open) return;
     if (dialog.id === 'create-welcome') {
       try { localStorage.setItem(WELCOME_STORAGE_KEY, 'true'); } catch {}
+    } else if (dialog.id === 'create-open-preset') {
+      const input = dialog.querySelector<HTMLInputElement>('#preset-code');
+      if (input) input.value = '';
+      this._checkPresetInput();
     }
   };
 
@@ -538,8 +592,7 @@ export class CreateCustomizer extends WebComponent {
     }
     const code = presetCode(config);
     for (const el of this.querySelectorAll('[data-preset-code]')) el.textContent = code;
-    for (const el of this.querySelectorAll('[data-init-command]')) el.textContent = initCommand(config);
-    for (const a of this.querySelectorAll<HTMLAnchorElement>('a[data-init-md]')) a.href = `/ui/init/md?preset=${code}`;
+    for (const b of this.querySelectorAll<HTMLElement>('button[data-action="copy-preset"]')) b.title = `--preset ${code}`;
     for (const a of this.querySelectorAll<HTMLAnchorElement>('a[data-action="shuffle"]')) {
       a.href = createHref({ config: shuffleConfig(config), item: this._params.item });
     }
@@ -554,8 +607,7 @@ export class CreateCustomizer extends WebComponent {
       }
     }
     for (const a of this.querySelectorAll<HTMLAnchorElement>('a[data-open-preview]')) a.href = previewHref(this._params);
-    const itemInput = this.querySelector<HTMLInputElement>('input[type="hidden"][name="item"]');
-    if (itemInput) itemInput.value = this._params.item;
+    for (const input of this.querySelectorAll<HTMLInputElement>('input[type="hidden"][name="item"]')) input.value = this._params.item;
     for (const b of this.querySelectorAll<HTMLButtonElement>('button[data-action="undo"]')) b.disabled = !this.canUndo;
     for (const b of this.querySelectorAll<HTMLButtonElement>('button[data-action="redo"]')) b.disabled = !this.canRedo;
     this._syncProject();
@@ -598,8 +650,8 @@ export class CreateCustomizer extends WebComponent {
   private async _copy(button: HTMLButtonElement): Promise<void> {
     const action = button.dataset.action;
     let text: string;
-    if (action === 'copy-preset') text = presetCode(this._params.config);
-    else if (action === 'copy-command') text = initCommand(this._params.config);
+    // shadcn's Copy Preset copies the flag, ready to paste after init.
+    if (action === 'copy-preset') text = `--preset ${presetCode(this._params.config)}`;
     else if (action === 'copy-theme') text = themeTokensCss(this._params.config);
     else {
       const group = action === 'copy-new' ? 'new' : 'existing';

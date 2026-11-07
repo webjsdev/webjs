@@ -85,6 +85,14 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
             ${githubLink(stars)}
             ${separator}
             <ui-mode-switcher></ui-mode-switcher>
+            <!-- shadcn's DesignerActions on /ui/create from md: Get Code, the
+                 project dialog the page holds (#create-project), opened by
+                 its invoker command or, without one, by <create-customizer>.
+                 shadcn's "Open in v0" beside it has no WebJs counterpart. -->
+            <div class="hidden items-center gap-2 md:[body:has(#create-project)_&]:flex">
+              ${separator}
+              <button type="button" commandfor="create-project" command="show-modal" data-action="get-code" class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-primary bg-clip-padding px-2.5 text-sm font-medium whitespace-nowrap text-primary-foreground outline-none transition-all select-none hover:bg-primary/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px">Get Code</button>
+            </div>
             <!-- shadcn's "+ New" button, to the configurator. Hidden on the
                  configurator itself (and the typeset builder), the pages
                  that carry data-slot="designer". -->

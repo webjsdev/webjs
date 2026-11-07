@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
 import { encodePreset, isPresetCode } from '../../../packages/ui/packages/registry/themes/preset.js';
 import { buildThemeVars } from '../../../packages/ui/packages/registry/themes/themes.js';
-import { FIELDS, SHUFFLE_PRESETS, DEFAULT_CONFIG, normalizeConfig, shuffleConfig } from '#modules/ui/create/params.ts';
+import { FIELDS, SHUFFLE_PRESETS, DEFAULT_CONFIG, normalizeConfig, parsePresetInput, shuffleConfig } from '#modules/ui/create/params.ts';
 import { MENU_TARGETS, designSystemData } from '#modules/ui/create/design-system.ts';
 import { newProjectCommand } from '#modules/ui/create/project.ts';
 
@@ -47,8 +47,7 @@ test('/ui/create renders the configurator as a GET form with every picker', asyn
   assert.match(html, /<form method="get" action="\/ui\/create"/);
   for (const field of FIELDS) assert.match(html, new RegExp(`data-picker="${field}"`), `the ${field} picker`);
   const code = encodePreset(normalizeConfig({}));
-  assert.match(html, new RegExp(`data-preset-code>${code}<`), 'the default preset code');
-  assert.match(html, new RegExp(`data-init-command>npx @webjsdev/ui init --preset ${code}<`), 'the init command');
+  assert.match(html, new RegExp(`--preset <span data-preset-code>${code}</span>`), 'the default preset code, as the flag Copy Preset copies');
   assert.match(html, new RegExp(`<iframe src="/ui/preview/preview\\?preset=${code}"`), 'the preview frame');
   assert.equal(checked(html, 'style'), 'nova', 'shadcn\'s default style');
 });
@@ -181,4 +180,35 @@ test('the specimen label names the heading font only when it is a different face
   assert.equal(label('inter'), 'Inherit', 'the body face chosen again is still no different face');
   assert.equal(label('lora'), 'Lora');
   assert.equal(designSystemData(normalizeConfig({ ...DEFAULT_CONFIG, fontHeading: 'inherit' })).fontHeadingTitle, 'Inter', 'while the title names the inherited font');
+});
+
+test('the footer is shadcn\'s: Copy Preset, Open Preset and Shuffle, then Get Code from md', async () => {
+  const html = await page('/ui/create');
+  // The last Get Code is the footer's; the first is the header's (from md).
+  const footer = html.slice(html.indexOf('data-action="copy-preset"') - 400, html.lastIndexOf('data-action="get-code"') + 200);
+  const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+  assert.match(header, /md:\[body:has\(#create-project\)_&\]:flex[^>]*>[\s\S]*?commandfor="create-project" command="show-modal" data-action="get-code"/, 'the header\'s Get Code, shadcn\'s DesignerActions');
+  const order = ['data-action="copy-preset"', 'data-action="open-preset"', 'data-action="shuffle"', 'data-action="get-code"'].map((a) => footer.indexOf(a));
+  assert.ok(order.every((i) => i >= 0), 'all four controls');
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'in shadcn\'s order');
+  assert.match(footer, /<span class="md:hidden">Open<\/span><span class="hidden md:inline">Open Preset<\/span>/, 'Open on a phone, Open Preset from md');
+  assert.match(footer, /class="[^"]*-mt-3 hidden[^"]*md:flex[^"]*"[^>]*>\s*<button type="button" commandfor="create-project"/, 'Get Code only from md');
+  assert.doesNotMatch(html, /data-init-command|Instructions<\/span>/, 'the old init command row is gone, as from shadcn\'s footer');
+});
+
+test('Open Preset is a GET form that takes either spelling of a code', async () => {
+  const html = await page('/ui/create');
+  assert.match(html, /<dialog id="create-open-preset"[\s\S]*?<form method="get" action="\/ui\/create"[\s\S]*?<input id="preset-code" name="preset"/, 'a dialog holding a GET form');
+  assert.match(html, /commandfor="create-open-preset" command="show-modal" data-action="open-preset"/, 'opened by the footer with no script');
+  assert.match(html, /data-action="open-preset"[^>]*>Open Preset\.\.\./, 'and from the menu');
+  const code = encodePreset(normalizeConfig({ style: 'lyra', theme: 'blue', baseColor: 'zinc' }));
+  assert.equal(parsePresetInput(code), code);
+  assert.equal(parsePresetInput(` --preset ${code} `), code, 'the copied flag');
+  assert.equal(parsePresetInput('open sesame'), null);
+  assert.equal(parsePresetInput(''), null);
+  // What the form submits with JavaScript off: the flag, spaces and all.
+  for (const pasted of [code, `--preset ${code}`]) {
+    const opened = await page(`/ui/create?preset=${encodeURIComponent(pasted)}`);
+    assert.equal(checked(opened, 'style'), 'lyra', `${JSON.stringify(pasted)} opens the preset`);
+  }
 });

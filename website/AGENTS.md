@@ -150,8 +150,10 @@ website/
                        frame, server markup from modules/ui/create/. The
                        state is the query string (`?preset=<code>`, or the
                        fields one by one), the customizer a GET form that
-                       works with JS off, its footer the preset code and
-                       `npx @webjsdev/ui init --preset <code>`, and
+                       works with JS off, its footer shadcn's (Copy Preset,
+                       the code as a `--preset` flag; Open Preset, a GET form
+                       in a dialog that takes either spelling; Shuffle; Get
+                       Code, also in the header from md), and
                        components/create-customizer.ts the behaviour. The
                        header's Create link and "+ New" button lead here
         blocks/page.ts blocks/[category]/page.ts
@@ -550,8 +552,8 @@ website/
                        mapped truthfully onto `create-webjs` plus
                        `@webjsdev/ui init --preset`), the customizer /
                        preview-frame (with the item explorer) / project-form /
-                       welcome-dialog fragments, and placeholder.ts (the
-                       stand-in preview)
+                       open-preset / welcome-dialog fragments, and
+                       placeholder.ts (the stand-in preview)
     ui/queries/github-stars.server.ts
                        the action the /ui chrome layout awaits for the star
                        count, over lib/github-stars.server.ts
@@ -576,6 +578,11 @@ website/
                        Playfair Display in public/sera-fonts.css, linked only
                        by /ui/sera)
     generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
+    audit-390.mjs audit-390-overlays.mjs
+                       the phone-width audit against a local shadcn/ui site:
+                       each page pair at 390x844 in light and dark, full-page
+                       shots plus what sticks out past the screen, and the
+                       overlay docs pages with their lead demo open
     shoot-home-cards.mjs
                        regenerate public/images/home-cards-{light,dark}.png,
                        the /ui home page's card grid as it shows below md,

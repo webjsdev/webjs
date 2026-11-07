@@ -5,6 +5,7 @@ import { customizer } from '#modules/ui/create/customizer.ts';
 import { previewFrame } from '#modules/ui/create/preview-frame.ts';
 import { projectForm } from '#modules/ui/create/project-form.ts';
 import { welcomeDialog } from '#modules/ui/create/welcome-dialog.ts';
+import { openPreset } from '#modules/ui/create/open-preset.ts';
 import { explorerItems } from '#modules/ui/queries/create-items.server.ts';
 // The behaviour around the server's markup. A page never hydrates, so it
 // imports the element to register it.
@@ -43,6 +44,7 @@ export default async function CreatePage({ searchParams }: PageProps) {
         ${previewFrame(params, groups)}
         ${customizer(params)}
         ${projectForm(params)}
+        ${openPreset(params)}
         ${welcomeDialog()}
       </create-customizer>
     </main>
