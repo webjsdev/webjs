@@ -279,6 +279,55 @@ test('add: local-first (no --registry) installs a real component, strips its exa
   }
 });
 
+// positionFloating moved out of popover.ts into floating.ts (#1666), so the
+// popover's class helpers carry no browser code. Every overlay that places
+// itself installs floating.ts beside it, and popover.ts beside that for the
+// placement types, and the pair resolves from where they landed.
+test('add: an overlay installs floating.ts beside it, and a bare popover does not', async () => {
+  globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
+  const origLog = console.log;
+  console.log = () => {};
+  try {
+    for (const name of ['tooltip', 'hover-card', 'dropdown-menu', 'context-menu', 'menubar', 'select', 'combobox']) {
+      const d = mkdtempSync(join(tmpdir(), `webjsui-add-floating-${name}-`));
+      try {
+        writeFileSync(join(d, 'components.json'), JSON.stringify({
+          style: 'default',
+          tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+          aliases: { components: 'components', utils: 'lib/utils/cn', ui: 'components/ui', lib: 'lib' },
+        }));
+        await add.parseAsync([name, '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+        const ui = join(d, 'components', 'ui');
+        assert.ok(existsSync(join(ui, 'floating.ts')), `${name}: floating.ts lands in components/ui`);
+        assert.ok(existsSync(join(ui, 'popover.ts')), `${name}: popover.ts (its types) lands beside it`);
+        const floating = readFileSync(join(ui, 'floating.ts'), 'utf8');
+        assert.match(floating, /export function positionFloating/);
+        assert.match(floating, /from '\.\/popover\.ts'/, 'it reaches the types as a sibling');
+        const own = readFileSync(join(ui, `${name}.ts`), 'utf8');
+        if (name !== 'menubar') assert.match(own, /from '\.\/floating\.ts'/, `${name}: imports its sibling floating.ts`);
+      } finally {
+        rmSync(d, { recursive: true, force: true });
+      }
+    }
+    const d = mkdtempSync(join(tmpdir(), 'webjsui-add-popover-'));
+    try {
+      writeFileSync(join(d, 'components.json'), JSON.stringify({
+        style: 'default',
+        tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+        aliases: { components: 'components', utils: 'lib/utils/cn', ui: 'components/ui', lib: 'lib' },
+      }));
+      await add.parseAsync(['popover', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+      assert.ok(existsSync(join(d, 'components', 'ui', 'popover.ts')));
+      assert.equal(existsSync(join(d, 'components', 'ui', 'floating.ts')), false, 'the class helpers alone need no placement module');
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  } finally {
+    console.log = origLog;
+    globalThis.fetch = origFetch;
+  }
+});
+
 test('add: local-first installs empty, spinner and field together (#1569)', async () => {
   globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
   const d = mkdtempSync(join(tmpdir(), 'webjsui-add-real-'));

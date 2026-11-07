@@ -393,7 +393,8 @@
       "registryDependencies": [
         "button",
         "input-group",
-        "popover"
+        "popover",
+        "floating"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -427,7 +428,8 @@
       "type": "registry:ui",
       "registryDependencies": [
         "dropdown-menu",
-        "popover"
+        "popover",
+        "floating"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -492,7 +494,8 @@
       "type": "registry:ui",
       "registryDependencies": [
         "popover",
-        "lib-dom"
+        "lib-dom",
+        "floating"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -537,11 +540,26 @@
       ]
     },
     {
+      "name": "floating",
+      "type": "registry:lib",
+      "description": "positionFloating(), the measured placement the kit's overlays use (lands beside the components)",
+      "registryDependencies": [
+        "popover"
+      ],
+      "files": [
+        {
+          "path": "components/floating.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "hover-card",
       "type": "registry:ui",
       "registryDependencies": [
         "popover",
-        "lib-dom"
+        "lib-dom",
+        "floating"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -846,7 +864,8 @@
       "name": "select",
       "type": "registry:ui",
       "registryDependencies": [
-        "popover"
+        "popover",
+        "floating"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1060,7 +1079,8 @@
       "type": "registry:ui",
       "registryDependencies": [
         "popover",
-        "lib-dom"
+        "lib-dom",
+        "floating"
       ],
       "dependencies": [
         "@webjsdev/core"

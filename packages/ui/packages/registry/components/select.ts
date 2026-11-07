@@ -97,7 +97,7 @@
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { templateContent, unsafeHTML } from '@webjsdev/core/directives';
 import { cn, ensureId } from '../lib/utils.ts';
-import { positionFloating } from './popover.ts';
+import { positionFloating } from './floating.ts';
 
 /** The trigger's classes: the element's drawn trigger, and the native select's no-JavaScript look. */
 export const selectTriggerClass = (): string =>

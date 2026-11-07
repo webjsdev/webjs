@@ -59,7 +59,8 @@
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ensureId } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
-import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
+import { positionFloating } from './floating.ts';
+import type { PopoverSide, PopoverAlign } from './popover.ts';
 
 // UA `[popover]` defaults paint a bordered, padded panel centered with
 // `margin: auto`; the class string opts out via `m-0` + `border-0` and

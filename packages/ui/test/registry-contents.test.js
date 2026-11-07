@@ -235,12 +235,16 @@ test('alert-dialog : uses alertdialog role, blocks Escape via cancel event', { s
   assert.match(src, /showModal/);
 });
 
-test('popover : tier-1 class helpers + positionFloating utility export', { skip }, () => {
+test('popover : tier-1 class helpers, with the positioning utility in floating.ts', { skip }, () => {
   const src = readSource('popover');
-  // No custom element: pure class helpers + a positioning utility for
-  // sibling tier-2 components.
+  // No custom element: pure class helpers. The positioning utility the
+  // sibling tier-2 components use is floating.ts, so a page importing only
+  // these helpers reaches no browser code (and neither re-exports the other).
   assert.doesNotMatch(src, /defineElement\(/);
-  assert.match(src, /export\s+function\s+positionFloating/);
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /positionFloating|from '\.\/floating\.ts'/);
+  assert.doesNotMatch(code, /\b(window|document)\b/, 'no browser global in the class helpers');
+  assert.match(readSource('floating'), /export\s+function\s+positionFloating/);
   // Parameterized helper with shadcn parity for side / align / sideOffset / alignOffset.
   assert.match(src, /export\s+function\s+popoverContentClass\s*\(/);
   assert.match(src, /PopoverContentOptions/);
@@ -261,7 +265,7 @@ test('popover : tier-1 class helpers + positionFloating utility export', { skip 
 });
 
 test('positionFloating : accepts alignOffset for tier-2 placement', { skip }, () => {
-  const src = readSource('popover');
+  const src = readSource('floating');
   // The utility consumed by tooltip / hover-card / dropdown-menu must
   // accept alignOffset alongside sideOffset.
   assert.match(src, /alignOffset\??:\s*number/);

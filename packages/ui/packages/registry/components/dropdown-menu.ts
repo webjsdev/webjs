@@ -165,7 +165,8 @@ function slot(el: Element, part: string): string {
 function rootTag(el: Element): string {
   return (el.constructor as { rootTag?: string }).rootTag ?? fam(el);
 }
-import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
+import { positionFloating } from './floating.ts';
+import type { PopoverSide, PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
 // Class helpers

@@ -60,7 +60,7 @@ import {
 } from './dropdown-menu.ts';
 import { html } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
-import { positionFloating } from './popover.ts';
+import { positionFloating } from './floating.ts';
 
 /** The trigger region's classes (the element applies them). */
 export const contextMenuTriggerClass = (): string => 'cn-context-menu-trigger select-none';

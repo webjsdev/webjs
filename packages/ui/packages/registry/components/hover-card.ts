@@ -73,7 +73,8 @@
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
-import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
+import { positionFloating } from './floating.ts';
+import type { PopoverSide, PopoverAlign } from './popover.ts';
 
 // `fixed m-0` opts out of the UA `[popover]` auto-centering margin so
 // JS-computed top/left from positionFloating lands correctly. shadcn's
