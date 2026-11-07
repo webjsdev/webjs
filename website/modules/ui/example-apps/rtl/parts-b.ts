@@ -86,7 +86,7 @@ export function inputGroupButton(lang: RtlLang) {
       <div role="group" data-slot="input-group-addon" data-align="inline-start" class=${inputGroupAddonClass()}>
         <button type="button" popovertarget="rtl-price-info" aria-haspopup="dialog" aria-expanded="false" aria-label=${s.info} data-slot="button" data-variant="secondary" data-size="icon-xs" class=${inputGroupButtonClass({ variant: 'secondary', size: 'icon-xs' })}>${IconInfoCircle()}</button>
       </div>
-      <div id="rtl-price-info" popover role="dialog" aria-label=${s.info} data-slot="popover-content" data-side="bottom" data-align="end" class=${cn(popoverContentClass({ align: 'end' }), 'rounded-xl text-sm not-open:hidden')}>
+      <div id="rtl-price-info" popover role="dialog" aria-label=${s.info} data-slot="popover-content" data-side="bottom" data-align="end" class=${cn(popoverContentClass({ align: 'end' }), 'rounded-xl text-sm')}>
         <p class="font-medium">${s.priceInfo}</p>
         <p class="mt-1">${s.priceDescription}</p>
       </div>

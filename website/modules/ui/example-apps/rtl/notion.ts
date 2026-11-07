@@ -53,7 +53,7 @@ export function notionPromptForm(lang: RtlLang) {
               </ui-tooltip-trigger>
               <ui-tooltip-content>${s.mentionTooltip}</ui-tooltip-content>
             </ui-tooltip>
-            <div id="rtl-mentions" popover role="dialog" aria-label=${s.addContext} data-slot="popover-content" data-side="bottom" data-align="start" class=${cn(popoverContentClass({ align: 'start' }), 'p-0 not-open:hidden')}>
+            <div id="rtl-mentions" popover role="dialog" aria-label=${s.addContext} data-slot="popover-content" data-side="bottom" data-align="start" class=${cn(popoverContentClass({ align: 'start' }), 'p-0')}>
               <ui-command label=${s.addContext}>
                 <ui-command-input placeholder=${s.searchPages}></ui-command-input>
                 <ui-command-list>

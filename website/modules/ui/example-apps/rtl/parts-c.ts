@@ -102,7 +102,7 @@ export function buttonGroupPopover(lang: RtlLang) {
     <button type="button" data-slot="button" class=${outline('sm')}>${BotIcon()} ${s.copilot}</button>
     <button type="button" popovertarget="rtl-copilot" aria-haspopup="dialog" aria-expanded="false" aria-label=${s.openPopover} data-slot="button" class=${outline('icon-sm')}>${ChevronDownIcon()}</button>
   </div>
-  <div id="rtl-copilot" popover role="dialog" aria-labelledby="rtl-copilot-title" data-slot="popover-content" data-side="bottom" data-align="start" class=${cn(popoverContentClass({ align: 'start' }), 'p-0 not-open:hidden')}>
+  <div id="rtl-copilot" popover role="dialog" aria-labelledby="rtl-copilot-title" data-slot="popover-content" data-side="bottom" data-align="start" class=${cn(popoverContentClass({ align: 'start' }), 'p-0')}>
     <div class="px-4 py-3"><div id="rtl-copilot-title" class="text-sm font-medium">${s.agentTasks}</div></div>
     <div role="none" data-slot="separator" data-orientation="horizontal" class=${separatorClass()}></div>
     <div class="p-4 text-sm *:[p:not(:last-child)]:mb-2">
