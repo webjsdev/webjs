@@ -290,3 +290,19 @@ DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
+
+## Playfair Display
+
+The webjs.dev/ui site self-hosts the Playfair Display typeface
+(https://github.com/clauseggers/Playfair-Display) for its Sera page, as
+Google Fonts serves it (the latin subset, unmodified).
+
+```text
+Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display), with Reserved Font Name "Playfair Display"
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: http://scripts.sil.org/OFL
+```
+
+The full text of the SIL Open Font License, Version 1.1 is reproduced under
+Geist and Geist Mono above.

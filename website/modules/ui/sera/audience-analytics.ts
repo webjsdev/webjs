@@ -25,12 +25,12 @@ import { MoreHorizontalIcon } from '#lib/ui/lucide.ts';
 // attribute the sera button sizes key their padding on.
 const icon = (paths: unknown, opts: { dataIcon?: string; cls?: string } = {}) =>
   svg`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=${opts.dataIcon ?? null} class=${opts.cls ?? null}>${paths}</svg>`;
-const chevronDown = svg`<path d="m6 9 6 6 6-6"></path>`;
-const download = svg`<path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path>`;
-const trendingUp = svg`<path d="M16 7h6v6"></path><path d="m22 7-8.5 8.5-5-5L2 17"></path>`;
-const trendingDown = svg`<path d="M16 17h6v-6"></path><path d="m22 17-8.5-8.5-5 5L2 7"></path>`;
-const moveRight = svg`<path d="M18 8L22 12L18 16"></path><path d="M2 12H22"></path>`;
-const arrowDown = svg`<path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path>`;
+const chevronDown = () => svg`<path d="m6 9 6 6 6-6"></path>`;
+const download = () => svg`<path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path>`;
+const trendingUp = () => svg`<path d="M16 7h6v6"></path><path d="m22 7-8.5 8.5-5-5L2 17"></path>`;
+const trendingDown = () => svg`<path d="M16 17h6v-6"></path><path d="m22 17-8.5-8.5-5 5L2 7"></path>`;
+const moveRight = () => svg`<path d="M18 8L22 12L18 16"></path><path d="M2 12H22"></path>`;
+const arrowDown = () => svg`<path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path>`;
 
 const DATE_OPTIONS = [
   { label: 'Last 7 days', value: 'last-7-days' },
@@ -53,7 +53,7 @@ function previewHeader() {
         <ui-dropdown-menu>
           <ui-dropdown-menu-trigger>
             <button type="button" data-slot="button" data-variant="outline" data-size="default" class=${cn(buttonClass({ variant: 'outline' }), 'bg-background hover:bg-background/80 data-popup-open:bg-background')}>
-              Last 30 days ${icon(chevronDown, { dataIcon: 'inline-end' })}
+              Last 30 days ${icon(chevronDown(), { dataIcon: 'inline-end' })}
             </button>
           </ui-dropdown-menu-trigger>
           <ui-dropdown-menu-content align="end">
@@ -63,7 +63,7 @@ function previewHeader() {
           </ui-dropdown-menu-content>
         </ui-dropdown-menu>
         <button type="button" data-slot="button" data-variant="default" data-size="default" class=${buttonClass()}>
-          ${icon(download, { dataIcon: 'inline-start' })}
+          ${icon(download(), { dataIcon: 'inline-start' })}
           <span class="lg:hidden">Export</span>
           <span class="hidden lg:inline">Export Report</span>
         </button>
@@ -93,7 +93,7 @@ function metricCard(m: Metric) {
       <div data-slot="card-description" class=${cn(cardDescriptionClass(), 'text-xs uppercase')}>${m.label}</div>
       <div data-slot="card-title" class=${cn(cardTitleClass(), 'text-5xl tracking-tight lowercase')}>${m.value}</div>
       <div data-slot="card-description" class=${cardDescriptionClass()}>
-        ${icon(m.trend === 'up' ? trendingUp : trendingDown, { cls: 'inline-block size-2.5 text-muted-foreground' })}
+        ${icon(m.trend === 'up' ? trendingUp() : trendingDown(), { cls: 'inline-block size-2.5 text-muted-foreground' })}
         <span class="text-foreground">${m.comparison}</span>
         <span>${m.change}</span>
       </div>
@@ -120,11 +120,10 @@ const TRAFFIC_CONFIG = {
   unique: { label: 'Unique', theme: { light: 'var(--chart-1)', dark: 'var(--chart-2)' } },
 } satisfies ChartConfig;
 
-const X_AXIS_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-
 function formatXAxisTick(value: unknown): string {
   const date = new Date(`${String(value)}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? String(value) : X_AXIS_DATE.format(date);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date);
 }
 
 // shadcn marks the peak with a Recharts ReferenceDot; here the views line
@@ -193,7 +192,7 @@ function demographics() {
     </div>
     <div data-slot="card-footer" class=${cardFooterClass()}>
       <button type="button" data-slot="button" data-variant="link" data-size="default" class=${cn(buttonClass({ variant: 'link' }), 'w-full')}>
-        View all source ${icon(moveRight, { dataIcon: 'inline-end' })}
+        View all source ${icon(moveRight(), { dataIcon: 'inline-end' })}
       </button>
     </div>
   </div>`;
@@ -293,7 +292,7 @@ function topEditorial() {
     <div data-slot="card-footer" class=${cn(cardFooterClass(), 'justify-center group-has-[[data-load-more]:checked]/editorial:hidden')}>
       <input type="checkbox" id="sera-top-editorial-more" data-load-more class="peer sr-only">
       <label for="sera-top-editorial-more" data-slot="button" data-variant="outline" data-size="default" class=${cn(buttonClass({ variant: 'outline' }), 'cursor-pointer peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50')}>
-        Load more content ${icon(arrowDown, { dataIcon: 'inline-end' })}
+        Load more content ${icon(arrowDown(), { dataIcon: 'inline-end' })}
       </label>
     </div>
   </div>`;

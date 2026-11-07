@@ -3,7 +3,6 @@ import type { Metadata } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { selectTriggerClass } from '#modules/ui/components/select.ts';
-import { CheckIcon } from '#lib/ui/lucide.ts';
 import { extraStyleLinks } from '#lib/ui/style-links.ts';
 import { uiPageHeader } from '#lib/ui/ui-page-header.ts';
 import {
@@ -37,7 +36,10 @@ export const metadata: Metadata = {
 };
 
 // lucide's clipboard, the swatch's resting icon.
-const clipboardIcon = html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="group-hover:opacity-100 group-data-[last-copied=true]:hidden"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path></svg>`;
+const clipboardIcon = () => html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="group-hover:opacity-100 group-data-[last-copied=true]:hidden"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path></svg>`;
+
+// lucide's check, shown on the swatch copied last.
+const checkIcon = () => html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="hidden group-hover:opacity-100 group-data-[last-copied=true]:block group-data-[last-copied=true]:opacity-100"><path d="M20 6 9 17l-5-5"></path></svg>`;
 
 /** shadcn's Color: one swatch, a button that copies its value. */
 function swatch(color: Color) {
@@ -55,8 +57,8 @@ function swatch(color: Color) {
     class="group relative flex aspect-[3/1] w-full flex-1 cursor-pointer flex-col gap-2 text-(--text) sm:aspect-[2/3] sm:h-auto sm:w-auto [&>svg]:absolute [&>svg]:top-4 [&>svg]:right-4 [&>svg]:z-10 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-0 [&>svg]:transition-opacity"
     style=${`--bg: ${color.oklch}; --text: ${color.foreground}`}
   >
-    ${clipboardIcon}
-    ${CheckIcon('hidden group-hover:opacity-100 group-data-[last-copied=true]:block group-data-[last-copied=true]:opacity-100')}
+    ${clipboardIcon()}
+    ${checkIcon()}
     <div class="border-ghost w-full flex-1 rounded-md bg-(--bg) after:rounded-lg after:border-input md:rounded-lg"></div>
     <div class="flex w-full flex-col items-center justify-center gap-1">
       <span class="font-mono text-xs text-muted-foreground tabular-nums transition-colors group-hover:text-foreground group-data-[last-copied=true]:text-primary sm:hidden xl:flex">${color.className}</span>

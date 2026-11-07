@@ -31,7 +31,7 @@ import {
 const PREFIX = 'media-library-table';
 
 // shadcn starts with the first asset selected.
-const INITIALLY_SELECTED = new Set(['1']);
+const INITIALLY_SELECTED = ['1'];
 
 function assetRow(asset: Asset) {
   const id = PREFIX + '-select-' + asset.id;
@@ -41,7 +41,7 @@ function assetRow(asset: Asset) {
   return html`
     <tr data-slot="table-row" class=${cn(tableRowClass(), 'cursor-pointer has-checked:bg-muted')}>
       <td data-slot="table-cell" class=${cn(tableCellClass(), 'pl-6')}>
-        <input type="checkbox" data-slot="checkbox" id=${id} aria-label=${'Select ' + asset.name} ?checked=${INITIALLY_SELECTED.has(asset.id)} class=${checkboxClass()}>
+        <input type="checkbox" data-slot="checkbox" id=${id} aria-label=${'Select ' + asset.name} ?checked=${INITIALLY_SELECTED.includes(asset.id)} class=${checkboxClass()}>
       </td>
       <td data-slot="table-cell" class=${tableCellClass()}>
         <div class="relative flex aspect-4/3 w-16 items-center justify-center bg-muted/60 ring-1 ring-border/70 ring-inset">

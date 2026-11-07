@@ -24,6 +24,10 @@
  * (Inter, JetBrains Mono, Geist, Geist Mono) are the same files, and the
  * typeset faces are printed as a second block for that stylesheet.
  *
+ * Playfair Display is the heading face of the /ui/sera showcase only, the one
+ * shadcn's Sera page loads. It is declared in public/sera-fonts.css, which only
+ * that page links, and printed as its own block for that stylesheet.
+ *
  * The site is English, so the latin subset (which already includes the General
  * Punctuation block: curly quotes, the middle dot) is enough.
  */
@@ -40,11 +44,14 @@ const FAMILIES = [
   { name: 'JetBrains Mono', slug: 'jetbrains-mono', range: '100..800' },
   { name: 'Geist', slug: 'geist', range: '100..900' },
   { name: 'Geist Mono', slug: 'geist-mono', range: '100..900' },
+  // The Sera showcase's heading face (/ui/sera).
+  { name: 'Playfair Display', slug: 'playfair-display', range: '400..900' },
   // The typeset builder's faces not already listed above.
   ...TYPESET_FONTS.filter((font) => !['inter', 'jetbrains-mono', 'geist', 'geist-mono'].includes(font.id))
     .map((font) => ({ name: font.name, slug: font.id, range: font.range })),
 ];
 const TYPESET_SLUGS = new Set(TYPESET_FONTS.map((font) => font.id));
+const SERA_SLUGS = new Set(['playfair-display']);
 
 // Optional slug filter, so adding a family does not re-download (and possibly
 // change the bytes of) the files already committed.
@@ -70,6 +77,7 @@ const parseLatin = (css) => {
 await mkdir(OUT_DIR, { recursive: true });
 const faces = [];
 const typesetFaces = [];
+const seraFaces = [];
 
 for (const fam of wanted) {
   const res = await fetch(cssUrl(fam.name, fam.range), { headers: { 'User-Agent': UA } });
@@ -86,7 +94,9 @@ for (const fam of wanted) {
     `src:url('/public/fonts/${file}') format('woff2');}`;
   faces.push(face);
   if (TYPESET_SLUGS.has(fam.slug)) typesetFaces.push(face);
+  if (SERA_SLUGS.has(fam.slug)) seraFaces.push(face);
 }
 
 console.log('\n/* paste into public/input.css (or public/ui-input.css for the /ui faces) */\n' + faces.join('\n'));
 if (typesetFaces.length) console.log('\n/* the typeset faces, for public/typeset-fonts.css */\n' + typesetFaces.join('\n'));
+if (seraFaces.length) console.log('\n/* the Sera showcase faces, for public/sera-fonts.css */\n' + seraFaces.join('\n'));

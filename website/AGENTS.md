@@ -165,9 +165,10 @@ website/
                        design-system.ts). A board of kit components stands in
                        until a preview block is in the registry, and a
                        component's `<name>-demo` renders there too (the item
-                       explorer). The page module ships nothing; the menu
-                       color is a CSS rule on the wrapper's data-menu-color
-                       (inverted) plus public/ui-menu-color.js (translucent)
+                       explorer). It imports the blocks' elements barrel, as
+                       view/[name] does; the menu color is a CSS rule on the
+                       wrapper's data-menu-color (inverted) plus
+                       public/ui-menu-color.js (translucent)
       view/[name]/page.ts
                        one registry block full screen in new-york, the block
                        viewer's iframe target and its "Open in New Tab". It

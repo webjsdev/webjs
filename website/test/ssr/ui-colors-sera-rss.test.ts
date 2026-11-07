@@ -58,6 +58,7 @@ test('/ui/sera renders the six preview screens in the sera style and the taupe t
   assert.match(body, /<h1[^>]*>Introducing Sera<\/h1>/);
   assert.match(body, /class="style-sera /, 'the page renders in the sera style');
   assert.match(body, /\/public\/ui-styles\/sera\.css/, 'and links its stylesheet');
+  assert.match(body, /\/public\/sera-fonts\.css/, 'and its own fonts, Playfair Display among them');
   assert.equal(body.match(/class="preview theme-taupe /g)?.length, 6, 'six preview screens');
   for (const heading of ['Audience Analytics', 'Article Directory', 'EDIT ARTICLE', 'Media Library']) {
     assert.ok(body.includes(heading), `${heading} is on the page`);

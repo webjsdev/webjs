@@ -36,7 +36,7 @@ export const metadata: Metadata = {
 };
 
 // lucide's arrow-right, carrying the data-icon the sera button pads for.
-const arrowRight = html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon="inline-end"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>`;
+const arrowRight = () => html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon="inline-end"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>`;
 
 // shadcn's style.css for the page's previews: the fonts, radius 0 (its
 // theme-taupe carries it, ours does not), and content-visibility so the
@@ -66,7 +66,7 @@ export default function SeraPage() {
             <p class="max-w-2xl text-base text-pretty text-foreground sm:text-lg md:text-balance">${DESCRIPTION}</p>
             <div class="flex w-full items-center justify-center gap-2 pt-2 **:data-[slot=button]:shadow-none **:[.container]:justify-start">
               <a href="/ui/create?preset=b4xFeBLg4O" data-slot="button" data-variant="default" data-size="sm" class=${cn(buttonClass({ size: 'sm' }), 'no-underline')}>
-                Open in Create ${arrowRight}
+                Open in Create ${arrowRight()}
               </a>
             </div>
           </div>
