@@ -463,6 +463,14 @@ test('ui-tabs-list: shadcn\'s `line` variant, and `underline` as its alias, are 
   }
 });
 
+test('ui-tabs-trigger: a disabled trigger is served as a disabled button with data-disabled', { skip }, async () => {
+  const out = await ssr(['tabs.ts'], (html) => html`<ui-tabs value="a"><ui-tabs-list><ui-tabs-trigger value="a">A</ui-tabs-trigger><ui-tabs-trigger value="b" disabled>B</ui-tabs-trigger></ui-tabs-list></ui-tabs>`);
+  const [a, b] = [...out.matchAll(/<button[^>]*role="tab"[^>]*>/g)].map((m) => m[0]);
+  assert.match(b, /\sdisabled(="")?[\s>]/, 'the disabled trigger\'s button is disabled');
+  assert.match(b, /\sdata-disabled(="")?[\s>]/, 'and carries data-disabled');
+  assert.doesNotMatch(a, /\s(data-)?disabled(="")?[\s>]/, 'an enabled trigger carries neither');
+});
+
 test('ui-toggle-group: with no spacing written the style decides (shadcn\'s gap of 2), and a written one is served', { skip }, async () => {
   const bare = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
   const root = (bare.match(/<div[^>]*data-slot="toggle-group"[^>]*>/) ?? [''])[0];

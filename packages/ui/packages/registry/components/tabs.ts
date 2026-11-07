@@ -8,7 +8,7 @@
  * shadcn parity:
  *   Tabs           → <ui-tabs value orientation>
  *   TabsList       → <ui-tabs-list variant>
- *   TabsTrigger    → <ui-tabs-trigger value>
+ *   TabsTrigger    → <ui-tabs-trigger value disabled>
  *   TabsContent    → <ui-tabs-content value>
  *
  * Attributes on <ui-tabs>:
@@ -23,6 +23,11 @@
  * Attributes on <ui-tabs-trigger> / <ui-tabs-content>:
  *   `value`: string. Identifier this trigger / panel pair shares.
  *
+ * Attributes on <ui-tabs-trigger>:
+ *   `disabled`: boolean (reflected). The rendered `<button>` is disabled, so it
+ *   takes the `disabled:` styles and `data-disabled`, a click never selects its
+ *   tab, and Arrow / Home / End skip it.
+ *
  * Events:
  *   `ui-value-change` on <ui-tabs>: `{ detail: { value } }` after a change.
  *
@@ -30,6 +35,7 @@
  *   ArrowRight / ArrowLeft   next / previous (horizontal)
  *   ArrowDown / ArrowUp      next / previous (vertical)
  *   Home / End               first / last
+ *   (a `disabled` trigger is skipped by all four)
  *   Enter / Space            activate (native button activation)
  *
  * A11y (owned by the element, nothing to supply beyond trigger names):
@@ -248,10 +254,12 @@ UiTabsList.register('ui-tabs-list');
 
 export class UiTabsTrigger extends WebComponent({
   value: prop(String, { reflect: true }),
+  disabled: prop(Boolean, { reflect: true }),
 }) {
   constructor() {
     super();
     this.value = '';
+    this.disabled = false;
   }
 
   // render() runs server-side too. webjs resolves closest() at SSR against
@@ -277,6 +285,8 @@ export class UiTabsTrigger extends WebComponent({
       data-state=${active ? 'active' : 'inactive'}
       aria-selected=${String(active)}
       tabindex=${active ? '0' : '-1'}
+      ?disabled=${this.disabled}
+      ?data-disabled=${this.disabled}
       class=${cn(TABS_TRIGGER_CLASS, authored)}
       @click=${this._onClick}
       @keydown=${this._onKeyDown}
@@ -284,7 +294,7 @@ export class UiTabsTrigger extends WebComponent({
   }
 
   _onClick = (): void => {
-    if (this.value) this._tabs?.setAttribute('value', this.value);
+    if (this.value && !this.disabled) this._tabs?.setAttribute('value', this.value);
   };
 
   _onKeyDown = (e: KeyboardEvent): void => {
@@ -295,8 +305,10 @@ export class UiTabsTrigger extends WebComponent({
     // a nested <ui-tabs> inside a panel, and arrow nav at the boundary would
     // jump into the inner group and set this group's value to an inner-only
     // value (hiding every panel). Same scoping dropdown-menu applies to items.
+    // A disabled trigger is skipped by every key, as Radix's roving focus
+    // skips an item that is not focusable.
     const triggers = Array.from(tabs.querySelectorAll<UiTabsTrigger>('ui-tabs-trigger')).filter(
-      (t) => t._tabs === tabs,
+      (t) => t._tabs === tabs && (!t.disabled || t === this),
     );
     const idx = triggers.indexOf(this);
     const nextKey = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown';
@@ -305,8 +317,8 @@ export class UiTabsTrigger extends WebComponent({
     let target: UiTabsTrigger | null = null;
     if (e.key === nextKey) target = triggers[(idx + 1) % triggers.length] ?? null;
     else if (e.key === prevKey) target = triggers[(idx - 1 + triggers.length) % triggers.length] ?? null;
-    else if (e.key === 'Home') target = triggers[0] ?? null;
-    else if (e.key === 'End') target = triggers[triggers.length - 1] ?? null;
+    else if (e.key === 'Home') target = triggers.find((t) => !t.disabled) ?? null;
+    else if (e.key === 'End') target = [...triggers].reverse().find((t) => !t.disabled) ?? null;
     // Enter/Space already handled natively by <button>; no preventDefault needed.
 
     if (target) {

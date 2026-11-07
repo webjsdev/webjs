@@ -44,7 +44,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('tabs-vertical')}
 
     ${heading(toc, 2, 'Disabled')}
-    <p>The kit's <code>&lt;ui-tabs-trigger&gt;</code> has no <code>disabled</code> attribute yet, so the trigger below still selects its tab when clicked.</p>
+    <p>Add <code>disabled</code> to a <code>&lt;ui-tabs-trigger&gt;</code> to disable it. Its button is disabled, so it cannot be selected, and the arrow keys skip it.</p>
     ${await componentPreview('tabs-disabled')}
 
     ${heading(toc, 2, 'Icons')}
@@ -86,6 +86,7 @@ export default async function body(toc: TocEntry[]) {
         <thead><tr><th>Attribute</th><th>Type</th><th>Default</th></tr></thead>
         <tbody>
           <tr><td><code>value</code></td><td><code>string</code></td><td><code>""</code></td></tr>
+          <tr><td><code>disabled</code></td><td><code>boolean</code></td><td><code>false</code></td></tr>
         </tbody>
       </table>
     </div>

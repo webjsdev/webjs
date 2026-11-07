@@ -56,6 +56,57 @@ suite('ui-tabs', () => {
     root.remove();
   });
 
+  // shadcn's Tabs › Disabled: Radix passes `disabled` to the trigger's
+  // button, so a click never selects it and the roving focus skips it.
+  test('a disabled trigger is a disabled button that no click or key selects', async () => {
+    const root = await mount(html`
+      <ui-tabs value="a">
+        <ui-tabs-list>
+          <ui-tabs-trigger value="a">A</ui-tabs-trigger>
+          <ui-tabs-trigger value="b" disabled>B</ui-tabs-trigger>
+          <ui-tabs-trigger value="c">C</ui-tabs-trigger>
+          <ui-tabs-trigger value="d" disabled>D</ui-tabs-trigger>
+        </ui-tabs-list>
+        <ui-tabs-content value="a">PANE A</ui-tabs-content>
+        <ui-tabs-content value="b">PANE B</ui-tabs-content>
+        <ui-tabs-content value="c">PANE C</ui-tabs-content>
+        <ui-tabs-content value="d">PANE D</ui-tabs-content>
+      </ui-tabs>
+    `);
+    try {
+      await tick();
+      const tabs = root.querySelector('ui-tabs');
+      const tab = (v) => root.querySelector(`ui-tabs-trigger[value="${v}"] [role="tab"]`);
+      const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+      assert.equal(tab('b').disabled, true, 'the rendered button is disabled');
+      assert.ok(tab('b').hasAttribute('data-disabled'));
+      assert.equal(tab('a').disabled, false);
+      tab('b').click();
+      root.querySelector('ui-tabs-trigger[value="b"]').click();
+      await tick();
+      assert.equal(tabs.getAttribute('value'), 'a', 'a click never selects a disabled tab');
+      tab('a').focus();
+      key(tab('a'), 'ArrowRight');
+      await tick();
+      assert.equal(tabs.getAttribute('value'), 'c', 'ArrowRight skips the disabled b');
+      assert.equal(document.activeElement, tab('c'));
+      key(tab('c'), 'ArrowRight');
+      await tick();
+      assert.equal(tabs.getAttribute('value'), 'a', 'and the disabled d, wrapping to a');
+      key(tab('a'), 'End');
+      await tick();
+      assert.equal(tabs.getAttribute('value'), 'c', 'End lands on the last enabled tab');
+      key(tab('c'), 'ArrowLeft');
+      await tick();
+      assert.equal(tabs.getAttribute('value'), 'a', 'ArrowLeft skips b');
+      key(tab('a'), 'Home');
+      await tick();
+      assert.equal(tabs.getAttribute('value'), 'a', 'Home lands on the first enabled tab');
+    } finally {
+      root.remove();
+    }
+  });
+
   test('initial active tab has data-state="active"', async () => {
     const root = await mount(html`
       <ui-tabs value="a">
