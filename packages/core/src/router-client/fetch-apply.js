@@ -19,6 +19,7 @@ import { navigate } from './navigator.js';
 import { prefetchTake } from './prefetch.js';
 import { currentNavigationToken } from './state.js';
 import { readStreamedShell, streamBoundariesProgressively } from './stream.js';
+import { loadIncomingStylesheets } from './stylesheets.js';
 import { _swapCommit, applySwap } from './swap.js';
 
 /**
@@ -294,6 +295,19 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
   // malformed/empty HTML body). Surface a navigation-error so the app can
   // recover in place rather than a destructive full reload.
   if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return { ok: false, status: respStatus, aborted: false, applied: false }; }
+
+  // Load the stylesheets the incoming page brings before it is swapped in, so
+  // its first paint is styled (see stylesheets.js). Null when it brings none,
+  // and the swap then stays in this task. A newer navigation that started
+  // during the wait owns the page, exactly as after the body read above.
+  const sheets = loadIncomingStylesheets(doc, finalUrl || href);
+  if (sheets) {
+    await sheets;
+    if (myToken !== currentNavigationToken) {
+      if (streamCtx && streamCtx.reader) { try { streamCtx.reader.cancel(); } catch { /* ignore */ } }
+      return { ok: false, status: respStatus, aborted: true, applied: false };
+    }
+  }
 
   // #1406: recording the push after the swap finalizes the outgoing page's
   // entry against the DESTINATION document, at a scroll offset the browser has

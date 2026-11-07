@@ -10,8 +10,10 @@ import { LEAD_PREVIEWS } from '#modules/ui/docs/lead-previews.ts';
  * layout's leading links are hoisted, and a body stylesheet is not reliably
  * render-blocking, #406). The page emits it again in its own markup for a
  * SOFT navigation, where the root layout is not re-rendered and the router's
- * head merge only adds. The same URL twice costs one fetch, which is the
- * pattern app/ui/layout.ts uses for public/ui.css.
+ * head merge only adds. The router loads that inline link before it swaps the
+ * page in, so the page paints in its style from the first frame. The same URL
+ * twice costs one fetch, which is the pattern app/ui/layout.ts uses for
+ * public/ui.css.
  */
 const STYLES_BY_PATH: Record<string, string[]> = {
   // The home page as shadcn renders it: the hero's buttons in luma and the

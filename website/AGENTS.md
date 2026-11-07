@@ -773,7 +773,10 @@ TWICE, deliberately. The root layout emits it in its leading head run for a
 `<head>` and a body stylesheet is not reliably render-blocking (#406).
 `app/ui/layout.ts` emits it again, which covers a soft navigation into `/ui`,
 where the root layout is not re-rendered and the router's head merge only
-adds. The links that commonly cross sections (the marketing header and footer
+adds. The router loads a stylesheet the incoming page brings before it swaps
+the page in (#1666), so that inline copy is applied on the first paint, and so
+are the per-page kit styles `lib/ui/style-links.ts` lists (rhea on the AI
+Elements pages, luma on blocks and charts). The links that commonly cross sections (the marketing header and footer
 UI links, the docs sidebar link, the `/ui` links back in the menu drawer
 and the footer) also carry
 `data-no-router`, so the usual path is a full load. Both stylesheets declare

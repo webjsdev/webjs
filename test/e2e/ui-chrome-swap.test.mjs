@@ -8,9 +8,10 @@
  *   1. A soft navigation from a marketing page to /ui, through a link with
  *      NO `data-no-router`, swaps the header and footer with no full page
  *      load and no `webjs:navigation-fallback`.
- *   2. The /ui stylesheet applies after that swap (the root layout is not
- *      re-rendered on a soft navigation, so the link app/ui/layout.ts emits is
- *      what brings it in).
+ *   2. The /ui stylesheet is applied when the swapped content lands (the root
+ *      layout is not re-rendered on a soft navigation, so the link
+ *      app/ui/layout.ts emits is what brings it in, and the router loads it
+ *      before it swaps the page in).
  *   3. The content's offset fits the NEW header: each header is sized by the
  *      --header-h token, which follows the section (and the /ui header's
  *      breakpoint), so nothing measures a header a swap may have replaced
@@ -75,6 +76,16 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
       a.id = 'e2e-to-ui';
       a.textContent = 'to ui';
       document.querySelector('main')?.append(a);
+      // The font the /ui content paints in on the FIRST frame it is in the
+      // document. The router loads the stylesheets a page brings before it
+      // swaps the page in, so the swapped content is never unstyled.
+      window.__fontAtSwap = null;
+      new MutationObserver((records, observer) => {
+        const el = document.querySelector('.ui-site');
+        if (!el) return;
+        window.__fontAtSwap = getComputedStyle(el).fontFamily;
+        observer.disconnect();
+      }).observe(document.body, { childList: true, subtree: true });
     });
 
     await page.click('#e2e-to-ui');
@@ -88,11 +99,9 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
     assert.doesNotMatch(uiHeader, /Compare/, 'and the marketing header is gone');
     assert.match(await page.locator('footer').first().textContent(), /shadcn\/ui/, 'the /ui footer is in');
 
-    // The /ui stylesheet arrives with the swapped markup and applies.
-    await page.waitForFunction(() => {
-      const el = document.querySelector('.ui-site');
-      return !!el && getComputedStyle(el).fontFamily.includes('Geist');
-    }, null, { timeout: 10_000 });
+    // The /ui stylesheet is applied on the first frame the /ui content is in
+    // the document, not after it: the swap waited for it.
+    assert.match(await page.evaluate(() => window.__fontAtSwap) || '', /Geist/, 'the swapped content is styled when it lands');
 
     // The offset fits the header that is on screen now: the bar's height
     // equals the body's top padding, at the /ui header's two sizes.
