@@ -66,5 +66,5 @@ test('each type page shows its charts in shadcn\'s order, each drawn on the serv
 test('the header links Charts after Blocks', async () => {
   const html = await (await handle('/ui/charts/area')).text();
   const nav = html.slice(html.indexOf('>Blocks</a>'), html.indexOf('>Blocks</a>') + 400);
-  assert.match(nav, /href="\/ui\/charts"[^>]*>Charts<\/a>/);
+  assert.match(nav, /href="\/ui\/charts\/area"[^>]*>Charts<\/a>/);
 });

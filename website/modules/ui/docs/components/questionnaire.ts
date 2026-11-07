@@ -166,7 +166,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('questionnaire-progress', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Animated Items')}
-    <p>Animate the active item while keeping progress and navigation stationary. Each item renders a fieldset that carries <code>data-active</code> while it is shown, so target that child with the <code>*:data-active:</code> variant.</p>
+    <p>Animate the active item while keeping progress and navigation stationary. Each item moves its class onto the fieldset it renders, which carries <code>data-active</code> while it is shown, so the <code>data-active:</code> variant targets it directly.</p>
     ${await componentPreview('questionnaire-animated', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Card')}

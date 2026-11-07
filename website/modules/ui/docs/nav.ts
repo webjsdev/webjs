@@ -950,9 +950,21 @@ export const NAV: DocGroup[] = [
   }
 ];
 
+// A group whose pages sit in a folder with an index page of its own. shadcn's
+// page tree reads the index first, so /ui/docs/ai-elements sits between
+// Typography and Chain of Thought, and /ui/docs/components leads into
+// Accordion.
+const GROUP_INDEX: Record<string, string> = {
+  'Components': '/ui/docs/components',
+  'AI Elements': '/ui/docs/ai-elements',
+};
+
 /** Every docs page in reading order, for the previous and next links. */
 export function readingOrder(): DocLink[] {
-  return NAV.flatMap((g) => g.items).filter((l) => l.href.startsWith('/ui/docs'));
+  return NAV.flatMap((g) => {
+    const index = SECTIONS.find((s) => s.href === GROUP_INDEX[g.title]);
+    return index ? [index, ...g.items] : g.items;
+  }).filter((l) => l.href.startsWith('/ui/docs'));
 }
 
 /** The pages either side of `href`, or null at an end. */
@@ -979,7 +991,9 @@ export const HEADER_NAV: DocLink[] = [
   { title: 'Docs', href: '/ui/docs' },
   { title: 'Components', href: '/ui/docs/components' },
   { title: 'Blocks', href: '/ui/blocks' },
-  { title: 'Charts', href: '/ui/charts' },
+  // shadcn links the area page directly (lib/config.ts), since /charts only
+  // redirects there.
+  { title: 'Charts', href: '/ui/charts/area' },
   { title: 'Directory', href: '/ui/docs/directory' },
   { title: 'Typeset', href: '/ui/typeset' },
   { title: 'Create', href: '/ui/create' },

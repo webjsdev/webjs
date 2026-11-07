@@ -1,9 +1,10 @@
 import { html } from '@webjsdev/core';
 
-// The element renders a fieldset that carries data-active while its question
-// is on screen, so the animation targets that child.
+// The element moves this class onto the fieldset it renders, which carries
+// data-active while its question is on screen, so the variants key on the
+// fieldset itself.
 const itemClass =
-  '*:data-active:animate-in *:data-active:fade-in-0 *:data-active:slide-in-from-bottom-2 *:data-active:duration-300 motion-reduce:*:animate-none';
+  'data-active:animate-in data-active:fade-in-0 data-active:slide-in-from-bottom-2 data-active:duration-300 motion-reduce:animate-none';
 
 export default function QuestionnaireAnimated() {
   return html`
