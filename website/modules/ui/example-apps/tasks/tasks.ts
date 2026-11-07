@@ -35,11 +35,21 @@ import {
  * form as a filter changes, and the row selection count.
  */
 
-const ghostSm = buttonClass({ variant: 'ghost', size: 'sm' });
-const outlineSm = buttonClass({ variant: 'outline', size: 'sm' });
-const menuPanel = (align: 'start' | 'end', width: string) =>
-  cn(popoverContentClass({ side: 'bottom', align }), 'p-1', width);
-const menuItem = cn(dropdownMenuItemClass(), 'no-underline text-popover-foreground');
+// Class strings shared by the fragments below. Functions rather than module
+// constants: a call at module scope is work the elision analyser counts, and
+// it would ship this module, and the page, to the browser.
+function ghostSm() {
+  return buttonClass({ variant: 'ghost', size: 'sm' });
+}
+function outlineSm() {
+  return buttonClass({ variant: 'outline', size: 'sm' });
+}
+function menuPanel(align: 'start' | 'end', width: string) {
+  return cn(popoverContentClass({ side: 'bottom', align }), 'p-1', width);
+}
+function menuItem() {
+  return cn(dropdownMenuItemClass(), 'no-underline text-popover-foreground');
+}
 
 /** shadcn's UserNav: the avatar button and the account menu. */
 function userNav() {
@@ -77,7 +87,7 @@ function facetedFilter(s: TasksState, key: 'status' | 'priority', title: string,
   const selected = new Set(s[key]);
   const id = `filter-${key}`;
   const chosen = options.filter((o) => selected.has(o.value));
-  return html`<button type="button" popovertarget=${id} aria-haspopup="dialog" data-slot="button" class=${cn(outlineSm, 'h-8 border-dashed')}>
+  return html`<button type="button" popovertarget=${id} aria-haspopup="dialog" data-slot="button" class=${cn(outlineSm(), 'h-8 border-dashed')}>
       ${CirclePlusIcon()}
       ${title}
       ${selected.size ? html`
@@ -112,13 +122,13 @@ function facetedFilter(s: TasksState, key: 'status' | 'priority', title: string,
             </ui-command-group>` : ''}
         </ui-command-list>
       </ui-command>
-      <noscript><div class="border-t p-1"><button class=${cn(ghostSm, 'w-full')}>Apply</button></div></noscript>
+      <noscript><div class="border-t p-1"><button class=${cn(ghostSm(), 'w-full')}>Apply</button></div></noscript>
     </div>`;
 }
 
 /** shadcn's DataTableViewOptions: the View menu with one checkbox per hideable column. */
 function viewOptions(s: TasksState) {
-  return html`<button type="button" popovertarget="view-options" aria-haspopup="dialog" data-slot="button" class=${cn(outlineSm, 'ml-auto hidden h-8 lg:flex')}>${Settings2Icon()} View</button>
+  return html`<button type="button" popovertarget="view-options" aria-haspopup="dialog" data-slot="button" class=${cn(outlineSm(), 'ml-auto hidden h-8 lg:flex')}>${Settings2Icon()} View</button>
     <div id="view-options" popover role="dialog" aria-labelledby="view-options-label" class=${menuPanel('end', 'w-[150px]')}>
       <div id="view-options-label" class=${dropdownMenuLabelClass()}>Toggle columns</div>
       <div role="none" class=${dropdownMenuSeparatorClass()}></div>
@@ -142,7 +152,7 @@ function toolbar(s: TasksState, v: TasksView) {
       <input id="tasks-q" name="q" type="search" value=${s.q} placeholder="Filter tasks..." autocomplete="off" data-slot="input" data-filter-text class=${cn(inputClass(), 'h-8 w-[150px] lg:w-[250px]')}>
       ${facetedFilter(s, 'status', 'Status', statuses, v.facets.status)}
       ${facetedFilter(s, 'priority', 'Priority', priorities, v.facets.priority)}
-      ${filtered ? html`<a href=${hrefFor(s, { q: '', status: [], priority: [], page: 1 })} data-slot="button" class=${cn(ghostSm, 'no-underline')}>Reset ${XIcon()}</a>` : ''}
+      ${filtered ? html`<a href=${hrefFor(s, { q: '', status: [], priority: [], page: 1 })} data-slot="button" class=${cn(ghostSm(), 'no-underline')}>Reset ${XIcon()}</a>` : ''}
     </div>
     <div class="flex items-center gap-2">
       ${viewOptions(s)}
@@ -156,16 +166,16 @@ function columnHeader(s: TasksState, col: Column, title: string) {
   const dir = s.sort?.id === col ? (s.sort.desc ? 'desc' : 'asc') : null;
   const id = `sort-${col}`;
   return html`<div class="flex items-center gap-2">
-    <button type="button" popovertarget=${id} aria-haspopup="dialog" data-slot="button" class=${cn(ghostSm, '-ml-3 h-8 data-[state=open]:bg-accent')}>
+    <button type="button" popovertarget=${id} aria-haspopup="dialog" data-slot="button" class=${cn(ghostSm(), '-ml-3 h-8 data-[state=open]:bg-accent')}>
       <span>${title}</span>
       ${dir === 'desc' ? ArrowDownIcon() : dir === 'asc' ? ArrowUpIcon() : ChevronsUpDownIcon()}
       <span class="sr-only">${dir ? `, sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}</span>
     </button>
     <div id=${id} popover role="dialog" aria-label=${`${title} column`} class=${cn(menuPanel('start', 'w-32'), 'font-normal')}>
-      <a href=${hrefFor(s, { sort: { id: col, desc: false } })} class=${menuItem} aria-current=${dir === 'asc' ? 'true' : null}>${ArrowUpIcon()} Asc</a>
-      <a href=${hrefFor(s, { sort: { id: col, desc: true } })} class=${menuItem} aria-current=${dir === 'desc' ? 'true' : null}>${ArrowDownIcon()} Desc</a>
+      <a href=${hrefFor(s, { sort: { id: col, desc: false } })} class=${menuItem()} aria-current=${dir === 'asc' ? 'true' : null}>${ArrowUpIcon()} Asc</a>
+      <a href=${hrefFor(s, { sort: { id: col, desc: true } })} class=${menuItem()} aria-current=${dir === 'desc' ? 'true' : null}>${ArrowDownIcon()} Desc</a>
       <div role="none" class=${dropdownMenuSeparatorClass()}></div>
-      <a href=${hrefFor(s, { hide: [...s.hide, col] })} class=${menuItem}>${EyeOffIcon()} Hide</a>
+      <a href=${hrefFor(s, { hide: [...s.hide, col] })} class=${menuItem()}>${EyeOffIcon()} Hide</a>
     </div>
   </div>`;
 }
@@ -257,7 +267,7 @@ function pagination(s: TasksState, v: TasksView) {
             ${PAGE_SIZES.map((n) => html`<option value=${String(n)} ?selected=${n === s.size}>${n}</option>`)}
           </select>
         </ui-select>
-        <noscript><button class=${ghostSm}>Apply</button></noscript>
+        <noscript><button class=${ghostSm()}>Apply</button></noscript>
       </div>
       <div class="flex w-[100px] items-center justify-center text-sm font-medium">Page ${v.page} of ${v.pageCount}</div>
       <div class="flex items-center space-x-2">
