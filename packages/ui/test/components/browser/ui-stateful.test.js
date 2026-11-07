@@ -1465,6 +1465,21 @@ suite('ui-sidebar', () => {
     assert.equal(provider.openMobile, false, 'closing the sheet closes the phone sidebar');
     root.remove();
   });
+
+  test('the phone sheet is --sidebar-width-mobile wide, 18rem when nothing sets it', async () => {
+    for (const [style, want] of [[null, '18rem'], ['--sidebar-width-mobile: 20rem', '20rem']]) {
+      const root = await mount(layout());
+      const { provider, sidebar } = parts(root);
+      if (style) provider.setAttribute('style', style);
+      provider.isMobile = true;
+      await tick();
+      await tick();
+      const sheet = sidebar.querySelector('[data-mobile="true"]');
+      assert.ok(sheet, 'the phone sheet is drawn');
+      assert.equal(getComputedStyle(sheet).getPropertyValue('--sidebar-width').trim(), want, `the sheet's width with ${style ?? 'nothing set'}`);
+      root.remove();
+    }
+  });
 });
 
 suite('ui-switch', () => {
@@ -2110,6 +2125,113 @@ suite('ui-sonner: a toast from markup, and a toast with its own position', () =>
       assert.equal(globalThis.__webjsSonnerClicks ?? 0, 0, 'no viewport holds the listener');
     } finally {
       btn.remove();
+    }
+  });
+});
+
+// --------------------------------------------------------------------------
+// The questionnaire: the active question set from outside, navigation
+// buttons the author disables, and a form the page binds an action to.
+// --------------------------------------------------------------------------
+
+suite('ui-questionnaire: item, disabled buttons and as-child', () => {
+  let renderToString;
+  suiteSetup(async () => {
+    ({ renderToString } = await import('../../../../core/src/render-server.js'));
+    await import(`${COMPONENTS_DIR}/questionnaire.ts`);
+  });
+  const until = async (fn, ms = 2000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return fn();
+  };
+  const questions = (extra = '') => html`
+    <ui-questionnaire-item name="a" required><ui-questionnaire-title>A?</ui-questionnaire-title><ui-questionnaire-choices><ui-questionnaire-choice value="a1">A1</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item>
+    <ui-questionnaire-item name="b"><ui-questionnaire-title>B?</ui-questionnaire-title><ui-questionnaire-choices><ui-questionnaire-choice value="b1">B1</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item>
+    <ui-questionnaire-item name="c"><ui-questionnaire-title>C?</ui-questionnaire-title><ui-questionnaire-choices><ui-questionnaire-choice value="c1">C1</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item>
+    <ui-questionnaire-actions><ui-questionnaire-previous></ui-questionnaire-previous><ui-questionnaire-next ?disabled=${extra === 'next-disabled'}></ui-questionnaire-next><ui-questionnaire-submit></ui-questionnaire-submit></ui-questionnaire-actions>`;
+  const shown = (root) => [...root.querySelectorAll('[data-slot="questionnaire-item"]')].filter((f) => !f.hidden).map((f) => f.closest('ui-questionnaire-item').getAttribute('name'));
+
+  test('default-item opens on a question, and setting item from outside goes there', async () => {
+    const root = await mount(html`<ui-questionnaire default-item="b">${questions()}</ui-questionnaire>`);
+    try {
+      const q = root.querySelector('ui-questionnaire');
+      await until(() => shown(root).length === 1);
+      assert.deepEqual(shown(root), ['b'], 'opens on b');
+      assert.equal(q.item, 'b', 'item reads the active question');
+      const changes = [];
+      q.addEventListener('ui-active-change', (e) => changes.push(e.detail.name));
+      q.item = 'c';
+      await until(() => shown(root)[0] === 'c');
+      assert.deepEqual(shown(root), ['c'], 'item set from outside shows that question');
+      q.setAttribute('item', 'a');
+      await until(() => shown(root)[0] === 'a');
+      assert.deepEqual(shown(root), ['a'], 'and so does the attribute');
+      root.querySelector('[data-slot="questionnaire-choice"] input, [data-slot="questionnaire-choice-input"], ui-questionnaire-item[name="a"] input').click();
+      root.querySelector('[data-slot="questionnaire-next"]').click();
+      await until(() => shown(root)[0] === 'b');
+      assert.equal(q.item, 'b', 'the reader\'s own step updates item');
+      assert.ok(changes.includes('b'), 'and reports it');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('a disabled Next cannot be pressed and Enter does not step on', async () => {
+    const root = await mount(html`<ui-questionnaire default-item="b">${questions('next-disabled')}</ui-questionnaire>`);
+    try {
+      await until(() => shown(root).length === 1);
+      const next = root.querySelector('[data-slot="questionnaire-next"]');
+      assert.equal(next.disabled, true, 'the button is disabled');
+      assert.equal(next.hasAttribute('aria-keyshortcuts'), false, 'and offers no Enter shortcut');
+      // Stop the submit below the client router, which would navigate.
+      root.addEventListener('submit', (e) => e.preventDefault());
+      const form = root.querySelector('form');
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 100));
+      assert.deepEqual(shown(root), ['b'], 'Enter (a submit) leaves the reader on b');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('as-child drives the page\'s own form, keeping the action the page bound', async () => {
+    const save = async () => ({ success: true });
+    save.$$webjsAction = 'abc123/saveAnswers';
+    const out = await renderToString(html`<ui-questionnaire as-child><form action=${save} data-slot="questionnaire" class="cn-questionnaire">${questions()}</form></ui-questionnaire>`);
+    assert.equal((out.match(/<form/g) || []).length, 1, 'one form, the page\'s');
+    assert.match(out, /name="__webjs_action" value="abc123\/saveAnswers"/, 'served with the action identity');
+    assert.match(out, /<form[^>]*method="post"/);
+    const root = document.createElement('div');
+    root.innerHTML = out;
+    document.body.appendChild(root);
+    try {
+      await until(() => shown(root).length === 1);
+      const form = root.querySelector('form');
+      assert.deepEqual(shown(root), ['a'], 'one question at a time on the page\'s form');
+      assert.equal(form.noValidate, true, 'validated per question');
+      assert.ok(form.querySelector('input[name="__webjs_action"]'), 'the identity is still in the form');
+      let stepHeld = null;
+      root.addEventListener('submit', (e) => { stepHeld = e.defaultPrevented; e.preventDefault(); }, { once: true });
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await tick();
+      assert.equal(stepHeld, true, 'Enter on an unanswered required question is held');
+      root.querySelector('ui-questionnaire-item[name="a"] input').click();
+      root.querySelector('[data-slot="questionnaire-next"]').click();
+      await until(() => shown(root)[0] === 'b');
+      root.querySelector('[data-slot="questionnaire-next"]').click();
+      await until(() => shown(root)[0] === 'c');
+      // Read what the questionnaire decided, below it and above the client
+      // router, then stop the submit there so the test page stays put.
+      let held = null;
+      root.addEventListener('submit', (e) => { held = e.defaultPrevented; e.preventDefault(); }, { once: true });
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      assert.equal(held, false, 'on the last question the page\'s form submits to its action');
+    } finally {
+      root.remove();
     }
   });
 });

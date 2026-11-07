@@ -12,6 +12,11 @@
  *
  * shadcn parity:
  *   Questionnaire (shortcuts) → <ui-questionnaire shortcuts="letters" | "numbers" action method>
+ *   Questionnaire item / defaultItem
+ *                             → the `item` property and attribute (the active question,
+ *                               settable from outside) / `default-item`
+ *   Questionnaire render={<form action={…} />}
+ *                             → <ui-questionnaire as-child> around your own <form>
  *   QuestionnaireProgress     → <ui-questionnaire-progress> ("Question 1 of 3")
  *   QuestionnaireItem (name, required, multiple, disabled)
  *                             → <ui-questionnaire-item name required multiple disabled>
@@ -23,15 +28,30 @@
  *                             → <ui-questionnaire-choice-description>
  *   QuestionnaireInput        → <ui-questionnaire-input placeholder aria-label> (a freeform answer)
  *   QuestionnaireError        → <ui-questionnaire-error> (a default message when empty)
- *   QuestionnaireActions / Previous / Skip / Next / Submit
+ *   QuestionnaireActions / Previous / Skip / Next / Submit (disabled)
  *                             → <ui-questionnaire-actions> / -previous / -skip / -next / -submit
- *                               (`variant` and `size` as on a button)
+ *                               (`variant` and `size` as on a button, and `disabled`)
  *   onActiveItemChange        → `ui-active-change` ({ detail: { name } })
  *
  * A question's answers share its `name`, so `FormData.get(name)` reads a
  * single answer and `getAll(name)` a `multiple` one. Typing a freeform answer
  * clears a single question's choices, and picking a choice clears the text.
  * A `disabled` question is left out of the flow (a conditional question).
+ *
+ * The active question is the `item` property (and attribute): set it from
+ * outside to go to that question, and it follows the reader's own steps.
+ * `default-item` names the question the flow opens on. A navigation button
+ * written `disabled` cannot be pressed, and a disabled Next or Submit also
+ * stops Enter from stepping on, as in shadcn.
+ *
+ * To bind a `'use server'` action, write the form yourself, the way a page
+ * binds any action, and mark the questionnaire `as-child`:
+ * `<ui-questionnaire as-child><form action=${saveAnswers} data-slot="questionnaire"
+ * class=${questionnaireClass()}> ...questions and actions... </form></ui-questionnaire>`.
+ * The element then renders no form of its own and drives yours, so the page's
+ * binding (its hidden action field, `method="post"`) is served and kept, and
+ * the form posts with JavaScript off. Without `as-child` the element renders
+ * the form, with your `action` and `method` attributes as plain strings.
  *
  * Keyboard: Enter goes to the next question, and on the last one submits.
  * With `shortcuts`, a letter (A, B, C) or a number (1, 2, 3) picks the
@@ -155,6 +175,12 @@ export class UiQuestionnaire extends WebComponent({
   action: String,
   method: String,
   shortcuts: prop<'' | 'letters' | 'numbers'>(String),
+  // The active question, by name: set it to go there.
+  item: String,
+  // The question the flow opens on.
+  defaultItem: prop(String, { attribute: 'default-item' }),
+  // Drive the author's own <form> instead of rendering one.
+  asChild: prop(Boolean, { attribute: 'as-child' }),
   enhanced: prop<boolean>({ state: true }),
   active: prop<string>({ state: true }),
 }) {
@@ -165,16 +191,38 @@ export class UiQuestionnaire extends WebComponent({
     this.action = '';
     this.method = '';
     this.shortcuts = '';
+    this.item = '';
+    this.defaultItem = '';
+    this.asChild = false;
     this.enhanced = false;
     this.active = '';
   }
 
+  // The listeners sit on the host, which every event from the form reaches,
+  // so they serve the element's own form and an author's `as-child` one alike.
   connectedCallback(): void {
     super.connectedCallback?.();
+    this.addEventListener('submit', this._onSubmit);
+    this.addEventListener('keydown', this._onKeyDown);
+    this.addEventListener('change', this._onChange);
+    this.addEventListener('input', this._onChange);
     this._partConnected();
   }
 
+  disconnectedCallback(): void {
+    this.removeEventListener('submit', this._onSubmit);
+    this.removeEventListener('keydown', this._onKeyDown);
+    this.removeEventListener('change', this._onChange);
+    this.removeEventListener('input', this._onChange);
+    super.disconnectedCallback?.();
+  }
+
   render() {
+    if (this.asChild) {
+      // The author's form is the questionnaire; this host only drives it.
+      if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
+      return html`<slot></slot>`;
+    }
     return html`<form
       data-slot="questionnaire"
       action=${this.action || null}
@@ -182,11 +230,23 @@ export class UiQuestionnaire extends WebComponent({
       ?novalidate=${!!this.enhanced}
       data-shortcuts=${this.shortcuts || null}
       class=${cn(questionnaireClass(), takeAuthored(this))}
-      @submit=${this._onSubmit}
-      @keydown=${this._onKeyDown}
-      @change=${this._onChange}
-      @input=${this._onChange}
     ><slot></slot></form>`;
+  }
+
+  /** The form the questionnaire runs on: its own, or the author's under `as-child`. */
+  form(): HTMLFormElement | null {
+    if (typeof this.querySelector !== 'function') return null;
+    return this.querySelector('form');
+  }
+
+  willUpdate(changedProperties: Map<string, unknown>): void {
+    super.willUpdate?.(changedProperties);
+    // The active question set from outside: go there, with no validation, as
+    // a controlled shadcn Questionnaire does.
+    if (changedProperties.has('item') && this.enhanced && this.item && this.item !== this.active) {
+      const target = this.items().find((i) => i.name === this.item);
+      if (target) queueMicrotask(() => this._go(target, { focus: false }));
+    }
   }
 
   _partConnected(): void {
@@ -201,10 +261,21 @@ export class UiQuestionnaire extends WebComponent({
 
   _enhance(): void {
     if (this.enhanced) return;
-    const first = this.items()[0];
+    const items = this.items();
+    const wanted = this.item || this.defaultItem;
+    const first = items.find((i) => i.name === wanted) ?? items[0];
     if (!first) return;
     this.active = first.name;
+    this.item = first.name;
     this.enhanced = true;
+    // An author's form validates per question from here, as the element's own does.
+    if (this.asChild) {
+      const form = this.form();
+      if (form) {
+        form.noValidate = true;
+        if (this.shortcuts) form.setAttribute('data-shortcuts', this.shortcuts);
+      }
+    }
   }
 
   /** The questions in the flow, in order: every one not `disabled`. */
@@ -257,15 +328,23 @@ export class UiQuestionnaire extends WebComponent({
     return Array.from(this.querySelectorAll(tag)).filter((el) => rootOf(el) === this);
   }
 
-  _go(item: UiQuestionnaireItem | undefined): void {
+  _go(item: UiQuestionnaireItem | undefined, opts: { focus?: boolean } = {}): void {
     if (!item) return;
     if (item.name !== this.active) {
       this.active = item.name;
+      this.item = item.name;
       this.dispatchEvent(new CustomEvent('ui-active-change', { bubbles: true, detail: { name: item.name } }));
     }
     this.sync();
     // Focus the new question's first answer once it is shown.
+    if (opts.focus === false) return;
     this.updateComplete.then(() => requestAnimationFrame(() => item.inputs().find((i) => !i.disabled)?.focus()));
+  }
+
+  // Whether every button of a kind is written `disabled` (and there is one).
+  _allDisabled(tag: string): boolean {
+    const buttons = this._all(tag) as UiQuestionnaireButton[];
+    return buttons.length > 0 && buttons.every((b) => b.disabled);
   }
 
   /** Check the active question; mark it and return false when it needs an answer. */
@@ -309,13 +388,14 @@ export class UiQuestionnaire extends WebComponent({
   }
 
   // Enter in the form, and the Submit button, both arrive here.
-  _onSubmit = (e: SubmitEvent): void => {
-    if (!this.enhanced) return;
+  _onSubmit = (e: Event): void => {
+    if (!this.enhanced || (e.target as Element | null)?.closest?.(ROOT) !== this) return;
     const items = this.items();
     const item = this._activeItem();
     if (item && items.indexOf(item) < items.length - 1) {
       e.preventDefault();
-      this.next();
+      // Enter steps on only while Next can be pressed.
+      if (!this._allDisabled('ui-questionnaire-next')) this.next();
       return;
     }
     // On the last question every required one must be answered.
@@ -328,7 +408,7 @@ export class UiQuestionnaire extends WebComponent({
   };
 
   _onKeyDown = (e: KeyboardEvent): void => {
-    if (!this.enhanced || !this.shortcuts || e.metaKey || e.ctrlKey || e.altKey || isTextEntry(e.target)) return;
+    if (!this.enhanced || !this.shortcuts || rootOf(e.target as Element) !== this || e.metaKey || e.ctrlKey || e.altKey || isTextEntry(e.target)) return;
     const item = this._activeItem();
     if (!item) return;
     const choices = item.choices();
@@ -347,7 +427,7 @@ export class UiQuestionnaire extends WebComponent({
   _onChange = (e: Event): void => {
     const target = e.target as HTMLInputElement;
     const item = itemOf(target);
-    if (!item) return;
+    if (!item || rootOf(item) !== this) return;
     if (!item.multiple) {
       if (target.matches?.('[data-slot="questionnaire-input"]') && target.value.trim()) {
         for (const i of item.inputs()) if (i.type === 'radio') i.checked = false;
@@ -684,6 +764,8 @@ UiQuestionnaireActions.register('ui-questionnaire-actions');
 export class UiQuestionnaireButton extends WebComponent({
   variant: String,
   size: String,
+  // Written by the author, as shadcn's `disabled` on a navigation button.
+  disabled: Boolean,
   visible: prop<boolean>({ state: true }),
 }) {
   static part = '';
@@ -697,6 +779,7 @@ export class UiQuestionnaireButton extends WebComponent({
     const ctor = this.constructor as typeof UiQuestionnaireButton;
     this.variant = ctor.defaultVariant;
     this.size = 'default';
+    this.disabled = false;
     this.visible = ctor.submits;
   }
 
@@ -713,8 +796,9 @@ export class UiQuestionnaireButton extends WebComponent({
       data-size=${this.size}
       data-variant=${this.variant}
       ?hidden=${!this.visible}
+      ?disabled=${this.disabled}
       aria-hidden=${this.visible ? null : 'true'}
-      aria-keyshortcuts=${this.visible && (ctor.part === 'next' || ctor.part === 'submit') ? 'Enter' : null}
+      aria-keyshortcuts=${this.visible && !this.disabled && (ctor.part === 'next' || ctor.part === 'submit') ? 'Enter' : null}
       class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), ctor.place, takeAuthored(this))}
       @click=${this._onClick}
     ><slot>${ctor.label}</slot></button>`;
