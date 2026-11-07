@@ -512,6 +512,46 @@ suite('ui-input-otp', () => {
     root.remove();
   });
 
+  test('typing adds or removes no element and rewrites no attribute that did not change', async () => {
+    // An element inserted anywhere makes the browser re-check every :has()
+    // rule on the page, and an attribute write re-checks the ones naming it.
+    // A page carrying the kit's styles has hundreds, so the slot moving its
+    // caret by inserting it cost each keystroke a 150ms style pass.
+    const root = await mount(otp());
+    await tick();
+    const { el, input, slots } = parts(root);
+    input.focus();
+    await tick();
+    const elementsMoved = [];
+    const attributes = [];
+    const observer = new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === 'childList') {
+          for (const n of [...r.addedNodes, ...r.removedNodes]) if (n.nodeType === 1) elementsMoved.push(n);
+        } else if (r.type === 'attributes' && r.target !== input) {
+          attributes.push(`${r.target.tagName.toLowerCase()} ${r.attributeName}`);
+        }
+      }
+    });
+    observer.observe(el, { subtree: true, childList: true, attributes: true });
+    type(input, '1');
+    await tick();
+    type(input, '12');
+    await tick();
+    input.dispatchEvent(new Event('keyup'));
+    document.dispatchEvent(new Event('selectionchange'));
+    await tick();
+    observer.disconnect();
+    assert.deepEqual(elementsMoved, [], 'the caret moves by class, so no element is inserted or removed');
+    // Each keystroke moves the active slot on by one: two slots change their
+    // data-active and two carets change their class, and nothing else.
+    const active = attributes.filter((a) => a.endsWith(' data-active'));
+    assert.equal(active.length, 4, `two keystrokes write data-active four times, not ${active.length}`);
+    assert.ok(!attributes.some((a) => / (data-slot|aria-hidden)$/.test(a)), `unchanged attributes are not rewritten: ${attributes.join(', ')}`);
+    assert.deepEqual(slots.map((s) => !s.querySelector('.cn-input-otp-caret')), [true, true, false, true], 'only the active empty slot shows its caret');
+    root.remove();
+  });
+
   test('a keystroke that breaks the pattern is refused', async () => {
     const root = await mount(otp());
     await tick();

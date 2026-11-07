@@ -1937,8 +1937,7 @@
   "true",
   "aria-invalid",
   "true",
-  "aria-invalid",
-  "",
+  "hidden",
   "ui-input-otp-slot",
   "ui-input-otp-separator"
  ],

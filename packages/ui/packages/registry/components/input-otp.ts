@@ -80,6 +80,7 @@ export class UiInputOtp extends WebComponent({
   _savedStyle: string | null = null;
   _last = '';
   _focused = false;
+  _disabled: boolean | null = null;
 
   constructor() {
     super();
@@ -231,7 +232,12 @@ export class UiInputOtp extends WebComponent({
     queueMicrotask(() => { this._last = this.input?.value ?? ''; this._sync(); });
   };
 
-  // Push the value, the caret and the state into every drawn part.
+  // Push the value, the caret and the state into every drawn part. It runs
+  // several times per keystroke (input, keyup, each selectionchange), so it
+  // hands a part new state only when something it draws changed: every
+  // attribute write re-checks the page's :has() rules, and a page carrying
+  // the kit's styles has hundreds of them, which made each keystroke wait on
+  // style recalculation.
   _sync = (): void => {
     const input = this.input;
     if (!input || !this.enhanced) return;
@@ -244,12 +250,20 @@ export class UiInputOtp extends WebComponent({
       const i = Number(slot.index);
       const char = value[i] ?? '';
       const active = this._focused && (end > start ? i >= start && i < end : i === start);
-      slot.state = { shown: true, char, active, caret: active && !char, invalid };
+      const next = { shown: true, char, active, caret: active && !char, invalid };
+      const s = slot.state;
+      if (s.shown !== next.shown || s.char !== next.char || s.active !== next.active || s.caret !== next.caret || s.invalid !== next.invalid) {
+        slot.state = next;
+      }
     });
     this.querySelectorAll<UiInputOtpGroup | UiInputOtpSeparator>(`${ROOT}-group, ${ROOT}-separator`).forEach((part) => {
-      part.shown = true;
+      if (!part.shown) part.shown = true;
     });
-    this.revision++;
+    const disabled = !!input.disabled;
+    if (disabled !== this._disabled) {
+      this._disabled = disabled;
+      this.revision++;
+    }
   };
 }
 UiInputOtp.register('ui-input-otp');
@@ -305,23 +319,31 @@ export class UiInputOtpSlot extends WebComponent({
   // shadcn's slot classes use first: / last: for the joined corners, which
   // only work on the elements that are siblings in the group: the slot hosts
   // themselves, not a box inside each. So the slot styles its own host.
+  // Each write is guarded: an attribute set to the value it already has still
+  // invalidates style, and the page re-checks its :has() rules for it.
   updated(changedProperties: Map<string, unknown>): void {
     super.updated?.(changedProperties);
     const s = this.state;
-    this.setAttribute('class', [inputOtpSlotClass(), this._authored].filter(Boolean).join(' '));
-    this.setAttribute('data-slot', 'input-otp-slot');
-    this.setAttribute('data-active', s.active ? 'true' : 'false');
-    this.setAttribute('aria-hidden', 'true');
-    if (s.invalid) this.setAttribute('aria-invalid', 'true');
-    else this.removeAttribute('aria-invalid');
-    this.hidden = !s.shown;
+    const set = (name: string, value: string | null) => {
+      if (this.getAttribute(name) === value) return;
+      if (value === null) this.removeAttribute(name);
+      else this.setAttribute(name, value);
+    };
+    set('class', [inputOtpSlotClass(), this._authored].filter(Boolean).join(' '));
+    set('data-slot', 'input-otp-slot');
+    set('data-active', s.active ? 'true' : 'false');
+    set('aria-hidden', 'true');
+    set('aria-invalid', s.invalid ? 'true' : null);
+    if (this.hidden !== !s.shown) this.hidden = !s.shown;
   }
 
+  // The caret is always in the slot and only its class changes. Inserting or
+  // removing an element makes the browser re-check every :has() rule on the
+  // page, which on a page carrying the kit's styles took longer than a frame
+  // on each keystroke; a class change on a leaf is nearly free.
   render() {
     const s = this.state;
-    return html`${s.char}${s.caret
-      ? html`<div class=${inputOtpCaretClass()}><div class=${inputOtpCaretLineClass()}></div></div>`
-      : ''}`;
+    return html`${s.char}<div class=${s.caret ? inputOtpCaretClass() : 'hidden'}><div class=${inputOtpCaretLineClass()}></div></div>`;
   }
 }
 UiInputOtpSlot.register('ui-input-otp-slot');
