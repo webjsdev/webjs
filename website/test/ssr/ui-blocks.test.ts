@@ -170,6 +170,35 @@ test('the sample avatar is the WebJs one, hotlinked by an install and site-relat
   }
 });
 
+test('the preview cards follow a live design-system wrapper with no re-render', async () => {
+  // /ui/create repaints its wrapper in place on every pick, so the cards key
+  // on it: the names sit in spans the configurator rewrites, and the bar
+  // charts are drawn rounded and square with the style variants choosing.
+  const preview = await page('/ui/view/preview');
+  for (const key of ['style', 'font-heading', 'font-heading-label', 'font']) {
+    assert.match(preview, new RegExp(`<span data-design-system-text="${key}">`), `a ${key} name span`);
+  }
+  const p02 = await page('/ui/view/preview-02');
+  for (const html of [preview, p02]) {
+    assert.match(html, /class="contents style-lyra:hidden style-sera:hidden"><ui-chart/, 'the rounded chart, hidden under lyra and sera');
+    assert.match(html, /class="hidden style-lyra:contents style-sera:contents"><ui-chart/, 'the square chart, shown under them');
+  }
+});
+
+test('the dashboard-01 chart takes its first range and a default tooltip point', async () => {
+  const { renderToString } = await import('@webjsdev/core/server');
+  const { chartAreaInteractive } = await import('#modules/ui/blocks/dashboard-01/components/chart-area-interactive.ts');
+  const shown = (html: string) => [...html.matchAll(/<div data-range="(\w+)"(\s+hidden)?/g)].filter((m) => !m[2]).map((m) => m[1]);
+  const plain = await renderToString(chartAreaInteractive(), { ssr: false });
+  assert.deepEqual(shown(plain), ['90d'], 'three months by default');
+  assert.doesNotMatch(plain, /data-default-index=/, 'no tooltip point by default');
+  const week = await renderToString(chartAreaInteractive({ range: '7d', tooltipIndex: 3 }), { ssr: false });
+  assert.deepEqual(shown(week), ['7d'], 'the requested range shows first');
+  assert.match(week, /<ui-toggle-group type="single" value="7d"/, 'the toggle starts on it');
+  assert.match(week, /<option value="7d" selected/, 'and so does the select');
+  assert.match(week, /data-default-index="3"/, 'the tooltip point is drawn from the first paint');
+});
+
 /** Every .ts file under a block's directory. */
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

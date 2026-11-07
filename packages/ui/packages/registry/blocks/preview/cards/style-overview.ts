@@ -8,6 +8,10 @@
  * shadcn reads the style and font names from the configurator's search
  * params. Pass them in (`styleOverview({ style, font })`) from the page that
  * knows them; the defaults name the kit's default style and the site font.
+ * `font` is the heading font's name, or the body font's when the heading
+ * inherits it. Each name sits in a `data-design-system-text` span, so a host
+ * that restyles the card live (the /ui/create configurator) rewrites the
+ * names in place.
  */
 import { html } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
@@ -36,7 +40,7 @@ export function styleOverview(opts: { style?: string; font?: string } = {}) {
       <div data-slot="card-content" class=${cn(cardContentClass(), 'flex flex-col gap-6 style-lyra:gap-4 style-mira:gap-4')}>
         <div class="flex flex-col gap-1">
           <div class="font-heading text-2xl font-medium style-lyra:text-lg style-mira:text-lg style-sera:text-lg style-sera:font-semibold style-sera:tracking-wide style-sera:uppercase">
-            ${style} - ${font}
+            <span data-design-system-text="style">${style}</span> - <span data-design-system-text="font-heading">${font}</span>
           </div>
           <div class="line-clamp-2 text-base text-muted-foreground style-lyra:text-sm style-mira:text-sm style-sera:text-sm style-sera:leading-relaxed">
             Designers love packing quirky glyphs into test phrases. This is a

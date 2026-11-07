@@ -4,7 +4,10 @@
  * the chart is the kit's server-drawn `barChart`. Installed by
  * `npx @webjsdev/ui add preview-02` at `components/preview-02/power-usage.ts`.
  * Ported from shadcn/ui's preview-02, which squares the bars in its lyra and
- * sera styles; pass `{ rounded: false }` for that.
+ * sera styles. A bar's corners are drawn into its SVG path, so the card renders
+ * the chart both ways and the `style-lyra:` / `style-sera:` variants show the
+ * square one: a style switch repaints with no new render, and where those
+ * variants are not defined the rounded chart shows.
  */
 import { html } from '@webjsdev/core';
 import {
@@ -35,8 +38,19 @@ const chartConfig = {
   usage: { label: 'Usage (kW)', color: 'var(--chart-2)' },
 } satisfies ChartConfig;
 
-export function powerUsage(opts: { rounded?: boolean } = {}) {
-  const rounded = opts.rounded ?? true;
+export function powerUsage() {
+  const chart = (radius: number | number[]) => barChart({
+    config: chartConfig,
+    data: chartData,
+    title: 'Power usage through the day, in kilowatts',
+    class: 'aspect-auto h-[140px] w-full',
+    width: 330,
+    height: 140,
+    margin: { left: 0, right: 0, top: 4, bottom: 0 },
+    xAxis: { dataKey: 'hour', tickLine: false, tickMargin: 6, axisLine: false, class: 'text-xs' },
+    tooltip: { cursor: false, hideLabel: true },
+    bars: [{ dataKey: 'usage', fill: 'var(--color-usage)', radius }],
+  });
   return html`
     <div data-slot="card" data-size="default" class=${cardClass()}>
       <div data-slot="card-header" class=${cardHeaderClass()}>
@@ -44,18 +58,8 @@ export function powerUsage(opts: { rounded?: boolean } = {}) {
         <div data-slot="card-description" class=${cardDescriptionClass()}>Whole Home</div>
       </div>
       <div data-slot="card-content" class=${cn(cardContentClass(), 'flex flex-col gap-4')}>
-        ${barChart({
-          config: chartConfig,
-          data: chartData,
-          title: 'Power usage through the day, in kilowatts',
-          class: 'aspect-auto h-[140px] w-full',
-          width: 330,
-          height: 140,
-          margin: { left: 0, right: 0, top: 4, bottom: 0 },
-          xAxis: { dataKey: 'hour', tickLine: false, tickMargin: 6, axisLine: false, class: 'text-xs' },
-          tooltip: { cursor: false, hideLabel: true },
-          bars: [{ dataKey: 'usage', fill: 'var(--color-usage)', radius: rounded ? [4, 4, 0, 0] : 0 }],
-        })}
+        <div class="contents style-lyra:hidden style-sera:hidden">${chart([4, 4, 0, 0])}</div>
+        <div class="hidden style-lyra:contents style-sera:contents">${chart(0)}</div>
         <div role="none" data-slot="separator" data-orientation="horizontal" class=${separatorClass()}></div>
         <div class="grid grid-cols-2 gap-4">
           <div class="flex flex-col gap-0.5">

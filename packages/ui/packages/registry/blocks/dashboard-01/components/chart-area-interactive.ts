@@ -11,6 +11,10 @@
  * a phone on the 7-day range; here a phone starts on 3 months like any other
  * screen, since the server cannot know the width.
  *
+ * Options: `range` picks the range shown first (`'90d'` by default), and
+ * `tooltipIndex` shows the tooltip at that point from the first paint
+ * (Recharts' `defaultIndex`; none by default).
+ *
  * The figures are sample data. Query your own on the server and pass them to
  * the chart the same way.
  */
@@ -139,7 +143,9 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const RANGES = [
+export type ChartRange = '90d' | '30d' | '7d';
+
+const RANGES: { value: ChartRange; days: number; label: string }[] = [
   { value: '90d', days: 90, label: 'Last 3 months' },
   { value: '30d', days: 30, label: 'Last 30 days' },
   { value: '7d', days: 7, label: 'Last 7 days' },
@@ -153,7 +159,7 @@ const REFERENCE = Date.parse('2024-06-30');
 const shortDate = (value: unknown) =>
   new Date(String(value)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-function rangeChart(range: (typeof RANGES)[number]) {
+function rangeChart(range: (typeof RANGES)[number], tooltipIndex?: number) {
   const start = REFERENCE - range.days * DAY;
   const data = chartData.filter((item) => Date.parse(item.date) >= start);
   // Gradient ids are per range, since all three charts sit on one page.
@@ -178,7 +184,7 @@ function rangeChart(range: (typeof RANGES)[number]) {
     `,
     grid: { vertical: false },
     xAxis: { dataKey: 'date', tickLine: false, axisLine: false, tickMargin: 8, minTickGap: 32, tickFormatter: shortDate },
-    tooltip: { cursor: false, indicator: 'dot', labelFormatter: shortDate },
+    tooltip: { cursor: false, indicator: 'dot', labelFormatter: shortDate, defaultIndex: tooltipIndex },
     areas: [
       { dataKey: 'mobile', type: 'natural', fill: `url(#${mobile})`, stroke: 'var(--color-mobile)', stackId: 'a' },
       { dataKey: 'desktop', type: 'natural', fill: `url(#${desktop})`, stroke: 'var(--color-desktop)', stackId: 'a' },
@@ -186,7 +192,8 @@ function rangeChart(range: (typeof RANGES)[number]) {
   });
 }
 
-export function chartAreaInteractive() {
+export function chartAreaInteractive(opts: { range?: ChartRange; tooltipIndex?: number } = {}) {
+  const initial = RANGES.some((r) => r.value === opts.range) ? opts.range! : '90d';
   return html`
     <dashboard-01-chart-range>
       <div data-slot="card" data-size="default" class=${cn(cardClass(), '@container/card')}>
@@ -197,18 +204,18 @@ export function chartAreaInteractive() {
             <span class="@[540px]/card:hidden">Last 3 months</span>
           </div>
           <div data-slot="card-action" class=${cardActionClass()}>
-            <ui-toggle-group type="single" value="90d" variant="outline" spacing="0" class="hidden *:data-[slot=toggle-group-item]:px-4! @[767px]/card:flex">
+            <ui-toggle-group type="single" value=${initial} variant="outline" spacing="0" class="hidden *:data-[slot=toggle-group-item]:px-4! @[767px]/card:flex">
               ${RANGES.map((r) => html`<ui-toggle-group-item value=${r.value}>${r.label}</ui-toggle-group-item>`)}
             </ui-toggle-group>
             <ui-select size="sm">
               <select aria-label="Select a value" class=${cn(selectTriggerClass(), 'flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden')}>
-                ${RANGES.map((r) => html`<option value=${r.value} ?selected=${r.value === '90d'}>${r.label}</option>`)}
+                ${RANGES.map((r) => html`<option value=${r.value} ?selected=${r.value === initial}>${r.label}</option>`)}
               </select>
             </ui-select>
           </div>
         </div>
         <div data-slot="card-content" class=${cn(cardContentClass(), 'px-2 pt-4 sm:px-6 sm:pt-6')}>
-          ${RANGES.map((r) => html`<div data-range=${r.value} ?hidden=${r.value !== '90d'}>${rangeChart(r)}</div>`)}
+          ${RANGES.map((r) => html`<div data-range=${r.value} ?hidden=${r.value !== initial}>${rangeChart(r, opts.tooltipIndex)}</div>`)}
         </div>
       </div>
     </dashboard-01-chart-range>

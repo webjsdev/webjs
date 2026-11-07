@@ -6,8 +6,11 @@
  * `npx @webjsdev/ui add preview` at `components/preview/bar-chart-card.ts`.
  * Ported from shadcn/ui's preview block.
  *
- * shadcn squares the bars off under the lyra and sera styles. Pass
- * `rounded: false` for those.
+ * shadcn squares the bars off under the lyra and sera styles. A bar's corners
+ * are drawn into its SVG path, so CSS cannot square them: the card renders the
+ * chart both ways and the `style-lyra:` / `style-sera:` variants show the
+ * square one, so a style switch repaints with no new render. Where those
+ * variants are not defined, the rounded chart shows.
  */
 import { html } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
@@ -36,8 +39,23 @@ const barChartConfig: ChartConfig = {
   mobile: { label: 'Mobile', color: 'var(--chart-2)' },
 };
 
-export function barChartCard(opts: { rounded?: boolean } = {}) {
-  const radius = opts.rounded === false ? 0 : [6, 6, 0, 0];
+export function barChartCard() {
+  const chart = (radius: number | number[]) => barChart({
+    config: barChartConfig,
+    data: barChartData,
+    // The legend overflows the plot a little, as Recharts' HTML legend does.
+    class: 'max-h-[180px] w-full [&_.ui-chart-legend-wrapper]:overflow-visible [&_.ui-chart-surface]:overflow-visible',
+    title: 'Desktop and mobile visitors by month',
+    margin: { left: 0, right: 0, top: 8, bottom: 0 },
+    grid: { vertical: false, strokeDasharray: '3 3' },
+    xAxis: { dataKey: 'month', tickLine: false, tickMargin: 8, axisLine: false, tickFormatter: (value) => String(value).slice(0, 3) },
+    tooltip: { cursor: false, indicator: 'dashed' },
+    legend: {},
+    bars: [
+      { dataKey: 'desktop', fill: 'var(--color-desktop)', radius },
+      { dataKey: 'mobile', fill: 'var(--color-mobile)', radius },
+    ],
+  });
   const desktopTotal = barChartData.reduce((sum, item) => sum + item.desktop, 0);
   const mobileTotal = barChartData.reduce((sum, item) => sum + item.mobile, 0);
   const desktopDelta = Math.round(((desktopTotal - mobileTotal) / mobileTotal) * 100);
@@ -57,22 +75,8 @@ export function barChartCard(opts: { rounded?: boolean } = {}) {
         </div>
       </div>
       <div data-slot="card-content" class=${cn(cardContentClass(), 'flex flex-col gap-4 pt-0')}>
-        ${barChart({
-          config: barChartConfig,
-          data: barChartData,
-          // The legend overflows the plot a little, as Recharts' HTML legend does.
-          class: 'max-h-[180px] w-full [&_.ui-chart-legend-wrapper]:overflow-visible [&_.ui-chart-surface]:overflow-visible',
-          title: 'Desktop and mobile visitors by month',
-          margin: { left: 0, right: 0, top: 8, bottom: 0 },
-          grid: { vertical: false, strokeDasharray: '3 3' },
-          xAxis: { dataKey: 'month', tickLine: false, tickMargin: 8, axisLine: false, tickFormatter: (value) => String(value).slice(0, 3) },
-          tooltip: { cursor: false, indicator: 'dashed' },
-          legend: {},
-          bars: [
-            { dataKey: 'desktop', fill: 'var(--color-desktop)', radius },
-            { dataKey: 'mobile', fill: 'var(--color-mobile)', radius },
-          ],
-        })}
+        <div class="contents style-lyra:hidden style-sera:hidden">${chart([6, 6, 0, 0])}</div>
+        <div class="hidden style-lyra:contents style-sera:contents">${chart(0)}</div>
         <div class="grid w-full grid-cols-3 divide-x divide-border/60">
           ${stat('Desktop', desktopTotal.toLocaleString('en-US'))}
           ${stat('Mobile', mobileTotal.toLocaleString('en-US'))}
