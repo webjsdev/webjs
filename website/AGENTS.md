@@ -103,6 +103,9 @@ website/
                        exactly the viewport with no footer, shadcn's
                        has-data-[slot=designer] rule, and a docs page
                        (data-slot="docs") has no footer either, as shadcn's.
+                       It also mounts the one `<ui-sonner>` (top center),
+                       shadcn's root Toaster, so a page never mounts its own
+                       and a docs demo's `data-toast` button always fires.
                        test/ssr/ui-chrome.test.ts
         not-found.ts error.ts
                        section boundaries, rendered inside the /ui chrome
@@ -173,7 +176,9 @@ website/
                        modules/ui/example-apps/<name>/. dashboard is the
                        dashboard-01 block's mirror called with the options
                        that give it the example's shape, plus the example's
-                       Tabler icons and nav data; tasks is a server-rendered
+                       Tabler icons and nav data. Below md the shell shows
+                       the example's picture, not the example, as shadcn's
+                       does; tasks is a server-rendered
                        table whose filters, sort, hidden columns and page are
                        the query string (one GET form plus links, so it works
                        with JS off; <tasks-table> adds live submit and the row
@@ -569,6 +574,11 @@ website/
                        regenerate public/images/home-cards-{light,dark}.png,
                        the /ui home page's card grid as it shows below md,
                        from a running site (needs playwright)
+    shoot-example-images.mjs
+                       regenerate public/images/examples/<name>-{light,dark}.png,
+                       the pictures the /ui example pages show below md in
+                       place of the example, as shadcn's do (sizes in
+                       modules/ui/example-apps/images.ts; needs playwright)
     copy-registry.mjs  mirror the kit sources into modules/ui/components/ +
                        lib/utils/{cn,dom}.ts, and the registry blocks into
                        modules/ui/blocks/.

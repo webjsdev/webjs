@@ -182,3 +182,22 @@ test('the UI elements card shows its extra switch only from 4xl', async () => {
   assert.match(html, /<span class="hidden 4xl:flex items-center"><ui-switch[^>]*aria-label="Enable advanced setting"/);
   assert.match(html, /<span class="flex 4xl:hidden items-center"><ui-switch[^>]*aria-label="Enable compact notifications"/);
 });
+
+test('every /ui page has one toast viewport, shadcn\'s root Toaster', async () => {
+  for (const path of ['/ui', '/ui/colors', '/ui/docs/components/sonner']) {
+    const html = await page(path);
+    assert.equal(html.split('<ui-sonner').length - 1, 1, `${path}: exactly one <ui-sonner>`);
+    assert.match(html, /<ui-sonner position="top-center"/, `${path}: at the top center, as shadcn's`);
+  }
+});
+
+test('the Sonner docs demos fire their toasts with no script of their own', async () => {
+  const html = await page('/ui/docs/components/sonner');
+  assert.match(html, /data-toast="Event has been created" data-toast-description="Sunday, December 03, 2023 at 9:00 AM" data-toast-action="Undo"/, 'the lead demo');
+  for (const type of ['success', 'info', 'warning', 'error', 'loading']) {
+    assert.match(html, new RegExp(`data-toast-type="${type}"`), `the types demo fires a ${type} toast`);
+  }
+  for (const position of ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right']) {
+    assert.match(html, new RegExp(`data-toast-position="${position}"`), `the position demo fires at ${position}`);
+  }
+});

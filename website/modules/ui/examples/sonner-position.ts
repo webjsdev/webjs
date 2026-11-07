@@ -16,7 +16,7 @@ export default function SonnerPosition() {
   return html`
     <div class="flex flex-wrap justify-center gap-2">
       ${positions.map((position) => html`
-        <button type="button" data-slot="button" data-variant="outline" data-size="default" data-position=${position.value} class=${buttonClass({ variant: 'outline' })}>
+        <button type="button" data-slot="button" data-variant="outline" data-size="default" data-position=${position.value} data-toast="Event has been created" data-toast-position=${position.value} class=${buttonClass({ variant: 'outline' })}>
           ${position.label}
         </button>
       `)}

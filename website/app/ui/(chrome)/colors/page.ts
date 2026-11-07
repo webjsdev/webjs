@@ -117,7 +117,6 @@ export default function ColorsPage() {
           </section>
         </div>
       </div>
-      <span class="style-new-york contents"><ui-sonner position="top-center"></ui-sonner></span>
     </main>
   `;
 }

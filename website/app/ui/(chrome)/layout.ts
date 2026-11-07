@@ -2,6 +2,7 @@ import { html, cspNonce } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import '#components/ui-mode-switcher.ts';
 import '#components/ui-mobile-nav.ts';
+import '#modules/ui/components/sonner.ts';
 import '#components/docs-command-menu.ts';
 import { HEADER_NAV } from '#modules/ui/docs/nav.ts';
 import { commandMenu } from '#lib/ui/docs/command-menu.ts';
@@ -135,5 +136,9 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
         </div>
       </footer>
     </div>
+    <!-- shadcn's root Toaster: one viewport for every /ui page, top center,
+         so a docs demo's toast (data-toast, or toast()) has somewhere to
+         show. In the new-york style, the docs chrome's. -->
+    <span class="style-new-york contents"><ui-sonner position="top-center"></ui-sonner></span>
   `;
 }
