@@ -14,7 +14,9 @@
  * shadcn's own install-time RTL transform uses (scripts/logical-classes.mjs).
  * The kit is logical throughout, so a `dir="rtl"` page flips with no build
  * step, and a left-to-right page renders the mapped class exactly as the
- * physical one.
+ * physical one. A class with no logical form (a horizontal translate, a
+ * resize cursor) gains an `rtl:` twin beside it instead, as in shadcn's
+ * transform, so a switch thumb slides the right way under `dir="rtl"`.
  *
  * The supplement exists because the kit's base form is not quite shadcn's.
  * Each kit component keeps inline only the classes shadcn's base form ALSO
@@ -28,7 +30,7 @@
  * shadcn/ui is MIT licensed; see packages/ui/THIRD_PARTY_NOTICES.md.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { logicalClassList } from './logical-classes.mjs';
+import { rtlClassList } from './logical-classes.mjs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,7 +57,7 @@ for (const name of PORTED_STYLES) {
   block += '}\n';
   const header = `/* Ported from shadcn/ui (apps/v4/registry/styles/style-${name}.css, MIT).
    Regenerate with packages/ui/scripts/port-styles.mjs. */\n`;
-  const logical = (css) => css.replace(/(@apply\s+)([^;]+)(;)/g, (m, a, classes, z) => a + logicalClassList(classes) + z);
+  const logical = (css) => css.replace(/(@apply\s+)([^;]+)(;)/g, (m, a, classes, z) => a + rtlClassList(classes) + z);
   writeFileSync(join(OUT, `style-${name}.css`), header + logical(original + block));
 }
 console.log(`ported ${PORTED_STYLES.length} styles with ${Object.keys(supplement).length} supplement rule(s)`);

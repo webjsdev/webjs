@@ -64,10 +64,11 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 // UA `[popover]` defaults paint a bordered, padded panel centered with
 // `margin: auto`; the class string opts out via `m-0` + `border-0` and
 // layers the shadcn look on top. `fixed` keeps JS-computed top/left in
-// top layer. UA `[popover]:not(:popover-open) { display: none }` keeps
-// the closed state hidden.
+// top layer. A closed panel is hidden by `not-open:hidden`, since the UA
+// `[popover]:not(:popover-open) { display: none }` loses to the
+// `inline-flex` most styles give the content (see popoverContentClass).
 export const tooltipContentClass = (): string =>
-  'cn-tooltip-content z-50 w-fit origin-(--radix-tooltip-content-transform-origin) bg-foreground text-background';
+  'cn-tooltip-content z-50 w-fit origin-(--radix-tooltip-content-transform-origin) bg-foreground text-background not-open:hidden';
 
 // Module-level "last close" timestamp, shared across every <ui-tooltip>
 // on the page. When the next tooltip is hovered within

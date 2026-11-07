@@ -67,7 +67,7 @@ export const contextMenuTriggerClass = (): string => 'cn-context-menu-trigger se
 
 /** The menu panel's classes (the element applies them). */
 export const contextMenuContentClass = (): string =>
-  'cn-context-menu-content z-50 origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto';
+  'cn-context-menu-content z-50 origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto not-open:hidden';
 /** A menu item's classes (the element applies them). */
 export const contextMenuItemClass = (): string =>
   'cn-context-menu-item group/context-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
@@ -90,7 +90,7 @@ export const contextMenuSubTriggerClass = (): string =>
   'cn-context-menu-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A sub-menu panel's classes (the element applies them). */
 export const contextMenuSubContentClass = (): string =>
-  'cn-context-menu-sub-content z-50 origin-(--radix-context-menu-content-transform-origin) overflow-hidden';
+  'cn-context-menu-sub-content z-50 origin-(--radix-context-menu-content-transform-origin) overflow-hidden not-open:hidden';
 
 const contextMenuItemIndicatorClass = (): string =>
   'cn-context-menu-item-indicator pointer-events-none';

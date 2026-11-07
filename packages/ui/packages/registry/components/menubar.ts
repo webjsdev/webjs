@@ -77,7 +77,7 @@ export const menubarTriggerClass = (): string =>
   'cn-menubar-trigger flex items-center outline-hidden select-none';
 /** A menu panel's classes (the element applies them). */
 export const menubarContentClass = (): string =>
-  'cn-menubar-content z-50 origin-(--radix-menubar-content-transform-origin) overflow-x-hidden overflow-y-auto';
+  'cn-menubar-content z-50 origin-(--radix-menubar-content-transform-origin) overflow-x-hidden overflow-y-auto not-open:hidden';
 /** A menu item's classes (the element applies them). */
 export const menubarItemClass = (): string =>
   'cn-menubar-item group/menubar-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
@@ -100,7 +100,7 @@ export const menubarSubTriggerClass = (): string =>
   'cn-menubar-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A sub-menu panel's classes (the element applies them). */
 export const menubarSubContentClass = (): string =>
-  'cn-menubar-sub-content z-50 origin-(--radix-menubar-content-transform-origin) overflow-hidden';
+  'cn-menubar-sub-content z-50 origin-(--radix-menubar-content-transform-origin) overflow-hidden not-open:hidden';
 
 const menubarItemIndicatorClass = (type?: 'checkbox' | 'radio'): string =>
   type === 'radio'

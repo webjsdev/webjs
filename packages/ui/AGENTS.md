@@ -204,7 +204,7 @@ tracked source, the standard shadcn "you own it" pattern.
 | 1a/2 | `toggle` | Hybrid: exports `toggleClass({ variant, size })` (pair with a native `<button>`) AND registers `<ui-toggle>`. Because it registers an element, the kit tooling (`webjs ui view` / the MCP `ui` tool / the `add` strip) treats it as Tier-2 and keeps its file whole. |
 | 1a | `breadcrumb` | `breadcrumbListClass`, `breadcrumbItemClass`, `breadcrumbLinkClass`, `breadcrumbPageClass`, `breadcrumbSeparatorClass`, `breadcrumbEllipsisClass` |
 | 1a | `pagination` | `paginationClass`, `paginationContentClass`, `paginationLinkClass({ isActive, size })`, `paginationPreviousClass`, `paginationNextClass`, `paginationEllipsisClass` |
-| 1b | `popover` | `popoverContentClass`, `popoverHeaderClass`, `popoverTitleClass`, `popoverDescriptionClass`. Compose with `<button popovertarget="id">` + `<div popover id="id">`; positioning via CSS anchor positioning or the exported `positionFloating` helper. |
+| 1b | `popover` | `popoverContentClass`, `popoverHeaderClass`, `popoverTitleClass`, `popoverDescriptionClass`. Compose with `<button popovertarget="id">` + `<div popover id="id">`; positioning via CSS anchor positioning or the exported `positionFloating` helper. The content class carries `not-open:hidden`, as does every kit panel rendered `popover` (tooltip, hover card, the menus, select, combobox): the browser hides a closed popover only through a user-agent rule, which the `flex` / `inline-flex` most styles give the panel would beat, so without it a closed panel painted. |
 | 1b | `accordion` | `accordionClass`, `accordionItemClass`, `accordionTriggerClass`, `accordionContentClass`, `accordionContentInnerClass` (the wrapper shadcn's AccordionContent renders around your content, where the styles put the padding). Compose with `<details name="...">` + `<summary>`; `name` provides exclusive-open behavior natively. |
 | 1b | `collapsible` | `collapsibleClass`, `collapsibleTriggerClass`, `collapsibleContentClass`. Compose with `<details>` + `<summary>`. As shadcn's CollapsibleTrigger carries no classes, the trigger keeps only the `<summary>` resets inline, so a `buttonClass()` merged onto it keeps its size; new-york's row look rides `cn-collapsible-trigger`. |
 | 1b | `progress` | `progressClass()`, apply to native `<progress value max>`. Browser draws the bar via `::-webkit-progress-value` and `::-moz-progress-bar`. Omit `value` for the indeterminate / pulse state. |
@@ -625,7 +625,12 @@ the CLI gains no dependency:
   styles, copied by `scripts/port-styles.mjs` with every `@apply` class mapped to
   its logical form through shadcn's own RTL table (`scripts/logical-classes.mjs`:
   `rounded-l` to `rounded-s`, `border-r` to `border-e`), which renders the same
-  left to right and flips under `dir="rtl"`, plus one appended BASE
+  left to right and flips under `dir="rtl"`. A class with no logical form gets
+  an `rtl:` twin beside it, as shadcn's transform adds (`translate-x-px` gains
+  `rtl:-translate-x-px`, a resize cursor its mirror; a centring translate stays
+  alone), so a switch thumb slides the right way in RTL; `style-new-york.css`
+  carries the same twins, and `test/ported-styles-logical.test.js` checks all
+  nine. Plus one appended BASE
   SUPPLEMENT block. The kit's base form keeps inline what shadcn's base form
   keeps inline (the separator's `data-horizontal:h-px`, the avatar badge's
   sizes, the menus' `origin-(...)`), because a utility only the kit's

@@ -2870,7 +2870,7 @@
   "",
   "70%",
   "h-4 max-w-(--skeleton-width) flex-1",
-  "mx-3.5 translate-x-px gap-1 border-s border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden flex min-w-0 flex-col",
+  "mx-3.5 translate-x-px gap-1 border-s border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden flex min-w-0 flex-col rtl:-translate-x-px",
   "group/menu-sub-item relative",
   "h-7 gap-2 rounded-md px-2 text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[size=sm]:text-xs data-[size=md]:text-sm flex min-w-0 -translate-x-px items-center overflow-hidden outline-hidden group-data-[collapsible=icon]:hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:shrink-0",
   "function",
@@ -3130,8 +3130,8 @@
   "shrink-0 cursor-pointer rounded-full border border-transparent shadow-xs peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 bg-input dark:bg-input/80 peer-checked:bg-primary data-checked:bg-primary peer group/switch inline-flex items-center transition-all outline-none relative",
   "h-[1.15rem] w-8",
   "h-3.5 w-6",
-  "after:size-4 after:translate-x-px peer-checked:after:translate-x-[calc(100%-2px)]",
-  "after:size-3 after:translate-x-px peer-checked:after:translate-x-[calc(100%-1px)]",
+  "after:size-4 after:translate-x-px peer-checked:after:translate-x-[calc(100%-2px)] rtl:after:-translate-x-px rtl:peer-checked:after:-translate-x-[calc(100%-2px)]",
+  "after:size-3 after:translate-x-px peer-checked:after:translate-x-[calc(100%-1px)] rtl:after:-translate-x-px rtl:peer-checked:after:-translate-x-[calc(100%-1px)]",
   "after:pointer-events-none after:absolute after:start-0 after:rounded-full after:bg-background after:transition-transform peer-checked:after:bg-primary-foreground dark:after:bg-foreground",
   "default",
   "input-id",
@@ -3161,7 +3161,7 @@
   "true",
   "true",
   "peer absolute inset-0 z-10 m-0 size-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed",
-  "after:pointer-events-none after:absolute after:start-0 after:rounded-full after:bg-background after:transition-transform peer-checked:after:bg-primary-foreground dark:after:bg-foreground pointer-events-none block ring-0 transition-transform size-4 rounded-full bg-background translate-x-px data-checked:translate-x-[calc(100%-2px)] dark:bg-foreground dark:data-checked:bg-primary-foreground group-data-[size=sm]/switch:size-3 group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-1px)] after:hidden",
+  "after:pointer-events-none after:absolute after:start-0 after:rounded-full after:bg-background after:transition-transform peer-checked:after:bg-primary-foreground dark:after:bg-foreground pointer-events-none block ring-0 transition-transform size-4 rounded-full bg-background translate-x-px data-checked:translate-x-[calc(100%-2px)] dark:bg-foreground dark:data-checked:bg-primary-foreground group-data-[size=sm]/switch:size-3 group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-1px)] after:hidden rtl:-translate-x-px rtl:data-checked:-translate-x-[calc(100%-2px)] rtl:group-data-[size=sm]/switch:data-checked:-translate-x-[calc(100%-1px)]",
   "ui-switch"
  ],
  "components/table.ts": [

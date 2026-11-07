@@ -172,7 +172,7 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 // --------------------------------------------------------------------------
 
 export const dropdownMenuContentClass = (): string =>
-  'cn-dropdown-menu-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto data-[state=closed]:overflow-hidden';
+  'cn-dropdown-menu-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto data-[state=closed]:overflow-hidden not-open:hidden';
 
 export const dropdownMenuItemClass = (): string =>
   'cn-dropdown-menu-item group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
@@ -195,7 +195,7 @@ export const dropdownMenuSubTriggerClass = (): string =>
   'cn-dropdown-menu-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuSubContentClass = (): string =>
-  'cn-dropdown-menu-sub-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden';
+  'cn-dropdown-menu-sub-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden not-open:hidden';
 
 const dropdownMenuItemIndicatorClass = (): string =>
   'cn-dropdown-menu-item-indicator pointer-events-none';

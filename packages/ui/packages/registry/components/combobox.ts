@@ -78,7 +78,7 @@ export const comboboxClearClass = (): string => 'cn-combobox-clear';
 export const comboboxClearIconClass = (): string => 'cn-combobox-clear-icon pointer-events-none';
 /** The popup's classes (the element applies them). */
 export const comboboxContentClass = (): string =>
-  'cn-combobox-content group/combobox-content z-50 max-h-(--available-height) origin-(--transform-origin) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] data-[chips=true]:min-w-(--anchor-width)';
+  'cn-combobox-content group/combobox-content z-50 max-h-(--available-height) origin-(--transform-origin) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] data-[chips=true]:min-w-(--anchor-width) not-open:hidden';
 /** The list's classes (the element applies them). */
 export const comboboxListClass = (): string => 'cn-combobox-list overflow-y-auto overscroll-contain';
 /** An item's classes (the element applies them). */

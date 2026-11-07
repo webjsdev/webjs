@@ -94,7 +94,7 @@ export const selectTriggerIconClass = (): string =>
   'cn-select-trigger-icon pointer-events-none';
 /** The listbox panel's classes (the element applies them). */
 export const selectContentClass = (): string =>
-  'cn-select-content z-50 max-h-(--radix-select-content-available-height) origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto data-[align-trigger=true]:animate-none';
+  'cn-select-content z-50 max-h-(--radix-select-content-available-height) origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto data-[align-trigger=true]:animate-none not-open:hidden';
 /** The listbox's inner viewport (the element applies them). */
 export const selectViewportClass = (): string =>
   'cn-select-viewport data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)';

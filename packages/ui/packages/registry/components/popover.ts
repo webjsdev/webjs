@@ -203,6 +203,13 @@ const MARGIN_OFFSET_CLASS: Record<PopoverSide, Record<PopoverSideOffset, string>
  * `m-0` clears the UA `margin: auto` so anchor positioning isn't
  * fighting auto-centering, then a single directional margin sets the
  * sideOffset gap.
+ *
+ * `not-open:hidden` keeps a CLOSED panel hidden. The browser hides one
+ * through its own `[popover]:not(:popover-open) { display: none }`, but
+ * that is a user-agent rule, which any author `display` beats, and most
+ * styles give the panel `flex` (shadcn's Radix content is never in the
+ * document while closed, so its styles never had to care). Every
+ * `popover` panel in the kit carries the same guard.
  */
 export function popoverContentClass(opts: PopoverContentOptions = {}): string {
   const side = opts.side ?? 'bottom';
@@ -219,7 +226,7 @@ export function popoverContentClass(opts: PopoverContentOptions = {}): string {
     alignClass = ALIGN_OFFSET_CLASS[`${axis}-${edge}`][Math.abs(alignOffset) as PopoverAlignStep] ?? '';
   }
   return [
-    'cn-popover-content z-50 w-72 origin-(--radix-popover-content-transform-origin) outline-hidden',
+    'cn-popover-content z-50 w-72 origin-(--radix-popover-content-transform-origin) outline-hidden not-open:hidden',
     POSITION_AREA_CLASS[`${side}-${align}`],
     MARGIN_OFFSET_CLASS[side][sideOffset],
     alignClass,

@@ -77,10 +77,11 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 
 // `fixed m-0` opts out of the UA `[popover]` auto-centering margin so
 // JS-computed top/left from positionFloating lands correctly. shadcn's
-// visual layer sits on top. UA `[popover]:not(:popover-open) {
-// display: none }` handles closed-state hiding.
+// visual layer sits on top. `not-open:hidden` hides a closed panel, which
+// the UA `[popover]:not(:popover-open)` rule cannot do once any author
+// `display` applies (see popoverContentClass).
 export const hoverCardContentClass = (): string =>
-  'cn-hover-card-content z-50 origin-(--radix-hover-card-content-transform-origin) outline-hidden';
+  'cn-hover-card-content z-50 origin-(--radix-hover-card-content-transform-origin) outline-hidden not-open:hidden';
 
 // --------------------------------------------------------------------------
 // <ui-hover-card>
