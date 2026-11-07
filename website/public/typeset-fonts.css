@@ -4,13 +4,10 @@
  * latin variable woff2 that scripts/fetch-fonts.mjs saves into public/fonts/
  * (it prints this block), from the list in modules/ui/typeset/fonts.ts.
  *
- * Geist and Geist Mono are in that list too, but every /ui page already
- * declares them (public/ui-input.css), so they are not repeated here. Inter
- * and JetBrains Mono are the marketing site's files, declared in
- * public/input.css as well, which a /ui page no longer loads.
+ * Inter, JetBrains Mono, Geist and Geist Mono are in that list too, but every
+ * /ui page already declares them (public/input.css and public/ui-input.css),
+ * so they are not repeated here.
  */
-@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter.woff2') format('woff2');}
-@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url('/public/fonts/jetbrains-mono.woff2') format('woff2');}
 @font-face{font-family:'Noto Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/noto-sans.woff2') format('woff2');}
 @font-face{font-family:'Nunito Sans';font-style:normal;font-weight:200 1000;font-display:swap;src:url('/public/fonts/nunito-sans.woff2') format('woff2');}
 @font-face{font-family:'Figtree';font-style:normal;font-weight:300 900;font-display:swap;src:url('/public/fonts/figtree.woff2') format('woff2');}

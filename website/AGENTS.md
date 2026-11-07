@@ -766,19 +766,8 @@ wrapper (`scripts/scope-ui-styles.mjs`, run by `copy-registry.mjs` and by
 the NEAREST wrapper wins: a nova demo inside the new-york docs chrome takes
 only nova, the way shadcn's baked imports do. The registry's style files stay
 byte-for-byte shadcn's, since the CLI bake reads them. `ui.css` holds the
-`/ui` tokens on `.ui-site` and the utilities `/ui` code uses, and it stands
-ALONE: a `/ui` path loads `ui.css` and no `tailwind.css`, so `ui.css` imports
-Tailwind's preflight itself (declaring the same layer order
-`@import "tailwindcss"` does) and the rules both sheets need come from
-`public/shared-base.css`, which both inputs import. Loading both used to match
-every shared utility and `:has()` rule twice, which made a menu open slow. The
-root layout therefore links exactly one of the two by path, and
-`app/(site)/layout.ts` repeats the `tailwind.css` link for a soft navigation
-in from `/ui`. A `/ui` path that 404s or throws renders `app/ui/not-found.ts`
-or `app/ui/error.ts`, in `/ui` classes, since the root boundaries are styled
-by `tailwind.css`. The fonts the configurator and typeset frames name
-(Inter and JetBrains Mono among them) are declared in
-`public/typeset-fonts.css`, not borrowed from `tailwind.css`. The link is emitted
+`/ui` tokens on `.ui-site` and the utilities only `/ui` code uses, and no
+preflight, since the root stylesheet already supplies it. The link is emitted
 TWICE, deliberately. The root layout emits it in its leading head run for a
 `/ui` path, because only the root layout's leading `<link>` run is hoisted into
 `<head>` and a body stylesheet is not reliably render-blocking (#406).

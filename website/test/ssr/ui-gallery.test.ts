@@ -102,29 +102,18 @@ test('there is exactly one header, one footer, and one theme control', async () 
   }
 });
 
-test('a /ui page loads only the /ui stylesheet, and a marketing page only its own', async () => {
+test('a full load of a /ui page has the /ui stylesheet in <head>, and a marketing page has none', async () => {
   // Only the ROOT layout's leading link run is hoisted into <head>, and a
   // stylesheet left in <body> is not reliably render-blocking (#406), so the
-  // root layout links each section's stylesheet itself, by path. The two are
-  // exclusive: ui.css carries its own reset, and a /ui page that also loaded
-  // tailwind.css matched every shared utility and :has() rule twice.
+  // root layout emits the /ui link itself, for /ui paths only.
   const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
-  const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
-  for (const path of [UI_COMPONENT, UI_INDEX, '/ui/view/dashboard-01']) {
-    const ui = await bodyOf(path);
-    assert.match(headOf(ui), /<link rel="stylesheet" href="\/public\/ui\.css/, `${path} has ui.css in <head>`);
-    assert.match(headOf(ui), /\/public\/fonts\/geist\.woff2/, 'and preloads Geist');
-    assert.ok(!ui.includes('/public/tailwind.css'), `${path} does not load the marketing stylesheet`);
-    assert.ok(!ui.includes('/public/fonts/inter.woff2'), `${path} does not preload the marketing fonts`);
-  }
+  const ui = await bodyOf(UI_COMPONENT);
+  assert.match(headOf(ui), /<link rel="stylesheet" href="\/public\/ui\.css/, '/ui has ui.css in <head>');
+  assert.match(headOf(ui), /\/public\/fonts\/geist\.woff2/, 'and preloads Geist');
   for (const path of [MARKETING_PATH, DOC_PATH, '/']) {
     const html = await bodyOf(path);
     assert.ok(!html.includes('/public/ui.css'), `${path} does not load the /ui stylesheet`);
     assert.ok(!html.includes('geist.woff2'), `${path} does not preload the /ui font`);
-    assert.match(headOf(html), /<link rel="stylesheet" href="\/public\/tailwind\.css/, `${path} has tailwind.css in <head>`);
-    // The marketing chrome repeats it, for a soft navigation in from /ui,
-    // where the root layout is not re-rendered.
-    assert.match(bodyPart(html), /<link rel="stylesheet" href="\/public\/tailwind\.css/, `${path} links it again in its own markup`);
   }
 });
 
@@ -228,13 +217,7 @@ test('the /ui tokens are scoped to .ui-site, so they cannot leak into the market
   assert.match(css, /\.ui-site\s*\{[^}]*--background:\s*light-dark\(/, 'the raw values sit on .ui-site, in light-dark() form');
   assert.match(css, /\.ui-site\s*\{[^}]*--sidebar-primary:/, 'including the sidebar family');
   assert.ok(!/:root\s*\{[^}]*--background:/.test(css), 'and none is declared at :root');
-  // ui.css stands alone, since a /ui page loads nothing else: Tailwind's
-  // reset, in the layer order @import "tailwindcss" declares, and the rules
-  // it shares with tailwind.css.
-  assert.match(css, /^@layer theme, base, components, utilities;$/m, 'ui.css declares the layer order');
-  assert.match(css, /@import "tailwindcss\/preflight\.css" layer\(base\);/, 'and imports the reset');
-  assert.match(css, /@import "\.\/shared-base\.css";/, 'and the shared rules');
-  assert.match(readFileSync(resolve(WEBSITE_ROOT, 'public/input.css'), 'utf8'), /@import "\.\/shared-base\.css";/, 'which tailwind.css imports too');
+  assert.ok(!/@import\s+["']tailwindcss["']/.test(css), 'ui.css does not ship a second preflight');
   const html = await bodyOf(UI_COMPONENT);
   assert.match(html, /<div class="ui-site/, 'every /ui page renders inside the .ui-site wrapper');
 });

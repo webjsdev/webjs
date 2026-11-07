@@ -38,8 +38,7 @@
  * are declared in public/typeset-fonts.css, which only the typeset pages link,
  * so no other page downloads them. The four that the site already serves
  * (Inter, JetBrains Mono, Geist, Geist Mono) are the same files, and the
- * typeset faces are printed as a second block for that stylesheet, Inter and
- * JetBrains Mono included, since a /ui page does not load public/input.css.
+ * typeset faces are printed as a second block for that stylesheet.
  *
  * EB Garamond and Instrument Serif are two of the configurator's (/ui/create)
  * fonts that the typeset builder does not offer. They are declared in
@@ -88,7 +87,7 @@ const FAMILIES = [
 ];
 // The typeset faces this script prints for public/typeset-fonts.css: the ones
 // no other /ui stylesheet declares.
-const TYPESET_SLUGS = new Set(TYPESET_FONTS.map((font) => font.id).filter((id) => !['geist', 'geist-mono'].includes(id)));
+const TYPESET_SLUGS = new Set(TYPESET_FONTS.map((font) => font.id).filter((id) => !['inter', 'jetbrains-mono', 'geist', 'geist-mono'].includes(id)));
 const SERA_SLUGS = new Set(['playfair-display']);
 const CREATE_SLUGS = new Set(['eb-garamond', 'instrument-serif']);
 

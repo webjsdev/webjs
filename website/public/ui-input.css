@@ -1,28 +1,19 @@
 /* Tailwind CSS v4 input for the /ui section, compiled to public/ui.css (#1666).
 
    /ui is a replica of the shadcn/ui site, with its own palette, type and
-   chrome, so it gets its own stylesheet and the two sections never load each
-   other's. A /ui page loads this file and NOT public/tailwind.css (the root
-   layout links one or the other by path), so it stands alone: Tailwind's
-   theme, reset (preflight) and utilities, the /ui tokens, and the rules the
-   two sheets share (./shared-base.css). Loading both, as /ui did at first,
-   doubled every utility a page matched and every :has() rule the browser
-   re-checks on each style recalculation.
-
-   The layer order is declared first, as `@import "tailwindcss"` does, so the
-   kit styles in layer(base) stay below the utilities whatever else a page
-   loads.
+   chrome, so it gets its own stylesheet and a marketing page never pays for
+   it. A /ui page loads BOTH stylesheets: public/tailwind.css stays in the root
+   layout and supplies the reset (preflight), and this file adds the /ui
+   tokens and the utilities only /ui code uses. That is why it imports the
+   theme and the utilities but NOT preflight, which would otherwise ship twice.
 
    `source(none)` turns off automatic content detection, so only the /ui code
    named by the @source lines below is scanned. lib/utils/{cn,dom}.ts is
    gitignored and an explicit file @source is scanned regardless; the kit's
    mirrored components and blocks are read at their registry source instead,
    see the last two @source lines. */
-@layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
-@import "./shared-base.css";
 
 /* The kit's styles (#1666, D8). The registry components are in BASE FORM,
    carrying semantic cn-* names, and a style maps each name to Tailwind. In an
@@ -145,12 +136,6 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --font-mono: 'Geist Mono Regular', ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* Preflight's code, kbd, samp and pre take this one, which Tailwind
-     declares on :root as var(--font-mono) and so resolves THERE, to the
-     marketing mono the root layout sets. Restated here it resolves to the
-     /ui mono above, so a code sample with no font class is Geist Mono, as
-     shadcn's are. */
-  --default-mono-font-family: var(--font-mono);
 
   /* shadcn sizes its header and footer from these (14 and 16 spacing steps
      for the header, 14 and 24 for the footer). The header itself is

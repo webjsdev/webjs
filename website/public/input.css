@@ -1,7 +1,5 @@
 /* Tailwind CSS v4 input - compiled to public/tailwind.css. */
 @import "tailwindcss";
-/* The rules /ui shares (the native select fix, the code token colours). */
-@import "./shared-base.css";
 
 /* The /ui gallery renders live @webjsdev/ui components, whose sources are
    mirrored into these two directories by scripts/copy-registry.mjs. Both are
@@ -166,6 +164,20 @@
   --color-ring:                 var(--ring);
 }
 
+@layer base {
+  /* A rule the kit's theme block carries and this site never receives, because it writes its own stylesheet instead of running
+     `webjs ui init`. A native <option> paints transparent over the browser
+     popup when no rule applies, so in dark mode a native select's options
+     disappear. Canvas / CanvasText are the system colours the browser
+     would have painted anyway. Two ELEMENT selectors (specificity 0,0,2) and no
+     wrapper requirement, matching the kit rule exactly. */
+  select option,
+  select optgroup {
+    background-color: Canvas;
+    color: CanvasText;
+  }
+}
+
 /*
  * Self-hosted fonts (latin subset woff2 in public/fonts/, fetched by
  * scripts/fetch-fonts.mjs). One VARIABLE file per family covers its whole
@@ -178,3 +190,21 @@
 @font-face{font-family:'Inter Tight';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter-tight.woff2') format('woff2');}
 @font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter.woff2') format('woff2');}
 @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url('/public/fonts/jetbrains-mono.woff2') format('woff2');}
+
+/*
+ * Syntax-highlight token colors (theme-aware). Emitted at SSR by
+ * lib/highlight.ts (home page code windows and blog code fences share the
+ * one tokenizer, so the palette is defined once here, globally, rather than
+ * inline per page). Class names: t-com/t-str/t-kw/t-fn/t-type/t-num/t-punc/t-id.
+ */
+/* One light-dark() per token, same rule as the palettes above: the dark half
+   used to be written twice, once per theme selector. .t-com / .t-punc / .t-id
+   read palette tokens that already carry their own pair. */
+.t-com { color: var(--fg-subtle); font-style: italic; }
+.t-str { color: light-dark(oklch(0.52 0.13 150), oklch(0.80 0.14 150)); }
+.t-kw  { color: light-dark(oklch(0.52 0.16 295), oklch(0.76 0.14 295)); font-weight: 600; }
+.t-fn  { color: light-dark(oklch(0.52 0.15 250), oklch(0.75 0.13 250)); }
+.t-type{ color: light-dark(oklch(0.52 0.10 200), oklch(0.80 0.10 200)); }
+.t-num { color: light-dark(oklch(0.55 0.12 215), oklch(0.82 0.12 215)); }
+.t-punc{ color: var(--fg-muted); }
+.t-id  { color: var(--fg); }
