@@ -103,16 +103,18 @@ test('there is exactly one header, one footer, and one theme control', async () 
 });
 
 test('a /ui page loads only the /ui stylesheet, and a marketing page only its own', async () => {
-  // Only the ROOT layout's leading link run is hoisted into <head>, and a
-  // stylesheet left in <body> is not reliably render-blocking (#406), so the
-  // root layout links each section's stylesheet itself, by path. The two are
+  // Each section layout links its own sheet first, and the framework hoists
+  // it into <head> (a body stylesheet is not reliably render-blocking, #406)
+  // owned by the root's children range, so the router switches it off when a
+  // soft navigation crosses to the other section (#1669). The two are
   // exclusive: ui.css carries its own reset, and a /ui page that also loaded
   // tailwind.css matched every shared utility and :has() rule twice.
   const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
-  const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
+  const owned = (sheet: string) => new RegExp(`<link rel="stylesheet" href="/public/${sheet}[^"]*" data-wj-style-owner="/">`);
   for (const path of [UI_COMPONENT, UI_INDEX, '/ui/view/dashboard-01']) {
     const ui = await bodyOf(path);
-    assert.match(headOf(ui), /<link rel="stylesheet" href="\/public\/ui\.css/, `${path} has ui.css in <head>`);
+    assert.match(headOf(ui), owned('ui\\.css'), `${path} has ui.css in <head>, owned by its section`);
+    assert.equal(ui.split('/public/ui.css').length, 2, 'linked once');
     assert.match(headOf(ui), /\/public\/fonts\/geist\.woff2/, 'and preloads Geist');
     assert.ok(!ui.includes('/public/tailwind.css'), `${path} does not load the marketing stylesheet`);
     assert.ok(!ui.includes('/public/fonts/inter.woff2'), `${path} does not preload the marketing fonts`);
@@ -121,10 +123,8 @@ test('a /ui page loads only the /ui stylesheet, and a marketing page only its ow
     const html = await bodyOf(path);
     assert.ok(!html.includes('/public/ui.css'), `${path} does not load the /ui stylesheet`);
     assert.ok(!html.includes('geist.woff2'), `${path} does not preload the /ui font`);
-    assert.match(headOf(html), /<link rel="stylesheet" href="\/public\/tailwind\.css/, `${path} has tailwind.css in <head>`);
-    // The marketing chrome repeats it, for a soft navigation in from /ui,
-    // where the root layout is not re-rendered.
-    assert.match(bodyPart(html), /<link rel="stylesheet" href="\/public\/tailwind\.css/, `${path} links it again in its own markup`);
+    assert.match(headOf(html), owned('tailwind\\.css'), `${path} has tailwind.css in <head>, owned by its section`);
+    assert.equal(html.split('/public/tailwind.css').length, 2, 'linked once');
   }
 });
 
@@ -410,17 +410,17 @@ test('the old /docs/ui page is gone, permanently redirected to /ui', async () =>
   assert.equal(new URL(res.headers.get('location')!, 'http://localhost').pathname, '/ui');
 });
 
-test('a page links its kit styles, in <head> and in its own markup', async () => {
+test('a page links its kit styles in <head>, owned by the page', async () => {
   // public/ui.css carries no kit style. Each is one file under
-  // public/ui-styles/, linked by the pages that render in it
-  // (lib/ui/style-links.ts). The root layout's copy makes a full load
-  // flash-free, and the page's copy covers a soft navigation in.
-  // test/ssr/ui-style-links.test.ts holds every page to this.
+  // public/ui-styles/, linked first in the markup of the pages that render
+  // in it (lib/ui/style-links.ts), which the framework hoists into <head>
+  // tagged with its owner, so it is switched off when the page is left
+  // (#1669). test/ssr/ui-style-links.test.ts holds every page to this.
   const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
   const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
   const home = await bodyOf(UI_INDEX);
-  assert.match(headOf(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'the home page has rhea in <head>');
-  assert.match(bodyPart(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'and in its own markup');
+  assert.match(headOf(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css[^"]*" data-style-sheet="rhea" data-wj-style-owner="[^"]+">/, 'the home page has rhea in <head>, owned');
+  assert.doesNotMatch(bodyPart(home), /\/public\/ui-styles\//, 'and no copy in its body');
   const button = await bodyOf(UI_COMPONENT);
   assert.match(headOf(button), /<link rel="stylesheet" href="\/public\/ui-styles\/nova\.css/, 'a docs page has nova, its previews\' style');
   assert.match(headOf(button), /<link rel="stylesheet" href="\/public\/ui-styles\/new-york\.css/, 'and new-york, the chrome\'s');

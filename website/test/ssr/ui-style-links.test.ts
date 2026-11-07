@@ -139,19 +139,24 @@ test('every /ui page and frame links the sheet of every style it renders', async
     const used = wrappers(body);
     const frame = path.startsWith('/ui/preview/') || path.startsWith('/ui/view/');
     for (const style of used) {
-      // A full load paints its first frame from <head>, the only place a
-      // stylesheet reliably blocks rendering (#406). Every page is reached
-      // that way, the frames only that way.
+      // <head> is the only place a stylesheet reliably blocks rendering
+      // (#406). A page links its styles first in its own markup and the
+      // framework hoists them there, owned by the boundary that linked them,
+      // so a soft navigation's response carries them in <head> too and the
+      // router switches them off when that boundary is replaced (#1669).
       if (!head.has(style)) problems.push(`${path}: renders .style-${style} and has no ${style}.css in <head>`);
-      // A chrome page reached by a soft navigation has only its own markup.
-      else if (!frame && !linked(body).has(style)) problems.push(`${path}: ${style}.css is not in the page's own markup (a soft navigation would miss it)`);
+      else if (!new RegExp(`href="/public/ui-styles/${style}\\.css[^"]*"[^>]*data-wj-style-owner=`).test(html.slice(0, split))) {
+        problems.push(`${path}: ${style}.css is in <head> with no owner, so it would outlive the page`);
+      }
     }
-    if (frame) {
-      // A frame is never soft-navigated into, so it links only what it
-      // renders, and only once: every copy of a sheet is matched again.
-      for (const style of head) if (!used.has(style)) problems.push(`${path}: links ${style}.css and renders no .style-${style}`);
-      for (const style of linked(body)) problems.push(`${path}: links ${style}.css again in its body`);
+    // Every copy of a sheet is matched again, so each is linked once, and a
+    // link left in the body was not hoisted (it did not lead its template).
+    for (const style of linked(body)) problems.push(`${path}: links ${style}.css in its body`);
+    for (const m of html.slice(0, split).matchAll(/href="(\/public\/[^"?]+\.css)/g)) {
+      if (html.slice(0, split).split(`href="${m[1]}`).length > 2) problems.push(`${path}: links ${m[1]} twice`);
     }
+    // A frame is a page of its own, so it links only what it renders.
+    if (frame) for (const style of head) if (!used.has(style)) problems.push(`${path}: links ${style}.css and renders no .style-${style}`);
   }
   assert.ok(rendered > 180, `rendered ${rendered} pages`);
   assert.deepEqual(problems, []);

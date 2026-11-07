@@ -64,9 +64,8 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
   const stars = await githubStars();
 
   return html`
-    <!-- new-york, the style the header's search and the toaster render in,
-         for a soft navigation in from the marketing site (the root layout
-         links it in head on a full load, lib/ui/style-links.ts). -->
+    <!-- new-york, the style the header's search and the toaster render in.
+         First in the markup, so it is moved into head (lib/ui/style-links.ts). -->
     ${styleLink('new-york')}
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">Skip to content</a>
 

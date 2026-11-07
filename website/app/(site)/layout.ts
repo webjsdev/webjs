@@ -51,10 +51,9 @@ function navAnchor(n: NavItem, cls: string) {
 }
 
 export default function SiteLayout({ children }: LayoutProps) {
-  // The marketing stylesheet again, for a soft navigation in from /ui: the
-  // root layout links it in <head> only on a full load of a marketing page,
-  // and a /ui page does not load it at all. The router loads this link before
-  // it swaps the page in, and the same URL twice costs one fetch.
+  // The marketing stylesheet, first in this layout's markup so the framework
+  // moves it into <head> and switches it off when a soft navigation leaves
+  // the marketing site for /ui (#1669).
   return html`
     <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
