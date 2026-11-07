@@ -189,3 +189,22 @@ test('no shipped style maps a marker class, which @apply cannot carry', async ()
     }
   }
 });
+
+test('the bake resolves a composed part in its favour: a nova FieldLabel keeps leading-snug, not the Label\'s leading-none', async () => {
+  const { bakeForStyle } = await import('../src/registry/style-bake.js');
+  const { stripTypeScript } = await import('../../server/src/ts-strip.js');
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { pathToFileURL } = await import('node:url');
+  const REG = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'registry');
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-bake-field-'));
+  writeFileSync(join(dir, 'utils.mjs'), await stripTypeScript(readFileSync(join(REG, 'lib', 'utils.ts'), 'utf8')));
+  const { cn } = await import(pathToFileURL(join(dir, 'utils.mjs')).href);
+  for (const style of ['nova', 'new-york']) {
+    const baked = bakeForStyle(readFileSync(join(REG, 'components', 'field.ts'), 'utf8'), style);
+    const label = values(baked).find((v) => v.includes('peer/field-label'));
+    const merged = cn(label).split(/\s+/);
+    assert.ok(merged.includes('leading-snug'), `${style}: ${merged.join(' ')}`);
+    assert.ok(!merged.includes('leading-none'), `${style}: the Label's leading-none is resolved away`);
+  }
+});
