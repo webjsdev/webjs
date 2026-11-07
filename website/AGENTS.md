@@ -149,6 +149,19 @@ website/
                        screens (modules/ui/sera/), all server markup in the
                        sera style and the taupe theme, and below md the
                        screenshots in public/images/ shadcn shows instead
+        examples/<name>/page.ts
+                       /ui/examples/{dashboard,tasks,playground,authentication,
+                       rtl}, shadcn's five example apps, each a whole page built
+                       from the kit inside lib/ui/examples-shell.ts (header,
+                       examples nav, frame). Their parts live in
+                       modules/ui/example-apps/<name>/. dashboard reuses the
+                       dashboard-01 block's mirror; tasks is a server-rendered
+                       table whose filters, sort, hidden columns and page are
+                       the query string (one GET form plus links, so it works
+                       with JS off; <tasks-table> adds live submit and the row
+                       selection); authentication binds a real 'use server'
+                       action; rtl is the nova style under dir="rtl" with a
+                       ?lang= selector
         (gallery)/     the interim component gallery, until the docs pages
                        replace it: layout.ts is its sidebar (new-york style)
           [name]/page.ts /ui/<name>, one page per component
@@ -276,7 +289,8 @@ website/
     docs-copy-page.ts  the /ui docs pages' Copy Page button: fetches the page's
                        /ui/llm markdown on the click and copies it. Hidden
                        until defined, since the View as Markdown link beside
-                       it covers JS off
+                       it covers JS off (test/components/browser/
+                       docs-copy-page.test.js)
                        (components/ui/ is intentionally EMPTY here, left free
                        for `webjs ui add` to own, exactly as the scaffold
                        expects, and gitignored so it stays that way. The
@@ -302,6 +316,10 @@ website/
                        behaviour is components/block-viewer.ts
       blocks-shell.ts  the /ui/blocks page chrome: header, categories nav
                        (shadcn's lib/categories.ts), the featured list
+      examples-shell.ts
+                       the /ui/examples page chrome: header, examples nav
+                       (shadcn's examples-nav.tsx) and the example's frame. A
+                       fragment for the same reason as blocks-shell.ts
       data-table-demo.ts
                        the payments table both Data Table docs demos render
       cta-panel.ts     the closing call to action
@@ -343,7 +361,15 @@ website/
                        the markdown is the page and there is no second copy to
                        keep in step. The docs shell's `data-slot="docs-body"`
                        and `docs-description` and the preview's `data-demo`
-                       are what it reads. test/ssr/ui-llms.test.ts
+                       are what it reads. Every result (each page's
+                       markdown, the page list, both corpora) is cached in
+                       process, keyed to `sourceFingerprint()`, a hash of the
+                       mtime and size of every file the pages are built from,
+                       re-taken at most once a second: a deploy starts empty
+                       and a dev edit invalidates. Responses carry an ETag and
+                       answer If-None-Match with a 304. A page that throws is
+                       listed from its metadata rather than failing the index.
+                       test/ssr/ui-llms.test.ts
     ui/llm-path.ts     /ui/<path> to /ui/llm/<path>, browser-safe
     html-to-markdown.ts
                        a small parser and converter for HTML this site
@@ -419,6 +445,11 @@ website/
                        tab, behind a name allowlist since it is RPC-callable.
                        ui/elements.ts imports every Tier-2 element once, from
                        app/ui/layout.ts, so a demo string's elements upgrade
+    ui/example-apps/<name>/  the parts of one /ui example app (data, fragments,
+                       and the one element an example needs, like
+                       tasks/tasks-table.ts). example-bind.ts is the shared
+                       element that mirrors kit events into the playground's
+                       and rtl's server markup
     ui/queries/registry.server.ts  composes the registry JSON on demand from
                        packages/ui/packages/registry/ (the source of truth).
                        This is what /ui/registry/** serves.

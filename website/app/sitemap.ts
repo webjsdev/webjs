@@ -3,7 +3,6 @@ import { listComparisons } from '#modules/compare/queries/list-comparisons.serve
 import { listArticles } from '#modules/articles/queries/list-articles.server.ts';
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 import { getDocPages } from '#lib/docs-llms.server.ts';
-import { loadRegistryIndex } from '#modules/ui/queries/registry.server.ts';
 import { listUiPages } from '#lib/ui/llm.server.ts';
 import { siteUrl } from '#lib/env.ts';
 
@@ -26,12 +25,11 @@ import { siteUrl } from '#lib/env.ts';
 const SITE_URL = siteUrl();
 
 export default async function Sitemap() {
-  const [comparisons, articles, posts, docPages, registry, uiPages] = await Promise.all([
+  const [comparisons, articles, posts, docPages, uiPages] = await Promise.all([
     listComparisons(),
     listArticles(),
     listPosts(),
     getDocPages(),
-    loadRegistryIndex(),
     listUiPages(SITE_URL),
   ]);
 
@@ -56,23 +54,8 @@ export default async function Sitemap() {
     priority: p.slug === 'getting-started' ? 0.9 : 0.8,
   }));
 
-  // One entry per component in the gallery, enumerated from the live registry
-  // index rather than a hardcoded list, so a component added to
-  // packages/ui/packages/registry is crawlable the moment it exists. Only
-  // `registry:ui` items have a page; themes and lib items are registry
-  // artifacts with nothing to render (and /ui/<theme> deliberately 404s).
-  //
-  // ui.webjs.dev served no sitemap at all, which is a large part of why moving
-  // the gallery was cheap: there was almost nothing indexed to lose.
-  const uiRoutes = registry
-    .filter((item) => item.type === 'registry:ui')
-    .map((item) => ({
-      url: `${SITE_URL}/ui/${item.name}`,
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    }));
-
-  // Every /ui page (#1666): the docs, every component page, the section pages
+  // Every /ui page (#1666): the docs, every component page (the retired
+  // gallery's /ui/<name> urls 308 there and are not listed), the section pages
   // (blocks, charts, typeset, create and the rest) and every block category.
   // The list is the one /llms.txt and /ui/llms.txt print, derived from the
   // nav, the component records, the docs modules, the registry and the route
@@ -108,5 +91,5 @@ export default async function Sitemap() {
     priority: 0.6,
   }));
 
-  return sitemap([...staticRoutes, ...docRoutes, ...uiPageRoutes, ...uiRoutes, ...compareRoutes, ...articleRoutes, ...blogRoutes]);
+  return sitemap([...staticRoutes, ...docRoutes, ...uiPageRoutes, ...compareRoutes, ...articleRoutes, ...blogRoutes]);
 }

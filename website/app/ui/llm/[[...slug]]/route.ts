@@ -8,9 +8,11 @@
  * each page's head points at it with a `<link rel="alternate"
  * type="text/markdown">`.
  *
- * An unknown path is a 404, the same status the page itself would answer.
+ * The markdown is cached until the source changes, and the response carries
+ * an ETag, so a repeat fetch is a 304. An unknown path is a 404, the same
+ * status the page itself would answer.
  */
-import { renderUiMarkdown, markdownResponse } from '#lib/ui/llm.server.ts';
+import { renderUiMarkdown, markdownResponse, cachedTextResponse } from '#lib/ui/llm.server.ts';
 import { originFor } from '#lib/docs-llms.server.ts';
 import { uiPathFromSlug } from '#lib/ui/llm-path.ts';
 
@@ -19,5 +21,5 @@ export async function GET(req: Request, { params }: { params: { slug?: string | 
   const path = uiPathFromSlug(slug);
   const md = await renderUiMarkdown(path, originFor(req));
   if (md == null) return markdownResponse(`# Not found\n\nNo /ui page at ${path}.\n`, 404);
-  return markdownResponse(md);
+  return cachedTextResponse(req, md);
 }

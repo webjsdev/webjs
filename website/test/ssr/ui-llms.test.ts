@@ -11,7 +11,7 @@
  */
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat, utimes } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
@@ -19,20 +19,20 @@ import { COMPONENTS } from '#modules/ui/docs/nav.ts';
 import { COMPONENT_DOCS } from '#modules/ui/docs/components/index.ts';
 import { DOC_PAGES } from '#modules/ui/docs/pages/index.ts';
 import { listBlocks } from '#modules/ui/queries/blocks.server.ts';
-import { listUiPages, renderUiIndexSection } from '#lib/ui/llm.server.ts';
+import { listUiPages, renderUiIndexSection, llmRenderCount } from '#lib/ui/llm.server.ts';
 import { uiMarkdownHref, uiPathFromSlug } from '#lib/ui/llm-path.ts';
 import { parseHtml, toMarkdown } from '#lib/html-to-markdown.ts';
 import Sitemap from '#app/sitemap.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-let handle: (path: string) => Promise<Response>;
+let handle: (path: string, init?: RequestInit) => Promise<Response>;
 let llms = '';
 let uiLlms = '';
 
 before(async () => {
   const app = await createRequestHandler({ appDir: WEBSITE_ROOT, dev: false });
   await app.warmup?.();
-  handle = async (path) => app.handle(new Request('http://localhost' + path));
+  handle = async (path, init) => app.handle(new Request('http://localhost' + path, init));
   llms = await (await handle('/llms.txt')).text();
   uiLlms = await (await handle('/ui/llms.txt')).text();
 });
@@ -236,4 +236,81 @@ test('html to markdown: tables, code figures, link lists, and the preview droppe
     '| Prop | Type |\n| --- | --- |\n| `size` | `"sm" \\| "lg"` |',
     '- [A](https://webjs.dev/a)\n- [B](https://webjs.dev/b)',
   ].join('\n\n'));
+});
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+test('a page\'s markdown is rendered once per source version and served with an ETag', async () => {
+  const path = '/ui/llm/docs/components/badge';
+  const first = await handle(path);
+  const body = await first.text();
+  const etag = first.headers.get('etag');
+  assert.ok(etag, 'an ETag');
+  assert.match(first.headers.get('cache-control') ?? '', /max-age=\d+/);
+
+  const before = llmRenderCount();
+  const second = await handle(path);
+  assert.equal(await second.text(), body);
+  assert.equal(second.headers.get('etag'), etag);
+  assert.equal(llmRenderCount(), before, 'the second request rendered nothing');
+
+  const revalidated = await handle(path, { headers: { 'if-none-match': etag! } });
+  assert.equal(revalidated.status, 304);
+  assert.equal(await revalidated.text(), '');
+
+  // The counterfactual: the cache is keyed to the source, so touching a
+  // source file (as a dev edit does) renders the page again.
+  const file = resolve(WEBSITE_ROOT, 'lib/ui/llm-path.ts');
+  const st = await stat(file);
+  try {
+    await utimes(file, st.atime, new Date(st.mtimeMs + 60_000));
+    await sleep(1100);
+    await (await handle(path)).text();
+    assert.ok(llmRenderCount() > before, 'a source change renders the page again');
+  } finally {
+    await utimes(file, st.atime, st.mtime);
+    // Let the fingerprint settle back before the next test reads the cache.
+    await sleep(1100);
+  }
+});
+
+test('the full corpus is built once and answers a repeat with a 304', async () => {
+  const first = await handle('/ui/llms-full.txt');
+  await first.text();
+  const before = llmRenderCount();
+  const second = await handle('/ui/llms-full.txt');
+  await second.text();
+  assert.equal(llmRenderCount(), before, 'the second request rendered nothing');
+  // /llms-full.txt carries the same /ui corpus, so it renders nothing either.
+  await (await handle('/llms-full.txt')).text();
+  assert.equal(llmRenderCount(), before, '/llms-full.txt reuses the built corpus');
+  const etag = second.headers.get('etag')!;
+  assert.equal((await handle('/ui/llms-full.txt', { headers: { 'if-none-match': etag } })).status, 304);
+  assert.match(second.headers.get('cache-control') ?? '', /s-maxage=\d+/);
+});
+
+test('a missing page answers 404 and is not cacheable', async () => {
+  assert.equal((await handle('/ui/llm/docs/components/not-a-component')).status, 404);
+  const res = await handle('/ui/llm/docs/components/not-a-component');
+  assert.equal(res.status, 404);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+});
+
+test('every /ui page in the sitemap answers 200, so a retired page drops out', async () => {
+  const xml = await Sitemap();
+  const ui = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname).filter((p) => p === '/ui' || p.startsWith('/ui/'));
+  assert.ok(ui.length > 100);
+  const notPages: string[] = [];
+  for (const path of ui) {
+    const res = await handle(path);
+    await res.arrayBuffer();
+    if (res.status !== 200) notPages.push(`${path} (${res.status})`);
+  }
+  assert.deepEqual(notPages, []);
+  // The retired gallery's /ui/<name> pages redirect to the component docs,
+  // and nothing lists them: neither the sitemap nor the llms files.
+  const legacy = await handle('/ui/button');
+  assert.ok(legacy.status >= 300 && legacy.status < 400, `/ui/button redirects (${legacy.status})`);
+  assert.ok(!ui.includes('/ui/button'));
+  assert.ok(!listedPaths(llms).has('/ui/button') && !listedPaths(uiLlms).has('/ui/button'));
 });

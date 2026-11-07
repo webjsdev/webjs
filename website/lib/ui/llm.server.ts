@@ -20,8 +20,18 @@
  *   elements left unexpanded, and converted by lib/html-to-markdown.ts. So the
  *   markdown says what the page says, demos' source included, with no second
  *   copy of any page to keep in step.
+ *
+ * Rendering is not free (the whole corpus is 2.8MB and several seconds), and
+ * crawlers fetch these files, so every result is cached in process and keyed
+ * to the SOURCE: a fingerprint of the files the pages are built from (see
+ * `sourceFingerprint`). A deploy is a new process and starts empty, and a dev
+ * edit changes the fingerprint, so a cached page is never older than its
+ * source. The responses carry an ETag and answer a matching If-None-Match
+ * with a 304.
  */
-import { join, dirname } from 'node:path';
+import { createHash } from 'node:crypto';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { join, dirname, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildRouteTable, matchPage, staticPageRoutes } from '@webjsdev/server';
 // The bare specifier on purpose, not '@webjsdev/core/server': on Node it is the
@@ -59,6 +69,128 @@ interface PageModule {
 }
 
 const routeTable = (): Promise<RouteTable> => buildRouteTable(APP_ROOT);
+
+/**
+ * What the /ui pages are built from: this app's source (its package.json
+ * included, for the redirects), the kit's registry, the gallery's demo index,
+ * and the agent skill /llms-full.txt appends. A root that is not there (a
+ * standalone deploy) is skipped.
+ */
+const SOURCE_ROOTS = [
+  'app', 'modules', 'lib', 'components', 'package.json',
+  '../packages/ui/packages/registry', '../gallery/modules/gallery', '../.agents/skills/webjs',
+].map((p) => join(APP_ROOT, p));
+
+/**
+ * How long one fingerprint is trusted. Taking one is a stat of every source
+ * file (about 1600, roughly 15ms), so a burst of crawler requests shares one
+ * walk while a dev edit is still seen within a second.
+ */
+const FINGERPRINT_TTL_MS = 1000;
+
+async function collectStats(path: string, out: string[]): Promise<void> {
+  const st = await stat(path).catch(() => null);
+  if (!st) return;
+  if (!st.isDirectory()) {
+    out.push(`${relative(APP_ROOT, path)}:${st.mtimeMs}:${st.size}`);
+    return;
+  }
+  const entries = await readdir(path, { withFileTypes: true }).catch(() => []);
+  await Promise.all(entries
+    .filter((e) => e.name !== 'node_modules' && !e.name.startsWith('.'))
+    .map((e) => collectStats(join(path, e.name), out)));
+}
+
+let fingerprintMemo: { at: number; value: Promise<string> } | null = null;
+
+/**
+ * A hash of the path, mtime and size of every file under SOURCE_ROOTS. It
+ * changes when a source file is edited, added or removed, which is what
+ * invalidates the caches below. The framework exposes no public build epoch
+ * a route handler can read, so the source itself is the key.
+ */
+export function sourceFingerprint(): Promise<string> {
+  const now = Date.now();
+  if (!fingerprintMemo || now - fingerprintMemo.at > FINGERPRINT_TTL_MS) {
+    const value = (async () => {
+      const stats: string[] = [];
+      await Promise.all(SOURCE_ROOTS.map((r) => collectStats(r, stats)));
+      return createHash('sha1').update(stats.sort().join('\n')).digest('hex');
+    })();
+    fingerprintMemo = { at: now, value };
+  }
+  return fingerprintMemo.value;
+}
+
+/** A rendered text body with its ETag, computed once per cache entry. */
+export interface CachedText {
+  body: string;
+  etag: string;
+}
+
+const withEtag = (body: string): CachedText => ({
+  body,
+  etag: `W/"${createHash('sha1').update(body).digest('base64url').slice(0, 22)}"`,
+});
+
+/** Bounded, so a crawler walking every page cannot grow it without limit. */
+const MAX_ENTRIES = 512;
+const memo = new Map<string, { fp: string; value: Promise<unknown> }>();
+
+/**
+ * `build()`'s result for `key`, built at most once per source fingerprint.
+ * Concurrent callers share one build. A build that fails or yields null (a
+ * page that does not exist) is not kept, so a 404 is never cached.
+ */
+async function cached<T>(key: string, build: () => Promise<T>): Promise<T> {
+  const fp = await sourceFingerprint();
+  const hit = memo.get(key);
+  if (hit && hit.fp === fp) return hit.value as Promise<T>;
+  const value = build();
+  memo.delete(key);
+  memo.set(key, { fp, value });
+  while (memo.size > MAX_ENTRIES) memo.delete(memo.keys().next().value as string);
+  const drop = () => {
+    if (memo.get(key)?.value === value) memo.delete(key);
+  };
+  value.then((v) => { if (v == null) drop(); }, drop);
+  return value;
+}
+
+let renders = 0;
+
+/** How many pages this process has rendered for markdown, for the cache test. */
+export function llmRenderCount(): number {
+  return renders;
+}
+
+let redirectsMemo: { fp: string; value: Promise<URLPattern[]> } | null = null;
+
+/**
+ * The `webjs.redirects` sources in package.json. The router answers a path
+ * one matches with a redirect before any page runs, so such a path is not a
+ * page of its own and is never listed.
+ */
+async function configRedirects(): Promise<URLPattern[]> {
+  const fp = await sourceFingerprint();
+  if (redirectsMemo?.fp !== fp) {
+    const value = readFile(join(APP_ROOT, 'package.json'), 'utf8').then((raw) => {
+      const rules: { source?: unknown }[] = JSON.parse(raw)?.webjs?.redirects ?? [];
+      return rules
+        .filter((r) => typeof r.source === 'string')
+        .map((r) => {
+          try {
+            return new URLPattern({ pathname: r.source as string });
+          } catch {
+            return null;
+          }
+        })
+        .filter((r): r is URLPattern => r !== null);
+    }).catch(() => []);
+    redirectsMemo = { fp, value };
+  }
+  return redirectsMemo.value;
+}
 
 /** "Button | WebJs UI" and "WebJs UI | Foo" to "Button" and "Foo". */
 function cleanTitle(title: unknown): string {
@@ -114,6 +246,7 @@ async function renderPage(path: string, table: RouteTable, origin: string, hops 
     if (isControlFlow(e)) return null;
     throw e;
   }
+  renders++;
   const html = await renderToString(value, { ssr: false });
   return { path, tree: parseHtml(html), meta: await metaOf(page.mod, page.ctx) };
 }
@@ -175,13 +308,20 @@ async function blockMarkdown(name: string, origin: string, compactOn?: string): 
 }
 
 /**
- * One /ui page as markdown: the title, the description, the page's own URL,
- * then the body. A component preview becomes its demo's source, the install
- * tabs the npm command and the source to copy by hand, a block viewer the
- * block's add command and files.
+ * One /ui page as markdown (/ui/llm/<path>), cached per source fingerprint:
+ * the title, the description, the page's own URL, then the body. A component
+ * preview becomes its demo's source, the install tabs the npm command and the
+ * source to copy by hand, a block viewer the block's add command and files.
  */
-export async function renderUiMarkdown(path: string, origin: string, table?: RouteTable, opts: { compactBlocks?: boolean } = {}): Promise<string | null> {
-  const rendered = await renderPage(path, table ?? (await routeTable()), origin);
+export function renderUiMarkdown(path: string, origin: string): Promise<CachedText | null> {
+  return cached(`page:${origin}:${path}`, async () => {
+    const body = await buildUiMarkdown(path, origin, await routeTable());
+    return body == null ? null : withEtag(body);
+  });
+}
+
+async function buildUiMarkdown(path: string, origin: string, table: RouteTable, opts: { compactBlocks?: boolean } = {}): Promise<string | null> {
+  const rendered = await renderPage(path, table, origin);
   if (!rendered) return null;
   const { tree, meta } = rendered;
   const r = regions(tree);
@@ -247,14 +387,27 @@ function homeMarkdown(origin: string): string {
   ].join('\n\n');
 }
 
+/**
+ * renderPage for the index. A page that throws while rendering is still a
+ * page (its own route answers the error), so the index lists it from its
+ * metadata rather than failing every llms.txt and the sitemap with it.
+ */
+async function renderForIndex(path: string, table: RouteTable, origin: string) {
+  try {
+    return await renderPage(path, table, origin);
+  } catch {
+    return 'error' as const;
+  }
+}
+
 /** Title and description for a page, from its metadata, else its rendered docs shell. */
 async function describe(path: string, table: RouteTable, origin: string): Promise<{ title: string; description: string }> {
   const page = await pageFor(path, table, origin);
   if (!page) return { title: '', description: '' };
   const meta = await metaOf(page.mod, page.ctx);
   if (meta.title && meta.description) return meta;
-  const rendered = await renderPage(path, table, origin);
-  const r = rendered ? regions(rendered.tree) : null;
+  const rendered = await renderForIndex(path, table, origin);
+  const r = rendered && rendered !== 'error' ? regions(rendered.tree) : null;
   return { title: meta.title || r?.title || '', description: meta.description || r?.description || '' };
 }
 
@@ -273,14 +426,22 @@ async function loadDocPage(key: string) {
 /**
  * Every /ui page, in the order an agent should read them: the section pages,
  * the docs nav groups in sidebar order, every component, then the blocks.
+ * Cached per source fingerprint, since the section pages are rendered to
+ * find their titles and links.
  */
-export async function listUiPages(origin: string): Promise<UiPage[]> {
+export function listUiPages(origin: string): Promise<UiPage[]> {
+  return cached(`pages:${origin}`, () => buildUiPageList(origin));
+}
+
+async function buildUiPageList(origin: string): Promise<UiPage[]> {
   const table = await routeTable();
+  const redirects = await configRedirects();
   const out: UiPage[] = [];
   const seen = new Set<string>();
   const add = (p: UiPage) => {
     if (seen.has(p.path) || !uiMarkdownHref(p.path)) return;
     seen.add(p.path);
+    if (redirects.some((r) => r.test({ pathname: p.path }))) return;
     out.push(p);
   };
 
@@ -291,9 +452,14 @@ export async function listUiPages(origin: string): Promise<UiPage[]> {
   const statics = staticPageRoutes(table as Parameters<typeof staticPageRoutes>[0]).filter((p) => uiMarkdownHref(p));
   for (const path of [...HEADER_NAV.map((n) => n.href), ...statics]) {
     if (path.startsWith('/ui/docs') || seen.has(path)) continue;
-    const rendered = await renderPage(path, table, origin);
+    const rendered = await renderForIndex(path, table, origin);
     if (!rendered) continue;
     const nav = HEADER_NAV.find((n) => n.href === path);
+    if (rendered === 'error') {
+      const d = await describe(path, table, origin);
+      add({ path, title: d.title || nav?.title || path, description: d.description, group: 'Sections' });
+      continue;
+    }
     const r = regions(rendered.tree);
     add({
       path: rendered.path,
@@ -307,8 +473,8 @@ export async function listUiPages(origin: string): Promise<UiPage[]> {
       const href = new URL(a.attrs.href, 'http://x').pathname.replace(/\/+$/, '');
       if (!href.startsWith(path + '/') || seen.has(href)) continue;
       if (!(await pageFor(href, table, origin))?.dynamic) continue;
-      const linked = await renderPage(href, table, origin);
-      if (!linked || linked.path !== href) continue;
+      const linked = await renderForIndex(href, table, origin);
+      if (!linked || linked === 'error' || linked.path !== href) continue;
       const lr = regions(linked.tree);
       add({ path: href, title: linked.meta.title || lr.title || href, description: linked.meta.description || lr.description, group: nav?.title ?? 'Sections' });
     }
@@ -448,14 +614,15 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 /**
  * Every /ui page's markdown, concatenated: the UI half of /llms-full.txt and
  * the whole of /ui/llms-full.txt. A page that fails to render is named rather
- * than dropping the corpus.
+ * than dropping the corpus. Callers go through `uiCorpus` / `siteCorpus`,
+ * which cache it.
  */
-export async function renderUiCorpus(origin: string): Promise<string> {
+async function buildUiCorpus(origin: string): Promise<string> {
   const table = await routeTable();
   const pages = await listUiPages(origin);
   const parts = await mapLimit(pages, 6, async (p) => {
     try {
-      return (await renderUiMarkdown(p.path, origin, table, { compactBlocks: true })) ?? '';
+      return (await buildUiMarkdown(p.path, origin, table, { compactBlocks: true })) ?? '';
     } catch (e) {
       return `# ${p.title}\n\nSource: ${origin}${p.path}\n\n(This page could not be rendered as markdown: ${e instanceof Error ? e.message : String(e)})\n`;
     }
@@ -463,13 +630,53 @@ export async function renderUiCorpus(origin: string): Promise<string> {
   return parts.filter(Boolean).map((s) => s.trim()).join('\n\n---\n\n') + '\n';
 }
 
-/** A markdown response, cacheable and kept out of the search index like the docs variants. */
+/** The /ui corpus, built once per source version for both files that carry it. */
+const uiCorpusBody = (origin: string) => cached(`ui-body:${origin}`, () => buildUiCorpus(origin));
+
+/** /ui/llms-full.txt: every /ui page's markdown under one heading, cached. */
+export function uiCorpus(origin: string): Promise<CachedText> {
+  return cached(`ui-corpus:${origin}`, async () => withEtag(
+    `# WebJs UI (full corpus)\n\nEvery page of ${origin}/ui as markdown, concatenated.\n\n---\n\n${await uiCorpusBody(origin)}`,
+  ));
+}
+
+/** /llms-full.txt: the framework docs corpus, then the /ui corpus, cached. */
+export function siteCorpus(origin: string, docs: () => Promise<string>): Promise<CachedText> {
+  return cached(`site-corpus:${origin}`, async () => {
+    const [d, ui] = await Promise.all([docs(), uiCorpusBody(origin)]);
+    return withEtag(`${d}\n---\n\n# WebJs UI (every /ui page)\n\n${ui}`);
+  });
+}
+
+/** The headers every cached text response carries. */
+const CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
+
+/**
+ * A cached text body as a response: an ETag, a Cache-Control, and a 304 when
+ * the request already holds this version. Kept out of the search index like
+ * the docs variants, since each one copies a page that exists as HTML.
+ */
+export function cachedTextResponse(req: Request, text: CachedText, contentType = 'text/markdown; charset=utf-8'): Response {
+  const headers = {
+    'content-type': contentType,
+    'cache-control': CACHE_CONTROL,
+    etag: text.etag,
+    'x-robots-tag': 'noindex',
+  };
+  const tags = (req.headers.get('if-none-match') ?? '').split(',').map((t) => t.trim().replace(/^W\//, ''));
+  if (tags.includes('*') || tags.includes(text.etag.replace(/^W\//, ''))) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(text.body, { headers });
+}
+
+/** A markdown response that is not cached (a 404). */
 export function markdownResponse(body: string, status = 200): Response {
   return new Response(body, {
     status,
     headers: {
       'content-type': 'text/markdown; charset=utf-8',
-      'cache-control': status === 200 ? 'public, max-age=300' : 'no-store',
+      'cache-control': status === 200 ? CACHE_CONTROL : 'no-store',
       'x-robots-tag': 'noindex',
     },
   });
