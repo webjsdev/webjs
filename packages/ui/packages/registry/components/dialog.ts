@@ -685,13 +685,20 @@ UiDialogContent.register('ui-dialog-content');
 // <ui-dialog-close>
 // --------------------------------------------------------------------------
 
+// shadcn's DialogClose is `asChild` around the author's button, so in a footer
+// the BUTTON is the flex item: a phone's column footer stretches it full width.
+// Here the host and its wrapper are display: contents, which leaves the
+// authored button that item, and the click still reaches the wrapper. The host
+// box is turned off through its style, which the server serves.
 export class UiDialogClose extends WebComponent {
   static rootTag = 'ui-dialog';
   static slotPrefix = 'dialog';
 
   render() {
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
     return html`<div
       data-slot=${`${(this.constructor as typeof UiDialogClose).slotPrefix}-close`}
+      class="contents"
       @click=${this._onClick}
     ><slot></slot></div>`;
   }

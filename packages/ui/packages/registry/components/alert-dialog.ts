@@ -576,6 +576,15 @@ UiAlertDialogContent.register('ui-alert-dialog-content');
 
 const ALERT_DIALOG_ACTION_GRID_STRETCH = 'group-data-[size=sm]/alert-dialog-content:w-full';
 
+// The action and the cancel render the button shadcn's AlertDialogAction /
+// AlertDialogCancel are, so the BUTTON is the footer's flex or grid item: on a
+// phone the column footer stretches it full width. The host draws no box of
+// its own, turned off through its style, which the server serves, and a class
+// written on it lands on the button, as shadcn's className does.
+function boxless(host: HTMLElement): void {
+  if (typeof host.getAttribute === 'function' && !host.getAttribute('style')) host.setAttribute('style', 'display: contents');
+}
+
 export class UiAlertDialogCancel extends WebComponent({
   variant: prop<ButtonVariant>(String, { reflect: true }),
   size: prop<ButtonSize>(String, { reflect: true }),
@@ -587,10 +596,11 @@ export class UiAlertDialogCancel extends WebComponent({
   }
 
   render() {
+    boxless(this);
     return html`<button
       type="button"
       data-slot="alert-dialog-cancel"
-      class="${buttonClass({ variant: this.variant, size: this.size })} ${ALERT_DIALOG_ACTION_GRID_STRETCH}"
+      class=${cn(buttonClass({ variant: this.variant, size: this.size }), ALERT_DIALOG_ACTION_GRID_STRETCH, takeAuthoredClass(this, null))}
       @click=${this._onClick}
     ><slot></slot></button>`;
   }
@@ -610,10 +620,11 @@ export class UiAlertDialogAction extends WebComponent({
   }
 
   render() {
+    boxless(this);
     return html`<button
       type="button"
       data-slot="alert-dialog-action"
-      class="${buttonClass({ variant: this.variant, size: this.size })} ${ALERT_DIALOG_ACTION_GRID_STRETCH}"
+      class=${cn(buttonClass({ variant: this.variant, size: this.size }), ALERT_DIALOG_ACTION_GRID_STRETCH, takeAuthoredClass(this, null))}
       @click=${this._onClick}
     ><slot></slot></button>`;
   }

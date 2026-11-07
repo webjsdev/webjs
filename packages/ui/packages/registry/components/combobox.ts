@@ -189,9 +189,17 @@ export class UiCombobox extends WebComponent({
     return this.querySelector<HTMLInputElement>('input[data-slot="input-group-control"], input[data-slot="combobox-chip-input"]');
   }
 
-  /** What the popup sits against: the chips box, else the input group. */
+  /**
+   * What the popup sits against: the chips box, else the text field itself, as
+   * Base UI's popup anchors to Combobox.Input. Its width is --anchor-width, so
+   * the styles' `min-w-[calc(var(--anchor-width)+--spacing(7))]` adds back the
+   * trigger button and the list spans the input group, as shadcn's does. (The
+   * group as the anchor made the list a button's width wider than the field.)
+   */
   _anchor(): HTMLElement | null {
-    return this.querySelector<HTMLElement>('[data-slot="combobox-chips"]') ?? this.querySelector<HTMLElement>('[data-slot="input-group"]');
+    return this.querySelector<HTMLElement>('[data-slot="combobox-chips"]')
+      ?? this.querySelector<HTMLElement>('input[data-slot="input-group-control"]')
+      ?? this.querySelector<HTMLElement>('[data-slot="input-group"]');
   }
 
   _panel(): HTMLElement | null {

@@ -650,6 +650,10 @@
     @apply fixed m-0 border-0 overflow-visible rounded-md px-3 py-1.5 text-xs text-balance;
   }
 
+  .cn-tooltip-arrow {
+    @apply size-2.5 rotate-45 rounded-[2px];
+  }
+
   /* MARK: button-group */
   .cn-button-group {
     @apply has-[>[data-slot=button-group]]:gap-2 [&>*]:focus-visible:relative [&>*]:focus-visible:z-10 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-e-md;

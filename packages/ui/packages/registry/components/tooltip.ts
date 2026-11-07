@@ -8,6 +8,8 @@
  *   Tooltip               → <ui-tooltip delay-duration skip-delay-duration>
  *   TooltipTrigger        → <ui-tooltip-trigger>
  *   TooltipContent        → <ui-tooltip-content side align side-offset align-offset>
+ *                           (with shadcn's arrow, TooltipPrimitive.Arrow, drawn
+ *                           by the content and placed on the trigger's centre)
  *   TooltipProvider       → not needed; delay state is per-tooltip (and globally
  *                           shared via `skip-delay-duration` cooldown).
  *
@@ -22,7 +24,8 @@
  * Attributes on <ui-tooltip-content>:
  *   `side`:         "top" (default) | "right" | "bottom" | "left".
  *   `align`:        "center" (default) | "start" | "end".
- *   `side-offset`:  number, default 4. Pixels between trigger and content.
+ *   `side-offset`:  number, default 0 (shadcn's). Pixels between trigger and
+ *                   content, on top of the arrow's height, as Radix adds it.
  *   `align-offset`: number, default 0. Pixels of cross-axis shift.
  *
  * Events: none dispatched at present (hover state changes are local;
@@ -68,8 +71,26 @@ import type { PopoverSide, PopoverAlign } from './popover.ts';
 // top layer. A closed panel is hidden by `not-open:hidden`, since the UA
 // `[popover]:not(:popover-open) { display: none }` loses to the
 // `inline-flex` most styles give the content (see popoverContentClass).
+// `overflow-visible` undoes the UA popover's `overflow: auto`, which would
+// clip the arrow hanging off the tip's edge (Radix's content is no popover,
+// so shadcn's styles never needed it).
+/** The arrow's classes (the element applies them): shadcn's TooltipPrimitive.Arrow. */
+export const tooltipArrowClass = (): string =>
+  'cn-tooltip-arrow z-50 translate-y-[calc(-50%_-_2px)] bg-foreground fill-foreground';
+
+// Where the arrow's wrapper sits for each side the tip lands on, as Radix's
+// PopperArrow places it: on the edge facing the trigger, turned to point at it.
+const ARROW_PLACEMENT: Record<string, { edge: string; origin: string; transform: string }> = {
+  top: { edge: 'bottom', origin: '', transform: 'translateY(100%)' },
+  bottom: { edge: 'top', origin: 'center 0', transform: 'rotate(180deg)' },
+  right: { edge: 'left', origin: '0 0', transform: 'translateY(50%) rotate(90deg) translateX(-50%)' },
+  left: { edge: 'right', origin: '100% 0', transform: 'translateY(50%) rotate(-90deg) translateX(50%)' },
+};
+// Radix's Arrow is 10 by 5.
+const ARROW_WIDTH = 10;
+
 export const tooltipContentClass = (): string =>
-  'cn-tooltip-content z-50 w-fit origin-(--radix-tooltip-content-transform-origin) bg-foreground text-background not-open:hidden';
+  'cn-tooltip-content z-50 w-fit origin-(--radix-tooltip-content-transform-origin) overflow-visible bg-foreground text-background not-open:hidden';
 
 // Module-level "last close" timestamp, shared across every <ui-tooltip>
 // on the page. When the next tooltip is hovered within
@@ -247,13 +268,48 @@ export class UiTooltip extends WebComponent({
     if (!trigger) return;
     // Placement attributes live on the <ui-tooltip-content> host (the
     // public API surface); positioning targets the inner popover element.
+    // Radix offsets the tip by the arrow's height on top of sideOffset, so the
+    // arrow has room between the tip and the trigger.
+    const arrow = popover.querySelector('[data-slot="tooltip-arrow"]');
+    const arrowHeight = arrow ? parseFloat(getComputedStyle(arrow).height) || 0 : 0;
     positionFloating(trigger, popover, {
       side: (contentHost.getAttribute('side') ?? 'top') as PopoverSide,
       align: (contentHost.getAttribute('align') ?? 'center') as PopoverAlign,
-      sideOffset: Number(contentHost.getAttribute('side-offset') ?? 4),
+      sideOffset: Number(contentHost.getAttribute('side-offset') ?? 0) + arrowHeight,
       alignOffset: Number(contentHost.getAttribute('align-offset') ?? 0),
       radix: this.localName.slice(3),
     });
+    this._placeArrow(trigger, popover);
+  }
+
+  // The arrow sits on the side facing the trigger, centred on it along the
+  // tip's edge and kept inside that edge, the way Radix's arrow is.
+  _placeArrow(trigger: HTMLElement, popover: HTMLElement): void {
+    const wrap = popover.querySelector<HTMLElement>('[data-slot="tooltip-arrow-wrapper"]');
+    if (!wrap) return;
+    const side = popover.getAttribute('data-side') ?? 'top';
+    const place = ARROW_PLACEMENT[side] ?? ARROW_PLACEMENT.top;
+    const t = trigger.getBoundingClientRect();
+    // The tip's own box, read through its layout offsets rather than its
+    // rect, which an entrance animation is still scaling.
+    // The wrapper is placed from inside the tip's border.
+    const left = popover.offsetLeft + popover.clientLeft;
+    const top = popover.offsetTop + popover.clientTop;
+    // Radix's transforms keep the wrapper's centre on its left edge's offset
+    // plus half its width across a top or bottom edge, and on its top's offset
+    // plus half its height along a side edge, so centre it by those.
+    const w = wrap.offsetWidth || ARROW_WIDTH;
+    const h = wrap.offsetHeight || ARROW_WIDTH / 2;
+    const along = side === 'top' || side === 'bottom'
+      ? Math.min(Math.max(t.left + t.width / 2 - left - w / 2, 0), popover.clientWidth - w)
+      : Math.min(Math.max(t.top + t.height / 2 - top - h / 2, 0), popover.clientHeight - h);
+    const st = wrap.style;
+    st.left = st.top = st.right = st.bottom = '';
+    if (side === 'top' || side === 'bottom') st.left = `${along}px`;
+    else st.top = `${along}px`;
+    st.setProperty(place.edge, '0px');
+    st.transformOrigin = place.origin;
+    st.transform = place.transform;
   }
 }
 UiTooltip.register('ui-tooltip');
@@ -295,7 +351,9 @@ export class UiTooltipContent extends WebComponent {
       role="tooltip"
       popover="manual"
       class=${tooltipContentClass()}
-    ><slot></slot></div>`;
+    ><slot></slot><span data-slot="tooltip-arrow-wrapper" aria-hidden="true" style="position: absolute; bottom: 0px; transform: translateY(100%)"><svg
+      data-slot="tooltip-arrow" class=${tooltipArrowClass()} width="10" height="5" viewBox="0 0 30 10" preserveAspectRatio="none" style="display: block"
+    ><polygon points="0,0 30,0 15,10"></polygon></svg></span></div>`;
   }
 }
 UiTooltipContent.register('ui-tooltip-content');

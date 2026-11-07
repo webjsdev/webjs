@@ -781,6 +781,46 @@ suite('ui-tooltip', () => {
   // a thin wrapper; data-state, role, popover, class all live on the
   // inner rendered element. Tests target the inner element accordingly.
 
+  // shadcn's TooltipContent draws TooltipPrimitive.Arrow, placed by Radix on
+  // the edge facing the trigger and centred on it.
+  test('the tip draws its arrow on the edge facing the trigger, centred on it', async () => {
+    for (const side of ['top', 'bottom', 'right']) {
+      // The styles' placement basics, which this suite does not load: a
+      // trigger the size of its button and a popover with no UA centring.
+      const root = await mount(html`
+        <style>.tt-arrow ui-tooltip-trigger { display: inline-block; } .tt-arrow [popover] { margin: 0; inset: auto; border: 0; }</style>
+        <div class="tt-arrow" style="padding: 80px 200px">
+          <ui-tooltip delay-duration="0">
+            <ui-tooltip-trigger><button style="width: 40px; height: 24px">?</button></ui-tooltip-trigger>
+            <ui-tooltip-content side=${side}><span style="display: inline-block; width: 160px">A longer tip than its trigger</span></ui-tooltip-content>
+          </ui-tooltip>
+        </div>`);
+      try {
+        const tip = root.querySelector('ui-tooltip');
+        tip.show();
+        await new Promise((r) => setTimeout(r, 20));
+        await tick();
+        const panel = tip.querySelector('[role="tooltip"]');
+        const wrap = panel.querySelector('[data-slot="tooltip-arrow-wrapper"]');
+        assert.ok(panel.querySelector('svg[data-slot="tooltip-arrow"]'), `${side}: the arrow is drawn`);
+        assert.equal(wrap.getAttribute('aria-hidden'), 'true');
+        const t = tip.querySelector('ui-tooltip-trigger').getBoundingClientRect();
+        const w = wrap.getBoundingClientRect();
+        const p = panel.getBoundingClientRect();
+        if (side === 'right') {
+          assert.ok(Math.abs((w.top + w.bottom) / 2 - (t.top + t.bottom) / 2) <= 1.5, `${side}: centred on the trigger`);
+          assert.ok(w.right <= p.left + 1, `${side}: on the edge facing the trigger`);
+        } else {
+          assert.ok(Math.abs((w.left + w.right) / 2 - (t.left + t.right) / 2) <= 1.5, `${side}: centred on the trigger (${(w.left + w.right) / 2} vs ${(t.left + t.right) / 2})`);
+          if (side === 'top') assert.ok(w.top >= p.bottom - 1, `${side}: below the tip, toward the trigger`);
+          else assert.ok(w.bottom <= p.top + 1, `${side}: above the tip, toward the trigger`);
+        }
+      } finally {
+        root.remove();
+      }
+    }
+  });
+
   test('tooltip is closed initially', async () => {
     const root = await mount(html`
       <ui-tooltip>
@@ -2458,6 +2498,29 @@ suite('ui-combobox', () => {
     await tick();
   };
   const key = (target, k) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+
+  // Base UI anchors the popup to Combobox.Input, so --anchor-width is the
+  // text field's width and the list starts at its edge. The styles' min width
+  // (that plus the trigger button) then spans the input group, as shadcn's
+  // list does. Anchoring the group made the list a button's width too wide.
+  test('the list is anchored to the text field, not the input group around it', async () => {
+    const root = await mount(html`<style>.cb-anchor [data-slot="input-group"] { display: flex; width: 260px; } .cb-anchor [data-slot="input-group"] input { flex: 1; min-width: 0; } .cb-anchor [popover] { margin: 0; inset: auto; border: 0; }</style><div class="cb-anchor">${single()}</div>`);
+    try {
+      const { el, input } = parts(root);
+      input.focus();
+      el.open = true;
+      await tick();
+      await new Promise((r) => setTimeout(r, 20));
+      const panel = el.querySelector('[data-slot="combobox-content"]');
+      const field = input.getBoundingClientRect();
+      const group = el.querySelector('[data-slot="input-group"]').getBoundingClientRect();
+      assert.ok(field.width < group.width, 'the field is narrower than its group (the setup is meaningful)');
+      assert.equal(panel.style.getPropertyValue('--anchor-width'), `${field.width}px`, '--anchor-width is the field\'s width');
+      assert.ok(Math.abs(panel.getBoundingClientRect().left - field.left) <= 1, 'and the list starts at the field\'s edge');
+    } finally {
+      root.remove();
+    }
+  });
 
   test('the value lives in a hidden form control, and the input shows its label', async () => {
     const root = await mount(single('astro'));

@@ -2130,6 +2130,42 @@ suite('ui-sonner: a toast from markup, and a toast with its own position', () =>
 });
 
 // --------------------------------------------------------------------------
+// A dialog footer's buttons are its flex items, so a phone's column footer
+// stretches them full width, as shadcn's asChild close and its alert-dialog
+// buttons are.
+// --------------------------------------------------------------------------
+
+suite('dialog-family footers: the button is the footer\'s item', () => {
+  suiteSetup(async () => {
+    for (const name of ['dialog', 'alert-dialog', 'sheet', 'drawer']) await import(`${COMPONENTS_DIR}/${name}.ts`);
+  });
+
+  test('a close, cancel or action button stretches across a column footer', async () => {
+    // The kit suite loads no Tailwind: the footer's phone layout and the
+    // wrapper's `contents` class are written out here.
+    const root = await mount(html`<style>
+        .ft { display: flex; flex-direction: column-reverse; gap: 8px; width: 300px; }
+        .contents { display: contents; }
+      </style>
+      <div class="ft" id="ft-dialog"><ui-dialog-close><button type="button">Cancel</button></ui-dialog-close></div>
+      <div class="ft" id="ft-sheet"><ui-sheet-close><button type="button">Close</button></ui-sheet-close></div>
+      <div class="ft" id="ft-drawer"><ui-drawer-close><button type="button">Done</button></ui-drawer-close></div>
+      <ui-alert-dialog><div class="ft" id="ft-alert"><ui-alert-dialog-cancel class="ad-own">Cancel</ui-alert-dialog-cancel><ui-alert-dialog-action>Continue</ui-alert-dialog-action></div></ui-alert-dialog>`);
+    try {
+      await tick();
+      for (const id of ['ft-dialog', 'ft-sheet', 'ft-drawer', 'ft-alert']) {
+        for (const button of root.querySelectorAll(`#${id} button`)) {
+          assert.equal(Math.round(button.getBoundingClientRect().width), 300, `${id}: "${button.textContent.trim()}" spans the footer`);
+        }
+      }
+      assert.ok(root.querySelector('#ft-alert [data-slot="alert-dialog-cancel"]').classList.contains('ad-own'), 'a class on the cancel lands on its button');
+    } finally {
+      root.remove();
+    }
+  });
+});
+
+// --------------------------------------------------------------------------
 // The questionnaire: the active question set from outside, navigation
 // buttons the author disables, and a form the page binds an action to.
 // --------------------------------------------------------------------------
