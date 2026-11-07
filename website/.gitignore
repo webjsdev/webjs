@@ -9,6 +9,10 @@
 /modules/ui/blocks/
 /lib/utils/cn.ts
 /lib/utils/dom.ts
+/lib/utils/icons.ts
+# The design-system data (themes, fonts, the preset code) the /ui/create
+# configurator runs in the browser too.
+/modules/ui/design-system/
 
 # components/ui/ belongs to `webjs ui add`, exactly as it does in a scaffolded
 # app, so this site keeps it empty and tracks nothing there. It is ignored

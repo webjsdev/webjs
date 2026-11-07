@@ -35,7 +35,7 @@
  */
 
 import { BASE_COLOR_NAMES, RADII, buildThemeVars, getTheme, themesForBaseColor } from './themes.js';
-import { FONT_DEFINITIONS, getFont, googleFontsUrl } from './fonts.js';
+import { getFont, googleFontsUrl } from './fonts.js';
 
 export const PRESET_STYLES = ['nova', 'vega', 'maia', 'lyra', 'mira', 'luma', 'sera', 'rhea', 'new-york'];
 export const PRESET_BASE_COLORS = ['neutral', 'stone', 'zinc', 'gray', 'mauve', 'olive', 'mist', 'taupe'];
@@ -87,10 +87,27 @@ const FIELDS_V2 = [
  * @property {string} menuColor
  */
 
-/** Every field at index 0: what an all-zero code decodes to. */
-export const DEFAULT_PRESET_CONFIG = /** @type {PresetConfig} */ (
-  Object.fromEntries(FIELDS_V2.map((f) => [f.key, f.values[0]]))
-);
+/**
+ * Every field at index 0: what an all-zero code decodes to. Written out
+ * rather than computed from the field table, because the module does no work
+ * at module scope: the configurator runs it in the browser, and a top-level
+ * call would pin every page importing it to the browser (see the kit's
+ * AGENTS.md). A test holds it equal to the table.
+ *
+ * @type {PresetConfig}
+ */
+export const DEFAULT_PRESET_CONFIG = {
+  menuColor: 'default',
+  menuAccent: 'subtle',
+  radius: 'default',
+  font: 'inter',
+  iconLibrary: 'lucide',
+  theme: 'neutral',
+  baseColor: 'neutral',
+  style: 'nova',
+  chartColor: 'neutral',
+  fontHeading: 'inherit',
+};
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const VERSIONS = ['a', 'b'];
@@ -267,9 +284,6 @@ export function buildPresetItem(config) {
     meta: { preset: code, config: { ...config } },
   };
 }
-
-/** Every font name, in the configurator's (font-definitions) order. */
-export const FONT_NAMES = FONT_DEFINITIONS.map((f) => f.name);
 
 /**
  * The Google Fonts stylesheet URLs a config's fonts need, body first.

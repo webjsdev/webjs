@@ -979,8 +979,10 @@ export const HEADER_NAV: DocLink[] = [
   { title: 'Docs', href: '/ui/docs' },
   { title: 'Components', href: '/ui/docs/components' },
   { title: 'Blocks', href: '/ui/blocks' },
+  { title: 'Charts', href: '/ui/charts' },
   { title: 'Directory', href: '/ui/docs/directory' },
   { title: 'Typeset', href: '/ui/typeset' },
+  { title: 'Create', href: '/ui/create' },
 ];
 
 /**

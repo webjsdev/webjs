@@ -111,6 +111,26 @@ test('the five icon libraries are registry items exporting the same function nam
   }
 });
 
+test('no icon file spells a browser global, which would ship every page importing it', () => {
+  // WebJs's elision analyser reads a module's template text for these names
+  // (CLIENT_GLOBAL_RE in packages/server/src/component-elision.js), and a
+  // glyph class such as `lucide-app-window` once pinned lib/icons.ts.
+  const globals = /\b(window|document|navigator|localStorage|sessionStorage|customElements|matchMedia|addEventListener)\b/;
+  for (const lib of ICON_LIBRARIES) {
+    const src = readFileSync(join(REGISTRY, lib.path), 'utf8');
+    assert.doesNotMatch(src, globals, `${lib.path} names a browser global`);
+  }
+  // The escape keeps the runtime class unchanged.
+  assert.match(readFileSync(join(REGISTRY, 'lib', 'icons.ts'), 'utf8'), /'lucide lucide-app-\\u0077indow'/);
+});
+
+test('the preset module does no work at module scope (the configurator runs it in the browser)', () => {
+  const src = readFileSync(join(REGISTRY, 'themes', 'preset.js'), 'utf8');
+  for (const line of src.split('\n')) {
+    if (/^export const|^const/.test(line)) assert.doesNotMatch(line, /=\s*[\w.]+\(|\.map\(|Object\.fromEntries/, `a module-scope call: ${line}`);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // The preset code
 // ---------------------------------------------------------------------------

@@ -122,6 +122,16 @@ website/
                        the query string (shadcn's params), the customizer a
                        GET form that works with JS off, and
                        components/typeset-customizer.ts the behaviour
+        create/page.ts /ui/create, shadcn's design-system configurator: the
+                       customizer (style, base color, theme, chart color,
+                       fonts, icon library, radius, menu) and the preview
+                       frame, server markup from modules/ui/create/. The
+                       state is the query string (`?preset=<code>`, or the
+                       fields one by one), the customizer a GET form that
+                       works with JS off, its footer the preset code and
+                       `npx @webjsdev/ui init --preset <code>`, and
+                       components/create-customizer.ts the behaviour. The
+                       header's Create link and "+ New" button lead here
         blocks/page.ts blocks/[category]/page.ts
                        /ui/blocks (shadcn's featured blocks) and
                        /ui/blocks/<category>: the header, the categories nav
@@ -136,6 +146,15 @@ website/
                        the typeset builder's iframe target, one of shadcn's
                        specimens with the params as --preview-* properties.
                        Outside (chrome), so it has no header
+      preview/[name]/page.ts
+                       the configurator's iframe target: preview block <name>
+                       (preview, preview-02, preview-03) through the block
+                       viewer's render query, inside a data-slot="design-system"
+                       wrapper carrying the chosen .style-<name> and the
+                       theme, radius and font tokens (modules/ui/create/
+                       design-system.ts). A board of kit components stands in
+                       until a preview block is in the registry. Ships no
+                       script; the configurator repaints the wrapper in place
       view/[name]/page.ts
                        one registry block full screen in new-york, the block
                        viewer's iframe target and its "Open in New Tab". It
@@ -190,6 +209,12 @@ website/
                        frame's --preview-* rewritten in place), hover preview,
                        popovers placed beside their trigger, R / Shift+R / D /
                        undo and redo (also from inside the frame), locks, copy
+    create-customizer.ts
+                       the /ui/create configurator's behaviour around the
+                       server's markup: a choice applies at once (replaceState
+                       with the new preset code, the theme lists following the
+                       base color, the frame's design-system wrapper repainted
+                       in place), the preview switch, the copy buttons
     block-viewer.ts    the /ui block viewer's behaviour around the server's
                        markup (lib/ui/block-viewer.ts): drag-resizing the
                        preview, refresh, the two copy buttons, and the file
@@ -244,8 +269,10 @@ website/
       highlight.ts     SSR syntax highlighter for the code samples
       frontmatter.ts   parse changelog/blog markdown frontmatter
       faq.ts           parse a `## FAQ` markdown section into FAQPage JSON-LD
-      cn.ts dom.ts     GITIGNORED. The kit's helpers, mirrored to the exact
-                       path `webjs ui add` writes them to in a real app
+      cn.ts dom.ts icons.ts
+                       GITIGNORED. The kit's helpers (and its Lucide icons),
+                       mirrored to the exact path `webjs ui add` writes them
+                       to in a real app
     links.ts           cross-app URLs + in-app paths for the header and footer
     samples.ts         the code samples shown on the marketing pages
     docs-llms.server.ts  enumerates the doc pages on disk (sitemap, llms.txt).
@@ -341,6 +368,16 @@ website/
     ui/init/           preset-request.ts (a query string to a validated preset
                        config, shadcn's parse-config) and instructions.ts (the
                        /ui/init/md markdown)
+    ui/create/         the configurator (#1666): params.ts (the state, parse /
+                       normalize / href / shuffle, pure so the element shares
+                       it), design-system.ts (a choice as the preview's CSS
+                       custom properties), the customizer / preview-frame
+                       fragments, and placeholder.ts (the stand-in preview)
+    ui/design-system/  GITIGNORED mirror of the kit's design-system data
+                       (packages/ui/packages/registry/themes/{base-colors,
+                       themes,fonts,preset}.js), written by copy-registry.mjs,
+                       so the configurator runs the same theme builder and
+                       preset code in the browser as `init --preset` runs
   scripts/             manual dev tools, NOT part of build/deploy
     fetch-fonts.mjs    download the self-hosted variable woff2 fonts (the
                        typeset faces are declared in public/typeset-fonts.css,

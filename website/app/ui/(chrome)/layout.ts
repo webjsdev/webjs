@@ -7,6 +7,7 @@ import { HEADER_NAV } from '#modules/ui/docs/nav.ts';
 import { commandMenu } from '#lib/ui/docs/command-menu.ts';
 import { GH_URL, NEW_TAB } from '#lib/links.ts';
 import { brandMark } from '#lib/design/brand.ts';
+import { PlusSignIcon } from '#lib/ui/hugeicons.ts';
 
 /**
  * The /ui chrome: header and footer, ported from shadcn/ui's site
@@ -63,6 +64,13 @@ export default function UiChromeLayout({ children, url }: LayoutProps) {
             <theme-toggle></theme-toggle>
             ${separator}
             <a class=${ghostSm} href="/" data-no-router>webjs.dev</a>
+            <!-- shadcn's "+ New" button, to the configurator. Hidden on the
+                 configurator itself (and the typeset builder), the pages
+                 that carry data-slot="designer". -->
+            <div class="flex items-center gap-2 [body:has([data-slot=designer])_&]:hidden">
+              ${separator}
+              <a href="/ui/create" data-new-project class="inline-flex h-[31px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 text-sm font-medium whitespace-nowrap text-primary-foreground no-underline outline-none transition-all hover:bg-primary/90 focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_svg]:size-4">${PlusSignIcon('', 2)}New</a>
+            </div>
             <site-nav-menu class="lg:hidden" label="Toggle navigation">
               ${HEADER_NAV.map((n) => html`<a class=${panelLink} href=${n.href}>${n.title}</a>`)}
             </site-nav-menu>

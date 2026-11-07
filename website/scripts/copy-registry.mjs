@@ -98,6 +98,19 @@ for (const name of readdirSync(COMPONENTS_DST)) {
 let changed = 0;
 if (writeIfChanged(join(LIB_DST_DIR, 'cn.ts'), readFileSync(LIB_SRC, 'utf8'))) changed++;
 if (writeIfChanged(join(LIB_DST_DIR, 'dom.ts'), readFileSync(LIB_DOM_SRC, 'utf8'))) changed++;
+// The kit's icons (Lucide, the default library) land beside cn() in an app
+// (`lib/utils/icons.ts`), so they land there here too (#1666).
+if (writeIfChanged(join(LIB_DST_DIR, 'icons.ts'), readFileSync(join(REGISTRY_ROOT, 'lib', 'icons.ts'), 'utf8'))) changed++;
+
+// The design-system data (shadcn's themes, fonts and the preset code), as
+// plain ESM the /ui/create configurator runs on the server AND in the browser
+// (#1666). They import each other by sibling path, so they are copied as one
+// directory, unchanged.
+const DESIGN_SYSTEM_DST = join(SITE_ROOT, 'modules', 'ui', 'design-system');
+mkdirSync(DESIGN_SYSTEM_DST, { recursive: true });
+for (const name of ['base-colors.js', 'themes.js', 'fonts.js', 'preset.js']) {
+  if (writeIfChanged(join(DESIGN_SYSTEM_DST, name), readFileSync(join(REGISTRY_ROOT, 'themes', name), 'utf8'))) changed++;
+}
 
 for (const name of upstream) {
   const rewritten = readFileSync(join(COMPONENTS_SRC, name), 'utf8')
