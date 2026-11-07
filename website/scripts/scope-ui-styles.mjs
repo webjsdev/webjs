@@ -12,10 +12,9 @@
  * wins, and nothing leaks across.
  *
  * The registry files stay byte-for-byte shadcn's (the CLI's bake reads them),
- * so the scoping is applied to copies. public/ui-input.css and
- * scripts/build-ui-styles.mjs compile these copies. copy-registry.mjs runs
- * this before every build of public/ui.css, and build-ui-styles.mjs runs it
- * itself.
+ * so the scoping is applied to copies, and scripts/build-ui-styles.mjs
+ * compiles each into its own sheet. copy-registry.mjs runs this too, and
+ * build-ui-styles.mjs runs it itself.
  *
  * The copies also settle which part wins when one element carries two parts'
  * names. shadcn composes a part over another the way a FieldLabel renders a
@@ -36,12 +35,14 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classSegments, segmentValue, CN_ALLOWLIST } from '../../packages/ui/src/registry/style-bake.js';
+import { PRESET_STYLES } from '../../packages/ui/packages/registry/themes/preset.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const site = resolve(here, '..');
 const styles = resolve(site, '../packages/ui/packages/registry/styles');
 
-export const STYLE_NAMES = ['new-york', 'nova', 'vega', 'maia', 'lyra', 'mira', 'luma', 'sera', 'rhea'];
+/** Every kit style: the registry's own list, which a preset encodes. */
+export const STYLE_NAMES = PRESET_STYLES;
 export const SCOPED_DIR = join(site, 'node_modules', '.cache', 'ui-styles', 'scoped');
 
 const LIMIT = `:is(${STYLE_NAMES.map((n) => `.style-${n}`).join(', ')})`;

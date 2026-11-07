@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
 import { stylesFor } from '#lib/ui/style-links.ts';
 import { listUiPages } from '#lib/ui/llm.server.ts';
+import { styleSheetHref } from '#modules/ui/create/design-system.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -46,13 +47,15 @@ test('the home and section pages keep their styles', () => {
   assert.deepEqual(stylesFor('/ui/sera'), ['new-york', 'sera']);
 });
 
-test('ui.css carries no kit style; each is its own sheet', () => {
+test('ui.css carries no kit style; each is its own sheet', async () => {
   const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
   assert.doesNotMatch(ui, /scoped\/style-[a-z-]+\.css/, 'ui-input.css imports no style');
-  const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
-  for (const name of ['new-york', 'nova']) {
-    assert.match(build, new RegExp(`'${name}'`), `build-ui-styles.mjs builds ${name}`);
-  }
+  // The build compiles every style the registry lists, the two the chrome
+  // and the docs render included, and the configurator links only those.
+  const { STYLE_NAMES } = await import('../../scripts/scope-ui-styles.mjs');
+  for (const name of ['new-york', 'nova']) assert.ok(STYLE_NAMES.includes(name), `the build compiles ${name}`);
+  assert.equal(styleSheetHref('nova'), '/public/ui-styles/nova.css');
+  assert.equal(styleSheetHref('not-a-style'), null, 'a name nothing builds gets no sheet');
 });
 
 /** The pathnames to render: every /ui page, and the frames pages embed. */

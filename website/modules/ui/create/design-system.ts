@@ -1,6 +1,6 @@
 import { buildThemeVars, getTheme, isBaseColor } from '#modules/ui/design-system/themes.js';
 import { getFont } from '#modules/ui/design-system/fonts.js';
-import { presetFontVars } from '#modules/ui/design-system/preset.js';
+import { presetFontVars, PRESET_STYLES } from '#modules/ui/design-system/preset.js';
 import { optionLabel, type CreateConfig } from './params.ts';
 
 /**
@@ -125,7 +125,7 @@ export function fontFamily(name: string): string {
 
 /** The stylesheet a style needs: each kit style is its own sheet in public/ui-styles/. */
 export function styleSheetHref(style: string): string | null {
-  return /^[a-z-]+$/.test(style) ? `/public/ui-styles/${style}.css` : null;
+  return PRESET_STYLES.includes(style) ? `/public/ui-styles/${style}.css` : null;
 }
 
 /**

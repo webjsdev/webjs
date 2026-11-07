@@ -25,14 +25,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { writeScopedStyles, SCOPED_DIR } from './scope-ui-styles.mjs';
+import { writeScopedStyles, SCOPED_DIR, STYLE_NAMES } from './scope-ui-styles.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const site = resolve(here, '..');
 const styles = resolve(site, '../packages/ui/packages/registry/styles');
-
-/** Every kit style, each compiled to its own sheet. */
-export const STYLES = ['luma', 'lyra', 'maia', 'mira', 'new-york', 'nova', 'rhea', 'sera', 'vega'];
 
 const cacheDir = join(site, 'node_modules', '.cache', 'ui-styles');
 const outDir = join(site, 'public', 'ui-styles');
@@ -42,7 +39,7 @@ mkdirSync(outDir, { recursive: true });
 writeScopedStyles();
 
 const only = process.argv.slice(2);
-const names = only.length ? STYLES.filter((n) => only.includes(n)) : STYLES;
+const names = only.length ? STYLE_NAMES.filter((n) => only.includes(n)) : STYLE_NAMES;
 
 for (const name of names) {
   const input = join(cacheDir, `${name}.input.css`);
