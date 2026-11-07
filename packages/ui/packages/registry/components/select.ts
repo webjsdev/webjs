@@ -7,12 +7,15 @@
  * trigger and listbox in its place, writing every choice back into it.
  *
  * shadcn parity:
- *   Select                   → <ui-select placeholder size position>
+ *   Select                   → <ui-select placeholder size position align content-class>
  *   SelectTrigger (size)     → drawn by the element (`size="sm" | "default"`)
+ *   SelectTrigger children   → a <template data-select-trigger> (see below)
  *   SelectValue placeholder  → the `placeholder` attribute, or a placeholder <option>
  *   SelectContent            → drawn by the element (`position="item-aligned"`, the
  *                              default, opens over the trigger on the chosen option;
- *                              `"popper"` opens below it)
+ *                              `"popper"` opens below it, at `align="start"` (the
+ *                              default), `"center"` or `"end"`)
+ *   SelectContent className  → the `content-class` attribute
  *   SelectGroup + SelectLabel→ <optgroup label="...">
  *   SelectItem               → <option value="...">
  *   SelectItem children      → a <template> inside the <option> (see below)
@@ -35,6 +38,16 @@
  * parser keeps a `<template>` inside an `<option>`, and it adds no text to the
  * option, so the no-JavaScript select shows the label alone. A class on the
  * `<option>` lands on its item, as SelectItem's `className` does.
+ *
+ * For a trigger with more than the value in it, shadcn's SelectTrigger
+ * children ("Format: " beside the chosen format), put a
+ * `<template data-select-trigger>` inside `<ui-select>`, beside the
+ * select. The trigger renders its content, and fills an element in it marked
+ * `data-slot="select-value"` with the chosen option's label (or the
+ * placeholder). That content is `aria-hidden`: the trigger still carries the
+ * label alone as its text for assistive technology, so the select is
+ * announced by its label and its value, as before. With JavaScript off the
+ * template is inert and the native select shows as it always did.
  *
  * Keyboard (as Radix's): on the trigger, ArrowDown / ArrowUp, Enter or Space
  * open the list on the selected option, and typing selects the first option
@@ -82,7 +95,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { templateContent } from '@webjsdev/core/directives';
+import { templateContent, unsafeHTML } from '@webjsdev/core/directives';
 import { cn, ensureId } from '../lib/utils.ts';
 import { positionFloating } from './popover.ts';
 
@@ -136,6 +149,10 @@ export class UiSelect extends WebComponent({
   placeholder: String,
   size: prop<'default' | 'sm'>(String),
   position: prop<'popper' | 'item-aligned'>(String),
+  // Where a `position="popper"` list sits along the trigger (Radix's align).
+  align: prop<'start' | 'center' | 'end'>(String),
+  // Classes for the list panel, shadcn's SelectContent `className`.
+  contentClass: String,
   open: prop(Boolean, { reflect: true }),
   // Set once the element has taken over from the native select.
   enhanced: prop<boolean>({ state: true }),
@@ -388,7 +405,7 @@ export class UiSelect extends WebComponent({
       class=${select?.getAttribute('class') || selectTriggerClass()}
       @click=${this._onTriggerClick}
       @keydown=${this._onTriggerKeyDown}
-    ><span data-slot="select-value">${shown ? shown.label || shown.text : this._placeholderText()}</span><svg
+    >${this._triggerBody(shown ? shown.label || shown.text : this._placeholderText())}<svg
       xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
       class=${selectTriggerIconClass()}
     ><path d="m6 9 6 6 6-6"></path></svg></button><div
@@ -399,7 +416,8 @@ export class UiSelect extends WebComponent({
       aria-labelledby=${labels.length ? labels.join(' ') : null}
       data-state=${this.open ? 'open' : 'closed'}
       data-position=${this.position || 'item-aligned'}
-      class=${selectContentClass()}
+      data-align=${this.position === 'popper' ? this.align || 'start' : null}
+      class=${this.contentClass ? cn(selectContentClass(), this.contentClass) : selectContentClass()}
       @keydown=${this._onListKeyDown}
       @pointerdown=${this._onListPointerDown}
       @scroll=${this._syncScrollButtons}
@@ -410,6 +428,26 @@ export class UiSelect extends WebComponent({
     >${this._entries().map(renderEntry)}</div><div data-slot="select-scroll-down-button" aria-hidden="true" hidden class=${selectScrollDownButtonClass()}
         @pointerenter=${() => this._autoScroll(1)} @pointerleave=${this._stopScroll}
       ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></div></div></div>`;
+  }
+
+  /** The author's trigger content, if any: `<template data-select-trigger>`. */
+  _triggerTemplate(): HTMLTemplateElement | null {
+    return this.querySelector<HTMLTemplateElement>('template[data-select-trigger]');
+  }
+
+  // The trigger's content: the value alone, or the author's template with the
+  // value written into its `data-slot="select-value"` element, hidden from
+  // assistive technology beside the value as plain text, so the trigger still
+  // reads as its label. The template is the author's own markup from the page
+  // and the value goes in as text, so the serialized copy is safe to render.
+  _triggerBody(text: string): unknown {
+    const tpl = this._triggerTemplate();
+    if (!tpl) return html`<span data-slot="select-value">${text}</span>`;
+    const box = document.createElement('div');
+    box.append(tpl.content.cloneNode(true));
+    const slot = box.querySelector('[data-slot="select-value"]');
+    if (slot) slot.textContent = text;
+    return html`<span data-slot="select-trigger-content" aria-hidden="true" class="contents">${unsafeHTML(box.innerHTML)}</span><span class="sr-only">${text}</span>`;
   }
 
   updated(changedProperties: Map<string, unknown>): void {
@@ -469,7 +507,7 @@ export class UiSelect extends WebComponent({
     panel.style.setProperty('--radix-select-content-available-height', `${Math.max(room, 120)}px`);
     panel.style.minWidth = `${t.width}px`;
     if (this.position === 'popper') {
-      positionFloating(trigger, panel, { side: 'bottom', align: 'start', sideOffset: 4 });
+      positionFloating(trigger, panel, { side: 'bottom', align: this.align || 'start', sideOffset: 4 });
       return;
     }
     // item-aligned: open OVER the trigger, the chosen option's text lying on

@@ -1531,6 +1531,58 @@ suite('ui-select: an item with more in it than its label', () => {
   });
 });
 
+suite('ui-select: trigger content, panel class and align', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/select.ts`);
+  });
+
+  // shadcn's /colors format picker: SelectTrigger children "Format: hex", a
+  // rounded-xl SelectContent, align="end" under position="popper".
+  test('a trigger template renders with the value filled in, hidden from assistive technology beside the label', async () => {
+    const root = document.createElement('div');
+    root.style.cssText = 'display:flex;justify-content:center;padding:40px';
+    document.body.appendChild(root);
+    // The kit suite loads no Tailwind, so give the content-class its width here.
+    root.innerHTML = '<style>.w-64 { width: 16rem; }</style><ui-select position="popper" align="end" content-class="rounded-xl w-64">'
+      + '<template data-select-trigger><span class="fmt-prefix">Format: </span><span data-slot="select-value" class="fmt-value"></span></template>'
+      + '<select aria-label="Format"><option value="hex" selected>hex</option><option value="rgb">rgb</option></select>'
+      + '</ui-select>';
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      await tick();
+      const trigger = root.querySelector('[data-slot="select-trigger"]');
+      const custom = trigger.querySelector('[data-slot="select-trigger-content"]');
+      assert.ok(custom, 'the template renders in the trigger');
+      assert.equal(custom.getAttribute('aria-hidden'), 'true');
+      assert.equal(custom.querySelector('.fmt-prefix')?.textContent, 'Format: ');
+      assert.equal(custom.querySelector('.fmt-value')?.textContent, 'hex', 'the value slot carries the label');
+      assert.equal(trigger.querySelector('.sr-only')?.textContent, 'hex', 'the trigger still reads as the label');
+      assert.equal(root.querySelector('select').options[0].text, 'hex', 'the native select is untouched');
+
+      root.querySelectorAll('[data-slot="select-item"]')[1].click();
+      await tick();
+      assert.equal(trigger.querySelector('.fmt-value')?.textContent, 'rgb', 'a new choice refills the value slot');
+      assert.equal(trigger.querySelector('.sr-only')?.textContent, 'rgb');
+
+      const panel = root.querySelector('[data-slot="select-content"]');
+      assert.ok(panel.classList.contains('rounded-xl') && panel.classList.contains('cn-select-content'), 'content-class lands on the panel beside its own classes');
+      assert.equal(panel.dataset.align, 'end');
+      trigger.click();
+      await new Promise((r) => setTimeout(r, 50));
+      await tick();
+      // The kit suite loads no stylesheet, so the panel keeps the UA popover
+      // insets; read the left the element placed it at rather than its box.
+      const t = trigger.getBoundingClientRect();
+      const width = panel.getBoundingClientRect().width;
+      const left = parseFloat(panel.style.left);
+      assert.ok(Math.abs(left + width - t.right) < 2, `align="end" lines the panel's end up with the trigger's (${left + width} vs ${t.right})`);
+      assert.ok(Math.abs(left - t.left) > 2, 'which is not where align="start" would put it');
+    } finally {
+      root.remove();
+    }
+  });
+});
+
 suite('ui-message-scroller: the parts render the boxes, not their hosts', () => {
   suiteSetup(async () => {
     await import(`${COMPONENTS_DIR}/message-scroller.ts`);
