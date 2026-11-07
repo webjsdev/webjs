@@ -20,7 +20,11 @@
 
   /* MARK: alert */
   .cn-alert {
-    @apply grid grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border px-4 py-3 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current;
+    @apply grid grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border px-4 py-3 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current has-data-[slot=alert-action]:pe-18;
+  }
+
+  .cn-alert-action {
+    @apply absolute top-2.5 end-3;
   }
 
   .cn-alert-variant-default {
@@ -37,6 +41,10 @@
 
   .cn-alert-description {
     @apply col-start-2 grid justify-items-start gap-1 text-sm text-muted-foreground [&_p]:leading-relaxed;
+  }
+
+  .cn-alert-dialog-overlay {
+    @apply bg-black/50;
   }
 
   .cn-alert-dialog-content {
@@ -249,6 +257,31 @@
 
   .cn-dialog-content {
     @apply top-[50%] left-[50%] grid max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 sm:max-w-lg;
+  }
+
+  .cn-collapsible-trigger {
+    @apply flex w-full items-center justify-between gap-2 rounded-md text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/50;
+  }
+
+  .cn-collapsible-content {
+    @apply text-sm;
+  }
+
+  /* The <ui-switch> thumb is a real element, as in shadcn, where the plain
+     markup switch draws its thumb as the track's ::after. new-york's
+     cn-switch-thumb rule is that ::after, so the real thumb draws itself here
+     and hides the pseudo-element. */
+  .cn-switch-knob {
+    @apply size-4 rounded-full bg-background translate-x-px data-checked:translate-x-[calc(100%-2px)] dark:bg-foreground dark:data-checked:bg-primary-foreground group-data-[size=sm]/switch:size-3 group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-1px)] after:hidden;
+  }
+
+  /* shadcn's new-york sidebar trigger is an icon button sized down to 7. */
+  .cn-sidebar-trigger {
+    @apply size-7;
+  }
+
+  .cn-dialog-overlay {
+    @apply bg-black/50;
   }
 
   .cn-dialog-close {
@@ -603,11 +636,11 @@
   }
 
   .cn-toggle-group {
-    @apply rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch;
+    @apply rounded-md not-data-[spacing]:gap-0 data-[spacing]:not-data-[spacing=0]:data-[variant=outline]:shadow-xs data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch;
   }
 
   .cn-toggle-group-item {
-    @apply w-auto min-w-0 px-3 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-s-md data-[spacing=0]:last:rounded-e-md data-[spacing=0]:data-[variant=outline]:border-s-0 data-[spacing=0]:data-[variant=outline]:first:border-s;
+    @apply w-auto min-w-0 px-3 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-s-md data-[spacing=0]:last:rounded-e-md data-[spacing=0]:data-[variant=outline]:border-s-0 data-[spacing=0]:data-[variant=outline]:first:border-s not-data-[spacing]:rounded-none not-data-[spacing]:shadow-none not-data-[spacing]:first:rounded-s-md not-data-[spacing]:last:rounded-e-md not-data-[spacing]:data-[variant=outline]:border-s-0 not-data-[spacing]:data-[variant=outline]:first:border-s;
   }
 
   /* MARK: tooltip */
@@ -936,6 +969,10 @@
   }
 
   /* MARK: sheet */
+  .cn-sheet-overlay {
+    @apply bg-black/50;
+  }
+
   .cn-sheet-content {
     @apply fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:sm:max-w-sm data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:sm:max-w-sm data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t;
   }
@@ -961,6 +998,10 @@
   }
 
   /* MARK: drawer */
+  .cn-drawer-overlay {
+    @apply bg-black/50;
+  }
+
   .cn-drawer-content {
     @apply flex h-auto flex-col bg-background data-[vaul-drawer-direction=top]:rounded-b-lg data-[vaul-drawer-direction=top]:border-b data-[vaul-drawer-direction=bottom]:rounded-t-lg data-[vaul-drawer-direction=bottom]:border-t data-[vaul-drawer-direction=right]:border-l data-[vaul-drawer-direction=left]:border-r;
   }

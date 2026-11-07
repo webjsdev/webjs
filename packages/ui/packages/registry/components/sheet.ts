@@ -56,6 +56,11 @@ export function sheetCloseButtonClass(): string {
   return 'cn-sheet-close';
 }
 
+/** The overlay behind the panel, which each style dims in its own way. */
+export function sheetOverlayClass(): string {
+  return 'cn-sheet-overlay fixed inset-0 z-50 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0';
+}
+
 /** The title and description block at the top. */
 export function sheetHeaderClass(): string {
   return 'cn-sheet-header flex flex-col';
@@ -114,6 +119,10 @@ export class UiSheetContent extends UiDialogContent {
 
   _closeClass(): string {
     return sheetCloseButtonClass();
+  }
+
+  _overlayClass(): string {
+    return sheetOverlayClass();
   }
 }
 UiSheetContent.register('ui-sheet-content');

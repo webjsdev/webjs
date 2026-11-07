@@ -101,7 +101,9 @@
  * override the margin via inline style on the popover element.
  */
 export type PopoverSideOffset = 0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24;
-export type PopoverAlignOffset = 0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24;
+type PopoverAlignStep = 0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24;
+/** An align offset in pixels, either way: a negative one pulls back past the aligned edge. */
+export type PopoverAlignOffset = PopoverAlignStep | -2 | -4 | -6 | -8 | -12 | -16 | -20 | -24;
 
 export interface PopoverContentOptions {
   /** Which side of the trigger the popover appears on. Default 'bottom'. */
@@ -112,8 +114,9 @@ export interface PopoverContentOptions {
   sideOffset?: PopoverSideOffset;
   /**
    * Pixels offset along the align axis. Positive values push away from
-   * the aligned edge toward the opposite edge. No-op for align='center'.
-   * Default 0 (matches shadcn).
+   * the aligned edge toward the opposite edge, negative ones the other way
+   * (shadcn's `alignOffset={-4}`). No-op for align='center'. Default 0
+   * (matches shadcn).
    */
   alignOffset?: PopoverAlignOffset;
 }
@@ -142,7 +145,7 @@ const POSITION_AREA_CLASS: Record<string, string> = {
 // side: top/bottom sides translate X; left/right sides translate Y.
 // All 36 (4 axis-direction combos × 9 offset values) appear literally so
 // Tailwind 4 generates each class.
-const ALIGN_OFFSET_CLASS: Record<string, Record<PopoverAlignOffset, string>> = {
+const ALIGN_OFFSET_CLASS: Record<string, Record<PopoverAlignStep, string>> = {
   'horizontal-start': {
     0: 'translate-x-[0px]',  2: 'translate-x-[2px]',  4: 'translate-x-[4px]',
     6: 'translate-x-[6px]',  8: 'translate-x-[8px]',  12: 'translate-x-[12px]',
@@ -210,7 +213,10 @@ export function popoverContentClass(opts: PopoverContentOptions = {}): string {
   let alignClass = '';
   if (align !== 'center' && alignOffset !== 0) {
     const axis = side === 'top' || side === 'bottom' ? 'horizontal' : 'vertical';
-    alignClass = ALIGN_OFFSET_CLASS[`${axis}-${align}`][alignOffset];
+    // A negative offset from one edge is the same shift as a positive one
+    // from the other, so it reads the other edge's table.
+    const edge = alignOffset < 0 ? (align === 'start' ? 'end' : 'start') : align;
+    alignClass = ALIGN_OFFSET_CLASS[`${axis}-${edge}`][Math.abs(alignOffset) as PopoverAlignStep] ?? '';
   }
   return [
     'cn-popover-content z-50 w-72 origin-(--radix-popover-content-transform-origin) outline-hidden',

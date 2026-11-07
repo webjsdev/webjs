@@ -376,13 +376,13 @@ export class UiCalendar extends WebComponent({
       aria-disabled=${this._canGo(-1) ? null : 'true'}
       class=${cn(buttonClass({ variant: 'ghost' }), NAV_BUTTON, 'rdp-button-previous')}
       @click=${() => this._turn(-1)}
-    ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="cn-rtl-flip size-4"><path d="m15 18-6-6 6-6"></path></svg></button><button
+    ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="cn-rtl-flip size-4 rtl:rotate-180"><path d="m15 18-6-6 6-6"></path></svg></button><button
       type="button"
       aria-label="Go to the Next Month"
       aria-disabled=${this._canGo(1) ? null : 'true'}
       class=${cn(buttonClass({ variant: 'ghost' }), NAV_BUTTON, 'rdp-button-next')}
       @click=${() => this._turn(1)}
-    ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="cn-rtl-flip size-4"><path d="m9 18 6-6-6-6"></path></svg></button></nav>${months.map((mo, mi) => {
+    ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="cn-rtl-flip size-4 rtl:rotate-180"><path d="m9 18 6-6-6-6"></path></svg></button></nav>${months.map((mo, mi) => {
       const captionId = `${this._id}-caption-${mi}`;
       return html`<div class="flex w-full flex-col gap-4"><div class="flex h-(--cell-size) w-full items-center justify-center px-(--cell-size)">${dropdown && mi === 0
         ? this._dropdowns(mo, captionId)

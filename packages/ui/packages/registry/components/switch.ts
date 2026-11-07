@@ -165,7 +165,7 @@ export class UiSwitch extends WebComponent({
     ><span
       data-slot="switch-thumb"
       data-state=${state}
-      class=${cn('cn-switch-thumb pointer-events-none block ring-0 transition-transform', THUMB_SIZES[size])}
+      class=${cn('cn-switch-thumb cn-switch-knob pointer-events-none block ring-0 transition-transform', THUMB_SIZES[size])}
     ></span></span>`;
   }
 }

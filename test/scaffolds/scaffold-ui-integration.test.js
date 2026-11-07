@@ -74,7 +74,12 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
       'layout no longer ships the Tailwind browser runtime');
     const inputCss = await readFile(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /@import "tailwindcss"/, 'input.css imports Tailwind');
-    assert.match(inputCss, /color-primary/, 'input.css carries the @theme color maps');
+    // The ui theme is IMPORTED from the stylesheet components.json names, so
+    // the tokens `webjs ui add` merges there for a block reach the compiled CSS.
+    assert.match(inputCss, /@import "\.\.\/styles\/globals\.css"/, 'input.css imports the ui theme components.json names');
+    const globalsCss = await readFile(join(appDir, 'styles', 'globals.css'), 'utf8');
+    assert.match(globalsCss, /color-primary/, 'which carries the @theme color maps');
+    assert.doesNotMatch(inputCss, /@webjsdev\/ui theme/, 'and is not copied a second time into input.css');
     // Every fluid --text-<name> size carries its --text-<name>--line-height
     // companion. Tailwind v4's text-<name> utility emits
     // `line-height: var(--tw-leading, var(--text-<name>--line-height))`, so a

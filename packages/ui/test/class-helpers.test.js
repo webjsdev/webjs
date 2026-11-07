@@ -414,3 +414,46 @@ test('accordion: accordionContentInnerClass is shadcn\'s inner content wrapper',
   assert.ok(inner.includes('[&_p:not(:last-child)]:mb-4'));
   assert.ok(tokens(accordionClass()).includes('flex') && tokens(accordionClass()).includes('flex-col'));
 });
+
+// ---------- review batch 2 (#1666) ----------
+
+test('calendar: the caption dropdown box and label carry names only new-york styles', { skip }, async () => {
+  const { calendarDropdownRootClass, calendarCaptionLabelClass } = await baseHelpers('calendar');
+  // shadcn's build leaves cn-calendar-dropdown-root / -caption-label unstyled,
+  // so ui.shadcn.com draws no border in any style. The kit's names are mapped
+  // by new-york alone.
+  assert.ok(!tokens(calendarDropdownRootClass()).includes('cn-calendar-dropdown-root'));
+  assert.ok(!tokens(calendarCaptionLabelClass()).includes('cn-calendar-caption-label'));
+  assert.ok(tokens(calendarDropdownRootClass()).includes('cn-calendar-dropdown-box'));
+});
+
+test('collapsible: the trigger keeps only its summary resets inline, so a merged button keeps its size', { skip }, async () => {
+  const { collapsibleTriggerClass } = await baseHelpers('collapsible');
+  const t = tokens(collapsibleTriggerClass());
+  for (const c of ['w-full', 'text-sm', 'rounded-md', 'gap-2']) assert.ok(!t.includes(c), `no inline ${c}`);
+  assert.ok(t.includes('list-none') && t.includes('[&::-webkit-details-marker]:hidden'));
+});
+
+test('item: the separator draws a line in every style; alert: alertActionClass; field: the label is a Label', { skip }, async () => {
+  const { itemSeparatorClass } = await baseHelpers('item');
+  for (const c of ['h-px', 'w-full', 'bg-border']) assert.ok(tokens(itemSeparatorClass()).includes(c), c);
+  const { alertActionClass } = await baseHelpers('alert');
+  assert.equal(alertActionClass(), 'cn-alert-action');
+  const { fieldLabelClass } = await baseHelpers('field');
+  assert.ok(tokens(fieldLabelClass()).includes('cn-label'), 'shadcn FieldLabel renders a Label');
+});
+
+test('popover: a negative alignOffset shifts the other way rather than dropping', { skip }, async () => {
+  const { popoverContentClass } = await baseHelpers('popover');
+  assert.match(popoverContentClass({ side: 'bottom', align: 'start', alignOffset: -4 }), /translate-x-\[-4px\]/);
+  assert.match(popoverContentClass({ side: 'bottom', align: 'end', alignOffset: -8 }), /translate-x-\[8px\]/);
+  assert.match(popoverContentClass({ side: 'right', align: 'start', alignOffset: 4 }), /translate-y-\[4px\]/);
+});
+
+test('new-york: the <ui-switch> thumb draws itself, and the sidebar trigger is size-7', { skip }, async () => {
+  const { readFileSync } = await import('node:fs');
+  const sw = readFileSync(join(COMPONENTS_DIR, 'switch.ts'), 'utf8');
+  assert.match(sw, /size-4 rounded-full bg-background[^']*after:hidden/, 'the real thumb has a size in new-york, and hides the plain-markup pseudo-element');
+  const sb = readFileSync(join(COMPONENTS_DIR, 'sidebar.ts'), 'utf8');
+  assert.match(sb, /'size-7'|\bsize-7\b/, 'new-york sizes the trigger as shadcn new-york does');
+});

@@ -212,20 +212,6 @@ async function writeUiBootstrap(appDir) {
 }
 
 /**
- * Read the @webjsdev/ui theme CSS so we can write it into public/input.css,
- * which css:build compiles into the static public/tailwind.css the layout
- * links. The theme tokens (`--color-primary`, `--color-card`, …) the registry
- * components consume become real utility classes in the compiled stylesheet,
- * so the app is styled with JavaScript off.
- *
- * @returns {Promise<string>} theme CSS source
- */
-async function readThemeCss() {
-  const src = join(UI_REGISTRY_ROOT, 'themes', 'index.css');
-  return await readFile(src, 'utf8');
-}
-
-/**
  * Fail loudly when the @webjsdev/ui registry is not on disk. The scaffold
  * reads component sources, the cn() helper, and the @webjsdev/ui theme from
  * UI_REGISTRY_ROOT and weaves them into a generated app/page.ts that
@@ -566,7 +552,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
           regenerate: [{
             output: 'public/tailwind.css',
             command: cssBuildCmd,
-            inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+            inputs: ['app', 'components', 'modules', 'lib', 'styles', 'public/input.css'],
           }],
         }),
       },
@@ -1299,13 +1285,16 @@ export type ActionResult<T> =
     // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
     // public/input.css into the STATIC public/tailwind.css that app/layout.ts
     // links, so the app is fully styled with JavaScript disabled. Write input.css:
-    // `@import "tailwindcss"`, source globs, the ui theme (read from the registry
-    // themes/index.css), then the app @theme inline block. The token VALUES live
-    // on :root in app/layout.ts (plain CSS, so they resolve with JS off) and the
-    // @theme inline maps here reference them by var(), the same split the blog
-    // uses. Same theme also lives at styles/globals.css for `webjsui` tooling.
-    const uiThemeRaw = await readThemeCss();
+    // `@import "tailwindcss"`, source globs, an import of the ui theme at
+    // styles/globals.css, then the app @theme inline block. The theme is
+    // IMPORTED, not copied: styles/globals.css is the stylesheet components.json
+    // names, so the tokens `webjs ui add` merges into it for a block (sidebar's
+    // --sidebar-*, chart's --chart-*) reach the compiled CSS. The token VALUES
+    // live on :root in app/layout.ts (plain CSS, so they resolve with JS off)
+    // and the @theme inline maps here reference them by var(), the same split
+    // the blog uses.
     await writeFile(join(publicDir, 'input.css'), `@import "tailwindcss";
+@import "../styles/globals.css";
 
 /* Scan app sources so their utility classes make it into the compiled bundle.
    Tailwind v4 auto-scans the project too; these @source lines are explicit. */
@@ -1313,8 +1302,6 @@ export type ActionResult<T> =
 @source "../components/**/*.{ts,js}";
 @source "../modules/**/*.{ts,js}";
 @source "../lib/**/*.{ts,js}";
-
-${uiThemeRaw}
 
 /* App @theme mappings. The token VALUES live on :root in app/layout.ts (plain
    CSS custom properties, so they resolve with JavaScript disabled); these

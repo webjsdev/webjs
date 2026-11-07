@@ -128,7 +128,10 @@ ui-alert-dialog-content { display: grid; }
 // Fills the viewport (fixed inset-0), NOT 0x0 (#730): WebKit makes a
 // top-layer <dialog> the containing block for its position:fixed descendants,
 // so a 0x0 host collapsed the fixed content panel to 0x0 (invisible on iOS).
-const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
+const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-transparent';
+
+/** The overlay behind the panel, which each style dims in its own way. */
+export const alertDialogOverlayClass = (): string => 'cn-alert-dialog-overlay fixed inset-0 z-50';
 
 function installStyles(): void {
   if (typeof document === 'undefined') return;
@@ -318,15 +321,20 @@ export class UiAlertDialog extends WebComponent({
     if (!changedProperties.has('open')) return;
     // Skip the constructor's initial open=false set so we don't fire
     // teardown for the closed-on-mount state.
-    if (changedProperties.get('open') === undefined) return;
+    // One written `open` still opens on that first update (shadcn's
+    // `defaultOpen`).
+    const initial = changedProperties.get('open') === undefined;
+    if (initial && !this.open) return;
     // The content renders its data-state from this element's `open`, and
     // nothing else re-renders it, so ask it to now. Every shadcn style
     // animates out on data-closed: left closed while the native dialog
     // opens, the content played its exit animation as it appeared.
     this._content?.requestUpdate?.();
     // Defer one microtask so the content child has rendered its inner
-    // native <dialog>; that's where showModal() / close() act.
-    queueMicrotask(() => {
+    // native <dialog>; that's where showModal() / close() act. On the first
+    // update the content may not have rendered yet, so that one waits.
+    queueMicrotask(async () => {
+      if (initial) await this._content?.updateComplete;
       if (this.open) this._setup();
       else this._teardown();
     });
@@ -513,6 +521,11 @@ export class UiAlertDialogContent extends WebComponent({
       @cancel=${this._onNativeCancel}
       @close=${this._onNativeClose}
     ><div
+      data-slot="alert-dialog-overlay"
+      data-state=${parentOpen ? 'open' : 'closed'}
+      aria-hidden="true"
+      class=${alertDialogOverlayClass()}
+    ></div><div
       data-slot="alert-dialog-content"
       data-size=${this.size}
       data-state=${parentOpen ? 'open' : 'closed'}

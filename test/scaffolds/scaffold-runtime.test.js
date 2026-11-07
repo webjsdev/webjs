@@ -60,7 +60,7 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     assert.deepEqual(p.webjs.dev.regenerate, [{
       output: 'public/tailwind.css',
       command: bunCompile,
-      inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+      inputs: ['app', 'components', 'modules', 'lib', 'styles', 'public/input.css'],
     }]);
     const regenCmds = p.webjs.dev.regenerate.map((r) => r.command);
     // The local CI list (#1471) is held to the same bar. Its audit step is

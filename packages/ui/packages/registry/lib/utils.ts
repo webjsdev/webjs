@@ -110,6 +110,7 @@ function GROUPS(): Array<[RegExp, string]> {
     [/^rounded(-[a-z]+)?$/, 'rounded'],
     [/^rounded-/, 'rounded'],
     [/^opacity-/, 'opacity'],
+    [/^leading-/, 'leading'],
     [/^font-(thin|light|normal|medium|semibold|bold|black|extralight|extrabold)$/, 'font-weight'],
     // Box-shadow SIZE and box-shadow COLOUR are two properties (`box-shadow` and
     // `--tw-shadow-color`), so they need two groups. `shadow-none` is a size,

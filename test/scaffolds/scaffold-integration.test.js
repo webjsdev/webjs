@@ -357,7 +357,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.deepEqual(pkg.webjs?.dev?.regenerate, [{
       output: 'public/tailwind.css',
       command: 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify',
-      inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+      inputs: ['app', 'components', 'modules', 'lib', 'styles', 'public/input.css'],
     }], 'webjs.dev.regenerate recompiles the static CSS on request (#967)');
     assert.equal(pkg.scripts['css:build'], 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
     // A production DEPENDENCY (#1606): `webjs start` compiles the CSS at every

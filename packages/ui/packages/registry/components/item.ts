@@ -44,9 +44,13 @@ export function itemGroupClass(): string {
   return 'cn-item-group group/item-group flex w-full flex-col';
 }
 
-/** Set `data-slot="item-separator"` on the element. */
+/**
+ * Set `data-slot="item-separator"` on the element. shadcn's ItemSeparator is a
+ * horizontal Separator, so the line's own size and colour come with it, and
+ * the style adds its margin.
+ */
 export function itemSeparatorClass(): string {
-  return 'cn-item-separator';
+  return 'cn-item-separator h-px w-full shrink-0 bg-border';
 }
 
 const ITEM_BASE =

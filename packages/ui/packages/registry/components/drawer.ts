@@ -60,6 +60,11 @@ export function drawerContentClass(): string {
 }
 
 /** The drag handle at the top of a bottom drawer. The element renders it. */
+/** The overlay behind the panel, which each style dims in its own way. */
+export function drawerOverlayClass(): string {
+  return 'cn-drawer-overlay fixed inset-0 z-50 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0';
+}
+
 export function drawerHandleClass(): string {
   return 'cn-drawer-handle mx-auto hidden shrink-0 group-data-[vaul-drawer-direction=bottom]/drawer-content:block';
 }
@@ -130,6 +135,10 @@ export class UiDrawerContent extends UiDialogContent {
 
   _panelClass(): string {
     return drawerContentClass();
+  }
+
+  _overlayClass(): string {
+    return drawerOverlayClass();
   }
 
   _panelLead(): unknown {

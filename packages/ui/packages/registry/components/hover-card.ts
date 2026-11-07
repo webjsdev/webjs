@@ -21,8 +21,9 @@
  *   `side-offset`:  number, default 4. Pixels between trigger and content.
  *   `align-offset`: number, default 0. Pixels of cross-axis shift.
  *
- * Events: none dispatched at present; observe the reflected `open`
- * attribute from CSS or JS.
+ * Events:
+ *   `ui-open-change` on <ui-hover-card>: `{ detail: { open } }` on every open
+ *   and close, shadcn's `onOpenChange`. The `open` attribute is reflected too.
  *
  * Programmatic API on <ui-hover-card>: `.show()` · `.hide()`.
  *
@@ -314,6 +315,7 @@ export class UiHoverCard extends WebComponent({
     // engines with no Popover API: Escape has to work regardless of that.
     if (this.open) this._bindEscape();
     else this._unbindEscape();
+    this.dispatchEvent(new CustomEvent('ui-open-change', { detail: { open: this.open }, bubbles: true }));
     // Wait one microtask for <ui-hover-card-content>'s inner [popover]
     // element to commit; we drive its showPopover() / hidePopover() and
     // refresh the trigger's aria-expanded.

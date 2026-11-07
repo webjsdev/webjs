@@ -450,3 +450,15 @@ test('ui-tabs-list: shadcn\'s `line` variant, and `underline` as its alias, are 
     assert.match(out, /class="[^"]*\bcn-tabs-list-variant-line\b/);
   }
 });
+
+test('ui-toggle-group: with no spacing written the style decides (shadcn\'s gap of 2), and a written one is served', { skip }, async () => {
+  const bare = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
+  const root = (bare.match(/<div[^>]*data-slot="toggle-group"[^>]*>/) ?? [''])[0];
+  assert.doesNotMatch(root, /data-spacing=/, 'no data-spacing, so no style joins the items by default');
+  assert.match(root, /style="--gap: 2"/, 'and shadcn\'s default gap');
+  assert.doesNotMatch((bare.match(/<ui-toggle-group-item[^>]*>/) ?? [''])[0], /data-spacing=/);
+  const joined = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group spacing="0"><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
+  assert.match(joined, /data-slot="toggle-group"[^>]*style="--gap: 0"[^>]*data-spacing="0"/);
+  const legacy = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group spacing="default"><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
+  assert.match(legacy, /data-spacing="1"/, 'the kit\'s earlier "default" is a gap of 1');
+});

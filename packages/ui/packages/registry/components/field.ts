@@ -139,7 +139,7 @@ export const fieldContentClass = (): string =>
 
 /** Field label: the `<label for>` of the control. Fades when the field is data-disabled. */
 export const fieldLabelClass = (): string =>
-  'cn-field-label group/field-label peer/field-label flex w-fit has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col';
+  'cn-label cn-field-label group/field-label peer/field-label flex w-fit items-center select-none group-data-[disabled=true]:pointer-events-none peer-disabled:cursor-not-allowed has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col';
 
 /** Field title: label-styled text that is not a `<label>` (a choice card's heading). */
 export const fieldTitleClass = (): string =>

@@ -6,6 +6,8 @@
  *   Alert (variant: default | destructive)  → alertClass({ variant })
  *   AlertTitle                              → alertTitleClass()
  *   AlertDescription                        → alertDescriptionClass()
+ *   AlertAction                             → alertActionClass() with data-slot="alert-action"
+ *                                             (a button or link in the alert's corner)
  *
  * A11y (required for accessible output): put role="alert" on the container
  * for an urgent, interrupting message, or role="status" for a polite,
@@ -55,3 +57,7 @@ export const alertTitleClass = (): string =>
 
 export const alertDescriptionClass = (): string =>
   'cn-alert-description';
+
+/** The alert's action, in its corner. Set `data-slot="alert-action"`, which the alert reserves room for. */
+export const alertActionClass = (): string =>
+  'cn-alert-action';

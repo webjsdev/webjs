@@ -424,6 +424,13 @@ export class UiComboboxInput extends WebComponent({
   inputId: prop(String, { attribute: 'input-id' }),
   showTrigger: prop(String, { attribute: 'show-trigger' }),
   showClear: prop(Boolean, { attribute: 'show-clear' }),
+  // The field state an author writes on the host belongs on the input, the
+  // focusable control, as shadcn passes ComboboxInput's props to its input:
+  // `aria-invalid` for the error look and the announcement, and
+  // `aria-describedby` for the error text. Observed, so a re-validation that
+  // changes them reaches the input.
+  invalid: prop(String, { attribute: 'aria-invalid' }),
+  describedBy: prop(String, { attribute: 'aria-describedby' }),
   state: prop<FieldState>({ state: true }),
 }) {
   connectedCallback(): void {
@@ -435,6 +442,8 @@ export class UiComboboxInput extends WebComponent({
     super();
     this.placeholder = '';
     this.inputId = '';
+    this.invalid = '';
+    this.describedBy = '';
     this.showTrigger = 'true';
     this.showClear = false;
     this.state = { open: false, activeId: '', hasValue: false };
@@ -455,6 +464,8 @@ export class UiComboboxInput extends WebComponent({
       aria-controls=${root?.listId ?? null}
       aria-activedescendant=${s.activeId || null}
       aria-label=${this.getAttribute?.('aria-label') || null}
+      aria-invalid=${this.invalid === 'true' ? 'true' : null}
+      aria-describedby=${this.describedBy || null}
       placeholder=${this.placeholder || null}
       ?disabled=${disabled}
       class=${inputGroupInputClass()}

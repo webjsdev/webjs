@@ -2879,3 +2879,101 @@ suite('overlay parts: a class on the host lands on the element it renders', () =
     }
   });
 });
+
+suite('dialog family: overlay, close button, open on first render', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/dialog.ts`);
+    await import(`${COMPONENTS_DIR}/alert-dialog.ts`);
+    await import(`${COMPONENTS_DIR}/hover-card.ts`);
+    await import(`${COMPONENTS_DIR}/combobox.ts`);
+  });
+
+  test('the dialog renders an overlay element the styles dim, and a click on it closes the dialog', async () => {
+    const root = await mount(html`<ui-dialog><ui-dialog-content><h2 data-slot="dialog-title">T</h2></ui-dialog-content></ui-dialog>`);
+    const el = root.querySelector('ui-dialog');
+    try {
+      el.show();
+      await tick();
+      await tick();
+      const overlay = root.querySelector('[data-slot="dialog-overlay"]');
+      assert.ok(overlay, 'an overlay element, which a style can reach (a ::backdrop it cannot)');
+      assert.match(overlay.className, /\bcn-dialog-overlay\b/);
+      assert.equal(overlay.getAttribute('data-state'), 'open', 'carrying the state the styles animate on');
+      overlay.click();
+      await tick();
+      assert.equal(el.open, false, 'a click on the overlay closes the dialog');
+    } finally {
+      el.open = false;
+      await tick();
+      root.remove();
+    }
+  });
+
+  test('the corner close button is a ghost icon button, as shadcn renders it', async () => {
+    const root = await mount(html`<ui-dialog><ui-dialog-content><h2 data-slot="dialog-title">T</h2></ui-dialog-content></ui-dialog>`);
+    try {
+      await tick();
+      const close = root.querySelector('button[data-slot="dialog-close"]');
+      assert.ok(close);
+      for (const c of ['cn-button', 'cn-button-variant-ghost', 'cn-button-size-icon-sm', 'cn-dialog-close']) {
+        assert.match(close.className, new RegExp(`(^|\\s)${c}(\\s|$)`), `the close button carries ${c}`);
+      }
+    } finally {
+      root.remove();
+    }
+  });
+
+  for (const [tag, content, native] of [['ui-dialog', 'ui-dialog-content', 'dialog-native'], ['ui-alert-dialog', 'ui-alert-dialog-content', 'alert-dialog-native']]) {
+    test(`<${tag} open> opens on its first render, as shadcn's defaultOpen does`, async () => {
+      let events = 0;
+      const root = document.createElement('div');
+      root.addEventListener('ui-open-change', () => events++);
+      document.body.appendChild(root);
+      root.innerHTML = `<${tag} open><${content}><h2 data-slot="${tag.slice(3)}-title">T</h2></${content}></${tag}>`;
+      try {
+        await tick();
+        await tick();
+        await new Promise((r) => setTimeout(r, 30));
+        const d = root.querySelector(`dialog[data-slot="${native}"]`);
+        assert.ok(d, 'the native dialog rendered');
+        assert.equal(d.open, true, 'and it is open');
+        assert.equal(events, 0, 'without an open-change event for the initial state');
+        root.querySelector(tag).open = false;
+        await tick();
+      } finally {
+        root.remove();
+      }
+    });
+  }
+
+  test('<ui-hover-card> reports ui-open-change on open and close', async () => {
+    const root = await mount(html`<ui-hover-card open-delay="0" close-delay="0"><ui-hover-card-trigger><a href="#x">x</a></ui-hover-card-trigger><ui-hover-card-content>Card</ui-hover-card-content></ui-hover-card>`);
+    const seen = [];
+    root.addEventListener('ui-open-change', (e) => seen.push(e.detail.open));
+    try {
+      const el = root.querySelector('ui-hover-card');
+      el.open = true;
+      await tick();
+      el.open = false;
+      await tick();
+      assert.deepEqual(seen, [true, false]);
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('<ui-combobox-input aria-invalid aria-describedby> puts both on the input', async () => {
+    const root = await mount(html`<ui-combobox name="fw"><ui-combobox-input aria-label="Framework" aria-invalid="true" aria-describedby="fw-error"></ui-combobox-input></ui-combobox><p id="fw-error">Pick one.</p>`);
+    try {
+      await tick();
+      const input = root.querySelector('input[role="combobox"]');
+      assert.equal(input.getAttribute('aria-invalid'), 'true');
+      assert.equal(input.getAttribute('aria-describedby'), 'fw-error');
+      root.querySelector('ui-combobox-input').setAttribute('aria-invalid', 'false');
+      await tick();
+      assert.equal(input.getAttribute('aria-invalid'), null, 'a cleared error leaves the input');
+    } finally {
+      root.remove();
+    }
+  });
+});

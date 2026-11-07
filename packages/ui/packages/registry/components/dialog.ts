@@ -195,6 +195,14 @@ export const dialogContentClass = (): string =>
 export const dialogCloseButtonClass = (): string =>
   'cn-dialog-close';
 
+/**
+ * The overlay behind the panel: shadcn's DialogOverlay, which each style
+ * dims and blurs in its own way. It is a real element inside the native
+ * dialog rather than the dialog's `::backdrop`, because a style's classes
+ * reach an element, not a pseudo-element.
+ */
+export const dialogOverlayClass = (): string => 'cn-dialog-overlay fixed inset-0 isolate z-50';
+
 const DIALOG_CLOSE_X_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
 
@@ -226,8 +234,9 @@ ${content} { display: grid; }
 // the same fixed panel against the viewport, so it worked on Android). A
 // viewport-sized transparent host gives the panel a correct containing block
 // on both engines; the panel still centers itself and the ::backdrop covers
-// the screen.
-export const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
+// the screen. The backdrop itself stays clear: the overlay element the content
+// renders is what the styles dim.
+export const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-transparent';
 
 /** Inject the pre-hydration rules for one root / content tag pair, once. */
 export function installOverlayStyles(root: string, content: string): void {
@@ -429,7 +438,10 @@ export class UiDialog extends WebComponent({
     // Constructor sets open=false, which records a (undefined -> false)
     // transition in the first update. Skip it so the dialog doesn't
     // emit a teardown + ui-open-change for the initial state.
-    if (changedProperties.get('open') === undefined) return;
+    // A dialog written `open` opens on that first update, though: it is
+    // shadcn's `defaultOpen`, which opens without an onOpenChange.
+    const initial = changedProperties.get('open') === undefined;
+    if (initial && !this.open) return;
     // The content renders its data-state from this element's `open`, and
     // nothing else re-renders it, so ask it to now. Every shadcn style
     // animates out on data-closed: left closed while the native dialog
@@ -437,9 +449,13 @@ export class UiDialog extends WebComponent({
     this._content?.requestUpdate?.();
     // Defer one microtask so the content child has committed its own
     // render (the native <dialog> element lives in the content's template).
-    queueMicrotask(() => {
+    // On the first update the content may not have rendered at all yet, so
+    // that one waits for it.
+    queueMicrotask(async () => {
+      if (initial) await this._content?.updateComplete;
       if (this.open) this._setup();
       else this._teardown();
+      if (initial) return;
       this.dispatchEvent(
         new CustomEvent('ui-open-change', { detail: { open: this.open }, bubbles: true }),
       );
@@ -601,6 +617,11 @@ export class UiDialogContent extends WebComponent({
       @close=${this._onNativeClose}
       @click=${this._onNativeBackdropClick}
     ><div
+      data-slot=${`${prefix}-overlay`}
+      data-state=${parentOpen ? 'open' : 'closed'}
+      aria-hidden="true"
+      class=${this._overlayClass()}
+    ></div><div
       data-slot=${`${prefix}-content`}
       data-state=${parentOpen ? 'open' : 'closed'}
       data-side=${this._side()}
@@ -614,16 +635,25 @@ export class UiDialogContent extends WebComponent({
             type="button"
             aria-label="Close"
             data-slot=${`${prefix}-close`}
-            class=${this._closeClass()}
+            class=${cn(buttonClass({ variant: 'ghost', size: 'icon-sm' }), this._closeClass())}
             @click=${this._onAutoCloseClick}
           >${unsafeHTML(DIALOG_CLOSE_X_SVG)}</button>`
         : ''}
     </div></dialog>`;
   }
 
-  /** The auto-injected close button's classes. A subclass may supply its own. */
+  /**
+   * The auto-injected close button's own classes, over a ghost icon button,
+   * as shadcn renders `<Button variant="ghost" size="icon-sm">`. A subclass
+   * may supply its own.
+   */
   _closeClass(): string {
     return dialogCloseButtonClass();
+  }
+
+  /** The overlay's classes. A subclass (sheet, drawer) supplies its own. */
+  _overlayClass(): string {
+    return dialogOverlayClass();
   }
 
   _onAutoCloseClick = (): void => {
@@ -635,11 +665,12 @@ export class UiDialogContent extends WebComponent({
     if (p?.open) p.open = false;
   };
 
-  // Backdrop-click closes the dialog: the click target on the backdrop is
-  // the <dialog> element itself (the inner content panel catches its own
+  // A click outside the panel closes the dialog: it lands on the overlay, or
+  // on the <dialog> element itself (the inner content panel catches its own
   // clicks).
   _onNativeBackdropClick = (e: MouseEvent): void => {
-    if (e.target === e.currentTarget) this._parent()?.hide();
+    const overlay = (e.target as Element | null)?.getAttribute?.('data-slot') === `${this._prefix()}-overlay`;
+    if (e.target === e.currentTarget || overlay) this._parent()?.hide();
   };
 
   // SSR-safe: linkedom doesn't implement closest() on custom elements.

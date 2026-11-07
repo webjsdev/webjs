@@ -65,7 +65,10 @@ export const collapsibleClass = (): string => 'group';
  * `disabled` prop combines both visual and behavior; we split them.
  */
 export const collapsibleTriggerClass = (opts: { disabled?: boolean } = {}): string => {
-  const base = 'flex w-full cursor-pointer list-none items-center justify-between gap-2 rounded-md text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/50 marker:hidden [&::-webkit-details-marker]:hidden';
+  // shadcn's CollapsibleTrigger carries no classes of its own, so a button's
+  // classes merged onto it keep their size and type. Only the <summary>
+  // resets stay inline; new-york's row look rides the cn- name.
+  const base = 'cn-collapsible-trigger cursor-pointer list-none marker:hidden [&::-webkit-details-marker]:hidden';
   if (opts.disabled) return `${base} pointer-events-none cursor-not-allowed opacity-50`;
   return base;
 };
@@ -74,4 +77,4 @@ export const collapsibleTriggerClass = (opts: { disabled?: boolean } = {}): stri
  * Content: <details> already hides children other than <summary> when
  * not [open], so this is purely typographic spacing. No display rules.
  */
-export const collapsibleContentClass = (): string => 'text-sm';
+export const collapsibleContentClass = (): string => 'cn-collapsible-content';

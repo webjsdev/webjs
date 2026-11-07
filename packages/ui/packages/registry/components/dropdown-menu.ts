@@ -238,7 +238,7 @@ function cls(el: Element): MenuClasses {
 }
 
 const CHEVRON_RIGHT_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto size-4" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cn-rtl-flip ms-auto size-4 rtl:rotate-180" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
 
 // Checked-state indicators for a checkbox / radio item. Decorative: the state
 // they draw is announced from aria-checked, so both are aria-hidden.
