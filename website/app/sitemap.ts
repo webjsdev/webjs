@@ -4,6 +4,7 @@ import { listArticles } from '#modules/articles/queries/list-articles.server.ts'
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 import { getDocPages } from '#lib/docs-llms.server.ts';
 import { loadRegistryIndex } from '#modules/ui/queries/registry.server.ts';
+import { listUiPages } from '#lib/ui/llm.server.ts';
 import { siteUrl } from '#lib/env.ts';
 
 /**
@@ -25,12 +26,13 @@ import { siteUrl } from '#lib/env.ts';
 const SITE_URL = siteUrl();
 
 export default async function Sitemap() {
-  const [comparisons, articles, posts, docPages, registry] = await Promise.all([
+  const [comparisons, articles, posts, docPages, registry, uiPages] = await Promise.all([
     listComparisons(),
     listArticles(),
     listPosts(),
     getDocPages(),
     loadRegistryIndex(),
+    listUiPages(SITE_URL),
   ]);
 
   // `/what-is-webjs` is a primary page, not a hub, so it carries a priority
@@ -70,6 +72,21 @@ export default async function Sitemap() {
       priority: 0.7,
     }));
 
+  // Every /ui page (#1666): the docs, every component page, the section pages
+  // (blocks, charts, typeset, create and the rest) and every block category.
+  // The list is the one /llms.txt and /ui/llms.txt print, derived from the
+  // nav, the component records, the docs modules, the registry and the route
+  // table, so a /ui page is crawlable the moment it exists. The bare iframe
+  // targets under /ui/view and /ui/preview are not pages and are left out.
+  const listed = new Set(staticRoutes.map((r) => r.url));
+  const uiPageRoutes = uiPages
+    .map((p) => ({
+      url: `${SITE_URL}${p.path}`,
+      changeFrequency: 'weekly' as const,
+      priority: p.path === '/ui/docs' ? 0.8 : 0.7,
+    }))
+    .filter((r) => !listed.has(r.url));
+
   const compareRoutes = comparisons.map((c) => ({
     url: `${SITE_URL}/compare/${c.slug}`,
     lastModified: c.date || undefined,
@@ -91,5 +108,5 @@ export default async function Sitemap() {
     priority: 0.6,
   }));
 
-  return sitemap([...staticRoutes, ...docRoutes, ...uiRoutes, ...compareRoutes, ...articleRoutes, ...blogRoutes]);
+  return sitemap([...staticRoutes, ...docRoutes, ...uiPageRoutes, ...uiRoutes, ...compareRoutes, ...articleRoutes, ...blogRoutes]);
 }

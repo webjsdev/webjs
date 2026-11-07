@@ -163,8 +163,11 @@ website/
                        wrapper carrying the chosen .style-<name> and the
                        theme, radius and font tokens (modules/ui/create/
                        design-system.ts). A board of kit components stands in
-                       until a preview block is in the registry. Ships no
-                       script; the configurator repaints the wrapper in place
+                       until a preview block is in the registry, and a
+                       component's `<name>-demo` renders there too (the item
+                       explorer). The page module ships nothing; the menu
+                       color is a CSS rule on the wrapper's data-menu-color
+                       (inverted) plus public/ui-menu-color.js (translucent)
       view/[name]/page.ts
                        one registry block full screen in new-york, the block
                        viewer's iframe target and its "Open in New Tab". It
@@ -251,7 +254,12 @@ website/
                        server's markup: a choice applies at once (replaceState
                        with the new preset code, the theme lists following the
                        base color, the frame's design-system wrapper repainted
-                       in place), the preview switch, the copy buttons
+                       in place), hover preview, undo and redo (Cmd or Ctrl+Z,
+                       Shift for redo, Ctrl+Y), Shuffle from shadcn's curated
+                       presets keeping the locked fields (R), Reset (Shift+R),
+                       Light/Dark (D), the item explorer (Cmd or Ctrl+P, a
+                       filter, a pick swaps the frame), the welcome dialog on
+                       the first visit, the Get Code dialog's commands, copy
     block-viewer.ts    the /ui block viewer's behaviour around the server's
                        markup (lib/ui/block-viewer.ts): drag-resizing the
                        preview, refresh, the two copy buttons, and the file
@@ -446,10 +454,19 @@ website/
                        config, shadcn's parse-config) and instructions.ts (the
                        /ui/init/md markdown)
     ui/create/         the configurator (#1666): params.ts (the state, parse /
-                       normalize / href / shuffle, pure so the element shares
-                       it), design-system.ts (a choice as the preview's CSS
-                       custom properties), the customizer / preview-frame
-                       fragments, and placeholder.ts (the stand-in preview)
+                       normalize / href / curated shuffle, pure so the element
+                       shares it), design-system.ts (a choice as the
+                       preview's CSS custom properties, the menu-color rule,
+                       the theme tokens), project.ts (the Get Code commands,
+                       mapped truthfully onto `create-webjs` plus
+                       `@webjsdev/ui init --preset`), the customizer /
+                       preview-frame (with the item explorer) / project-form /
+                       welcome-dialog fragments, and placeholder.ts (the
+                       stand-in preview)
+    ui/queries/create-items.server.ts
+                       what the item explorer lists: the registry's blocks
+                       (shadcn drops numbered names) and every component with
+                       a `<name>-demo`
     ui/design-system/  GITIGNORED mirror of the kit's design-system data
                        (packages/ui/packages/registry/themes/{base-colors,
                        themes,fonts,preset}.js), written by copy-registry.mjs,
@@ -458,7 +475,9 @@ website/
   scripts/             manual dev tools, NOT part of build/deploy
     fetch-fonts.mjs    download the self-hosted variable woff2 fonts (the
                        typeset faces are declared in public/typeset-fonts.css,
-                       linked only by the typeset pages)
+                       linked only by the typeset pages, and the Sera page's
+                       Playfair Display in public/sera-fonts.css, linked only
+                       by /ui/sera)
     generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
     copy-registry.mjs  mirror the kit sources into modules/ui/components/ +
                        lib/utils/{cn,dom}.ts, and the registry blocks into
@@ -473,6 +492,8 @@ website/
                        node_modules/.cache/ui-styles/themes.css (run by
                        copy-registry.mjs, imported by public/ui-input.css)
   public/              favicon, og image, self-hosted fonts, static assets
+    sera-fonts.css     the /ui/sera faces (Noto Sans, Playfair Display), linked
+                       only by that page
     images/            sera-0{1,2,3,6}-{light,dark}.png, shadcn's Sera
                        screenshots, which /ui/sera shows below md
 ```

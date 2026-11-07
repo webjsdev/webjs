@@ -8,6 +8,7 @@ import { commandMenu } from '#lib/ui/docs/command-menu.ts';
 import { GH_URL, NEW_TAB } from '#lib/links.ts';
 import { brandMark } from '#lib/design/brand.ts';
 import { PlusSignIcon } from '#lib/ui/hugeicons.ts';
+import { uiMarkdownHref } from '#lib/ui/llm-path.ts';
 
 /**
  * The /ui chrome: header and footer, ported from shadcn/ui's site
@@ -37,6 +38,22 @@ const separator = html`<div role="none" class="h-4 w-px shrink-0 bg-border"></di
 const panelLink = 'rounded-md px-3 py-2.5 text-sm font-medium no-underline text-foreground hover:bg-accent';
 
 const githubIcon = html`<svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.07 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3"/></svg>`;
+
+/**
+ * Every /ui page names its markdown in the head (#1666), a
+ * `<link rel="alternate" type="text/markdown">` to /ui/llm/<path>, so an
+ * agent that lands on the HTML finds the text form. Metadata merges by
+ * replacing a whole key, so `alternates` here REPLACES the root layout's and
+ * restates its canonical, built the same way app/layout.ts builds it.
+ */
+export function generateMetadata(ctx: { url: string }) {
+  const { origin, pathname } = new URL(ctx.url);
+  const canonical = origin + (pathname === '/' ? '' : pathname.replace(/\/+$/, ''));
+  const markdown = uiMarkdownHref(pathname);
+  return {
+    alternates: markdown ? { canonical, types: { 'text/markdown': origin + markdown } } : { canonical },
+  };
+}
 
 export default function UiChromeLayout({ children, url }: LayoutProps) {
   const nonce = cspNonce();

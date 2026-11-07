@@ -3,6 +3,10 @@ import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { neighbours } from '#modules/ui/docs/nav.ts';
 import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { uiMarkdownHref } from '#lib/ui/llm-path.ts';
+// The Copy Page button. A page never hydrates, so the shell its markup lives
+// in registers the element.
+import '#components/docs-copy-page.ts';
 
 /**
  * The frame of every /ui docs page, shadcn's apps/v4/app/(app)/docs/[[...slug]]/page.tsx
@@ -28,6 +32,8 @@ export function slug(text: string): string {
 }
 
 const arrow = (d: string) => html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${d}></path></svg>`;
+// shadcn's markdown mark (components/docs-copy-page.tsx), for View as Markdown.
+const markdownIcon = () => html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M19.5 2.25H2.5C1.81 2.25 1.25 2.81 1.25 3.5V12.5C1.25 13.19 1.81 13.75 2.5 13.75H19.5C20.19 13.75 20.75 13.19 20.75 12.5V3.5C20.75 2.81 20.19 2.25 19.5 2.25ZM2.5 1C1.12 1 0 2.12 0 3.5V12.5C0 13.88 1.12 15 2.5 15H19.5C20.88 15 22 13.88 22 12.5V3.5C22 2.12 20.88 1 19.5 1H2.5ZM3 4.5H4.69L7 7.02L9.31 4.5H11V11.5H9V7.8L7 9.98L5 7.8V11.5H3V4.5ZM15 8V4.5H17V8H19.5L16 11.5L12.5 8H15Z"></path></svg>`;
 const LEFT = 'M5 12l14 0 M5 12l6 6 M5 12l6 -6';
 const RIGHT = 'M5 12l14 0 M13 18l6 -6 M13 6l6 6';
 
@@ -56,6 +62,9 @@ export function docsPage(opts: { href: string; title: string; description?: stri
   const { previous, next } = neighbours(opts.href);
   const iconButton = cn(buttonClass({ variant: 'secondary', size: 'icon' }), 'extend-touch-target size-8 shadow-none no-underline md:size-7');
   const textButton = cn(buttonClass({ variant: 'secondary', size: 'sm' }), 'shadow-none no-underline');
+  // The page as markdown (app/ui/llm), for the Copy Page button and the link
+  // beside it, shadcn's DocsCopyPage.
+  const markdown = uiMarkdownHref(opts.href);
   return html`
     ${extraStyleLinks(opts.href)}
     <main id="main" data-slot="docs" class="flex scroll-mt-24 items-stretch pb-8 text-[1.05rem] sm:text-[15px] xl:w-full">
@@ -66,15 +75,18 @@ export function docsPage(opts: { href: string; title: string; description?: stri
             <div class="flex items-center justify-between md:items-start">
               <h1 class="scroll-m-24 text-3xl font-semibold tracking-tight sm:text-3xl">${opts.title}</h1>
               <div class="docs-nav flex items-center gap-2">
+                ${markdown ? html`
+                  <docs-copy-page href=${markdown} class="hidden [&:defined]:block"></docs-copy-page>
+                  <a href=${markdown} data-slot="button" data-no-router target="_blank" rel="noopener" class=${iconButton} title="View as Markdown">${markdownIcon()}<span class="sr-only">View as Markdown (opens in a new tab)</span></a>` : ''}
                 <div class="ml-auto flex gap-2">
                   ${previous ? html`<a href=${previous.href} data-slot="button" class=${iconButton}>${arrow(LEFT)}<span class="sr-only">Previous</span></a>` : ''}
                   ${next ? html`<a href=${next.href} data-slot="button" class=${iconButton}><span class="sr-only">Next</span>${arrow(RIGHT)}</a>` : ''}
                 </div>
               </div>
             </div>
-            ${opts.description ? html`<p class="text-[1.05rem] text-muted-foreground sm:text-base sm:text-balance md:max-w-[80%]">${opts.description}</p>` : ''}
+            ${opts.description ? html`<p data-slot="docs-description" class="text-[1.05rem] text-muted-foreground sm:text-base sm:text-balance md:max-w-[80%]">${opts.description}</p>` : ''}
           </div>
-          <div class="typeset w-full flex-1 pb-16 *:data-[slot=alert]:first:mt-0 sm:pb-0">${opts.body}</div>
+          <div data-slot="docs-body" class="typeset w-full flex-1 pb-16 *:data-[slot=alert]:first:mt-0 sm:pb-0">${opts.body}</div>
           <div class="hidden h-16 w-full items-center gap-2 px-4 sm:flex sm:px-0">
             ${previous ? html`<a href=${previous.href} data-slot="button" class=${textButton}>${arrow(LEFT)} ${previous.title}</a>` : ''}
             ${next ? html`<a href=${next.href} data-slot="button" class=${cn(textButton, 'ml-auto')}>${next.title} ${arrow(RIGHT)}</a>` : ''}

@@ -16,6 +16,10 @@ import { codeFigure } from './code.ts';
  * Previews render in the nova style, the one shadcn's docs render in (D8).
  * The demo string comes from renderDemo, which renders custom elements
  * unexpanded so this page's own render expands each exactly once.
+ *
+ * `data-demo` names the demo, so the page's markdown (lib/ui/llm.server.ts)
+ * inlines its source even when `hideCode` keeps it off the page, as shadcn's
+ * llm route inlines every ComponentPreview.
  */
 export interface PreviewOptions {
   align?: 'center' | 'start' | 'end';
@@ -37,7 +41,7 @@ export async function componentPreview(name: string, opts: PreviewOptions = {}) 
   }
   const align = opts.align ?? 'center';
   return html`
-    <div data-slot="component-preview" data-not-typeset class=${cn('group relative mt-4 mb-12 flex flex-col overflow-hidden rounded-2xl border', opts.className)}>
+    <div data-slot="component-preview" data-demo=${name} data-not-typeset class=${cn('group relative mt-4 mb-12 flex flex-col overflow-hidden rounded-2xl border', opts.className)}>
       <div data-slot="preview" dir=${opts.direction ?? 'ltr'}>
         <div data-align=${align} class=${cn(`preview style-${opts.style ?? 'nova'} relative flex h-72 w-full justify-center p-10 data-[align=center]:items-center data-[align=end]:items-start data-[align=start]:items-start sm:data-[align=end]:items-end`, opts.previewClass)}>
           ${unsafeHTML(demo.html)}
