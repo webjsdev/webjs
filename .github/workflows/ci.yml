@@ -14,6 +14,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Every job runs on ubuntu-24.04, not ubuntu-latest: GitHub moved
+# ubuntu-latest to 26.04, where `playwright install --with-deps` refuses
+# ("Playwright does not support chromium on ubuntu26.04-x64"), which fails
+# every job that installs a browser. Move to latest once Playwright supports it.
+
 # A newer push to the same branch cancels the older in-flight run.
 concurrency:
   group: ci-${{ github.ref }}
@@ -22,7 +27,7 @@ concurrency:
 jobs:
   conventions:
     name: Conventions (webjs check)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -78,7 +83,7 @@ jobs:
 
   unit:
     name: Unit + integration (node --test)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -100,7 +105,7 @@ jobs:
 
   bun:
     name: Bun runtime smoke + test matrix (#508, #509, #511)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -399,7 +404,7 @@ jobs:
 
   db-postgres:
     name: Postgres prod-engine round-trip (#563)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The cross-database Drizzle abstraction (#563) makes the schema, queries,
     # and actions portable, but migrations + runtime behavior are per-dialect.
     # The rest of CI runs on SQLite, so this job proves the SAME unified schema
@@ -437,7 +442,7 @@ jobs:
 
   browser:
     name: Browser (web-test-runner / Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -451,7 +456,7 @@ jobs:
 
   e2e:
     name: E2E (Puppeteer against the blog example)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -629,7 +634,7 @@ jobs:
   # scripts/protect-main.sh).
   e2e-bun:
     name: E2E (blog served on Bun)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -658,7 +663,7 @@ jobs:
 
   dist:
     name: Build (@webjsdev/core dist)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -673,7 +678,7 @@ jobs:
 
   apps:
     name: In-repo app tests (website + blog + gallery)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The framework jobs above cover packages/* and the root cross-package
     # suite. This job runs each IN-REPO app's OWN test suite (its `webjs test`
     # script), which the root runners do not discover, so a regression in an
@@ -745,7 +750,7 @@ jobs:
 
   docker:
     name: Docker image build (the deploy artifact)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The jobs above run the apps in-process via createRequestHandler; NONE of
     # them build the Docker image that every Railway service actually deploys.
     # That gap let #404's package reorg ship a stale `COPY packages/ts-plugin`
