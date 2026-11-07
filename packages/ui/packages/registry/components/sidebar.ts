@@ -35,7 +35,8 @@
  * The open state is kept in the `sidebar_state` cookie, as in shadcn, so a
  * page can read it on the server and render `default-open` to match, with no
  * flash. Ctrl+B (Cmd+B on a Mac) toggles it. Below 768px the sidebar opens
- * as a sheet from its side instead.
+ * as a sheet from its side instead, `--sidebar-width-mobile` wide (18rem
+ * when no ancestor sets it, shadcn's SIDEBAR_WIDTH_MOBILE).
  *
  * For a collapsed icon sidebar, wrap a menu button in a `<ui-tooltip>` whose
  * content carries `hidden group-data-[collapsible=icon]:block`, so the label
@@ -367,7 +368,7 @@ export class UiSidebar extends WebComponent({
         data-sidebar="sidebar"
         data-slot="sidebar"
         data-mobile="true"
-        style="--sidebar-width: 18rem"
+        style="--sidebar-width: var(--sidebar-width-mobile, 18rem)"
         class="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground"
       ><h2 data-slot="sheet-title" class="sr-only">Sidebar</h2><p data-slot="sheet-description" class="sr-only">Displays the mobile sidebar.</p><div class="flex h-full w-full flex-col"><slot></slot></div></ui-sheet-content></ui-sheet>`;
     }

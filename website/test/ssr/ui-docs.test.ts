@@ -59,6 +59,18 @@ test('the Manual tab shows every file of a component, each under the path add wr
   assert.deepEqual(await manualTitles('chart'), ['components/ui/chart.ts', 'components/ui/chart-element.ts', 'components/ui/chart-geometry.ts']);
 });
 
+test('the Sidebar page\'s View RTL Sidebar opens the right-to-left sidebar full screen', async () => {
+  const page = await (await handle('/ui/docs/components/sidebar')).text();
+  assert.match(page, /<a href="\/ui\/view\/sidebar-rtl"[^>]*>View RTL Sidebar/);
+  const res = await handle('/ui/view/sidebar-rtl');
+  assert.equal(res.status, 200);
+  const view = await res.text();
+  assert.match(view, /<div class="relative" dir="rtl" lang="ar"/, 'it reads right to left, in Arabic');
+  assert.match(view, /<ui-sidebar collapsible="icon" side="right"/, 'with the sidebar on the right');
+  // Only the whole-page demos open there; any other demo stays a 404.
+  assert.equal((await handle('/ui/view/button-demo')).status, 404);
+});
+
 test('every component in the nav has a page, and an unknown one is a 404', async () => {
   const failed: string[] = [];
   for (const c of COMPONENTS) {
@@ -67,6 +79,13 @@ test('every component in the nav has a page, and an unknown one is a 404', async
   }
   assert.deepEqual(failed, []);
   assert.equal((await handle('/ui/docs/components/not-a-component')).status, 404);
+});
+
+test('the sidebar\'s Typography link redirects to the Typeset docs, as shadcn\'s does', async () => {
+  assert.ok(NAV.some((g) => g.items.some((i) => i.href === '/ui/docs/components/typography')), 'the sidebar still lists it');
+  const res = await handle('/ui/docs/components/typography');
+  assert.equal(res.status, 308);
+  assert.equal(res.headers.get('location'), '/ui/docs/typeset');
 });
 
 test('a component page has the shadcn shape: title, preview, installation, table of contents', async () => {
@@ -89,7 +108,8 @@ test('the nav keeps shadcn\'s section order and leaves out what cannot exist', (
   for (const gone of ['/ui/docs/legacy', '/ui/docs/registry/open-in-v0', '/ui/docs/react-19']) {
     assert.ok(!hrefs.includes(gone), `${gone} is in the "Cannot exist" table`);
   }
-  assert.equal(COMPONENTS.length, 67, 'all of shadcn\'s component pages');
+  // shadcn's 67 less Typography, whose link redirects to the Typeset docs.
+  assert.equal(COMPONENTS.length, 66, 'all of shadcn\'s component pages');
 });
 
 test('the components index lists every component page, in title order as shadcn\'s does', async () => {

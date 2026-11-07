@@ -1,7 +1,8 @@
-import { html, notFound, cspNonce } from '@webjsdev/core';
+import { html, notFound, cspNonce, asset } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 import { unsafeHTML } from '@webjsdev/core/directives';
 import { renderBlock } from '#modules/ui/queries/render-block.server.ts';
+import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 // The custom elements the blocks define. The block renders here as a string,
 // so its own modules never load in the browser; this generated barrel
 // (scripts/copy-registry.mjs) registers them, as app/ui/layout.ts registers the
@@ -26,20 +27,32 @@ import '#modules/ui/blocks/elements.ts';
  * installed block would.
  */
 
+/**
+ * The docs demos that are whole pages, linked from a docs page to open full
+ * screen (shadcn's "View RTL Sidebar"). Any other demo stays a 404 here, so
+ * this route keeps serving blocks and nothing a block viewer cannot show.
+ */
+const FULL_SCREEN_DEMOS = new Set(['sidebar-rtl']);
+
 export async function generateMetadata({ params }: PageProps<'/ui/view/[name]'>) {
   const block = await renderBlock(params.name);
-  return { title: block ? `${block.title} | WebJs UI` : 'WebJs UI', robots: { index: false } };
+  const demo = block || !FULL_SCREEN_DEMOS.has(params.name) ? null : await renderDemo(params.name);
+  return { title: block ? `${block.title} | WebJs UI` : demo ? `${params.name} | WebJs UI` : 'WebJs UI', robots: { index: false } };
 }
 
 export default async function BlockView({ params }: PageProps<'/ui/view/[name]'>) {
   const block = await renderBlock(params.name);
-  if (!block) notFound();
+  // A whole-page docs demo (the sidebar's RTL view) renders here too, as
+  // shadcn's view route renders an example by name, in nova like the docs.
+  const demo = block || !FULL_SCREEN_DEMOS.has(params.name) ? null : await renderDemo(params.name);
+  if (!block && !demo) notFound();
   return html`
     <!-- The root layout reserves the fixed header's height on the page body, and
          this frame has no header. -->
     <style>:root { --header-h: 0px; }</style>
-    <div data-slot="block-view" data-block=${params.name} class="style-new-york bg-background">
-      ${unsafeHTML(block.html)}
+    ${demo ? html`<link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>` : ''}
+    <div data-slot="block-view" data-block=${params.name} class=${block ? 'style-new-york bg-background' : 'style-nova bg-background'}>
+      ${unsafeHTML(block ? block.html : demo!.html)}
     </div>
     <script nonce=${cspNonce()}>
       (function(){

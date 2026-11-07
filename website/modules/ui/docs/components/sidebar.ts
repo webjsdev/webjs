@@ -3,6 +3,9 @@ import { heading, type TocEntry } from '#lib/ui/docs/page.ts';
 import { blockPreview } from '#lib/ui/block-viewer.ts';
 import { codeFigure } from '#lib/ui/docs/code.ts';
 import { callout } from '#lib/ui/docs/callout.ts';
+import { cn } from '#lib/utils/cn.ts';
+import { ExternalLinkIcon } from '#lib/ui/lucide.ts';
+import { buttonClass } from '#modules/ui/components/button.ts';
 
 /**
  * The Sidebar docs page, ported from shadcn's
@@ -189,11 +192,11 @@ export function appSidebar() {
     ${codeFigure(`// The provider's wrapper: the desktop width and the collapsed icon width.
 style="--sidebar-width: 16rem; --sidebar-width-icon: 3rem"
 
-// The sheet content on a phone.
-style="--sidebar-width: 18rem"`, { title: 'components/ui/sidebar.ts', lineNumbers: true })}
-    <p>For multiple sidebars in your application, set <code>--sidebar-width</code> in the <code>style</code> of each <code>&lt;ui-sidebar&gt;</code>. The sidebar's gap and panel read it from there. The phone sheet keeps the width set in the file, since the kit has no <code>--sidebar-width-mobile</code> variable.</p>
+// The sheet content on a phone: --sidebar-width-mobile, else 18rem.
+style="--sidebar-width: var(--sidebar-width-mobile, 18rem)"`, { title: 'components/ui/sidebar.ts', lineNumbers: true })}
+    <p>For multiple sidebars in your application, set <code>--sidebar-width</code> and <code>--sidebar-width-mobile</code> in the <code>style</code> of each <code>&lt;ui-sidebar&gt;</code>. The sidebar's gap and panel read the first, and the phone sheet the second. <code>--sidebar-width-mobile</code> can also go on the provider, for every sidebar inside it.</p>
     ${codeFigure(`<ui-sidebar-provider>
-  <ui-sidebar style="--sidebar-width: 20rem"></ui-sidebar>
+  <ui-sidebar style="--sidebar-width: 20rem; --sidebar-width-mobile: 20rem"></ui-sidebar>
 </ui-sidebar-provider>`, { lineNumbers: true })}
 
     ${heading(toc, 3, 'Keyboard Shortcut')}
@@ -454,6 +457,7 @@ export async function sidebarOpen() {
 
     ${heading(toc, 2, 'RTL')}
     <p>To enable RTL support, see the <a href="/ui/docs/rtl">RTL configuration guide</a>. Put <code>dir="rtl"</code> on an ancestor and give the sidebar <code>side="right"</code>.</p>
+    <a href="/ui/view/sidebar-rtl" target="_blank" data-slot="button" data-size="sm" class=${cn(buttonClass({ size: 'sm' }), 'not-typeset mt-6 no-underline')}>View RTL Sidebar ${ExternalLinkIcon()}</a>
 
     ${heading(toc, 2, 'Changelog')}
     ${heading(toc, 3, 'RTL Support')}
