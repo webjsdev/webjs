@@ -49,15 +49,15 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'Composition')}
     <p>Use the following composition to build a pagination:</p>
-    ${codeFigure(`<nav> paginationClass()
-└── <ul> paginationContentClass()
-    ├── <li>
-    │   └── <a> paginationPreviousClass()
-    ├── <li>
-    │   └── <a> paginationLinkClass()
-    ├── <li> paginationEllipsisClass()
-    └── <li>
-        └── <a> paginationNextClass()`, { lang: 'text' })}
+    ${codeFigure(`paginationClass(), on a nav
+└── paginationContentClass(), on a ul
+    ├── li
+    │   └── paginationPreviousClass(), on an a
+    ├── li
+    │   └── paginationLinkClass(), on an a
+    ├── paginationEllipsisClass(), on an li
+    └── li
+        └── paginationNextClass(), on an a`, { lang: 'text' })}
 
     ${heading(toc, 2, 'Simple')}
     <p>A simple pagination with only page numbers.</p>

@@ -31,9 +31,9 @@ import { radioGroupClass, radioClass } from '#components/ui/radio-group.ts';`, {
 
     ${heading(toc, 2, 'Composition')}
     <p>Use the following composition to build a radio group:</p>
-    ${codeFigure(`<div role="radiogroup"> radioGroupClass()
-├── <input type="radio"> radioClass()
-└── <input type="radio"> radioClass()`, { lang: 'text' })}
+    ${codeFigure(`radioGroupClass(), on a div with role="radiogroup"
+├── radioClass(), on an input with type="radio"
+└── radioClass(), on an input with type="radio"`, { lang: 'text' })}
     <p>The items are native radio inputs sharing one <code>name</code>, so the browser supplies single selection, arrow key navigation, a single tab stop and form submission, with no script. Keep <code>data-slot="radio"</code> on each input: it draws the dot of a checked radio.</p>
 
     ${heading(toc, 2, 'Description')}
