@@ -81,11 +81,12 @@ test('/ui/preview/<name> wears the design system init --preset installs', async 
   const html = await res.text();
   const wrapper = html.match(/<div data-slot="design-system"[^>]*>/)?.[0] ?? '';
   assert.ok(wrapper, 'the design-system wrapper');
-  assert.match(wrapper, /class="style-lyra /, 'the chosen style');
+  assert.match(wrapper, /class="[^"]*\bstyle-lyra /, 'the chosen style');
   const { light, dark } = buildThemeVars(config);
   assert.ok(wrapper.includes(`--primary: light-dark(${light.primary}, ${dark.primary})`), 'the theme\'s primary, light and dark');
   assert.ok(wrapper.includes('--radius: 0.875rem'), 'the radius');
   assert.ok(wrapper.includes(`--font-sans: 'Figtree', sans-serif`), 'the body font');
+  assert.match(wrapper, /data-style="lyra" data-radius="large" data-font="figtree" data-font-heading="inherit" data-style-title="Lyra" data-font-title="Figtree"/, 'the choice as data, for preview content that shows it');
   assert.match(html, /<link rel="stylesheet" href="\/public\/ui-styles\/lyra\.css[^"]*" data-style-sheet="lyra">/, 'the style\'s stylesheet');
   assert.equal((await handle('/ui/preview/not-a-preview')).status, 404);
 });

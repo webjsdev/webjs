@@ -4,7 +4,7 @@ import { unsafeHTML } from '@webjsdev/core/directives';
 import { renderBlock } from '#modules/ui/queries/render-block.server.ts';
 import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 import { ITEM_NAME, PREVIEW_ITEMS, parseCreateParams } from '#modules/ui/create/params.ts';
-import { designSystemClass, designSystemStyle, menuColorCss, styleSheetHref } from '#modules/ui/create/design-system.ts';
+import { designSystemClass, designSystemData, designSystemStyle, menuColorCss, styleSheetHref } from '#modules/ui/create/design-system.ts';
 import { previewPlaceholder } from '#modules/ui/create/placeholder.ts';
 // The custom elements the blocks define (the preview cards' waveform, roller
 // shades, notification settings, chat player). The block renders here as a
@@ -55,6 +55,7 @@ export default async function CreatePreview({ params, searchParams }: PageProps)
   const demo = block || isPreview ? null : await renderDemo(name);
   if (!block && !demo && !isPreview) notFound();
   const sheet = styleSheetHref(config.style);
+  const data = designSystemData(config);
   const content = block
     ? unsafeHTML(block.html)
     : demo
@@ -67,7 +68,7 @@ export default async function CreatePreview({ params, searchParams }: PageProps)
     <!-- The root layout reserves the fixed header's height on the body, and
          this frame has no header. -->
     <style>:root { --header-h: 0px; } ${menuColorCss()}</style>
-    <div data-slot="design-system" data-item=${name} data-menu-color=${config.menuColor} class=${designSystemClass(config)} style=${designSystemStyle(config)}>
+    <div data-slot="design-system" data-item=${name} data-menu-color=${data.menuColor} data-style=${data.style} data-radius=${data.radius} data-font=${data.font} data-font-heading=${data.fontHeading} data-style-title=${data.styleTitle} data-font-title=${data.fontTitle} data-font-heading-title=${data.fontHeadingTitle} class=${designSystemClass(config)} style=${designSystemStyle(config)}>
       ${content}
     </div>
     <script src=${asset('/public/ui-menu-color.js')} defer></script>

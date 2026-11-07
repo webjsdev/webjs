@@ -21,7 +21,9 @@ import {
 } from '#modules/ui/create/params.ts';
 import {
   designSystemClass,
+  designSystemData,
   designSystemVars,
+  syncDesignSystemText,
   fontFamily,
   styleSheetHref,
   themeSwatch,
@@ -493,7 +495,8 @@ export class CreateCustomizer extends WebComponent {
     const root = doc?.querySelector<HTMLElement>('[data-slot="design-system"]');
     if (!doc || !root) return;
     root.className = designSystemClass(config);
-    root.dataset.menuColor = config.menuColor;
+    Object.assign(root.dataset, designSystemData(config));
+    syncDesignSystemText(root, config);
     for (const [name, value] of Object.entries(designSystemVars(config))) root.style.setProperty(name, value);
     const sheet = styleSheetHref(config.style);
     if (sheet && !doc.querySelector(`link[data-style-sheet="${config.style}"]`)) {

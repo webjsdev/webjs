@@ -35,7 +35,7 @@ const GROUPS = [
 
 // What the frame holds: the design-system wrapper with an open menu surface,
 // and the preview page's own menu script.
-const FRAME = '<div data-slot="design-system" class="style-nova"><div data-slot="dropdown-menu-content">menu</div></div><script src="/public/ui-menu-color.js"></script>';
+const FRAME = '<div data-slot="design-system" class="style-nova"><div data-slot="dropdown-menu-content">menu</div><span data-design-system-text="style">Nova</span><span data-design-system-text="font">Inter</span></div><script src="/public/ui-menu-color.js"></script>';
 
 const mount = async (config = normalizeConfig({}), { welcome = false } = {}) => {
   try {
@@ -130,6 +130,11 @@ suite('create-customizer', () => {
       assert.equal(current().style, 'lyra');
       assert.equal(current().radius, 'large');
       assert.equal(current().font, 'lora');
+      // The choice rides the wrapper as data, and text marked for it follows.
+      assert.equal(root.dataset.style, 'lyra');
+      assert.equal(root.dataset.radius, 'large');
+      assert.equal(root.querySelector('[data-design-system-text="style"]').textContent, 'Lyra');
+      assert.equal(root.querySelector('[data-design-system-text="font"]').textContent, 'Lora');
     } finally {
       box.remove();
     }

@@ -1,7 +1,7 @@
 import { buildThemeVars, getTheme, isBaseColor } from '#modules/ui/design-system/themes.js';
 import { getFont } from '#modules/ui/design-system/fonts.js';
 import { presetFontVars } from '#modules/ui/design-system/preset.js';
-import type { CreateConfig } from './params.ts';
+import { optionLabel, type CreateConfig } from './params.ts';
 
 /**
  * A design-system choice as CSS custom properties, for the /ui/create preview
@@ -62,7 +62,39 @@ export function designSystemStyle(config: CreateConfig): string {
 
 /** The wrapper's classes: the chosen style, and the token-driven page surface. */
 export function designSystemClass(config: CreateConfig): string {
-  return `style-${config.style} min-h-svh bg-background text-foreground [font-family:var(--font-sans)]`;
+  return `group/design-system style-${config.style} min-h-svh bg-background text-foreground [font-family:var(--font-sans)]`;
+}
+
+/**
+ * The choice as data attributes on the wrapper, for preview content that
+ * shows it (a card naming the style and the fonts, chart bars that follow the
+ * radius). Keyed on the wrapper, which /ui/create rewrites in place, rather
+ * than read once at render, so a pick repaints them with no new render: CSS
+ * reads the values (`group-data-[radius=none]/design-system:`), and an element
+ * marked `data-design-system-text="style|font|font-heading"` gets the
+ * matching title as its text. Keys are the dataset names.
+ */
+export function designSystemData(config: CreateConfig): Record<string, string> {
+  return {
+    style: config.style,
+    radius: config.radius,
+    font: config.font,
+    fontHeading: config.fontHeading,
+    menuColor: config.menuColor,
+    styleTitle: optionLabel('style', config.style, config),
+    fontTitle: optionLabel('font', config.font, config),
+    fontHeadingTitle: optionLabel('fontHeading', config.fontHeading, config),
+  };
+}
+
+/** Write the titles into the elements that show them. */
+export function syncDesignSystemText(root: Element, config: CreateConfig): void {
+  const data = designSystemData(config);
+  const titles: Record<string, string> = { style: data.styleTitle, font: data.fontTitle, 'font-heading': data.fontHeadingTitle };
+  for (const el of root.querySelectorAll<HTMLElement>('[data-design-system-text]')) {
+    const title = titles[el.dataset.designSystemText || ''];
+    if (title !== undefined && el.textContent !== title) el.textContent = title;
+  }
 }
 
 /**
