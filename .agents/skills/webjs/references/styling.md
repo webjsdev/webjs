@@ -203,6 +203,22 @@ Whichever form you use, a token nothing references is dropped in both, so an unu
 
 **Focus rings.** The design system applies ONE themed, keyboard-only focus ring globally in the theme CSS: `@layer base { * { @apply border-border outline-ring/50 } }` themes the outline COLOUR to `--ring/50`, and a `:focus-visible { outline: 2px solid color-mix(in oklab, var(--color-ring) 50%, transparent); outline-offset: 2px }` forces a SOLID outline. That second rule matters: `outline-ring/50` alone leaves `outline-style: auto`, so the browser draws its OWN focus ring (which can look thick and white and ignore the colour). So every focusable element (button, link, input) shares one `--ring`-coloured ring with no per-element styling (a native `<button>` renders it a touch wider than a link, a Chromium form-control quirk, but the colour is the same). Do NOT re-add a focus style on a light-DOM element (`buttonClass` deliberately carries none), and NEVER remove it (`outline: none` with no replacement fails WCAG 2.4.7). `:focus-visible` already limits the ring to keyboard / programmatic focus, not a mouse click. A SHADOW-DOM component is the ONE exception: a document rule cannot cross the shadow boundary, so it styles its own focus in `static styles`, matching the global ring EXACTLY (`--ring` at 50%, the same as `outline-ring/50`): `button:focus-visible { outline: 2px solid color-mix(in oklab, var(--color-ring) 50%, transparent); outline-offset: 2px }`. Without it, its controls fall back to the raw browser outline (thick, light on a dark theme, and shown on window-refocus).
 
+## A stylesheet for one section of the app
+
+When one part of the app has its own stylesheet (an admin area, a docs section, a component gallery), link it from THAT section's layout, as the first thing the layout renders, and leave the root layout alone:
+
+```ts
+// app/admin/layout.ts
+export default function AdminLayout({ children }: LayoutProps) {
+  return html`
+    <link rel="stylesheet" href=${asset('/public/admin.css')}>
+    <div class="admin-shell">${children}</div>
+  `;
+}
+```
+
+The server moves a `<link rel="stylesheet">` at the start of any layout's or page's output into `<head>`, after the root layout's own links, so it blocks first paint like a root stylesheet does (#1669). Comments and other `<link>` tags before it are fine; any other element ends the run, so a link further down stays where it is. A second link to an href the head already has is dropped. Do NOT also link the section's sheet from the root layout by pathname: the root layout is not re-rendered on a soft navigation, so that copy outlives the section.
+
 ## Light-DOM host display, and shadow hosts
 
 A custom element is `display: inline` in plain CSS, which collapses a component used as a block container to its content size. WebJs marks every LIGHT-DOM host `data-wj-host` and defaults it to `display: block` via one head rule in a low-priority cascade layer (`@layer webjs-host { :where([data-wj-host]) { display: block } }`), so a container component does not collapse. The layer keeps it overridable: any author style INCLUDING a Tailwind utility (`class="flex"`, `grid`, `hidden`) wins over it, and `[hidden]` still hides the host so `?hidden=${cond}` works. Opt into an inline light component with a tag-prefixed rule (`my-badge { display: inline }`).

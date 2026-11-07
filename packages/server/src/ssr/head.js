@@ -331,6 +331,121 @@ export function hoistHeadTags(headHtml, bodyHtml) {
 export const _hoistHeadTags = hoistHeadTags;
 
 /**
+ * The attribute naming the boundary a hoisted stylesheet came from (#1669).
+ * Its value is the SEGMENT of the `wj:children` range the link was rendered
+ * in: a nested layout's own markup sits inside its parent's range, and a
+ * page's inside its own boundary or its innermost layout's. The client router
+ * removes the link when it replaces that range and the incoming page no longer
+ * carries the same href, so a section's stylesheet leaves with the section.
+ */
+export const STYLE_OWNER_ATTR = 'data-wj-style-owner';
+
+const BOUNDARY_OPEN = '<!--wj:children:';
+// One token of a leading run after a boundary marker: a comment that is not a
+// client-router marker, or a `<link>` tag (quote-aware, like the root hoist).
+// Sticky, so it matches at `lastIndex` without copying the rest of the body.
+const OWNED_RUN_TOKEN_RE =
+  /\s*(<!--(?!\/?wj:)[\s\S]*?-->|<link\b(?:[^>"']|"[^"]*"|'[^']*')*>)/iy;
+const LINK_TAG_RE = /<link\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
+
+/**
+ * Read one attribute's value from a single tag's source.
+ * @param {string} tag
+ * @param {string} name
+ * @returns {string | null}
+ */
+function tagAttr(tag, name) {
+  const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(tag);
+  return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null;
+}
+
+/**
+ * Is a `<link>` tag an active stylesheet: `rel` names `stylesheet` and not
+ * `alternate`, and it has an href. The same test the router's stylesheet
+ * loader applies, so the two sides agree on what counts.
+ * @param {string} tag
+ */
+function isStylesheetTag(tag) {
+  const rel = (tagAttr(tag, 'rel') || '').toLowerCase().split(/\s+/);
+  return rel.includes('stylesheet') && !rel.includes('alternate') && !!tagAttr(tag, 'href');
+}
+
+/**
+ * The hrefs of every stylesheet `<link>` in an HTML string.
+ * @param {string} html
+ * @returns {Set<string>}
+ */
+export function stylesheetHrefs(html) {
+  const out = new Set();
+  for (const m of html.matchAll(LINK_TAG_RE)) {
+    if (isStylesheetTag(m[0])) out.add(/** @type {string} */ (tagAttr(m[0], 'href')));
+  }
+  return out;
+}
+
+/**
+ * Hoist the stylesheet links at the start of each nested layout's and page's
+ * output into `<head>` (#1669). The root hoist (`collectHoistedHeadTags`) only
+ * reads the leading run of the WHOLE body and stops at the first boundary
+ * marker, so a section layout's `<link rel="stylesheet">` stayed in `<body>`,
+ * where it is not reliably render-blocking (#406). This reads the leading run
+ * after EVERY `<!--wj:children:...-->` open marker instead.
+ *
+ * Only `rel="stylesheet"` links move, each tagged with `STYLE_OWNER_ATTR` set
+ * to the marker's segment. Comments and other `<link>` tags in the run stay
+ * where they are and do not end it; anything else does. A stylesheet whose
+ * href is already in `seen` (the head so far, or an earlier hoist) is dropped
+ * rather than hoisted twice, since one URL linked twice is two active sheets
+ * the browser matches every rule against. Every framework the WebJs router
+ * takes cues from puts a route's sheet in the head and dedupes by href.
+ *
+ * @param {string} bodyHtml
+ * @param {Set<string>} [seen]  Hrefs already linked in the head (mutated).
+ * @returns {{ tags: string[], body: string }}
+ */
+export function hoistOwnedStylesheets(bodyHtml, seen = new Set()) {
+  if (!bodyHtml.includes(BOUNDARY_OPEN)) return { tags: [], body: bodyHtml };
+  /** @type {string[]} */
+  const tags = [];
+  let out = '';
+  let pos = 0;
+  for (;;) {
+    const open = bodyHtml.indexOf(BOUNDARY_OPEN, pos);
+    if (open < 0) break;
+    const close = bodyHtml.indexOf('-->', open);
+    if (close < 0) break;
+    const markerEnd = close + 3;
+    out += bodyHtml.slice(pos, markerEnd);
+    // The route-key is everything after the LAST ':' (the router's own split,
+    // boundaries.js), so the segment is everything before it.
+    const rest = bodyHtml.slice(open + BOUNDARY_OPEN.length, close);
+    const cut = rest.lastIndexOf(':');
+    const segment = cut > 0 ? rest.slice(0, cut) : null;
+    pos = markerEnd;
+    if (!segment) continue;
+    let m;
+    for (;;) {
+      OWNED_RUN_TOKEN_RE.lastIndex = pos;
+      m = OWNED_RUN_TOKEN_RE.exec(bodyHtml);
+      if (!m) break;
+      const token = m[1];
+      const lead = m[0].slice(0, m[0].length - token.length);
+      pos += m[0].length;
+      if (token.startsWith('<!--') || !isStylesheetTag(token)) {
+        out += lead + token;
+        continue;
+      }
+      out += lead;
+      const href = /** @type {string} */ (tagAttr(token, 'href'));
+      if (seen.has(href)) continue;
+      seen.add(href);
+      tags.push(token.replace(/\s*\/?>$/, ` ${STYLE_OWNER_ATTR}="${escapeAttr(segment)}">`));
+    }
+  }
+  return { tags, body: out + bodyHtml.slice(pos) };
+}
+
+/**
  * The initial-load Suspense resolver: swaps each streamed
  * `<template data-webjs-resolve>` into its placeholder.
  *
