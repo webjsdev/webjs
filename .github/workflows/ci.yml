@@ -196,6 +196,12 @@ jobs:
       # corpus and holds it to the committed fixtures.
       - name: One-pass SSR renderer byte parity on Bun
         run: bun test/bun/ssr-one-pass-parity.mjs
+      # A custom element's attributes are served as the element left them
+      # after the server pass (lit-ssr's renderAttributes shape): the opening
+      # tag is re-read and spliced by position, string work a runtime
+      # difference would show as bytes.
+      - name: Served host attributes on Bun
+        run: bun test/bun/ssr-served-attrs.mjs
       # asset() url resolution on Bun (#1194): the helper reads the file
       # synchronously, hashes it with node:crypto, and compares node:path
       # containment to decide whether a url may be fingerprinted at all. A

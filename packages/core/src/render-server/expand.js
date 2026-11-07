@@ -3,9 +3,10 @@ import { unsafeHTML } from '../directives.js';
 import { escapeAttr } from '../escape.js';
 import { defaultSSRErrorTemplate, browserMemberHint } from './errors.js';
 import {
-  appendReflectedAttrs, applyAttrsToInstance, consumePropAttrs, parseAttrs, seedServerAttrs,
+  applyAttrsToInstance, consumePropAttrs, parseAttrs, seedServerAttrs,
   withHostMarker,
 } from './attrs.js';
+import { serveInstanceAttrs } from './served-attrs.js';
 
 /**
  * Custom-element expansion inside the op walk (#1646): what `injectDSD`
@@ -113,10 +114,11 @@ export async function settleRender(frame) {
 }
 
 function afterRender(frame) {
-  // Surface attributes the component set up to and including render() that
-  // were not in the source tag (reflected props, an explicit setAttribute,
-  // a host mutation inside render()). Reading after render() captures all.
-  frame.opening = appendReflectedAttrs(frame.opening, frame.instance, frame.presentAttrNames);
+  // Serve the attributes as the component left them up to and including
+  // render(): one it added is appended, one it changed carries its new value,
+  // and one it removed is dropped, as lit-ssr's renderAttributes() does (see
+  // served-attrs.js). Reading after render() captures all.
+  frame.opening = serveInstanceAttrs(frame.opening, frame.instance, frame.presentAttrNames);
   // Mark LIGHT-DOM hosts for the `@layer webjs-host` display:block default.
   // Shadow hosts are NOT marked: a document-level rule on the host beats the
   // shadow tree's own `:host { display }`.
