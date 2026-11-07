@@ -862,10 +862,6 @@ export const NAV: DocGroup[] = [
       {
         title: "AI SDK",
         href: "/ui/docs/helpers/ai-sdk"
-      },
-      {
-        title: "TanStack AI",
-        href: "/ui/docs/helpers/tanstack-ai"
       }
     ]
   },
