@@ -496,3 +496,15 @@ test('a /ui path that 404s or throws outside the chrome renders in /ui classes, 
   assert.equal(res.status, 404);
   assert.match(await res.text(), /Page not found[\s\S]*Back to WebJs UI/, 'a missing frame renders the /ui 404');
 });
+
+test('tailwind.css leaves out the /ui-only trees, which no page that loads it renders', () => {
+  // A /ui page loads public/ui.css alone, so compiling the /ui trees into
+  // tailwind.css only made every marketing page carry their utilities and
+  // :has() variants. lib/ui/ stays scanned, since the marketing chrome renders
+  // from it, all but its docs/ subtree.
+  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/input.css'), 'utf8');
+  for (const tree of ['../app/ui', '../modules/ui', '../lib/ui/docs']) {
+    assert.ok(css.includes(`@source not "${tree}";`), `input.css leaves out ${tree}`);
+  }
+  assert.ok(!/@source "\.\.\/modules\/ui\//.test(css), 'and names no kit source back in');
+});

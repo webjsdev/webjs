@@ -3,15 +3,15 @@
 /* The rules /ui shares (the native select fix, the code token colours). */
 @import "./shared-base.css";
 
-/* The /ui gallery renders live @webjsdev/ui components, whose sources are
-   mirrored into these two directories by scripts/copy-registry.mjs. Both are
-   gitignored (they are generated), and Tailwind's automatic content detection
-   skips gitignored files, so their utility classes would never be emitted
-   without naming them here. An explicit @source is scanned regardless of
-   gitignore, and it ADDS to the automatic scan rather than replacing it, so
-   the tracked app/, lib/, and modules/ trees keep being picked up. */
-@source "../modules/ui/components/**/*.{ts,js}";
-@source "../lib/utils/{cn,dom}.ts";
+/* No /ui page loads this sheet (public/ui.css serves /ui on its own), so the
+   /ui-only trees are left out of Tailwind's automatic scan: their utilities,
+   :has() variants included, would otherwise be compiled into every marketing
+   page for nothing. lib/ui/ cannot go as a whole, since the marketing chrome
+   renders from it (page-header.ts, site-footer.ts, cta-panel.ts), so only its
+   docs/ subtree is left out. */
+@source not "../app/ui";
+@source not "../modules/ui";
+@source not "../lib/ui/docs";
 
 /* The kit's components carry `dark:` utilities, and Tailwind's default `dark:`
    is the OS preference alone. This site's theme is the OS preference UNLESS
