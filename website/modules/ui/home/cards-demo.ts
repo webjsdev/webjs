@@ -4,6 +4,7 @@ import { sidebarNav } from './cards/sidebar-nav.ts';
 import { savingsTargets, contributionHistory, claimableBalance, dividendIncome } from './cards/finance.ts';
 import { newMilestone, payoutThreshold, accountAccess, qrConnect, payments } from './cards/forms.ts';
 import { emptyDistributeTrack, analyticsCard, notificationSettings, powerUsage } from './cards/insights.ts';
+import { cardsSkeletonRails } from './skeleton-rails.ts';
 
 /**
  * The home page's card grid, shadcn's CardsDemo
@@ -12,11 +13,13 @@ import { emptyDistributeTrack, analyticsCard, notificationSettings, powerUsage }
  *
  * Columns appear with the viewport exactly as shadcn's do: one column on a
  * phone, two from md, three from lg, four from 1400px and five from 1900px,
- * with fades at the top and bottom.
+ * with fades at the top and bottom, and from 2200px the faded skeleton rails
+ * either side (skeleton-rails.ts).
  */
 export function cardsDemo() {
   return html`
     <div data-slot="demo" class="theme-neutral relative flex w-full max-w-none flex-col gap-(--gap) overflow-hidden bg-muted p-12 pb-0! [--gap:--spacing(8)] min-[1900px]:p-12 min-[1900px]:[--gap:--spacing(10)]! lg:p-6 lg:[--gap:--spacing(6)] dark:bg-background">
+      ${cardsSkeletonRails()}
       <div class="relative z-10 mx-auto grid gap-(--gap) **:data-[slot=card]:w-full min-[1400px]:grid-cols-4! min-[1900px]:grid-cols-5! md:max-w-3xl md:grid-cols-2 lg:max-w-none lg:grid-cols-3 xl:max-w-[1600px] 2xl:max-w-[1900px]">
         <div class="flex flex-col items-start gap-(--gap)">
           ${uiElements()}

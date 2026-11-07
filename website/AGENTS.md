@@ -112,7 +112,10 @@ website/
         page.ts        /ui, shadcn's home page: the hero over the card grid
                        (modules/ui/home/), in the luma and rhea styles. The
                        grid has shadcn's five columns (md, lg, 1400px and
-                       1900px add one each); below md the page shows a picture
+                       1900px add one each), with shadcn's faded skeleton
+                       rails either side from 2200px
+                       (modules/ui/home/skeleton-rails.ts, aria-hidden); below
+                       md the page shows a picture
                        of the grid instead (public/images/home-cards-*.png,
                        scripts/shoot-home-cards.mjs), as shadcn's does
         docs/          /ui/docs, shadcn's docs (#1666, D15). layout.ts is the

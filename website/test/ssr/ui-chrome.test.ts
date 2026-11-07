@@ -150,7 +150,8 @@ test('the home page links where shadcn\'s does', async () => {
 
 test('the card grid has all five of shadcn\'s columns', async () => {
   const html = await page('/ui');
-  const demo = html.slice(html.indexOf('data-slot="demo"'));
+  // The real grid, past the skeleton rails drawn ahead of it.
+  const demo = html.slice(html.indexOf('<div class="relative z-10 mx-auto grid'));
   const columns = [...demo.matchAll(/<div class="((?:hidden )?flex(?:-col)? [^"]*gap-\(--gap\)[^"]*)">/g)].map((m) => m[1]);
   assert.deepEqual(
     columns.map((c) => c.split(' ').find((t) => /:flex$/.test(t)) ?? 'always'),
@@ -200,4 +201,19 @@ test('the Sonner docs demos fire their toasts with no script of their own', asyn
   for (const position of ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right']) {
     assert.match(html, new RegExp(`data-toast-position="${position}"`), `the position demo fires at ${position}`);
   }
+});
+
+test('from 2200px the grid has shadcn\'s skeleton rails either side', async () => {
+  const html = await page('/ui');
+  const demo = html.slice(html.indexOf('data-slot="demo"'));
+  const start = demo.indexOf('<div aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-12 z-10 hidden min-[2200px]:block');
+  assert.ok(start >= 0, 'the rails, hidden from assistive tech and below 2200px');
+  assert.ok(start < demo.indexOf('<div class="relative z-10 mx-auto grid'), 'drawn ahead of the real grid, as shadcn\'s are');
+  const rails = demo.slice(start, demo.indexOf('<div class="relative z-10 mx-auto grid'));
+  assert.match(rails, /left-\[calc\(50%-950px-var\(--rail-width\)-var\(--gap\)\)\]/, 'the left rail');
+  assert.match(rails, /right-\[calc\(50%-950px-var\(--rail-width\)-var\(--gap\)\)\]/, 'the right rail');
+  // 4 + 5 cards on the left, 7 + 7 on the right, each a skeleton card.
+  assert.equal(rails.split('data-slot="card" data-size="default"').length - 1, 23, 'shadcn\'s 23 skeleton cards');
+  assert.ok(rails.split('data-slot="skeleton"').length - 1 > 200, 'built of skeleton bars');
+  assert.doesNotMatch(rails, /<(button|input|a)\b/, 'and nothing focusable');
 });
