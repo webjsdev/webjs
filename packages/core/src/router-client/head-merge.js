@@ -7,6 +7,7 @@
  * @module
  */
 import { META_KEY_CSP_NONCE } from './constants.js';
+import { isStylesheetLink, mergeStylesheet } from './owned-styles.js';
 
 /**
  * Read the CSP nonce that the original page load published via
@@ -236,6 +237,8 @@ export function addNewHeadElements(newHead) {
     // A keyed <meta> is add/update/remove reconciled below (#1046), so skip it
     // here to avoid appending a duplicate when its content changed.
     if (el.tagName === 'META' && metaIdentity(el)) continue;
+    // One link per stylesheet, and an owned one placed root to leaf (#1669).
+    if (isStylesheetLink(el) && mergeStylesheet(el, cloneElementWithCorrectNonce)) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         document.head.appendChild(
@@ -263,10 +266,12 @@ export function addNewHeadElements(newHead) {
  * head (the shared app stylesheet is omitted because the client already has it),
  * so "absent from the incoming head" means "optimized away", NOT "removed". A
  * dynamic-removal opt-out would therefore re-introduce #936 (it would strip a
- * still-needed sheet on any partial response), and WebJs is Tailwind-first (one
- * global sheet, no page-specific sheets to drop), so the knob would be unsafe
- * and unused. Keeping every stylesheet is correct here; a genuinely changed one
- * is dropped by the deploy-level hard reload (build-id mismatch), not a soft swap.
+ * still-needed sheet on any partial response). Keeping every stylesheet is
+ * correct HERE; a genuinely changed one is dropped by the deploy-level hard
+ * reload (build-id mismatch), not a soft swap. A section's own stylesheet is
+ * the one case that does leave, and it is decided elsewhere, by ownership
+ * rather than by head absence: `owned-styles.js` switches a sheet off when the
+ * boundary REPLACE that owns it runs (#1669), which this merge never does.
  *
  * @param {Element} el
  * @returns {boolean}
@@ -327,6 +332,10 @@ export function mergeHead(newHead) {
     // kept above), or the head would carry two and `getCspNonce` could read the
     // wrong one (#1050).
     if (el.tagName === 'META' && metaIdentity(el) === META_KEY_CSP_NONCE) continue;
+    // A stylesheet the head already links is not appended twice, and an owned
+    // one is placed root to leaf (#1669). Nothing here REMOVES a sheet: this
+    // head can be a reduced one (#936).
+    if (isStylesheetLink(el) && mergeStylesheet(el, cloneElementWithCorrectNonce)) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         currentHead.appendChild(

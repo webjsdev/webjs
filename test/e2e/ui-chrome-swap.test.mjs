@@ -8,10 +8,12 @@
  *   1. A soft navigation from a marketing page to /ui, through a link with
  *      NO `data-no-router`, swaps the header and footer with no full page
  *      load and no `webjs:navigation-fallback`.
- *   2. The /ui stylesheet is applied when the swapped content lands (the root
- *      layout is not re-rendered on a soft navigation, so the link
- *      app/ui/layout.ts emits is what brings it in, and the router loads it
- *      before it swaps the page in).
+ *   2. The /ui stylesheet is applied when the swapped content lands (the
+ *      link app/ui/layout.ts leads with is hoisted into the response's head,
+ *      and the router loads it before it swaps the page in), and the
+ *      marketing sheet is switched off, so the soft navigation applies
+ *      exactly the stylesheets a full load of /ui does (#1669). Back
+ *      reverses both.
  *   3. The content's offset fits the NEW header: each header is sized by the
  *      --header-h token, which follows the section (and the /ui header's
  *      breakpoint), so nothing measures a header a swap may have replaced
@@ -43,6 +45,25 @@ async function ensureServer() {
   }
 }
 
+/**
+ * The stylesheets that apply right now, by path, sorted: every head link that
+ * is a stylesheet, not switched off (#1669) and not one of the router's
+ * temporary copies, plus how many links point at a file already counted.
+ */
+const activeSheets = (page) => page.evaluate(() => {
+  const seen = new Map();
+  for (const l of document.querySelectorAll('link[rel~="stylesheet"]')) {
+    if (l.hasAttribute('data-webjs-preload-style')) continue;
+    const path = new URL(l.href).pathname;
+    const on = !(l.sheet && l.sheet.disabled);
+    seen.set(path, { on: on || seen.get(path)?.on, n: (seen.get(path)?.n || 0) + 1 });
+  }
+  return {
+    on: [...seen].filter(([, v]) => v.on).map(([p]) => p).sort(),
+    duplicated: [...seen].filter(([, v]) => v.n > 1).map(([p]) => p),
+  };
+});
+
 /** The text of the fixed header currently on the page. */
 const headerText = (page) => page.evaluate(() => {
   const bars = document.querySelectorAll('.site-top');
@@ -57,8 +78,15 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
     const errors = [];
     page.on('pageerror', (err) => errors.push(err.message));
 
+    // What a FULL load of each side applies, the baseline a soft navigation
+    // has to match: a section's sheet leaves with the section (#1669).
+    await page.goto(BASE + '/ui');
+    await page.waitForLoadState('load');
+    const fullUi = await activeSheets(page);
     await page.goto(BASE + MARKETING);
     await page.waitForLoadState('load');
+    const fullMarketing = await activeSheets(page);
+    assert.deepEqual(fullMarketing.duplicated, [], 'a full load links each stylesheet once');
     assert.match(await headerText(page), /Blog/, 'starts on the marketing header');
     assert.equal(await page.locator('link[href*="/public/ui.css"]').count(), 0, 'the /ui stylesheet is not loaded on a marketing page');
 
@@ -102,6 +130,10 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
     // The /ui stylesheet is applied on the first frame the /ui content is in
     // the document, not after it: the swap waited for it.
     assert.match(await page.evaluate(() => window.__fontAtSwap) || '', /Geist/, 'the swapped content is styled when it lands');
+    // The marketing sheet is switched off and the /ui ones are on: the same
+    // set a full load of /ui applies, each file linked once.
+    assert.deepEqual((await activeSheets(page)).on, fullUi.on, 'a soft navigation into /ui applies what a full load does');
+    assert.deepEqual((await activeSheets(page)).duplicated, [], 'and links no file twice');
 
     // The offset fits the header that is on screen now: the bar's height
     // equals the body's top padding, at the /ui header's two sizes.
@@ -124,6 +156,9 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
     assert.equal(await page.evaluate(() => window.__sameDocument), true, 'Back is still the same document');
     assert.doesNotMatch(await headerText(page), /WebJs UI/, 'the /ui header is gone again');
     await headerFits();
+    // Back switches the marketing sheet on again and the /ui ones off.
+    assert.deepEqual((await activeSheets(page)).on, fullMarketing.on, 'Back applies what a full load of the marketing page does');
+    assert.deepEqual((await activeSheets(page)).duplicated, [], 'still one link per file');
     assert.deepEqual(errors, [], 'no page errors');
   } finally {
     await browser.close();

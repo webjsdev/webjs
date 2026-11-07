@@ -13,6 +13,7 @@ import { blurOutgoingFocus, diffChildren, replaceBoundaryRange, resyncEnclosingH
 import { trackedReloadSignature } from './frames.js';
 import { addNewHeadElements, mergeHead } from './head-merge.js';
 import { morphLayoutChrome, planLayoutChrome } from './layout-chrome.js';
+import { switchOffDepartedStylesheets } from './owned-styles.js';
 import { clearPrefetchRefused, prefetchClearAll } from './prefetch.js';
 import { snapshotCache } from './snapshot-cache.js';
 import { hardNavigate } from './state.js';
@@ -378,8 +379,16 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
     // runtime state (Tailwind injection, etc.) must not be invalidated.
     addNewHeadElements(doc.head);
     _swapCommit = runWithTransition(() => {
-      if (mode === 'replace') replaceBoundaryRange(live, incoming);
-      else swapMarkerRange(live, incoming, doc);
+      if (mode === 'replace') {
+        replaceBoundaryRange(live, incoming);
+        // The replaced range's own stylesheets go with it unless the incoming
+        // page carries them (#1669). Here, inside the commit, so a crossing
+        // restyles once and a view transition captures the outgoing page with
+        // its CSS. Never on a morph, which keeps every boundary it touches.
+        switchOffDepartedStylesheets(plan.segment, doc.head);
+      } else {
+        swapMarkerRange(live, incoming, doc);
+      }
       // No key sync is needed on the anchor's own comments: the plan's anchor
       // carries EQUAL live/incoming route-keys in every tier (a changed-key
       // REPLACE anchors at a parent already compared equal; the other tiers
