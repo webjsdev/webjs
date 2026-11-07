@@ -5,6 +5,8 @@
 # and lib modules live directly in components/*.ts and lib/*.ts, which
 # stay tracked; only these generated subdirectories are ignored.
 /modules/ui/components/
+# The registry blocks, mirrored the same way for the /ui/view/<name> frame.
+/modules/ui/blocks/
 /lib/utils/cn.ts
 /lib/utils/dom.ts
 

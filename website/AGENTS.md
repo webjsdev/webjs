@@ -88,7 +88,10 @@ website/
       (chrome)/        the /ui header and footer, a route group so the iframe
                        targets outside it render with no chrome
         layout.ts      the fixed header with its --header-h script and the
-                       footer with the one shadcn/ui credit line
+                       footer with the one shadcn/ui credit line. A page
+                       carrying data-slot="designer" (the typeset builder)
+                       makes it exactly the viewport with no footer, shadcn's
+                       has-data-[slot=designer] rule
         not-found.ts error.ts
                        section boundaries, rendered inside the /ui chrome
         page.ts        /ui, shadcn's home page: the hero over the card grid
@@ -112,12 +115,48 @@ website/
                        (the add command and the baked source), then the
                        component's own sections from
                        modules/ui/docs/components/<name>.ts
+        typeset/page.ts
+                       /ui/typeset, shadcn's typeset builder: the customizer,
+                       the preview frame and the Docs / Prompt panel, all
+                       server markup from modules/ui/typeset/. The state is
+                       the query string (shadcn's params), the customizer a
+                       GET form that works with JS off, and
+                       components/typeset-customizer.ts the behaviour
+        blocks/page.ts blocks/[category]/page.ts
+                       /ui/blocks (shadcn's featured blocks) and
+                       /ui/blocks/<category>: the header, the categories nav
+                       and one block viewer per block, all through
+                       lib/ui/blocks-shell.ts. A fragment rather than a
+                       layout, because the nav marks the current category and
+                       a layout is not re-rendered between two categories
         (gallery)/     the interim component gallery, until the docs pages
                        replace it: layout.ts is its sidebar (new-york style)
           [name]/page.ts /ui/<name>, one page per component
+      preview/typeset/[name]/page.ts
+                       the typeset builder's iframe target, one of shadcn's
+                       specimens with the params as --preview-* properties.
+                       Outside (chrome), so it has no header
+      view/[name]/page.ts
+                       one registry block full screen in new-york, the block
+                       viewer's iframe target and its "Open in New Tab". It
+                       renders the site's mirror of the block through
+                       modules/ui/queries/render-block.server.ts, and an
+                       inline script cancels any submit, since a block's form
+                       carries no action yet. Outside (chrome), so no header
+      typeset.css/route.ts
+                       shadcn's typeset.css as shadcn serves it (the body of
+                       public/ui-typeset.css under shadcn's header), for the
+                       builder's Copy button and its agent prompt
       r/registries.json/route.ts
                        the registry directory as JSON, shadcn's
                        /r/registries.json
+      init/route.ts init/md/route.ts
+                       shadcn's /init and /init/md for a design-system choice
+                       (`?preset=<code>`, or the fields one by one): the
+                       registry:base payload `init --preset` applies, and the
+                       markdown to set an app up by hand. Built from
+                       modules/ui/init/ over the kit's
+                       packages/ui/packages/registry/themes/preset.js
       registry/**      the JSON API that shipped CLI versions fetch (see
                        modules/ui/ below). Its paths never move
     sitemap.ts         /sitemap.xml (enumerates docs + ui + articles + compare + blog)
@@ -145,6 +184,18 @@ website/
                        "New Chat" card: a scripted conversation that streams
                        its answers a word at a time, on the kit's
                        <ui-message-scroller>
+    typeset-customizer.ts
+                       the /ui/typeset builder's behaviour around the server's
+                       markup: a choice applies at once (replaceState, the
+                       frame's --preview-* rewritten in place), hover preview,
+                       popovers placed beside their trigger, R / Shift+R / D /
+                       undo and redo (also from inside the frame), locks, copy
+    block-viewer.ts    the /ui block viewer's behaviour around the server's
+                       markup (lib/ui/block-viewer.ts): drag-resizing the
+                       preview, refresh, the two copy buttons, and the file
+                       tree's highlight. Preview / Code, the viewport size and
+                       the file choice are radio groups the CSS reads, so they
+                       work with JS off
     site-nav-menu.ts   the header's mobile menu, wrapping a native <details>
                        so it still opens with JS off
                        (components/ui/ is intentionally EMPTY here, left free
@@ -163,6 +214,15 @@ website/
     ui/                composed page fragments, one per file. SSR-time functions
                        returning `html`; nothing here registers a custom element
       page-header.ts   hub eyebrow + title + lede
+      ui-page-header.ts
+                       shadcn's /ui PageHeader (announcement, heading,
+                       description, actions) and PageNav, for the /ui section
+                       pages (blocks, charts)
+      block-viewer.ts  shadcn's BlockViewer as server markup (blockViewer)
+                       and its docs-page preview frame (blockPreview); the
+                       behaviour is components/block-viewer.ts
+      blocks-shell.ts  the /ui/blocks page chrome: header, categories nav
+                       (shadcn's lib/categories.ts), the featured list
       cta-panel.ts     the closing call to action
       site-footer.ts   the footer, rendered by the (site) chrome layout
       docs-shell.ts    the shell stylesheet (.prose-docs typography, the sticky
@@ -260,15 +320,44 @@ website/
     ui/queries/registry.server.ts  composes the registry JSON on demand from
                        packages/ui/packages/registry/ (the source of truth).
                        This is what /ui/registry/** serves.
+    ui/queries/blocks.server.ts  the blocks per category and one block's
+                       files at their install targets, with imports rewritten
+                       the way `add` writes them (the viewer's Code view)
+    ui/queries/render-block.server.ts  renders a block's page for /ui/view,
+                       behind a name allowlist, like render-demo.server.ts
+    ui/blocks/         GITIGNORED mirror of the registry blocks, written by
+                       scripts/copy-registry.mjs with each import that leaves
+                       the block pointed at the site's kit mirror, so a block
+                       shares the one kit instance the rest of /ui uses
     ui/utils/          tier classification, per-component examples + API metadata
+    ui/typeset/        the typeset builder (#1666): params.ts (shadcn's params,
+                       parse / serialize / shuffle, pure so the element shares
+                       it), fonts.ts (the faces, which scripts/fetch-fonts.mjs
+                       also reads), docs.ts (the Docs and Prompt text, true for
+                       a WebJs app), the customizer / preview-frame /
+                       docs-panel fragments, icons.ts, and fixtures/ (shadcn's
+                       five specimens, behind a .server.ts index so the
+                       preview page ships no script)
+    ui/init/           preset-request.ts (a query string to a validated preset
+                       config, shadcn's parse-config) and instructions.ts (the
+                       /ui/init/md markdown)
   scripts/             manual dev tools, NOT part of build/deploy
-    fetch-fonts.mjs    download the self-hosted variable woff2 fonts
+    fetch-fonts.mjs    download the self-hosted variable woff2 fonts (the
+                       typeset faces are declared in public/typeset-fonts.css,
+                       linked only by the typeset pages)
     generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
     copy-registry.mjs  mirror the kit sources into modules/ui/components/ +
-                       lib/utils/{cn,dom}.ts.
+                       lib/utils/{cn,dom}.ts, and the registry blocks into
+                       modules/ui/blocks/.
                        Runs via webjs.dev.before / webjs.start.before and is
                        baked into the deploy image (#526), so a component page
-                       never boots without its imports.
+                       never boots without its imports. It also writes the
+                       scoped kit styles and the theme classes (below)
+    build-ui-themes.mjs
+                       the .theme-<name> classes for shadcn's 24 themes, from
+                       the kit's themes.js, into
+                       node_modules/.cache/ui-styles/themes.css (run by
+                       copy-registry.mjs, imported by public/ui-input.css)
   public/              favicon, og image, self-hosted fonts, static assets
 ```
 
@@ -372,7 +461,11 @@ the root layout must keep rendering `${children}` with nothing around it.
 two kit styles, nova and new-york. The other seven compile one file each into
 `public/ui-styles/<name>.css` (`scripts/build-ui-styles.mjs`, run by the same
 four hooks), and a page links only the styles it renders, listed once in
-`lib/ui/style-links.ts`. The `dark` and `not-dark` variants and the theme
+`lib/ui/style-links.ts`. `ui.css` also carries shadcn's 24 themes as
+`.ui-site .theme-<name>` classes in `light-dark()` form, so a region wearing
+`theme-blue` repaints the way it does on shadcn's site; they are generated from
+the kit's own theme data (`scripts/build-ui-themes.mjs`), so the site and
+`init --preset` cannot disagree. The `dark` and `not-dark` variants and the theme
 mapping live in `public/ui-theme.css`, which both builds import ahead of the
 styles, since a style's `@apply` can use a variant only once it exists. Each
 region names its own `.style-<name>` wrapper (`.ui-site` carries none). The

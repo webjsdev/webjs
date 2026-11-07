@@ -11,6 +11,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node
 import { join, dirname, resolve, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { add } from '../src/commands/add.js';
+import { CN_ALLOWLIST } from '../src/registry/style-bake.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REGISTRY = join(HERE, '..', 'packages', 'registry');
@@ -77,7 +78,7 @@ test('every relative import in a block resolves to a registry file the install a
     for (const d of b.registryDependencies || []) visit(d);
     for (const f of b.files.filter((x) => x.path.endsWith('.ts'))) {
       const src = readFileSync(join(REGISTRY, f.path), 'utf8');
-      for (const [, spec] of src.matchAll(/from\s+'(\.{1,2}\/[^']+)'/g)) {
+      for (const [, spec] of src.matchAll(/(?:from|import)\s+'(\.{1,2}\/[^']+)'/g)) {
         const target = posix.normalize(posix.join(posix.dirname(f.path), spec));
         assert.ok(existsSync(join(REGISTRY, target)), `${b.name}: ${f.path} imports ${spec}, which exists`);
         assert.ok(reachable.has(target), `${b.name}: ${target} is written by the block or one of its dependencies`);
@@ -122,6 +123,35 @@ for (const name of ['login-04', 'signup-01']) {
       assert.match(out, /data-slot="field-label" for="email"/, 'labelled');
       assert.doesNotMatch(out, /class="[^"]*\bcn-[a-z]/, 'no cn-* name reaches the rendered page');
       assert.match(out, /inline-flex/, 'the baked button classes are there');
+      assert.ok(mod.metadata?.title, 'the page names itself');
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const name of ['sidebar-07', 'sidebar-13', 'sidebar-15']) {
+  test(`add ${name}: the installed dashboard page renders on the server, plain Tailwind, in the kit's sidebar`, async () => {
+    // sidebar-07 is the docs lead, sidebar-13 renders inside a dialog and
+    // sidebar-15 mounts two sidebars, so the three cover every shell shape.
+    const d = project();
+    try {
+      await quiet(() => add.parseAsync([name, '--yes', '--no-deps', '--cwd', d], { from: 'user' }));
+      const page = join(d, 'app', 'dashboard', 'page.ts');
+      assert.ok(existsSync(page), 'the page lands at its target');
+      for (const f of items.get(name).files) assert.ok(existsSync(join(d, f.target)), `${f.target} is written`);
+
+      const mod = await import(pathToFileURL(resolve(page)).href);
+      const { renderToString } = await import('@webjsdev/core/server');
+      const out = await renderToString(mod.default());
+      assert.match(out, /<ui-sidebar-provider[\s>]/, 'the kit sidebar shell');
+      assert.match(out, /data-sidebar="menu-button"/, 'menu buttons from the sidebar helpers');
+      // The bake keeps its allowlisted hooks (the trigger icon's cn-rtl-flip);
+      // any other cn-* name is one it failed to replace.
+      const kept = [...out.matchAll(/class="([^"]*)"/g)]
+        .flatMap((m) => m[1].split(/\s+/))
+        .filter((c) => /^cn-[a-z]/.test(c) && !CN_ALLOWLIST.has(c));
+      assert.deepEqual([...new Set(kept)], [], 'no unbaked cn-* name reaches the rendered page');
       assert.ok(mod.metadata?.title, 'the page names itself');
     } finally {
       rmSync(d, { recursive: true, force: true });

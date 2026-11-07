@@ -8,9 +8,10 @@
    theme and the utilities but NOT preflight, which would otherwise ship twice.
 
    `source(none)` turns off automatic content detection, so only the /ui code
-   named by the @source lines below is scanned. The kit mirror under
-   modules/ui/components/ and lib/utils/ is gitignored, and an explicit
-   @source is scanned regardless of .gitignore. */
+   named by the @source lines below is scanned. lib/utils/{cn,dom}.ts is
+   gitignored and an explicit file @source is scanned regardless; the kit's
+   mirrored components and blocks are read at their registry source instead,
+   see the last two @source lines. */
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
@@ -37,12 +38,24 @@
    nearer one's rules. */
 @import "../node_modules/.cache/ui-styles/scoped/style-new-york.css" layer(base);
 @import "../node_modules/.cache/ui-styles/scoped/style-nova.css" layer(base);
+/* shadcn's 24 themes as .theme-<name> classes (#1666): a preview wearing
+   theme-blue repaints in blue, as on shadcn's site. Generated from the kit's
+   theme data by scripts/build-ui-themes.mjs (run by copy-registry.mjs), each
+   colour in the light-dark() form the .ui-site tokens below use. */
+@import "../node_modules/.cache/ui-styles/themes.css";
 
 @source "../app/ui/**/*.ts";
 @source "../modules/ui/**/*.{ts,js}";
 @source "../components/**/*.ts";
 @source "../lib/ui/**/*.ts";
 @source "../lib/utils/{cn,dom}.ts";
+/* The kit components and the registry blocks /ui/view renders, read at their
+   source: the glob over modules/ui/ above does not reach into the gitignored
+   mirrors of them (modules/ui/components/, modules/ui/blocks/), so a layout
+   class only a kit component carries inline (the sidebar wrapper's
+   has-data-[variant=inset]:bg-sidebar) was never generated. */
+@source "../../packages/ui/packages/registry/components/*.ts";
+@source "../../packages/ui/packages/registry/blocks/**/*.ts";
 
 /* The /ui palette: shadcn's site tokens, the same values as its :root and
    .dark blocks, written once each as light-dark(LIGHT, DARK) the way the
@@ -137,44 +150,6 @@
   font-synthesis-weight: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-}
-/* shadcn's neutral theme (apps/v4/app/legacy-themes.css), which its home
-   card grid wears. It differs from the site palette above mainly in the chart
-   ramp, which is grey rather than blue. Written in the same light-dark() form.
-   The rest of shadcn's themes join it with the theme work in #1666. */
-.ui-site .theme-neutral {
-  --background:         light-dark(oklch(1 0 0),               oklch(0.145 0 0));
-  --foreground:         light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
-  --card:               light-dark(oklch(1 0 0),               oklch(0.205 0 0));
-  --card-foreground:    light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
-  --popover:            light-dark(oklch(1 0 0),               oklch(0.205 0 0));
-  --popover-foreground: light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
-  --primary:            light-dark(oklch(0.205 0 0),           oklch(0.922 0 0));
-  --primary-foreground: light-dark(oklch(0.985 0 0),           oklch(0.205 0 0));
-  --secondary:          light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
-  --secondary-foreground: light-dark(oklch(0.205 0 0),         oklch(0.985 0 0));
-  --muted:              light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
-  --muted-foreground:   light-dark(oklch(0.556 0 0),           oklch(0.708 0 0));
-  --accent:             light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
-  --accent-foreground:  light-dark(oklch(0.205 0 0),           oklch(0.985 0 0));
-  --destructive:        light-dark(oklch(0.577 0.245 27.325),  oklch(0.704 0.191 22.216));
-  --border:             light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 10%));
-  --input:              light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 15%));
-  --ring:               light-dark(oklch(0.708 0 0),           oklch(0.556 0 0));
-  --chart-1:            oklch(0.87 0 0);
-  --chart-2:            oklch(0.556 0 0);
-  --chart-3:            oklch(0.439 0 0);
-  --chart-4:            oklch(0.371 0 0);
-  --chart-5:            oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar:            light-dark(oklch(0.985 0 0),           oklch(0.205 0 0));
-  --sidebar-foreground: light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
-  --sidebar-primary:    light-dark(oklch(0.205 0 0),           oklch(0.488 0.243 264.376));
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent:     light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
-  --sidebar-accent-foreground: light-dark(oklch(0.205 0 0),    oklch(0.985 0 0));
-  --sidebar-border:     light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 10%));
-  --sidebar-ring:       light-dark(oklch(0.708 0 0),           oklch(0.556 0 0));
 }
 @media (width >= 64rem) {
   .ui-site { --header-height: calc(var(--spacing) * 16); }
