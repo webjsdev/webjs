@@ -204,3 +204,11 @@ export function _isNonHtmlPath(pathname) {
  * alone rather than reverted.
  */
 export const WRITE_BACK_ARMED_MS = 250;
+
+/**
+ * Marks the router's temporary stylesheet copies (`stylesheets.js`). Here,
+ * in the leaf module, so `owned-styles.js` can skip those copies without
+ * importing `stylesheets.js`, which imports `head-merge.js`, which imports
+ * `owned-styles.js`.
+ */
+export const PRELOAD_ATTR = 'data-webjs-preload-style';

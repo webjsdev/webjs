@@ -30,13 +30,14 @@
  * that fails or stalls never holds a navigation hostage: an `error` resolves
  * the wait, and so does a timeout, Turbo's 2 seconds.
  */
+import { PRELOAD_ATTR } from './constants.js';
 import { getCspNonce } from './head-merge.js';
 
 /** How long a navigation waits for one stylesheet before it swaps anyway. */
 export const STYLESHEET_TIMEOUT_MS = 2000;
 
-/** The attribute that marks the router's temporary copies. */
-export const PRELOAD_ATTR = 'data-webjs-preload-style';
+/** The attribute that marks the router's temporary copies (defined in the leaf). */
+export { PRELOAD_ATTR };
 
 /**
  * Is `el` a stylesheet that applies now: a `<link>` whose `rel` names

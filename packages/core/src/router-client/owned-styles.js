@@ -31,7 +31,7 @@
  * with no owner (the root layout's, or one an app writes into its head) is
  * never touched.
  */
-import { PRELOAD_ATTR } from './stylesheets.js';
+import { PRELOAD_ATTR } from './constants.js';
 
 /** The server's tag naming a hoisted stylesheet's owner segment. */
 export const OWNER_ATTR = 'data-wj-style-owner';
