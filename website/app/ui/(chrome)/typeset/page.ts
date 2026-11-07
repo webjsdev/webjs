@@ -41,7 +41,7 @@ export default async function TypesetPage({ url, searchParams }: PageProps) {
   const { origin } = new URL(url);
   return html`
     <link rel="stylesheet" href=${asset('/public/typeset-fonts.css')}>
-    <main id="main" class="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden section-soft [--customizer-width:--spacing(48)] [--gap:--spacing(4)] md:[--gap:--spacing(6)] 2xl:[--customizer-width:--spacing(56)]">
+    <main id="main" tabindex="-1" class="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden section-soft [--customizer-width:--spacing(48)] [--gap:--spacing(4)] md:[--gap:--spacing(6)] 2xl:[--customizer-width:--spacing(56)]">
       <typeset-customizer data-slot="designer" class="style-nova flex min-h-0 flex-1 flex-col items-start gap-(--gap) p-(--gap) pt-[calc(var(--gap)*0.25)] md:flex-row-reverse">
         ${docsPanel(params, origin)}
         ${previewFrame(params)}
