@@ -166,7 +166,7 @@ test('barChart renders the bars, axis and grid, with the colours on the containe
   assert.match(out, /<text x="41.6667" y="234"[^>]*><tspan x="41.6667" dy="0.71em">Jan<\/tspan>/);
   assert.equal(out.match(/<line stroke="#ccc"/g).length, 5, 'five horizontal grid lines, no vertical');
   assert.equal(out.match(/data-slot="chart-tooltips" hidden/g).length, 1);
-  assert.equal(out.match(/<div data-index="\d"/g).length, 6, 'one served tooltip per point');
+  assert.equal(out.match(/<div data-index="\d"[^>]*data-tip=/g).length, 6, 'one served tooltip per point, as data');
   assert.match(out, /data-slot="chart-tooltip"[^>]* hidden/, 'no tooltip showing without a defaultIndex');
 });
 
@@ -227,7 +227,8 @@ test('pieChart: Recharts\' donut slices, a centre label and per-slice tooltips',
   assert.match(out, /stroke="#fff" stroke-width="5"/);
   assert.match(out, /data-hit="target"/);
   assert.match(out, />Total<\/tspan>/);
-  assert.match(out, /Chrome<\/span>/, 'the tooltip names a slice from the config');
+  assert.match(out, /data-tip="\{&quot;label&quot;:&quot;&quot;,&quot;items&quot;:\[\{&quot;name&quot;:&quot;Chrome&quot;,&quot;value&quot;:&quot;275&quot;/, 'each point is served as data, the name from the config');
+  assert.doesNotMatch(out.split('data-slot="chart-tooltips"')[1], /cn-chart-tooltip/, 'with no markup per point');
 });
 
 test('pieChart labels: outside text with a line, and a label list inside', async () => {
@@ -281,6 +282,17 @@ test('an authored aspect ratio replaces the default one', async () => {
   const out = await ssr(c.pieChart({ config: BROWSER_CONFIG, data: BROWSERS, class: 'mx-auto aspect-square', pies: [{ dataKey: 'visitors' }] }));
   assert.doesNotMatch(out, /aspect-video/);
   assert.match(out, /aspect-square/);
+});
+
+test('a tooltip with a custom row or an icon is served as markup', async () => {
+  const out = await ssr(c.barChart({
+    config: { ...CONFIG, mobile: { label: 'Mobile', icon: () => c.chartText(0, 0, 'i') } },
+    data: MONTHS, tooltip: { formatter: (v) => `${v} kcal` },
+    bars: [{ dataKey: 'desktop' }, { dataKey: 'mobile' }],
+  }));
+  assert.doesNotMatch(out, /data-tip=/);
+  assert.match(out, /<div data-index="0"[^>]*><div class="cn-chart-tooltip/);
+  assert.match(out, /186 kcal/);
 });
 
 test('add chart installs chart.ts and chart-geometry.ts, and the installed copy renders', async () => {

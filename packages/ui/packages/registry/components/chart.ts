@@ -1,10 +1,11 @@
 /**
  * Chart: shadcn's Chart, drawn as plain SVG by the server. Tier-2. shadcn's
  * is Recharts (D10: the kit takes no third-party runtime dependency), so
- * this file ports the parts of Recharts the shadcn charts use: the scales and
- * nice ticks, the d3 curves, the bar, area, line, pie, radar and radial bar
- * geometry, Recharts' default margins and axis sizes, and shadcn's tooltip
- * and legend markup. Each chart function returns the whole `<ui-chart>`
+ * this file ports the parts of Recharts the shadcn charts use: the bar, area,
+ * line, pie, radar and radial bar layouts, Recharts' default margins and axis
+ * sizes, and shadcn's tooltip and legend markup. The maths (scales, nice
+ * ticks, the d3 curves, the bar and sector paths) lives in
+ * `chart-geometry.ts`, installed with it and re-exported here. Each chart function returns the whole `<ui-chart>`
  * (shadcn's ChartContainer plus the chart inside it), so the first paint is
  * the complete chart and it reads with JavaScript off.
  *
@@ -37,9 +38,11 @@
  * The element: `<ui-chart>` adds what needs a pointer. Hovering shows the
  * tooltip, the cursor and the active dots for the nearest point; the chart
  * takes focus (Recharts' accessibilityLayer), the arrow keys step through the
- * points, Home / End jump, Escape hides. Every tooltip is rendered by the
+ * points, Home / End jump, Escape hides. Every tooltip is resolved by the
  * server, one per point, so a `labelFormatter`, a `formatter` or an `icon`
- * runs once on the server and never ships.
+ * runs once on the server and never ships. A point whose tooltip is all text
+ * is served as data and drawn by the element; one with an icon or a custom
+ * row is served as markup.
  *
  * Design tokens used: `--chart-1` to `--chart-5` through the config, plus
  * `border`, `muted`, `muted-foreground`, `background` and `foreground`.
@@ -65,7 +68,7 @@
  * })}
  * ```
  */
-import { WebComponent, html, svg } from '@webjsdev/core';
+import { WebComponent, html, svg, render } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import {
   RADIAN, fmt, formatValue, num, percent, estimateTextWidth, niceTicks, linearScale, bandScale, pointScale,
@@ -182,42 +185,78 @@ export function payloadConfig(config: ChartConfig, item: ChartPayloadItem | unde
 }
 
 /**
- * The tooltip's content for one point: shadcn's ChartTooltipContent markup.
- * `label` is the point's category (a month, a date), `payload` its series.
+ * A tooltip resolved for one point: its label and its rows, with every
+ * formatter and config lookup already applied. When every part is a string
+ * it is plain data, which is how the chart serves a point (see `frame`).
  */
-export function chartTooltipContent(config: ChartConfig, label: unknown, payload: ChartPayloadItem[], o: ChartTooltipOptions = {}) {
-  if (!payload.length) return '';
-  const indicator = o.indicator ?? 'dot';
-  let tooltipLabel: unknown = '';
-  if (!o.hideLabel) {
+export interface ChartTooltipView {
+  label: unknown;
+  items: Array<{ name: unknown; value: string | null; color: string; icon?: unknown; custom?: unknown }>;
+}
+
+/** The view options the browser needs to draw a served point. */
+type TooltipLook = Pick<ChartTooltipOptions, 'indicator' | 'hideIndicator' | 'class' | 'labelClass'>;
+
+/** Resolve a point's tooltip: shadcn's ChartTooltipContent logic, without the markup. */
+export function chartTooltipView(config: ChartConfig, label: unknown, payload: ChartPayloadItem[], o: ChartTooltipOptions = {}): ChartTooltipView {
+  let viewLabel: unknown = '';
+  if (!o.hideLabel && payload.length) {
     const first = payload[0];
     const key = `${o.labelKey ?? first.dataKey ?? first.name ?? 'value'}`;
     const itemConfig = payloadConfig(config, first, key);
     const value = !o.labelKey && typeof label === 'string' ? (config[label]?.label ?? label) : itemConfig?.label;
-    if (o.labelFormatter) tooltipLabel = html`<div class=${cn('font-medium', o.labelClass)}>${o.labelFormatter(value, payload)}</div>`;
-    else if (value) tooltipLabel = html`<div class=${cn('font-medium', o.labelClass)}>${value}</div>`;
+    viewLabel = o.labelFormatter ? o.labelFormatter(value, payload) : (value ?? '');
   }
-  const nestLabel = payload.length === 1 && indicator !== 'dot';
-  return html`<div class=${cn('cn-chart-tooltip grid min-w-32 items-start', o.class)}>${nestLabel ? '' : tooltipLabel}<div class="grid gap-1.5">${payload
-    .filter((item) => item.type !== 'none')
-    .map((item, index) => {
-      const key = `${o.nameKey ?? item.name ?? item.dataKey ?? 'value'}`;
-      const itemConfig = payloadConfig(config, item, key);
-      const color = o.color ?? (typeof item.payload?.fill === 'string' ? item.payload.fill : item.color);
-      const body = o.formatter && item.value !== undefined && item.name
-        ? o.formatter(item.value, item.name, item, index, item.payload)
-        : html`${itemConfig?.icon
-          ? itemConfig.icon()
-          : o.hideIndicator
-            ? ''
-            : html`<div class=${cn('shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)', {
-              'h-2.5 w-2.5': indicator === 'dot',
-              'w-1': indicator === 'line',
-              'w-0 border-[1.5px] border-dashed bg-transparent': indicator === 'dashed',
-              'my-0.5': nestLabel && indicator === 'dashed',
-            })} style=${`--color-bg: ${color}; --color-border: ${color}`}></div>`}<div class=${cn('flex flex-1 justify-between leading-none', nestLabel ? 'items-end' : 'items-center')}><div class="grid gap-1.5">${nestLabel ? tooltipLabel : ''}<span class="text-muted-foreground">${itemConfig?.label ?? item.name}</span></div>${item.value != null ? html`<span class="font-mono font-medium text-foreground tabular-nums">${formatValue(item.value)}</span>` : ''}</div>`;
-      return html`<div class=${cn('flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground', indicator === 'dot' && 'items-center')}>${body}</div>`;
-    })}</div></div>`;
+  const items = payload.filter((item) => item.type !== 'none').map((item, index) => {
+    const key = `${o.nameKey ?? item.name ?? item.dataKey ?? 'value'}`;
+    const itemConfig = payloadConfig(config, item, key);
+    const color = o.color ?? (typeof item.payload?.fill === 'string' ? item.payload.fill : item.color);
+    const custom = o.formatter && item.value !== undefined && item.name ? o.formatter(item.value, item.name, item, index, item.payload) : undefined;
+    return {
+      name: itemConfig?.label ?? item.name,
+      value: item.value != null ? formatValue(item.value) : null,
+      color,
+      ...(itemConfig?.icon ? { icon: itemConfig.icon() } : {}),
+      ...(custom !== undefined ? { custom } : {}),
+    };
+  });
+  return { label: viewLabel, items };
+}
+
+/** A view that is all strings can be served as data and drawn in the browser. */
+function isPlainView(v: ChartTooltipView): boolean {
+  return typeof v.label === 'string' && v.items.every((i) => i.icon === undefined && i.custom === undefined && typeof i.name === 'string');
+}
+
+/** Draw a resolved tooltip: shadcn's ChartTooltipContent markup. */
+export function chartTooltipMarkup(view: ChartTooltipView, o: TooltipLook = {}) {
+  if (!view.items.length) return '';
+  const indicator = o.indicator ?? 'dot';
+  const tooltipLabel = view.label === '' || view.label == null ? '' : html`<div class=${cn('font-medium', o.labelClass)}>${view.label}</div>`;
+  const nestLabel = view.items.length === 1 && indicator !== 'dot';
+  return html`<div class=${cn('cn-chart-tooltip grid min-w-32 items-start', o.class)}>${nestLabel ? '' : tooltipLabel}<div class="grid gap-1.5">${view.items.map((item) => {
+    const body = item.custom !== undefined
+      ? item.custom
+      : html`${item.icon !== undefined
+        ? item.icon
+        : o.hideIndicator
+          ? ''
+          : html`<div class=${cn('shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)', {
+            'h-2.5 w-2.5': indicator === 'dot',
+            'w-1': indicator === 'line',
+            'w-0 border-[1.5px] border-dashed bg-transparent': indicator === 'dashed',
+            'my-0.5': nestLabel && indicator === 'dashed',
+          })} style=${`--color-bg: ${item.color}; --color-border: ${item.color}`}></div>`}<div class=${cn('flex flex-1 justify-between leading-none', nestLabel ? 'items-end' : 'items-center')}><div class="grid gap-1.5">${nestLabel ? tooltipLabel : ''}<span class="text-muted-foreground">${item.name}</span></div>${item.value != null ? html`<span class="font-mono font-medium text-foreground tabular-nums">${item.value}</span>` : ''}</div>`;
+    return html`<div class=${cn('flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground', indicator === 'dot' && 'items-center')}>${body}</div>`;
+  })}</div></div>`;
+}
+
+/**
+ * The tooltip's content for one point: shadcn's ChartTooltipContent.
+ * `label` is the point's category (a month, a date), `payload` its series.
+ */
+export function chartTooltipContent(config: ChartConfig, label: unknown, payload: ChartPayloadItem[], o: ChartTooltipOptions = {}) {
+  return chartTooltipMarkup(chartTooltipView(config, label, payload, o), o);
 }
 
 /** The legend: shadcn's ChartLegendContent markup over a series payload. */
@@ -330,9 +369,17 @@ function frame(o: ChartBaseOptions, f: Frame) {
   const t = o.tooltip || null;
   const def = t && t.defaultIndex != null ? f.points[t.defaultIndex] : undefined;
   const a11y = o.accessibilityLayer !== false;
+  // Each point's tooltip is resolved here, on the server, so a formatter never
+  // ships. One that is all strings is served as data (a 90 point chart would
+  // otherwise carry 90 copies of the markup); one with an icon or a custom
+  // row is served as markup.
+  const look: TooltipLook = t ? { indicator: t.indicator, hideIndicator: t.hideIndicator, class: t.class, labelClass: t.labelClass } : {};
+  const views = t ? f.points.map((p) => chartTooltipView(o.config, p.label, p.payload, t)) : [];
   // cn() keeps both aspect utilities, so an authored one replaces the default here.
   const base = /(^|\s)aspect-/.test(o.class ?? '') ? chartContainerClass().replace(' aspect-video', '') : chartContainerClass();
-  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}${legendLayer(o, f)}</svg>${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def ? chartTooltipContent(o.config, def.label, def.payload, t) : ''}</div><div data-slot="chart-tooltips" hidden>${f.points.map((p, i) => html`<div data-index=${String(i)} data-x=${fmt(p.x)} data-y=${fmt(p.y)}>${chartTooltipContent(o.config, p.label, p.payload, t)}</div>`)}</div><span data-slot="chart-live" class="sr-only" aria-live="polite"></span>` : ''}</div></ui-chart>`;
+  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}${legendLayer(o, f)}</svg>${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
+      ? html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)} data-tip=${JSON.stringify(v)}></div>`
+      : html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)}>${chartTooltipMarkup(v, look)}</div>`))}</div><span data-slot="chart-live" class="sr-only" aria-live="polite"></span>` : ''}</div></ui-chart>`;
 }
 
 /** The per-point overlay groups: hidden until their point is active (or it is the default). */
@@ -1058,6 +1105,11 @@ export class UiChart extends WebComponent {
     return Array.from(this.querySelectorAll<HTMLElement>('[data-slot="chart-tooltips"] > [data-index]'));
   }
 
+  _look(): TooltipLook {
+    const raw = this.querySelector<HTMLElement>('[data-slot="chart-tooltips"]')?.dataset.look;
+    return raw ? (JSON.parse(raw) as TooltipLook) : {};
+  }
+
   _init(): boolean {
     const s = this._svg();
     if (!s || !s.dataset.hit) return false;
@@ -1093,7 +1145,15 @@ export class UiChart extends WebComponent {
       g.setAttribute('visibility', g.getAttribute('data-index') === String(i) ? 'visible' : 'hidden');
     }
     if (i !== this.activeIndex || wrapper.hidden || !wrapper.firstChild) {
-      wrapper.replaceChildren(...Array.from(entry.cloneNode(true).childNodes));
+      const tip = entry.dataset.tip;
+      if (tip) {
+        // A served point is data: draw it with the same markup the server uses.
+        const box = document.createElement('div');
+        render(chartTooltipMarkup(JSON.parse(tip) as ChartTooltipView, this._look()), box);
+        wrapper.replaceChildren(...Array.from(box.childNodes));
+      } else {
+        wrapper.replaceChildren(...Array.from(entry.cloneNode(true).childNodes));
+      }
     }
     this.activeIndex = i;
     wrapper.hidden = false;
@@ -1120,7 +1180,12 @@ export class UiChart extends WebComponent {
   _announce(i: number): void {
     const live = this.querySelector<HTMLElement>('[data-slot="chart-live"]');
     const entry = this._entries()[i];
-    if (live && entry) live.textContent = (entry.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (!live || !entry) return;
+    const tip = entry.dataset.tip ? (JSON.parse(entry.dataset.tip) as ChartTooltipView) : null;
+    const text = tip
+      ? [tip.label, ...tip.items.map((it) => `${it.name} ${it.value ?? ''}`)].join(' ')
+      : entry.textContent ?? '';
+    live.textContent = text.replace(/\s+/g, ' ').trim();
   }
 
   _onMove = (e: PointerEvent): void => {
