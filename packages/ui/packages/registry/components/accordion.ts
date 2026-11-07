@@ -61,7 +61,7 @@
  *       <svg class="size-4 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
  *     </summary>
  *     <div class=${accordionContentClass()}>
- *       <div class=${accordionContentInnerClass()}>Yes, with the shadcn design tokens.</div>
+ *       <div class=${accordionContentInnerClass()}>Yes, with the kit's design tokens.</div>
  *     </div>
  *   </details>
  * </div>
