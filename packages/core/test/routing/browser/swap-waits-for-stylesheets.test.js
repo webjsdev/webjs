@@ -13,7 +13,7 @@
  * other, so the first assertion fails on a router that does not wait.
  */
 import { enableClientRouter, disableClientRouter, refreshPage, _setCurrentPageUrl } from '../../../src/router-client.js';
-import { loadIncomingStylesheets } from '../../../src/router-client/stylesheets.js';
+import { loadIncomingStylesheets, releaseIncomingStylesheets, PRELOAD_ATTR } from '../../../src/router-client/stylesheets.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 import { installNavGuard } from '../../../../../test/browser-nav-guard.js';
@@ -76,7 +76,23 @@ suite('Client router: a swap waits for the stylesheets the page brings (#1666)',
     observer.disconnect();
 
     assert.equal(widthAtSwap, '123px', 'the stylesheet was applied when the content arrived');
-    assert.ok(document.head.querySelector(`link[href="${url}"]`), 'a copy is kept in <head>, so a later visit waits for nothing');
+    // The router adds no stylesheet state of its own: once the page's own link
+    // has loaded, the temporary copy in <head> is gone.
+    for (let i = 0; i < 20 && document.querySelector(`[${PRELOAD_ATTR}]`); i++) await frame();
+    assert.equal(document.querySelectorAll(`[${PRELOAD_ATTR}]`).length, 0, 'no temporary copy remains');
+    assert.equal(document.querySelectorAll(`link[href="${url}"]`).length, 1, 'only the page\'s own link to the sheet is left');
+    assert.equal(getComputedStyle(document.getElementById('wj-sheet-probe')).width, '123px', 'and the sheet still applies');
+  });
+
+  test('a copy whose file the page does not link is removed at once', () => {
+    const url = cssUrl('#wj-sheet-probe { color: red; }');
+    added.push(url);
+    const doc = new DOMParser().parseFromString(docHtml(url, 'after'), 'text/html');
+    const incoming = loadIncomingStylesheets(doc, location.href);
+    assert.ok(incoming, 'the new sheet is loaded');
+    assert.equal(document.querySelectorAll(`[${PRELOAD_ATTR}]`).length, 1);
+    releaseIncomingStylesheets(incoming);
+    assert.equal(document.querySelectorAll(`[${PRELOAD_ATTR}]`).length, 0, 'discarded, so nothing is left behind');
   });
 
   test('a stylesheet that fails to load does not hold the navigation', async () => {
@@ -101,12 +117,22 @@ suite('Client router: a swap waits for the stylesheets the page brings (#1666)',
     assert.equal(loadIncomingStylesheets(again, location.href), null, 'a stylesheet the page already links is not waited for');
   });
 
-  test('an alternate or non-matching stylesheet is not waited for', () => {
+  test('an alternate, disabled or non-matching stylesheet is not waited for', () => {
     const html = `<!doctype html><html><head></head><body>`
       + `<link rel="alternate stylesheet" href="/alt.css">`
+      + `<link rel="stylesheet" disabled href="/off.css">`
       + `<link rel="stylesheet" media="print" href="/print.css">`
       + `</body></html>`;
     const doc = new DOMParser().parseFromString(html, 'text/html');
     assert.equal(loadIncomingStylesheets(doc, location.href), null);
+  });
+
+  test('a frame navigation reads only the frame, not the rest of the page', () => {
+    const html = `<!doctype html><html><head><link rel="stylesheet" href="/head-only.css"></head><body>`
+      + `<link rel="stylesheet" href="/outside-frame.css">`
+      + `<webjs-frame id="wj-sheet-frame"><p>frame</p></webjs-frame>`
+      + `</body></html>`;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    assert.equal(loadIncomingStylesheets(doc, location.href, 'wj-sheet-frame'), null, 'the sheets outside the frame are not loaded');
   });
 });

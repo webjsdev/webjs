@@ -19,7 +19,7 @@ import { navigate } from './navigator.js';
 import { prefetchTake } from './prefetch.js';
 import { currentNavigationToken } from './state.js';
 import { readStreamedShell, streamBoundariesProgressively } from './stream.js';
-import { loadIncomingStylesheets } from './stylesheets.js';
+import { loadIncomingStylesheets, releaseIncomingStylesheets } from './stylesheets.js';
 import { _swapCommit, applySwap } from './swap.js';
 
 /**
@@ -299,11 +299,13 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
   // Load the stylesheets the incoming page brings before it is swapped in, so
   // its first paint is styled (see stylesheets.js). Null when it brings none,
   // and the swap then stays in this task. A newer navigation that started
-  // during the wait owns the page, exactly as after the body read above.
-  const sheets = loadIncomingStylesheets(doc, finalUrl || href);
+  // during the wait owns the page, exactly as after the body read above, and
+  // this one's temporary copies go with it.
+  const sheets = loadIncomingStylesheets(doc, finalUrl || href, frameId);
   if (sheets) {
-    await sheets;
+    await sheets.ready;
     if (myToken !== currentNavigationToken) {
+      releaseIncomingStylesheets(sheets);
       if (streamCtx && streamCtx.reader) { try { streamCtx.reader.cancel(); } catch { /* ignore */ } }
       return { ok: false, status: respStatus, aborted: true, applied: false };
     }
@@ -350,6 +352,11 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
     : null;
 
   const disposition = applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc, refresh || (mutation ? 'layouts' : undefined), recordHistoryNow);
+  // The temporary stylesheet copies are released once the swap has COMMITTED:
+  // under a view transition the new markup, and the page's own links with it,
+  // lands a frame later. A copy with no twin in the result (a discarded or
+  // uncommitted swap) goes as soon as the commit settles.
+  if (sheets) _swapCommit.then(() => releaseIncomingStylesheets(sheets), () => releaseIncomingStylesheets(sheets));
   // `'none'` means applySwap returned WITHOUT committing anything: the frame the
   // response was for is missing, or it degraded to a hard navigation (an
   // importmap/build mismatch, a poisoned boundary scan). The page is not left
