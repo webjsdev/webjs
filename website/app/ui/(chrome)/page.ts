@@ -42,7 +42,7 @@ export default function UiHome({ url }: Pick<PageProps, 'url'>) {
   const { pathname } = new URL(url);
   return html`
     ${extraStyleLinks(pathname)}
-    <main id="main" class="flex flex-1 flex-col">
+    <main id="main" tabindex="-1" class="flex flex-1 flex-col">
       <section class="border-grid md:**:[.container]:pb-8 lg:**:[.container]:pb-12">
         <div class="container-wrapper">
           <div class="container flex flex-col items-center gap-2 px-6 py-8 text-center md:py-16 lg:py-20 xl:gap-4">
