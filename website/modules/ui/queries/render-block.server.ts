@@ -1,6 +1,7 @@
 'use server';
 
 import { readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { renderToString } from '@webjsdev/core/server';
@@ -25,7 +26,8 @@ const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 let known: Promise<Set<string>> | null = null;
 async function blockNames(): Promise<Set<string>> {
   known ??= readdir(BLOCKS, { withFileTypes: true })
-    .then((entries) => new Set(entries.filter((e) => e.isDirectory()).map((e) => e.name)))
+    // A block is a directory holding a page.ts (charts/ holds chart modules, no page).
+    .then((entries) => new Set(entries.filter((e) => e.isDirectory() && existsSync(join(BLOCKS, e.name, 'page.ts'))).map((e) => e.name)))
     .catch(() => new Set<string>());
   return known;
 }

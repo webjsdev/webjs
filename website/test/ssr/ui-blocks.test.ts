@@ -18,7 +18,8 @@ let handle: (path: string) => Promise<Response>;
 
 interface ManifestItem { name: string; type: string; categories?: string[]; files?: { path: string }[] }
 const manifest = JSON.parse(readFileSync(join(REGISTRY, 'registry.json'), 'utf8')) as { items: ManifestItem[] };
-const blocks = manifest.items.filter((i) => i.type === 'registry:block' && !(i.categories || []).includes('chart'));
+const blocks = manifest.items.filter((i) => i.type === 'registry:block' && !(i.categories || []).some((c) => c === 'chart' || c === 'preview'));
+const previews = manifest.items.filter((i) => i.type === 'registry:block' && (i.categories || []).includes('preview'));
 
 before(async () => {
   const app = await createRequestHandler({ appDir: WEBSITE_ROOT, dev: false });
@@ -121,6 +122,30 @@ test('/ui/view/<name> renders every block bare, with no chrome, in new-york', as
   }
   assert.equal((await handle('/ui/view/not-a-block')).status, 404);
   assert.equal((await handle('/ui/view/..%2Fregistry')).status, 404);
+});
+
+test('the preview blocks and dashboard-01 render in the frame, and their elements load there', async () => {
+  assert.deepEqual(previews.map((b) => b.name).sort(), ['preview', 'preview-02', 'preview-03'], 'the three preview boards');
+  for (const b of [...previews, { name: 'dashboard-01' }]) {
+    const html = await page(`/ui/view/${b.name}`);
+    assert.match(html, new RegExp(`data-block="${b.name}"`), `${b.name} renders`);
+    // Dozens of cards share one page, so an id must not repeat.
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), [], `${b.name} repeats no id`);
+  }
+  const dash = await page('/ui/view/dashboard-01');
+  assert.match(dash, /<dashboard-01-data-table[\s>]/, 'the data table element');
+  assert.match(dash, /<ui-sidebar-provider[\s>]/, 'in the kit sidebar shell');
+  // The frame loads the generated barrel of block elements, so a block's own
+  // element upgrades even though the block itself renders as a string.
+  assert.match(dash, /modules\/ui\/blocks\/elements\.ts|dashboard-01\/components\/data-table\.ts/, 'the block elements reach the browser');
+  // A preview board is not a blocks-page block.
+  for (const b of previews) assert.doesNotMatch(await page('/ui/blocks/sidebar'), new RegExp(`id="${b.name}"`));
+});
+
+test('/ui/blocks features dashboard-01 first, and /ui/blocks/dashboard lists it', async () => {
+  assert.equal(viewers(await page('/ui/blocks'))[0], 'dashboard-01');
+  assert.deepEqual(viewers(await page('/ui/blocks/dashboard')), ['dashboard-01']);
 });
 
 /** Every .ts file under a block's directory. */

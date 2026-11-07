@@ -292,9 +292,25 @@ which carry them, so the bake still yields plain Tailwind.
 with `public/placeholder.svg` for the four with a cover image, and shadcn's
 sidebar set, `sidebar-01` to `sidebar-16` (categories `["sidebar"]`, target
 `app/dashboard/page.ts` plus one `components/<part>.ts` per part:
-`app-sidebar.ts`, `nav-main.ts`, `nav-user.ts`, `team-switcher.ts` and so on).
+`app-sidebar.ts`, `nav-main.ts`, `nav-user.ts`, `team-switcher.ts` and so on),
+`dashboard-01` (categories `["dashboard"]`: the sidebar shell, the section
+cards, an area chart on the kit's `chart.ts` and the data table, with its
+sample rows as `components/dashboard-data.ts`), and the three configurator
+boards `preview`, `preview-02` and `preview-03` (categories `["preview"]`,
+`app/<name>/page.ts` plus one `components/<name>/<card>.ts` fragment per card),
+which the /ui configurator renders and the blocks pages do not list.
 Blocks of one family share targets, so installing a second one keeps the
 first one's files unless `--overwrite` is passed.
+
+**A block element is named after its block.** Where a card needs behaviour
+markup cannot give it (the data table's paging and selection, an animated
+waveform, a scripted chat), the card file defines a light-DOM element whose
+tag starts with the block name (`dashboard-01-data-table`,
+`preview-live-waveform`, `preview-03-chat`), server-renders its first state,
+and adds only the behaviour. Every block's elements can then register on one
+page, which the site's /ui/view frame does through a barrel
+`website/scripts/copy-registry.mjs` generates. Element ids inside a card carry
+the card's name, since a board renders dozens of cards on one page.
 
 **How a sidebar block maps shadcn's React.** The shell is the kit's
 `<ui-sidebar-provider>` / `<ui-sidebar>` / `<ui-sidebar-inset>` /

@@ -139,6 +139,16 @@ website/
                        lib/ui/blocks-shell.ts. A fragment rather than a
                        layout, because the nav marks the current category and
                        a layout is not re-rendered between two categories
+        colors/page.ts /ui/colors, shadcn's Tailwind palette page: the 26
+                       palettes from modules/ui/colors/, each swatch a button
+                       carrying its value in every format as data-*
+                       attributes, so the page reads with JS off.
+                       components/color-swatches.ts adds the copy, the shared
+                       format menus and the remembered choice
+        sera/page.ts   /ui/sera, shadcn's Sera style showcase: the six preview
+                       screens (modules/ui/sera/), all server markup in the
+                       sera style and the taupe theme, and below md the
+                       screenshots in public/images/ shadcn shows instead
         (gallery)/     the interim component gallery, until the docs pages
                        replace it: layout.ts is its sidebar (new-york style)
           [name]/page.ts /ui/<name>, one page per component
@@ -161,7 +171,10 @@ website/
                        renders the site's mirror of the block through
                        modules/ui/queries/render-block.server.ts, and an
                        inline script cancels any submit, since a block's form
-                       carries no action yet. Outside (chrome), so no header
+                       carries no action yet. It imports the generated
+                       modules/ui/blocks/elements.ts so a block's own elements
+                       (the data table, an animated card) upgrade. Outside
+                       (chrome), so no header
       typeset.css/route.ts
                        shadcn's typeset.css as shadcn serves it (the body of
                        public/ui-typeset.css under shadcn's header), for the
@@ -169,6 +182,9 @@ website/
       r/registries.json/route.ts
                        the registry directory as JSON, shadcn's
                        /r/registries.json
+      rss.xml/route.ts the WebJs UI changelog as RSS 2.0, shadcn's /rss.xml:
+                       one item per changelog/ui release, linking to its
+                       heading on /ui/docs/changelog
       init/route.ts init/md/route.ts
                        shadcn's /init and /init/md for a design-system choice
                        (`?preset=<code>`, or the fields one by one): the
@@ -178,9 +194,27 @@ website/
                        packages/ui/packages/registry/themes/preset.js
       registry/**      the JSON API that shipped CLI versions fetch (see
                        modules/ui/ below). Its paths never move
-    sitemap.ts         /sitemap.xml (enumerates docs + ui + articles + compare + blog)
+      llm/[[...slug]]/route.ts
+                       every /ui page as markdown, shadcn's /llm/<slug>:
+                       /ui/<path> is served at /ui/llm/<path> (/ui/llm is the
+                       home page), with each demo's source inlined, the add
+                       command and the API tables. Each /ui page's head names
+                       it as `<link rel="alternate" type="text/markdown">`
+                       (the (chrome) layout's generateMetadata), and the docs
+                       shell carries Copy Page (components/docs-copy-page.ts)
+                       and View as Markdown. See lib/ui/llm.server.ts
+      llms.txt/route.ts llms-full.txt/route.ts
+                       the /ui section's own llms.txt (every /ui page with
+                       its description, linked to its markdown, then the
+                       example apps) and every /ui page's markdown in one file
+    sitemap.ts         /sitemap.xml (enumerates docs + every /ui page +
+                       articles + compare + blog)
     robots.ts          /robots.txt (allow-all, points at the sitemap)
-    llms.txt/route.ts  /llms.txt (llmstxt.org overview for AI agents)
+    llms.txt/route.ts  /llms.txt (llmstxt.org overview for AI agents): the
+                       docs, then every /ui page and the example apps (the
+                       gallery demos, the blog, this site, the blocks)
+    llms-full.txt/route.ts
+                       every doc page, then every /ui page, as markdown
   components/
     theme-toggle.ts    system/light/dark cycle
     copy-cmd.ts        click-to-copy command line (light DOM, always-on button)
@@ -198,6 +232,9 @@ website/
                        is server markup, lib/ui/docs/command-menu.ts, offering
                        only the docs pages that exist (docPageExists in
                        modules/ui/docs/nav.ts)
+    data-table-demo.ts the Data Table docs demos' behaviour (filter, sort,
+                       column visibility, selection, paging) around the
+                       server markup in lib/ui/data-table-demo.ts
     message-scroller-demo.ts
                        shadcn's MessageScrollerDemo, the /ui home page's
                        "New Chat" card: a scripted conversation that streams
@@ -223,6 +260,14 @@ website/
                        work with JS off
     site-nav-menu.ts   the header's mobile menu, wrapping a native <details>
                        so it still opens with JS off
+    color-swatches.ts  the /ui/colors behaviour around the server's markup: a
+                       swatch copies its value in the chosen format (with a
+                       toast), the format menus share one choice, and the
+                       choice persists in localStorage under shadcn's key
+    docs-copy-page.ts  the /ui docs pages' Copy Page button: fetches the page's
+                       /ui/llm markdown on the click and copies it. Hidden
+                       until defined, since the View as Markdown link beside
+                       it covers JS off
                        (components/ui/ is intentionally EMPTY here, left free
                        for `webjs ui add` to own, exactly as the scaffold
                        expects, and gitignored so it stays that way. The
@@ -248,6 +293,8 @@ website/
                        behaviour is components/block-viewer.ts
       blocks-shell.ts  the /ui/blocks page chrome: header, categories nav
                        (shadcn's lib/categories.ts), the featured list
+      data-table-demo.ts
+                       the payments table both Data Table docs demos render
       cta-panel.ts     the closing call to action
       site-footer.ts   the footer, rendered by the (site) chrome layout
       docs-shell.ts    the shell stylesheet (.prose-docs typography, the sticky
@@ -275,6 +322,25 @@ website/
                        to in a real app
     links.ts           cross-app URLs + in-app paths for the header and footer
     samples.ts         the code samples shown on the marketing pages
+    ui/llm.server.ts   the /ui section for agents (#1666): `listUiPages` is the
+                       page list /llms.txt, /ui/llms.txt and the sitemap all
+                       print, DERIVED from the nav, the component records,
+                       DOC_PAGES, the registry blocks, the route table's
+                       static /ui pages and the dynamic pages a section links
+                       (/ui/charts/<type>), so a new page cannot be missing.
+                       `renderUiMarkdown` runs the page module the router
+                       would run, renders it with custom elements unexpanded,
+                       and converts the HTML with lib/html-to-markdown.ts, so
+                       the markdown is the page and there is no second copy to
+                       keep in step. The docs shell's `data-slot="docs-body"`
+                       and `docs-description` and the preview's `data-demo`
+                       are what it reads. test/ssr/ui-llms.test.ts
+    ui/llm-path.ts     /ui/<path> to /ui/llm/<path>, browser-safe
+    html-to-markdown.ts
+                       a small parser and converter for HTML this site
+                       renders: headings, lists, tables, code figures fenced
+                       with their language and title, previews reduced to
+                       their source, chrome and hidden text dropped
     docs-llms.server.ts  enumerates the doc pages on disk (sitemap, llms.txt).
                        Strips tags at every stage and decodes entities exactly
                        ONCE, at the end. Decoding earlier puts a bare `<` in
@@ -355,7 +421,9 @@ website/
     ui/blocks/         GITIGNORED mirror of the registry blocks, written by
                        scripts/copy-registry.mjs with each import that leaves
                        the block pointed at the site's kit mirror, so a block
-                       shares the one kit instance the rest of /ui uses
+                       shares the one kit instance the rest of /ui uses. It
+                       also writes elements.ts, a barrel importing every block
+                       file that registers a custom element
     ui/utils/          tier classification, per-component examples + API metadata
     ui/typeset/        the typeset builder (#1666): params.ts (shadcn's params,
                        parse / serialize / shuffle, pure so the element shares
@@ -365,6 +433,15 @@ website/
                        docs-panel fragments, icons.ts, and fixtures/ (shadcn's
                        five specimens, behind a .server.ts index so the
                        preview page ships no script)
+    ui/colors/         palette-data.ts (shadcn's Tailwind palette data, copied
+                       from its registry/_legacy-colors.ts) and colors.ts
+                       (getColors: every shade in every format, plus the text
+                       colour that reads on it)
+    ui/sera/           the /ui/sera preview screens, one module each
+                       (audience-analytics, article-directory, empty-state,
+                       edit-article, media-library, media-library-table, and
+                       the media library's data), ported from shadcn's
+                       app/(app)/(styles)/sera as server markup
     ui/init/           preset-request.ts (a query string to a validated preset
                        config, shadcn's parse-config) and instructions.ts (the
                        /ui/init/md markdown)
@@ -396,6 +473,8 @@ website/
                        node_modules/.cache/ui-styles/themes.css (run by
                        copy-registry.mjs, imported by public/ui-input.css)
   public/              favicon, og image, self-hosted fonts, static assets
+    images/            sera-0{1,2,3,6}-{light,dark}.png, shadcn's Sera
+                       screenshots, which /ui/sera shows below md
 ```
 
 ## How lib/ grows

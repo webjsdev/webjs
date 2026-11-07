@@ -42,6 +42,7 @@ export const COMPONENT_DOCS: Record<string, () => Promise<ComponentDocModule>> =
   'combobox': () => import('./combobox.ts'),
   'command': () => import('./command.ts'),
   'context-menu': () => import('./context-menu.ts'),
+  'data-table': () => import('./data-table.ts'),
   'date-picker': () => import('./date-picker.ts'),
   'dialog': () => import('./dialog.ts'),
   'direction': () => import('./direction.ts'),

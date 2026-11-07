@@ -130,10 +130,11 @@ for (const name of ['login-04', 'signup-01']) {
   });
 }
 
-for (const name of ['sidebar-07', 'sidebar-13', 'sidebar-15']) {
+for (const name of ['sidebar-07', 'sidebar-13', 'sidebar-15', 'dashboard-01']) {
   test(`add ${name}: the installed dashboard page renders on the server, plain Tailwind, in the kit's sidebar`, async () => {
     // sidebar-07 is the docs lead, sidebar-13 renders inside a dialog and
-    // sidebar-15 mounts two sidebars, so the three cover every shell shape.
+    // sidebar-15 mounts two sidebars, so the three cover every shell shape;
+    // dashboard-01 adds the chart and the data table elements.
     const d = project();
     try {
       await quiet(() => add.parseAsync([name, '--yes', '--no-deps', '--cwd', d], { from: 'user' }));
@@ -148,6 +149,33 @@ for (const name of ['sidebar-07', 'sidebar-13', 'sidebar-15']) {
       assert.match(out, /data-sidebar="menu-button"/, 'menu buttons from the sidebar helpers');
       // The bake keeps its allowlisted hooks (the trigger icon's cn-rtl-flip);
       // any other cn-* name is one it failed to replace.
+      const kept = [...out.matchAll(/class="([^"]*)"/g)]
+        .flatMap((m) => m[1].split(/\s+/))
+        .filter((c) => /^cn-[a-z]/.test(c) && !CN_ALLOWLIST.has(c));
+      assert.deepEqual([...new Set(kept)], [], 'no unbaked cn-* name reaches the rendered page');
+      assert.ok(mod.metadata?.title, 'the page names itself');
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const name of ['preview', 'preview-02', 'preview-03']) {
+  test(`add ${name}: the installed board renders every card on the server, plain Tailwind`, async () => {
+    // The configurator's component boards: dozens of cards on one page, so an
+    // import the install cannot resolve or an unbaked name in any card shows
+    // up here.
+    const d = project();
+    try {
+      await quiet(() => add.parseAsync([name, '--yes', '--no-deps', '--cwd', d], { from: 'user' }));
+      const page = join(d, 'app', name, 'page.ts');
+      assert.ok(existsSync(page), 'the page lands at its target');
+      for (const f of items.get(name).files) assert.ok(existsSync(join(d, f.target)), `${f.target} is written`);
+
+      const mod = await import(pathToFileURL(resolve(page)).href);
+      const { renderToString } = await import('@webjsdev/core/server');
+      const out = await renderToString(mod.default());
+      assert.match(out, /data-slot="capture-target"/, 'the board grid');
       const kept = [...out.matchAll(/class="([^"]*)"/g)]
         .flatMap((m) => m[1].split(/\s+/))
         .filter((c) => /^cn-[a-z]/.test(c) && !CN_ALLOWLIST.has(c));

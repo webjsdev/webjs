@@ -31,11 +31,15 @@ export interface BlockDisplay extends BlockSummary {
   files: BlockFile[];
 }
 
-/** Every block, by name, optionally only those in `category`. */
+/**
+ * Every block, by name, optionally only those in `category`. Charts have their
+ * own pages, and the preview blocks are the configurator's component boards,
+ * which shadcn's blocks pages do not list either.
+ */
 export async function listBlocks(category?: string): Promise<BlockSummary[]> {
   const index = await loadRegistryIndex();
   return index
-    .filter((it) => it.type === 'registry:block' && !(it.categories || []).includes('chart'))
+    .filter((it) => it.type === 'registry:block' && !(it.categories || []).some((c) => c === 'chart' || c === 'preview'))
     .filter((it) => !category || (it.categories || []).includes(category))
     .map((it) => ({
       name: it.name,

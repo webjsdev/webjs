@@ -41,4 +41,6 @@ import '#modules/ui/components/toggle.ts';
 import '#modules/ui/components/toggle-group.ts';
 // The site's own chat card, which the message scroller docs page shows.
 import '#components/message-scroller-demo.ts';
+// The Data Table docs demos' behaviour (filter, sort, columns, selection, pages).
+import '#components/data-table-demo.ts';
 import '#modules/ui/components/tooltip.ts';

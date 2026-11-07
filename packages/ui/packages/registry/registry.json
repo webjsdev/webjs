@@ -2138,6 +2138,613 @@
       ]
     },
     {
+      "name": "preview",
+      "type": "registry:block",
+      "title": "Preview",
+      "description": "A preview of the kit's components and charts, as thirty-one cards in a seven-column sheet.",
+      "categories": [
+        "preview"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "alert",
+        "alert-dialog",
+        "avatar",
+        "badge",
+        "button",
+        "button-group",
+        "card",
+        "chart",
+        "checkbox",
+        "dialog",
+        "dropdown-menu",
+        "empty",
+        "field",
+        "input",
+        "input-group",
+        "item",
+        "kbd",
+        "native-select",
+        "radio-group",
+        "select",
+        "separator",
+        "skeleton",
+        "slider",
+        "switch",
+        "table",
+        "tabs",
+        "textarea",
+        "toggle-group",
+        "tooltip",
+        "progress"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/preview/page.ts",
+          "type": "registry:page",
+          "target": "app/preview/page.ts"
+        },
+        {
+          "path": "blocks/preview/cards/activate-agent-dialog.ts",
+          "type": "registry:component",
+          "target": "components/preview/activate-agent-dialog.ts"
+        },
+        {
+          "path": "blocks/preview/cards/analytics-card.ts",
+          "type": "registry:component",
+          "target": "components/preview/analytics-card.ts"
+        },
+        {
+          "path": "blocks/preview/cards/anomaly-alert.ts",
+          "type": "registry:component",
+          "target": "components/preview/anomaly-alert.ts"
+        },
+        {
+          "path": "blocks/preview/cards/bar-chart-card.ts",
+          "type": "registry:component",
+          "target": "components/preview/bar-chart-card.ts"
+        },
+        {
+          "path": "blocks/preview/cards/book-appointment.ts",
+          "type": "registry:component",
+          "target": "components/preview/book-appointment.ts"
+        },
+        {
+          "path": "blocks/preview/cards/codespaces-card.ts",
+          "type": "registry:component",
+          "target": "components/preview/codespaces-card.ts"
+        },
+        {
+          "path": "blocks/preview/cards/contributions-activity.ts",
+          "type": "registry:component",
+          "target": "components/preview/contributions-activity.ts"
+        },
+        {
+          "path": "blocks/preview/cards/contributors.ts",
+          "type": "registry:component",
+          "target": "components/preview/contributors.ts"
+        },
+        {
+          "path": "blocks/preview/cards/environment-variables.ts",
+          "type": "registry:component",
+          "target": "components/preview/environment-variables.ts"
+        },
+        {
+          "path": "blocks/preview/cards/feedback-form.ts",
+          "type": "registry:component",
+          "target": "components/preview/feedback-form.ts"
+        },
+        {
+          "path": "blocks/preview/cards/file-upload.ts",
+          "type": "registry:component",
+          "target": "components/preview/file-upload.ts"
+        },
+        {
+          "path": "blocks/preview/cards/github-profile.ts",
+          "type": "registry:component",
+          "target": "components/preview/github-profile.ts"
+        },
+        {
+          "path": "blocks/preview/cards/icon-preview-grid.ts",
+          "type": "registry:component",
+          "target": "components/preview/icon-preview-grid.ts"
+        },
+        {
+          "path": "blocks/preview/cards/invite-team.ts",
+          "type": "registry:component",
+          "target": "components/preview/invite-team.ts"
+        },
+        {
+          "path": "blocks/preview/cards/invoice.ts",
+          "type": "registry:component",
+          "target": "components/preview/invoice.ts"
+        },
+        {
+          "path": "blocks/preview/cards/live-waveform.ts",
+          "type": "registry:component",
+          "target": "components/preview/live-waveform.ts"
+        },
+        {
+          "path": "blocks/preview/cards/no-team-members.ts",
+          "type": "registry:component",
+          "target": "components/preview/no-team-members.ts"
+        },
+        {
+          "path": "blocks/preview/cards/not-found.ts",
+          "type": "registry:component",
+          "target": "components/preview/not-found.ts"
+        },
+        {
+          "path": "blocks/preview/cards/observability-card.ts",
+          "type": "registry:component",
+          "target": "components/preview/observability-card.ts"
+        },
+        {
+          "path": "blocks/preview/cards/pie-chart-card.ts",
+          "type": "registry:component",
+          "target": "components/preview/pie-chart-card.ts"
+        },
+        {
+          "path": "blocks/preview/cards/report-bug.ts",
+          "type": "registry:component",
+          "target": "components/preview/report-bug.ts"
+        },
+        {
+          "path": "blocks/preview/cards/shipping-address.ts",
+          "type": "registry:component",
+          "target": "components/preview/shipping-address.ts"
+        },
+        {
+          "path": "blocks/preview/cards/shortcuts.ts",
+          "type": "registry:component",
+          "target": "components/preview/shortcuts.ts"
+        },
+        {
+          "path": "blocks/preview/cards/skeleton-loading.ts",
+          "type": "registry:component",
+          "target": "components/preview/skeleton-loading.ts"
+        },
+        {
+          "path": "blocks/preview/cards/sleep-report.ts",
+          "type": "registry:component",
+          "target": "components/preview/sleep-report.ts"
+        },
+        {
+          "path": "blocks/preview/cards/style-overview.ts",
+          "type": "registry:component",
+          "target": "components/preview/style-overview.ts"
+        },
+        {
+          "path": "blocks/preview/cards/typography-specimen.ts",
+          "type": "registry:component",
+          "target": "components/preview/typography-specimen.ts"
+        },
+        {
+          "path": "blocks/preview/cards/ui-elements.ts",
+          "type": "registry:component",
+          "target": "components/preview/ui-elements.ts"
+        },
+        {
+          "path": "blocks/preview/cards/usage-card.ts",
+          "type": "registry:component",
+          "target": "components/preview/usage-card.ts"
+        },
+        {
+          "path": "blocks/preview/cards/visitors.ts",
+          "type": "registry:component",
+          "target": "components/preview/visitors.ts"
+        },
+        {
+          "path": "blocks/preview/cards/weekly-fitness-summary.ts",
+          "type": "registry:component",
+          "target": "components/preview/weekly-fitness-summary.ts"
+        }
+      ]
+    },
+    {
+      "name": "preview-02",
+      "type": "registry:block",
+      "title": "Preview 02",
+      "description": "A preview of the kit in finance, music catalog and smart home cards.",
+      "categories": [
+        "preview"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "card",
+        "field",
+        "input",
+        "item",
+        "badge",
+        "chart",
+        "separator",
+        "label",
+        "empty",
+        "accordion",
+        "tabs",
+        "slider",
+        "switch",
+        "toggle-group",
+        "skeleton",
+        "checkbox",
+        "breadcrumb",
+        "dropdown-menu",
+        "select",
+        "textarea",
+        "progress",
+        "radio-group",
+        "table",
+        "input-group",
+        "native-select",
+        "sidebar",
+        "combobox",
+        "spinner",
+        "calendar"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/preview-02/page.ts",
+          "type": "registry:page",
+          "target": "app/preview-02/page.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/account-access.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/account-access.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/card-overview.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/card-overview.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/claimable-balance.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/claimable-balance.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/contribution-history.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/contribution-history.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/cover-art.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/cover-art.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/dividend-income.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/dividend-income.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/empty-connect-bank.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/empty-connect-bank.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/empty-distribute-track.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/empty-distribute-track.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/empty-explore-catalog.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/empty-explore-catalog.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/faq.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/faq.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/front-door.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/front-door.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/index-investing.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/index-investing.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/kitchen-island.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/kitchen-island.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/loading-card.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/loading-card.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/new-milestone.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/new-milestone.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/notification-settings.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/notification-settings.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/payments.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/payments.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/payout-threshold.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/payout-threshold.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/power-usage.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/power-usage.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/preferences.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/preferences.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/qr-connect.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/qr-connect.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/receiving-method.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/receiving-method.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/recent-transactions.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/recent-transactions.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/release-catalog.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/release-catalog.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/roller-shades.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/roller-shades.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/savings-progress.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/savings-progress.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/savings-targets.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/savings-targets.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/sidebar-nav.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/sidebar-nav.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/social-links.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/social-links.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/stock-performance.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/stock-performance.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/syncing-state.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/syncing-state.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/transfer-funds.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/transfer-funds.ts"
+        },
+        {
+          "path": "blocks/preview-02/cards/upcoming-payments.ts",
+          "type": "registry:component",
+          "target": "components/preview-02/upcoming-payments.ts"
+        }
+      ]
+    },
+    {
+      "name": "preview-03",
+      "type": "registry:block",
+      "title": "Preview 03",
+      "description": "Four AI chat cards: a simple chat, a group chat, a reasoning trace and a file review, each a scripted conversation.",
+      "categories": [
+        "preview"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "attachment",
+        "badge",
+        "bubble",
+        "button",
+        "card",
+        "dropdown-menu",
+        "field",
+        "input-group",
+        "marker",
+        "message",
+        "message-scroller",
+        "separator",
+        "spinner"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/preview-03/page.ts",
+          "type": "registry:page",
+          "target": "app/preview-03/page.ts"
+        },
+        {
+          "path": "blocks/preview-03/cards/simple-chat.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/simple-chat.ts"
+        },
+        {
+          "path": "blocks/preview-03/cards/group-chat.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/group-chat.ts"
+        },
+        {
+          "path": "blocks/preview-03/cards/reasoning-chat.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/reasoning-chat.ts"
+        },
+        {
+          "path": "blocks/preview-03/cards/files-chat.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/files-chat.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/chat-card.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/chat-card.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/chat-player.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/chat-player.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/prompt-input.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/prompt-input.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/part-text.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/part-text.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/part-reasoning.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/part-reasoning.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/part-file.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/part-file.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/part-source.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/part-source.ts"
+        },
+        {
+          "path": "blocks/preview-03/components/part-tool.ts",
+          "type": "registry:component",
+          "target": "components/preview-03/part-tool.ts"
+        }
+      ]
+    },
+    {
+      "name": "dashboard-01",
+      "type": "registry:block",
+      "title": "Dashboard 01",
+      "description": "A dashboard with sidebar, charts and data table.",
+      "categories": [
+        "dashboard"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "separator",
+        "button",
+        "card",
+        "badge",
+        "chart",
+        "select",
+        "toggle-group",
+        "dropdown-menu",
+        "avatar",
+        "checkbox",
+        "drawer",
+        "input",
+        "label",
+        "table",
+        "tabs"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/dashboard-01/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/nav-main.ts",
+          "type": "registry:component",
+          "target": "components/nav-main.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/nav-documents.ts",
+          "type": "registry:component",
+          "target": "components/nav-documents.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/nav-secondary.ts",
+          "type": "registry:component",
+          "target": "components/nav-secondary.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/nav-user.ts",
+          "type": "registry:component",
+          "target": "components/nav-user.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/site-header.ts",
+          "type": "registry:component",
+          "target": "components/site-header.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/section-cards.ts",
+          "type": "registry:component",
+          "target": "components/section-cards.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/chart-area-interactive.ts",
+          "type": "registry:component",
+          "target": "components/chart-area-interactive.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/data-table.ts",
+          "type": "registry:component",
+          "target": "components/data-table.ts"
+        },
+        {
+          "path": "blocks/dashboard-01/components/dashboard-data.ts",
+          "type": "registry:component",
+          "target": "components/dashboard-data.ts"
+        }
+      ]
+    },
+    {
       "name": "chart-area-interactive",
       "type": "registry:block",
       "title": "Area Chart - Interactive",
