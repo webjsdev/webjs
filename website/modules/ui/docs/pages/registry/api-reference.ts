@@ -36,7 +36,7 @@ export default async function body(toc: TocEntry[]) {
       <li><code>@webjsdev/ui/registry/extract</code> for the projector that turns the packaged registry into the view the CLI and the MCP server print.</li>
       <li><code>@webjsdev/ui/utils</code> for reading and writing <code>components.json</code>.</li>
     </ul>
-    ${callout(html`<p>The bare <code>@webjsdev/ui</code> entry is the CLI itself and runs it when imported, so import a subpath. There is no API that fetches, resolves or installs items, and no preset codec: those happen inside the CLI commands.</p>`)}
+    ${callout(html`<p>The bare <code>@webjsdev/ui</code> entry is the CLI itself and runs it when imported, so import a subpath. Fetching, resolving and installing items happen inside the CLI commands.</p>`)}
 
     ${heading(toc, 2, '@webjsdev/ui/registry/schema')}
     <p>The schemas are <a href="https://zod.dev">zod</a> schemas of the registry format. Use them to validate registry files or a project's config.</p>
@@ -56,7 +56,7 @@ if (!result.success) console.error(result.error.issues);`)}
           <tr><td><code>registryItemFileSchema</code></td><td>One entry of <code>files</code>. <code>target</code> is required for <code>registry:file</code> and <code>registry:page</code>.</td></tr>
           <tr><td><code>registryItemCssVarsSchema</code></td><td><code>cssVars</code>: <code>theme</code>, <code>light</code>, <code>dark</code>.</td></tr>
           <tr><td><code>registryItemCommonSchema</code></td><td>The item fields shared by every type.</td></tr>
-          <tr><td><code>registryItemTailwindSchema</code>, <code>registryItemCssSchema</code>, <code>registryItemEnvVarsSchema</code></td><td>The <code>tailwind</code>, <code>css</code> and <code>envVars</code> fields. They validate, but the CLI does not apply them.</td></tr>
+          <tr><td><code>registryItemTailwindSchema</code>, <code>registryItemCssSchema</code>, <code>registryItemEnvVarsSchema</code></td><td>The <code>tailwind</code>, <code>css</code> and <code>envVars</code> fields.</td></tr>
           <tr><td><code>rawConfigSchema</code></td><td>A project's <code>components.json</code>.</td></tr>
           <tr><td><code>lintConfigSchema</code>, <code>lintRuleSchema</code>, <code>lintSeveritySchema</code></td><td>The <code>lint</code> block of <code>components.json</code>.</td></tr>
         </tbody>

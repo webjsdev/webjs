@@ -24,7 +24,7 @@ export default async function body(toc: TocEntry[]) {
     <p>You can turn <strong>a public GitHub repository into a registry.</strong></p>
     <p>Add a <code>registry.json</code> file to the repository, build it, commit the output, and users can install from the repository's raw file URL with the WebJs UI CLI.</p>
     ${commandBlock(packageCommands(`add <item> --registry ${RAW}`))}
-    ${callout(html`<p><strong>Note:</strong> The CLI has no <code>owner/repo/item</code> address that reads a repository's <code>registry.json</code> directly. It fetches built item files from a base URL, so the repository has to contain the <code>build</code> output, and the address is the URL of the folder that holds it.</p>`)}
+    ${callout(html`<p><strong>Note:</strong> The CLI fetches built item files from a base URL, so the repository has to contain the <code>build</code> output, and the address is the URL of the folder that holds it.</p>`)}
 
     ${heading(toc, 2, 'Distribute Anything')}
     <p>Registry items are <strong>not limited to components.</strong> They can include any text file from your repository: source files, configuration, docs, templates, agent rules or project conventions. Each file names where it lands in the user's project with a <code>target</code>.</p>
@@ -128,7 +128,7 @@ export default async function body(toc: TocEntry[]) {
     <p><code>list</code> shows the items typed <code>registry:ui</code> and <code>registry:block</code>. An item of another type, such as <code>project-conventions</code> above, installs with <code>add</code> and prints with <code>view</code>, but is not listed.</p>
 
     ${heading(toc, 2, 'Organize the repository')}
-    <p>There is no <code>include</code> field, so the repository has one <code>registry.json</code>. Organize the source files in folders as you like, since each item's <code>path</code> points at its files wherever they are.</p>
+    <p>Keep one <code>registry.json</code> in the repository, and organize the source files in folders as you like, since each item's <code>path</code> points at its files wherever they are.</p>
 
     ${heading(toc, 2, 'Registry dependencies')}
     <p>A <code>registryDependencies</code> entry is the name of another item, and it is fetched from the same base URL as the item that lists it. So an item in your repository can depend on another item in your repository by name.</p>
@@ -144,7 +144,7 @@ export default async function body(toc: TocEntry[]) {
     }
   ]
 }`, { lang: 'json', title: 'registry.json', lineNumbers: true })}
-    <p>A dependency cannot point at another registry. A name like <code>button</code> resolves to <code>button.json</code> in your repository, not to the WebJs UI <code>button</code>. To build on a kit component, tell users to install it first with <code>webjs ui add button</code>, or ship your own copy as an item.</p>
+    <p>Every dependency comes from the item's own registry. A name like <code>button</code> resolves to <code>button.json</code> in your repository, not to the WebJs UI <code>button</code>. To build on a kit component, tell users to install it first with <code>webjs ui add button</code>, or ship your own copy as an item.</p>
 
     ${heading(toc, 2, 'Useful commands')}
     <p>View an item before installing it. <code>view</code> prints what the item is and then the source of every file it would write.</p>
@@ -163,7 +163,7 @@ npx @webjsdev/ui add brand-button`, { lang: 'bash' })}
     <p>For published install commands, prefer tags or full commit SHAs. A registry dependency is fetched from the same URL, so it is pinned to the same ref.</p>
 
     ${heading(toc, 2, 'Private repositories')}
-    <p>Private repositories are not supported. The CLI fetches with no credentials and no custom headers, and <code>raw.githubusercontent.com</code> answers a private file only with a token. See <a href="/ui/docs/registry/authentication">Authentication</a> for what a private registry can do instead.</p>
+    <p>To keep a registry private, serve its build output from a host you control: <code>raw.githubusercontent.com</code> answers a private file only with a token, and the CLI fetches with a plain request. See <a href="/ui/docs/registry/authentication">Authentication</a> for the patterns, a private network or a secret path segment.</p>
 
     ${heading(toc, 2, 'Review before installing')}
     <p>Registry items install code and project files from another repository. Treat a registry URL like any other third-party code dependency.</p>
@@ -173,7 +173,7 @@ npx @webjsdev/ui add brand-button`, { lang: 'bash' })}
       <li>Review the item definition, especially <code>files</code>, <code>target</code>, <code>dependencies</code>, <code>devDependencies</code> and <code>registryDependencies</code>.</li>
       <li>Prefer a tag or full commit SHA in the URL. A full 40-character commit SHA is the most reproducible option.</li>
       <li>Run <code>view</code> to print the item and every file's source before installing. Pipe its output to your agent or review tool if you want help checking the item.</li>
-      <li><code>add</code> asks before replacing an existing file, unless you pass <code>--yes</code> or <code>--overwrite</code>, and keeps an existing block file unless you pass <code>--overwrite</code>. It has no dry-run mode, so review first, and run <code>diff</code> afterwards to compare what is installed.</li>
+      <li><code>add</code> asks before replacing an existing file, unless you pass <code>--yes</code> or <code>--overwrite</code>, and keeps an existing block file unless you pass <code>--overwrite</code>. Review with <code>view</code> first, and run <code>diff</code> afterwards to compare what is installed.</li>
     </ul>
   `;
 }

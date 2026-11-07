@@ -19,7 +19,7 @@ const BASE = 'https://acme.com/r';
 export default async function body(toc: TocEntry[]) {
   return html`
     <p>Registries can change or go offline after they are added to the directory. Checking them keeps users from running an install command that fails.</p>
-    ${callout(html`<p>webjs.dev does not monitor the registries in the <a href="/ui/docs/directory">directory</a>, and it computes no status or score for them. The checks below are the ones a registry owner runs with the CLI, which validates everything it fetches.</p>`, { title: 'There is no hosted health service.' })}
+    ${callout(html`<p>A registry owner checks a registry in the <a href="/ui/docs/directory">directory</a> with the CLI, which validates everything it fetches. The checks below cover the index, the items, an install and drift.</p>`, { title: 'Check a registry with the CLI.' })}
 
     ${heading(toc, 2, 'What to check')}
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
@@ -47,10 +47,10 @@ done`, { lang: 'bash', title: 'check-registry.sh', lineNumbers: true })}
     <p>To test the install itself, run <code>add</code> in a throwaway app created with <code>webjs create</code>, then run its tests.</p>
 
     ${heading(toc, 2, 'Directory ranking')}
-    <p>The directory lists registries in the order of <code>website/modules/ui/directory/registries.ts</code>, with the WebJs UI registry first. Its search filters by name and description. Nothing reorders or hides an entry automatically.</p>
+    <p>The directory lists registries in the order of <code>website/modules/ui/directory/registries.ts</code>, with the WebJs UI registry first. Its search filters by name and description, and entries change only when the file does.</p>
 
     ${heading(toc, 2, 'Directory data in the API')}
-    <p><a href="/ui/r/registries.json" data-no-router>/ui/r/registries.json</a> serves each entry's <code>name</code>, <code>homepage</code>, <code>url</code>, <code>description</code> and <code>logo</code>. It carries no health or ranking fields.</p>
+    <p><a href="/ui/r/registries.json" data-no-router>/ui/r/registries.json</a> serves each entry's <code>name</code>, <code>homepage</code>, <code>url</code>, <code>description</code> and <code>logo</code>.</p>
 
     ${heading(toc, 2, 'What happens next')}
     <p>If a listed registry stops working, open an issue or a pull request on <a href="https://github.com/webjsdev/webjs">webjsdev/webjs</a> to fix or remove its entry. See <a href="/ui/docs/registry/registry-index">Registry Directory</a> for how entries are added.</p>

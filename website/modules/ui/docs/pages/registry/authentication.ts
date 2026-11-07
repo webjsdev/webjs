@@ -15,12 +15,12 @@ import { callout } from '#lib/ui/docs/callout.ts';
  * contract: network access, and a secret path segment the server checks.
  */
 export const title = 'Authentication';
-export const description = 'Keep a registry private when the CLI sends no credentials.';
+export const description = 'Keep a registry private with a private network or a secret URL.';
 
 export default async function body(toc: TocEntry[]) {
   return html`
-    <p>A private registry keeps internal components to the people allowed to install them. This guide shows what the WebJs UI CLI can and cannot send, and how to protect a registry within that.</p>
-    ${callout(html`<p>The CLI fetches <code>&lt;url&gt;/&lt;name&gt;.json</code> with a plain <code>fetch</code>. It sends no <code>Authorization</code> header, no API key header, no cookie, and it does not expand environment variables into a request. So there is no token, API key or query parameter to configure. Protection has to come from where the registry is reachable, or from the URL itself.</p>`, { title: 'The CLI sends no credentials.' })}
+    <p>A private registry keeps internal components to the people allowed to install them. This guide shows how to protect a registry the WebJs UI CLI installs from.</p>
+    ${callout(html`<p>The CLI fetches <code>&lt;url&gt;/&lt;name&gt;.json</code> with a plain <code>fetch</code>, so protect the registry by where it is reachable, or by the URL itself.</p>`, { title: 'Protect the registry, not the request.' })}
 
     ${heading(toc, 2, 'Common Patterns')}
 
@@ -34,7 +34,7 @@ export default async function body(toc: TocEntry[]) {
     <p>Treat the full URL as the secret. It appears in shell history, in CI logs when a command echoes it, and in the CLI's own error messages, which print the URL they requested. Keep it in <code>REGISTRY_URL</code> from a secret store rather than in a committed script.</p>
 
     ${heading(toc, 3, 'Query Parameters')}
-    <p>A token in a query string does not work. The CLI appends the item path after the base URL, so <code>https://registry.acme.com/r?token=abc</code> requests <code>https://registry.acme.com/r?token=abc/auth-utils.json</code>.</p>
+    <p>Put a token in the path rather than in a query string. The CLI appends the item path after the base URL, so <code>https://registry.acme.com/r?token=abc</code> requests <code>https://registry.acme.com/r?token=abc/auth-utils.json</code>.</p>
 
     ${heading(toc, 2, 'Server-Side Implementation')}
     <p>A WebJs route handler can check the segment in constant time and serve the files <code>webjsui build</code> wrote.</p>
@@ -95,7 +95,7 @@ curl https://registry.acme.com/r/<secret>/auth-utils.json
 npx @webjsdev/ui view auth-utils --registry https://registry.acme.com/r/<secret>`, { lang: 'bash' })}
 
     ${heading(toc, 2, 'Error Handling')}
-    <p>The CLI reports a failed request with its status and the URL it requested, for example <code>HTTP 404</code> or <code>HTTP 401</code>. It does not read an error body, so a custom error message in the response is not shown to the user. Document the expected URL format where your users get the URL instead.</p>
+    <p>The CLI reports a failed request with its status and the URL it requested, for example <code>HTTP 404</code> or <code>HTTP 401</code>. Document the expected URL format where your users get the URL, since the status and the URL are what they see.</p>
 
     ${heading(toc, 2, 'Next Steps')}
     <ul>

@@ -18,7 +18,7 @@ export const description = 'Use more than one registry, one registry per command
 
 export default async function body(toc: TocEntry[]) {
   return html`
-    ${callout(html`<p>The WebJs UI CLI has no namespaces. There is no <code>@acme/button</code> address, no <code>registry add</code> command, and no URL template. Each command reads one registry: the one <code>--registry</code> names, else the one the <code>REGISTRY_URL</code> environment variable names, else the WebJs UI registry. This page covers how to work with several registries under that model.</p>`, { title: 'Namespaces are not supported.' })}
+    ${callout(html`<p>Each command reads one registry: the one <code>--registry</code> names, else the one the <code>REGISTRY_URL</code> environment variable names, else the WebJs UI registry. This page covers how to work with several registries.</p>`, { title: 'One registry per command.' })}
 
     ${heading(toc, 2, 'Overview')}
     <p>A registry is addressed by its base URL, and the item by its name inside it. The CLI fetches <code>&lt;url&gt;/&lt;name&gt;.json</code>.</p>
@@ -43,10 +43,10 @@ https://registry.acme.com/beta      # experimental items`, { lang: 'txt' })}
 npx @webjsdev/ui list
 npx @webjsdev/ui add auth-utils`, { lang: 'bash' })}
     ${heading(toc, 3, 'components.json')}
-    <p><code>components.json</code> accepts a <code>registries</code> field, so an older file still parses, but the CLI does not read it. A registry configured there is ignored.</p>
+    <p>Name the registry with <code>--registry</code> or <code>REGISTRY_URL</code>. The <code>registries</code> field in <code>components.json</code> is accepted only so an older file still parses.</p>
 
     ${heading(toc, 2, 'Authentication & Security')}
-    <p>The CLI sends no credentials and expands no environment variables into headers or URLs. See <a href="/ui/docs/registry/authentication">Authentication</a> for what a private registry can do instead.</p>
+    <p>The CLI fetches each file with a plain request. See <a href="/ui/docs/registry/authentication">Authentication</a> for how to protect a private registry.</p>
     ${heading(toc, 3, 'Inspecting Resources Before Installation')}
     <p>Run <code>view</code> to print an item and the source of every file it would write before you install it.</p>
     ${commandBlock(packageCommands('view auth-utils --registry https://acme.com/r'))}
@@ -60,7 +60,7 @@ npx @webjsdev/ui add auth-utils`, { lang: 'bash' })}
 }`, { lang: 'json', title: 'dashboard.json', lineNumbers: true })}
     <p>Here <code>card</code> and <code>chart</code> are fetched from the registry <code>dashboard</code> came from, not from the WebJs UI registry. A registry that builds on kit components either ships its own copies as items or asks users to install the kit components first.</p>
     ${heading(toc, 3, 'Overriding Third-Party Resources')}
-    <p>There is no override mechanism, because there is nothing to override at install time: every file the CLI writes becomes your source. To customize a third-party component, install it and edit the file. <code>diff</code> then shows how your copy differs from the registry's.</p>
+    <p>Every file the CLI writes becomes your source. To customize a third-party component, install it and edit the file. <code>diff</code> then shows how your copy differs from the registry's.</p>
 
     ${heading(toc, 2, 'Versioning')}
     <p>The base URL is any prefix the CLI appends <code>/&lt;name&gt;.json</code> to, so put the version in the path.</p>
@@ -92,7 +92,7 @@ npx @webjsdev/ui diff --registry https://acme.com/r`, { lang: 'bash' })}
     ${codeFigure(`Failed to fetch registry index from https://acme.com/r/index.json: HTTP 404`, { lang: 'txt' })}
     <p><code>list</code> and <code>diff</code> need <code>&lt;url&gt;/index.json</code>. <code>webjsui build</code> writes it.</p>
     ${heading(toc, 3, 'Authentication Failures')}
-    <p>A registry that answers <code>401</code> or <code>403</code> fails the same way, with that status in the message. The CLI cannot send credentials, so the registry has to be reachable without them.</p>
+    <p>A registry that answers <code>401</code> or <code>403</code> fails the same way, with that status in the message. Make the registry reachable without credentials, as <a href="/ui/docs/registry/authentication">Authentication</a> describes.</p>
 
     ${heading(toc, 2, 'Creating Your Own Registry')}
     <p>To make a registry, build it with <code>webjsui build</code> and serve the output folder. See <a href="/ui/docs/registry/getting-started">Getting Started</a>.</p>

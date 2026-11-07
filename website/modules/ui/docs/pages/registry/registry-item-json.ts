@@ -136,7 +136,7 @@ export default async function body(toc: TocEntry[]) {
   "registryDependencies": ["brand-button", "brand-card"]
 }`)}
     <p>The CLI resolves them transitively and installs the deepest dependency first. A name it has already visited is skipped, so a cycle cannot loop.</p>
-    ${callout(html`<p><strong>Note:</strong> There is no address for an item in another registry: no <code>@namespace/item</code>, <code>owner/repo/item</code>, URL or file path form. A bare name such as <code>button</code> means <code>button.json</code> in your registry, not the WebJs UI button.</p>`)}
+    ${callout(html`<p><strong>Note:</strong> Every dependency comes from the item's own registry. A bare name such as <code>button</code> means <code>button.json</code> in your registry, not the WebJs UI button.</p>`)}
 
     ${heading(toc, 3, 'files')}
     <p>The <code>files</code> property is used to specify the files of your registry item. Each file has a <code>path</code>, <code>type</code>, <code>content</code> and an optional <code>target</code>.</p>
@@ -179,12 +179,12 @@ export default async function body(toc: TocEntry[]) {
     ])}
     <h4>target</h4>
     <p>The <code>target</code> property is used to indicate where the file should be placed in a project. It is a path from the project root, written as is, and it wins over the file type. Use it for routes, config, and every file of a block.</p>
-    <p>A target is written as is: there is no <code>~/</code> prefix and no <code>@ui/</code>, <code>@components/</code>, <code>@lib/</code> or <code>@hooks/</code> placeholder. A target such as <code>@ui/button.ts</code> is written to a folder named <code>@ui</code>. To land a file in the user's configured folder, leave out <code>target</code> and pick the file <code>type</code>.</p>
+    <p>A target is a path from the project root, written as is. A target such as <code>@ui/button.ts</code> is written to a folder named <code>@ui</code>. To land a file in the user's configured folder, leave out <code>target</code> and pick the file <code>type</code>.</p>
     <h4>Imports</h4>
     <p>On install, a relative import is resolved against the file's <code>path</code> in the registry and rewritten to where its target lands in the project, when it points at another file of the same item, <code>lib/utils.ts</code> (the user's <code>cn()</code> file), <code>lib/dom.ts</code>, <code>lib/icons.ts</code>, or a <code>components/&lt;name&gt;.ts</code> file (the <code>aliases.ui</code> folder). Any other import is left as written.</p>
 
     ${heading(toc, 3, 'tailwind')}
-    <p><strong>DEPRECATED:</strong> Use <code>cssVars.theme</code> instead for Tailwind v4 projects. The <code>tailwind</code> property is accepted by the schema, and the CLI does not apply it.</p>
+    <p><strong>DEPRECATED:</strong> Use <code>cssVars.theme</code> instead for Tailwind v4 projects.</p>
 
     ${heading(toc, 3, 'cssVars')}
     <p>Use to define CSS variables for your registry item. <code>add</code> writes them to the stylesheet <code>components.json</code> names: <code>theme</code> in the <code>@theme inline</code> block, <code>light</code> in <code>:root</code>, <code>dark</code> in <code>.dark</code>. A block that is missing is appended.</p>
@@ -206,13 +206,13 @@ export default async function body(toc: TocEntry[]) {
     <p>Only variables the stylesheet does not define yet are added. An existing one keeps its value, so <code>cssVars</code> adds tokens and never overrides them.</p>
 
     ${heading(toc, 3, 'css')}
-    <p>The <code>css</code> property is accepted by the schema, and the CLI does not apply it. To ship rules such as <code>@layer base</code>, <code>@utility</code> or <code>@keyframes</code>, add a CSS file as a <code>registry:file</code> with a <code>target</code>, and tell users to import it into their stylesheet.</p>
+    <p>To ship rules such as <code>@layer base</code>, <code>@utility</code> or <code>@keyframes</code>, add a CSS file as a <code>registry:file</code> with a <code>target</code>, and tell users to import it into their stylesheet.</p>
 
     ${heading(toc, 3, 'envVars')}
-    <p>The <code>envVars</code> property is accepted by the schema, and the CLI does not write it to any <code>.env</code> file. To ship example variables, add an <code>.env.example</code> file as a <code>registry:file</code>, as above.</p>
+    <p>To ship example variables, add an <code>.env.example</code> file as a <code>registry:file</code>, as above.</p>
 
     ${heading(toc, 3, 'font')}
-    <p>There is no <code>font</code> property in the schema, and <code>registry:font</code> items get no special handling. Ship a font as files and <code>cssVars.theme</code> entries instead, such as <code>"font-heading": "Poppins, sans-serif"</code>.</p>
+    <p>Ship a font as files and <code>cssVars.theme</code> entries, such as <code>"font-heading": "Poppins, sans-serif"</code>.</p>
 
     ${heading(toc, 3, 'docs')}
     <p>The <code>docs</code> property is accepted by the schema, and the CLI does not print it on install. Put install notes in the <code>description</code>, which <code>list</code> and <code>view</code> show.</p>
@@ -224,7 +224,7 @@ export default async function body(toc: TocEntry[]) {
 }`)}
 
     ${heading(toc, 3, 'meta')}
-    <p>Use <code>meta</code> to add additional metadata to your registry item. You can add any key/value pair, for your own tools to read. The CLI does not read it.</p>
+    <p>Use <code>meta</code> to add additional metadata to your registry item. You can add any key/value pair, for your own tools to read.</p>
     ${json(`{
   "meta": { "foo": "bar" }
 }`)}

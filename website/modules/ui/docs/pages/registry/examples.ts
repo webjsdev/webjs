@@ -50,7 +50,7 @@ export default async function body(toc: TocEntry[]) {
 }`, 'example-style.json')}
 
     ${heading(toc, 3, 'Custom style from scratch')}
-    <p><code>extends: "none"</code> is accepted by the schema and has no effect, since the CLI never installs anything an item does not list. A style from scratch is a style item whose <code>registryDependencies</code> are all your own items, and whose CSS variables are new names.</p>
+    <p>A style from scratch is a style item whose <code>registryDependencies</code> are all your own items, and whose CSS variables are new names. The CLI installs exactly what an item lists.</p>
     ${json(`{
   "name": "new-style",
   "type": "registry:style",
@@ -74,7 +74,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'registry:theme')}
     ${heading(toc, 3, 'Custom theme')}
-    <p>A theme item's <code>cssVars</code> add the variables a project does not define. A project that ran <code>webjs ui init</code> already defines <code>--background</code>, <code>--primary</code> and the rest, so <code>cssVars</code> cannot recolor it. To change existing values, ship the theme as a CSS file and tell users to import it after their theme.</p>
+    <p>A theme item's <code>cssVars</code> add the variables a project does not define. A project that ran <code>webjs ui init</code> already defines <code>--background</code>, <code>--primary</code> and the rest, so to change those values, ship the theme as a CSS file and tell users to import it after their theme.</p>
     ${json(`{
   "name": "custom-theme",
   "type": "registry:theme",
@@ -224,7 +224,7 @@ export default async function body(toc: TocEntry[]) {
 }`, 'media-query.json')}
 
     ${heading(toc, 2, 'Targets')}
-    <p>There are no target placeholders (<code>@components/</code>, <code>@ui/</code>, <code>@lib/</code>, <code>@hooks/</code>). A <code>target</code> is a path from the project root, written as is, and it decides where the file lands even when it differs from the file <code>type</code>.</p>
+    <p>A <code>target</code> is a path from the project root, written as is, and it decides where the file lands even when it differs from the file <code>type</code>.</p>
     ${json(`{
   "name": "type-mismatch",
   "type": "registry:item",
@@ -240,7 +240,7 @@ export default async function body(toc: TocEntry[]) {
     <p>To land a file in the user's configured folder instead, leave out <code>target</code> and let the file <code>type</code> pick it: <code>registry:ui</code> for <code>aliases.ui</code>, <code>registry:component</code> for <code>aliases.components</code>, <code>registry:lib</code> for <code>aliases.lib</code>.</p>
 
     ${heading(toc, 2, 'registry:font')}
-    <p>There is no <code>font</code> field in the schema, and a <code>registry:font</code> item gets no special handling. Ship the font family as a theme variable, and the font files, if any, as <code>registry:file</code> entries.</p>
+    <p>Ship the font family as a theme variable, and the font files, if any, as <code>registry:file</code> entries.</p>
     ${json(`{
   "name": "font-inter",
   "type": "registry:font",
@@ -284,7 +284,7 @@ export default async function body(toc: TocEntry[]) {
   ]
 }`, 'example-item.json')}
     ${heading(toc, 3, 'Metadata')}
-    <p>Use the <code>meta</code> field to attach arbitrary metadata to your registry items. This can be used to store custom data that your tools or scripts can use. The CLI does not read it.</p>
+    <p>Use the <code>meta</code> field to attach arbitrary metadata to your registry items. This can be used to store custom data that your tools or scripts can use.</p>
     ${json(`{
   "name": "custom-component",
   "type": "registry:ui",
@@ -332,7 +332,7 @@ export default async function body(toc: TocEntry[]) {
 }`, 'example-theme.json')}
 
     ${heading(toc, 2, 'Add custom CSS')}
-    <p>The schema accepts a <code>css</code> field, and the CLI does not apply it. Base styles, component styles, <code>@utility</code> rules, <code>@import</code>, <code>@plugin</code> and <code>@keyframes</code> all ship the same way: as a CSS file the user imports.</p>
+    <p>Base styles, component styles, <code>@utility</code> rules, <code>@import</code>, <code>@plugin</code> and <code>@keyframes</code> all ship the same way: as a CSS file the user imports.</p>
     ${json(`{
   "name": "acme-css",
   "type": "registry:style",
@@ -363,7 +363,7 @@ export default async function body(toc: TocEntry[]) {
 @import "./acme.css";`, { lang: 'css' })}
 
     ${heading(toc, 2, 'Add environment variables')}
-    <p>The schema accepts an <code>envVars</code> field, and the CLI does not write it to any file. Ship example variables as a file instead.</p>
+    <p>Ship example variables as a file.</p>
     ${json(`{
   "name": "custom-item",
   "type": "registry:item",

@@ -83,7 +83,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 3, 'Why does button in registryDependencies not resolve to the WebJs UI button?')}
     <p>A registry dependency is a name, and the CLI fetches it from the same registry as the item that lists it. In an item served from <code>https://acme.com/r</code>, <code>button</code> means <code>https://acme.com/r/button.json</code>.</p>
-    <p>There is no address for an item in another registry. If your item builds on a WebJs UI component, tell users to install it first, or ship your own copy in your registry.</p>
+    <p>Every dependency comes from the item's own registry. If your item builds on a WebJs UI component, tell users to install it first, or ship your own copy in your registry.</p>
     ${commandBlock(packageCommands('add button'))}
 
     ${heading(toc, 3, 'How do I pin a registry item?')}
@@ -112,7 +112,7 @@ export default async function body(toc: TocEntry[]) {
     }
   }
 }`)}
-    <p>The CLI adds only the variables the project does not define yet, each in its own block, and leaves every existing one as it is. So <code>cssVars</code> cannot override a value the project already sets, such as <code>--primary</code>. To change one, tell users to edit their stylesheet, or ship a <code>registry:file</code> they import after the theme.</p>
+    <p>The CLI adds only the variables the project does not define yet, each in its own block, and leaves every existing one as it is. To change a value the project already sets, such as <code>--primary</code>, tell users to edit their stylesheet, or ship a <code>registry:file</code> they import after the theme.</p>
 
     ${heading(toc, 3, 'Why is @webjsdev/core installed when my item lists no dependencies?')}
     <p><code>add</code> always installs <code>@webjsdev/core</code> along with an item's <code>dependencies</code>, since every kit file builds on it. Pass <code>--no-deps</code> to skip installing packages altogether.</p>

@@ -18,7 +18,7 @@ export const description = 'Open Source Registry Index';
 export default async function body(toc: TocEntry[]) {
   return html`
     <p>The open source registry index is a list of the open source registries you can install from with the WebJs UI CLI.</p>
-    <p>The <a href="/ui/docs/directory">Directory</a> page lists them, and each entry shows the command that installs from that registry. The CLI itself does not read the index: it installs from the registry its <code>--registry</code> flag names, and from the WebJs UI registry when there is no flag.</p>
+    <p>The <a href="/ui/docs/directory">Directory</a> page lists them, and each entry shows the command that installs from that registry. The CLI installs from the registry its <code>--registry</code> flag names, and from the WebJs UI registry when there is no flag.</p>
     <p>You can see the full list at <a href="/ui/r/registries.json" data-no-router>/ui/r/registries.json</a>.</p>
     <p>You do not need to submit a registry to the directory to use it. Any registry URL works with <code>--registry</code>. The directory is for registries you want other people to find.</p>
 
@@ -36,7 +36,7 @@ export default async function body(toc: TocEntry[]) {
   logo: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='var(--foreground)'>...</svg>",
 },`, { title: 'website/modules/ui/directory/registries.ts', lineNumbers: true })}
     ${commandBlock(packageCommands('list --registry https://acme.com/r'))}
-    <p>Once you have submitted your request, it will be reviewed. Once the pull request is merged, your registry appears in the directory with the next deploy of webjs.dev. There is no health monitoring: an entry stays listed until someone changes the file.</p>
+    <p>Once you have submitted your request, it will be reviewed. Once the pull request is merged, your registry appears in the directory with the next deploy of webjs.dev. An entry stays listed until someone changes the file.</p>
 
     ${heading(toc, 2, 'Requirements')}
     <ol>
