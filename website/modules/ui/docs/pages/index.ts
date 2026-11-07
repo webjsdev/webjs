@@ -84,6 +84,6 @@ export const DOC_PAGES: Record<string, () => Promise<DocPageModule>> = {
   'ai-elements/test-results': () => import('./ai-elements/test-results.ts'),
   'ai-elements/tool': () => import('./ai-elements/tool.ts'),
   'helpers/ai-sdk': () => import('./helpers/ai-sdk.ts'),
-  'react/message-scroller': () => import('./react/message-scroller.ts'),
-  'react/questionnaire': () => import('./react/questionnaire.ts'),
+  'primitives/message-scroller': () => import('./primitives/message-scroller.ts'),
+  'primitives/questionnaire': () => import('./primitives/questionnaire.ts'),
 };

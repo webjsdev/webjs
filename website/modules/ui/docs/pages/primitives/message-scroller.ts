@@ -19,7 +19,7 @@ const code = (s: string) => html`<code>${s}</code>`;
 
 export default async function body(toc: TocEntry[]) {
   return html`
-    <p>shadcn ships <code>MessageScroller</code> as a headless primitive in its <code>@shadcn/react</code> package. WebJs UI ported that primitive as a set of custom elements, <code>&lt;ui-message-scroller&gt;</code> and its parts. The elements own all of the scroll behavior: anchoring turns, following streamed output, keeping the reader's place as history loads, and tracking visibility.</p>
+    <p>Message Scroller is a set of custom elements, <code>&lt;ui-message-scroller&gt;</code> and its parts. The elements own all of the scroll behavior: anchoring turns, following streamed output, keeping the reader's place as history loads, and tracking visibility.</p>
     <p>The kit has no separate unstyled layer. Each element applies the kit's classes to the box it renders, and a <code>class</code> you write on an element is merged with them, so you style the scroller by adding classes, or by editing the copy of the component that the CLI puts in your project.</p>
     <p>For the behavior guide and live examples, see the <a href="/ui/docs/components/message-scroller">Message Scroller</a> component.</p>
 
@@ -50,20 +50,19 @@ export default async function body(toc: TocEntry[]) {
 </ui-message-scroller>`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'Parts')}
-    <p>If you are coming from shadcn, its styled parts and its unstyled namespace parts map to the kit's elements like this. The provider and the frame are one element in the kit.</p>
-    ${table(['Styled component', 'Unstyled part', 'WebJs UI element'], [
-      [code('MessageScrollerProvider'), code('MessageScroller.Provider'), html`${code('<ui-message-scroller>')}`],
-      [code('MessageScroller'), code('MessageScroller.Root'), html`${code('<ui-message-scroller>')}`],
-      [code('MessageScrollerViewport'), code('MessageScroller.Viewport'), code('<ui-message-scroller-viewport>')],
-      [code('MessageScrollerContent'), code('MessageScroller.Content'), code('<ui-message-scroller-content>')],
-      [code('MessageScrollerItem'), code('MessageScroller.Item'), code('<ui-message-scroller-item>')],
-      [code('MessageScrollerButton'), code('MessageScroller.Button'), code('<ui-message-scroller-button>')],
+    <p>Each part is one element. The root holds the scroll state and renders the frame, so state and frame are one element.</p>
+    ${table(['Element', 'Part'], [
+      [code('<ui-message-scroller>'), 'The root: the scroll state, the behavior and the frame.'],
+      [code('<ui-message-scroller-viewport>'), 'The scrolling element.'],
+      [code('<ui-message-scroller-content>'), 'The transcript list.'],
+      [code('<ui-message-scroller-item>'), 'One transcript row.'],
+      [code('<ui-message-scroller-button>'), 'The scroll-to-start or scroll-to-end button.'],
     ])}
-    <p>shadcn's hooks read from the provider. In the kit they are members of the <code>&lt;ui-message-scroller&gt;</code> element, which any code that can reach the element can use:</p>
-    ${table(['Hook', 'WebJs UI'], [
-      [code('useMessageScroller'), html`The element's ${code('scrollToMessage()')}, ${code('scrollToEnd()')} and ${code('scrollToStart()')} methods.`],
-      [code('useMessageScrollerScrollable'), html`The element's ${code('scrollable')} property and its ${code('ui-scrollable-change')} event.`],
-      [code('useMessageScrollerVisibility'), html`The element's ${code('visibleMessageIds')} property and its ${code('ui-visibility-change')} event.`],
+    <p>The state and the commands are members of the <code>&lt;ui-message-scroller&gt;</code> element, which any code that can reach the element can use:</p>
+    ${table(['What you need', 'WebJs UI'], [
+      ['Scroll commands', html`The element's ${code('scrollToMessage()')}, ${code('scrollToEnd()')} and ${code('scrollToStart()')} methods.`],
+      ['Which edges can scroll', html`The element's ${code('scrollable')} property and its ${code('ui-scrollable-change')} event.`],
+      ['Which rows are visible', html`The element's ${code('visibleMessageIds')} property and its ${code('ui-visibility-change')} event.`],
     ])}
     ${codeFigure(`const scroller = document.querySelector('ui-message-scroller');
 
@@ -145,23 +144,23 @@ export class ChatThread extends WebComponent {
   }
 }
 ChatThread.register('chat-thread');`, { title: 'modules/chat/components/chat-thread.ts', lineNumbers: true })}
-    <p>shadcn's example gives the scroll button its own text, "Jump to latest". <code>&lt;ui-message-scroller-button&gt;</code> renders its own arrow icon and its "Scroll to end" or "Scroll to start" label and takes no content, so it can be restyled with <code>class</code>, <code>variant</code> and <code>size</code> but not relabelled.</p>
+    <p><code>&lt;ui-message-scroller-button&gt;</code> renders its own arrow icon and its "Scroll to end" or "Scroll to start" label and takes no content, so it can be restyled with <code>class</code>, <code>variant</code> and <code>size</code> but not relabelled.</p>
 
     ${heading(toc, 2, 'Avoiding a Flash on Reload')}
     <p>A scroll container always opens at the top. HTML has no way to set <code>scrollTop</code>, so a server-rendered transcript would show the oldest messages first, and you would see a jump once JavaScript moves the view to <code>default-scroll-position</code>.</p>
     <p>The kit handles this for you. The frame and the viewport are served with <code>data-pending-scroll</code>, for every opening position, and the viewport's own classes include <code>data-[pending-scroll]:invisible</code>, so the transcript stays hidden until the element has applied the position and removed the attribute. There is no rule to add. Because the attribute is only removed by the element, a transcript also stays hidden while JavaScript is off.</p>
-    <p>shadcn's inline script that scrolls the server-rendered viewport to the end before hydration does not port. The scrolling element is rendered by <code>&lt;ui-message-scroller-viewport&gt;</code>, so an <code>id</code> written on that element stays on the host rather than reaching the scrolling box, and the element serves its viewport hidden until it upgrades in any case.</p>
+    <p>No inline script can scroll the server-rendered viewport before the element upgrades. The scrolling element is rendered by <code>&lt;ui-message-scroller-viewport&gt;</code>, so an <code>id</code> written on that element stays on the host rather than reaching the scrolling box, and the element serves its viewport hidden until it upgrades in any case.</p>
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'ui-message-scroller')}
-    <p>The root. It is shadcn's <code>MessageScroller.Provider</code> and <code>MessageScroller.Root</code> in one element: it owns the scroll state and the behavior, and renders the frame. The frame fills its parent, so use it inside a height-constrained layout.</p>
+    <p>The root. It owns the scroll state and the behavior, and renders the frame. The frame fills its parent, so use it inside a height-constrained layout.</p>
     ${table(['Attribute', 'Type', 'Default', 'Description'], [
       [code('auto-scroll'), code('boolean'), code('false'), 'Follow new content only while the reader is at the live edge. A scroll away from the end releases it, and a scroll back to the end, or scrollToEnd(), resumes it.'],
       [code('default-scroll-position'), code('"end" | "start" | "last-anchor"'), code('"end"'), html`Opening position, applied once after the messages lay out. ${code('"last-anchor"')} opens at the last ${code('scroll-anchor')} item and falls back to ${code('"end"')} when there is none.`],
       [code('class'), code('string'), '-', 'Merged with the frame\'s classes on the frame element.'],
     ])}
-    <p>shadcn's <code>scrollEdgeThreshold</code>, <code>scrollMargin</code> and <code>scrollPreviousItemPeek</code> have no attributes in the kit. The distance that still counts as being at an edge is fixed at 24px, and a newly anchored turn keeps a fixed 64px of the previous item in view.</p>
-    <p>The frame carries <code>data-slot="message-scroller"</code> and <code>data-pending-scroll</code> until the opening position applies. It does not carry shadcn's <code>data-scrollable</code> or <code>data-autoscrolling</code>: read the scroll state from the <code>scrollable</code> property, and <code>data-autoscrolling</code> is on the viewport.</p>
+    <p>The edge threshold, the scroll margin and the previous-item peek have no attributes. The distance that still counts as being at an edge is fixed at 24px, and a newly anchored turn keeps a fixed 64px of the previous item in view.</p>
+    <p>The frame carries <code>data-slot="message-scroller"</code> and <code>data-pending-scroll</code> until the opening position applies. It does not carry <code>data-scrollable</code> or <code>data-autoscrolling</code>: read the scroll state from the <code>scrollable</code> property, and <code>data-autoscrolling</code> is on the viewport.</p>
 
     ${heading(toc, 3, 'ui-message-scroller-viewport')}
     <p>The scrolling element. It takes no attributes apart from a merged <code>class</code>.</p>
@@ -170,7 +169,7 @@ ChatThread.register('chat-thread');`, { title: 'modules/chat/components/chat-thr
       [code('data-pending-scroll'), 'present', 'Present until the opening position is applied. The viewport is invisible while it is set.'],
       [code('data-autoscrolling'), 'present', 'Present for a frame while auto-scroll moves the viewport to the newest content.'],
     ])}
-    <p>Unlike shadcn's viewport it adds no <code>role="region"</code>, no accessible name and no <code>tabindex</code>, and it has no <code>preserveScrollOnPrepend</code> option, since keeping the reader's place when rows are prepended is the browser's own scroll anchoring.</p>
+    <p>The viewport adds no <code>role="region"</code>, no accessible name and no <code>tabindex</code>, and it has no option to preserve the scroll position on prepend, since keeping the reader's place when rows are prepended is the browser's own scroll anchoring.</p>
 
     ${heading(toc, 3, 'ui-message-scroller-content')}
     <p>The transcript. Every direct child should be a <code>&lt;ui-message-scroller-item&gt;</code>.</p>
@@ -187,7 +186,7 @@ ChatThread.register('chat-thread');`, { title: 'modules/chat/components/chat-thr
       [code('scroll-anchor'), code('boolean'), code('false'), 'Marks the row as a turn boundary that anchors near the top when it is appended.'],
       [code('class'), code('string'), '-', 'Merged with the item\'s classes on the item itself.'],
     ])}
-    <p>The item is the row box, so it carries its classes and <code>data-slot="message-scroller-item"</code> on itself. It keeps your <code>message-id</code> and <code>scroll-anchor</code> attributes as written, so select on those (<code>[scroll-anchor]</code>) where shadcn mirrors them into <code>data-message-id</code> and <code>data-scroll-anchor</code>.</p>
+    <p>The item is the row box, so it carries its classes and <code>data-slot="message-scroller-item"</code> on itself. It keeps your <code>message-id</code> and <code>scroll-anchor</code> attributes as written, so select on those (<code>[scroll-anchor]</code>). It does not mirror them into <code>data-*</code> attributes.</p>
 
     ${heading(toc, 3, 'ui-message-scroller-button')}
     <p>A button that scrolls to the start or end of the transcript. When there is nothing to scroll toward it is hidden, removed from the tab order with <code>tabindex="-1"</code>, and hidden from assistive technology with <code>aria-hidden="true"</code>.</p>
@@ -206,14 +205,14 @@ ChatThread.register('chat-thread');`, { title: 'modules/chat/components/chat-thr
     ])}
 
     ${heading(toc, 3, 'Methods')}
-    <p>Imperative transcript controls, called on the <code>&lt;ui-message-scroller&gt;</code> element. They are shadcn's <code>useMessageScroller</code>.</p>
+    <p>Imperative transcript controls, called on the <code>&lt;ui-message-scroller&gt;</code> element.</p>
     ${table(['Method', 'Type', 'Description'], [
       [code('scrollToMessage'), code('(id: string, options?) => void'), 'Scroll to the mounted item with that message-id. Does nothing when no mounted item has it.'],
       [code('scrollToEnd'), code('() => void'), 'Scroll to the newest message, and follow new ones again when auto-scroll is set.'],
       [code('scrollToStart'), code('() => void'), 'Scroll to the oldest message.'],
       [code('viewport'), code('() => HTMLElement | null'), 'The scrolling element, for a virtualizer or your own listeners.'],
     ])}
-    <p>The methods return nothing, where shadcn's return whether the command applied, and <code>scrollToMessage</code> does not queue a target that is not mounted yet: call it once the rows are in the DOM. <code>scrollToEnd</code> and <code>scrollToStart</code> take no options.</p>
+    <p>The methods return nothing, and <code>scrollToMessage</code> does not queue a target that is not mounted yet: call it once the rows are in the DOM. <code>scrollToEnd</code> and <code>scrollToStart</code> take no options.</p>
     <p><code>scrollToMessage</code> options:</p>
     ${table(['Option', 'Type', 'Default', 'Description'], [
       [code('align'), code('"start" | "center" | "end" | "nearest"'), code('"start"'), 'How the item aligns in the viewport.'],
@@ -221,14 +220,14 @@ ChatThread.register('chat-thread');`, { title: 'modules/chat/components/chat-thr
     ])}
 
     ${heading(toc, 3, 'scrollable')}
-    <p>Which edges the viewport can scroll toward, for UI that needs the values in JavaScript. It is shadcn's <code>useMessageScrollerScrollable</code>, read from the element's <code>scrollable</code> property and reported by the <code>ui-scrollable-change</code> event (which bubbles) each time it changes.</p>
+    <p>Which edges the viewport can scroll toward, for UI that needs the values in JavaScript. It is read from the element's <code>scrollable</code> property and reported by the <code>ui-scrollable-change</code> event (which bubbles) each time it changes.</p>
     ${table(['Value', 'Type', 'Description'], [
       [code('start'), code('boolean'), html`Whether the viewport can scroll toward the start. ${code('!start')} means it is at the top.`],
       [code('end'), code('boolean'), html`Whether the viewport can scroll toward the end. ${code('!end')} means it is at the bottom.`],
     ])}
 
     ${heading(toc, 3, 'visibleMessageIds')}
-    <p>Visibility state for outline, search, and active-turn UI. It is shadcn's <code>useMessageScrollerVisibility</code>, read from the element's <code>visibleMessageIds</code> property and reported by the <code>ui-visibility-change</code> event (which bubbles) with <code>{ visibleMessageIds }</code> as its detail.</p>
+    <p>Visibility state for outline, search, and active-turn UI. It is read from the element's <code>visibleMessageIds</code> property and reported by the <code>ui-visibility-change</code> event (which bubbles) with <code>{ visibleMessageIds }</code> as its detail.</p>
     ${table(['Value', 'Type', 'Description'], [
       [code('visibleMessageIds'), code('string[]'), 'The message-ids of the items intersecting the viewport, in document order.'],
     ])}

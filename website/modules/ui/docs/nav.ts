@@ -842,15 +842,15 @@ export const NAV: DocGroup[] = [
     ]
   },
   {
-    title: "React primitives",
+    title: "Primitives",
     items: [
       {
         title: "Message Scroller",
-        href: "/ui/docs/react/message-scroller"
+        href: "/ui/docs/primitives/message-scroller"
       },
       {
         title: "Questionnaire",
-        href: "/ui/docs/react/questionnaire"
+        href: "/ui/docs/primitives/questionnaire"
       }
     ]
   },

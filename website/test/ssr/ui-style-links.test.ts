@@ -15,7 +15,7 @@ test('the AI Elements patterns and the helper pages link rhea', () => {
 
 test('the AI Elements index and the react pages link nothing extra', () => {
   assert.deepEqual(extraStylesFor('/ui/docs/ai-elements'), []);
-  assert.deepEqual(extraStylesFor('/ui/docs/react/questionnaire'), []);
+  assert.deepEqual(extraStylesFor('/ui/docs/primitives/questionnaire'), []);
 });
 
 test('the home and blocks pages keep their styles', () => {

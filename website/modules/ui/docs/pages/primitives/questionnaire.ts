@@ -24,7 +24,7 @@ export default async function body(toc: TocEntry[]) {
   return html`
     <p><code>&lt;ui-questionnaire&gt;</code> is a form element for presenting one question at a time. It manages answers, progress, validation, and navigation.</p>
     <p>It works well for agent clarification prompts, onboarding, surveys, intake forms, and configuration.</p>
-    <p>shadcn ships Questionnaire as an unstyled primitive in its <code>@shadcn/react</code> package. WebJs UI ported that primitive as custom elements that apply the kit's classes, and a <code>class</code> written on any part is merged onto the element that part renders, so you restyle it by adding classes, or by editing the copy the CLI puts in your project. For the themed examples, see <a href="/ui/docs/components/questionnaire">Questionnaire</a>.</p>
+    <p>The parts are custom elements that apply the kit's classes, and a <code>class</code> written on any part is merged onto the element that part renders, so you restyle it by adding classes, or by editing the copy the CLI puts in your project. For the themed examples, see <a href="/ui/docs/components/questionnaire">Questionnaire</a>.</p>
 
     ${await installation(toc, {
       prose: html`The elements ship in the Questionnaire component file. Adding it copies <code>components/ui/questionnaire.ts</code> into your project, together with the <a href="/ui/docs/components/button">Button</a> its navigation actions are styled with.`,
@@ -62,20 +62,20 @@ export default async function body(toc: TocEntry[]) {
     <p><code>&lt;ui-questionnaire&gt;</code> renders a form. Each <code>&lt;ui-questionnaire-item&gt;</code> renders a fieldset, and its <code>&lt;ui-questionnaire-title&gt;</code> renders the legend. <code>&lt;ui-questionnaire-choice&gt;</code> renders a label around a native radio or checkbox, the indicator and the shortcut hint, so there are no separate input, label and shortcut parts to compose.</p>
 
     ${heading(toc, 2, 'Styled version')}
-    <p>The kit has one version, and it is styled. shadcn's styled names and its unstyled parts map to the kit's elements like this:</p>
-    ${table(['Styled component', 'Unstyled part', 'WebJs UI element'], [
-      [code('Questionnaire'), code('Questionnaire.Root'), code('<ui-questionnaire>')],
-      [code('QuestionnaireProgress'), code('Questionnaire.Progress'), code('<ui-questionnaire-progress>')],
-      [code('QuestionnaireItem'), code('Questionnaire.Item'), code('<ui-questionnaire-item>')],
-      [code('QuestionnaireTitle'), code('Questionnaire.Title'), code('<ui-questionnaire-title>')],
-      [code('QuestionnaireDescription'), code('Questionnaire.Description'), code('<ui-questionnaire-description>')],
-      [code('QuestionnaireChoices'), code('Questionnaire.Choices'), code('<ui-questionnaire-choices>')],
-      [code('QuestionnaireChoice'), html`${code('Questionnaire.Choice')} with ${code('ChoiceInput')}, ${code('ChoiceLabel')}, and ${code('ChoiceShortcut')}`, html`${code('<ui-questionnaire-choice>')}, which renders all four`],
-      ['None', 'None', html`${code('<ui-questionnaire-choice-description>')}, a second line inside a choice`],
-      [code('QuestionnaireInput'), code('Questionnaire.Input'), code('<ui-questionnaire-input>')],
-      [code('QuestionnaireError'), code('Questionnaire.Error'), code('<ui-questionnaire-error>')],
-      [code('QuestionnaireActions'), 'None. Layout only.', html`${code('<ui-questionnaire-actions>')}, layout only`],
-      [html`${code('QuestionnairePrevious')}, ${code('QuestionnaireSkip')}, ${code('QuestionnaireNext')}, ${code('QuestionnaireSubmit')}`, html`${code('Questionnaire.Previous')}, ${code('Questionnaire.Skip')}, ${code('Questionnaire.Next')}, ${code('Questionnaire.Submit')}`, html`${code('<ui-questionnaire-previous>')}, ${code('<ui-questionnaire-skip>')}, ${code('<ui-questionnaire-next>')}, ${code('<ui-questionnaire-submit>')}`],
+    <p>The kit has one version, and it is styled. Its parts are these elements:</p>
+    ${table(['Element', 'Part'], [
+      [code('<ui-questionnaire>'), 'The root form.'],
+      [code('<ui-questionnaire-progress>'), 'The progress line.'],
+      [code('<ui-questionnaire-item>'), 'One step, rendered as a fieldset.'],
+      [code('<ui-questionnaire-title>'), 'The step\'s question, rendered as the legend.'],
+      [code('<ui-questionnaire-description>'), 'Supporting text for the step.'],
+      [code('<ui-questionnaire-choices>'), 'The list of choices.'],
+      [code('<ui-questionnaire-choice>'), 'One choice: the native input, its label and its shortcut hint.'],
+      [code('<ui-questionnaire-choice-description>'), 'A second line inside a choice.'],
+      [code('<ui-questionnaire-input>'), 'A free-text answer.'],
+      [code('<ui-questionnaire-error>'), 'The step\'s validation message.'],
+      [code('<ui-questionnaire-actions>'), 'The layout container for the buttons.'],
+      [html`${code('<ui-questionnaire-previous>')}, ${code('<ui-questionnaire-skip>')}, ${code('<ui-questionnaire-next>')}, ${code('<ui-questionnaire-submit>')}`, 'The navigation buttons.'],
     ])}
 
     ${heading(toc, 2, 'Basic usage')}
@@ -442,7 +442,7 @@ async function reference(toc: TocEntry[]) {
     <p>A placeholder is not a label.</p>
 
     ${heading(toc, 2, 'Data attributes')}
-    <p>Use these attributes for styling. Boolean attributes are present when true and absent when false. They sit on the elements the parts render, not on the part hosts, and every rendered element also carries a <code>data-slot</code> named after its part. The kit sets fewer state attributes than shadcn's primitive; where one is missing, the native or ARIA attribute it sets instead is listed.</p>
+    <p>Use these attributes for styling. Boolean attributes are present when true and absent when false. They sit on the elements the parts render, not on the part hosts, and every rendered element also carries a <code>data-slot</code> named after its part. Where a state has no data attribute of its own, the native or ARIA attribute that carries it is listed.</p>
 
     ${heading(toc, 3, 'Root and Progress')}
     ${rows([
@@ -537,7 +537,7 @@ async function reference(toc: TocEntry[]) {
     <p>Its <code>input()</code> method returns the native control. There is no controlled <code>checked</code>: the control owns its state after the first render. Put a <code>&lt;ui-questionnaire-choice-description&gt;</code> inside for a second line.</p>
 
     ${heading(toc, 3, 'Choice input, label and shortcut')}
-    <p>shadcn's <code>ChoiceInput</code>, <code>ChoiceLabel</code> and <code>ChoiceShortcut</code> are rendered by <code>&lt;ui-questionnaire-choice&gt;</code>: the input is laid transparent over the row, the label text is the choice's content, and the shortcut hint shows the assigned key and stays hidden without one. They are not separate elements, so they take no attributes; style them through their <code>data-slot</code>.</p>
+    <p>The choice's input, label and shortcut hint are rendered by <code>&lt;ui-questionnaire-choice&gt;</code>: the input is laid transparent over the row, the label text is the choice's content, and the shortcut hint shows the assigned key and stays hidden without one. They are not separate elements, so they take no attributes; style them through their <code>data-slot</code>.</p>
 
     ${heading(toc, 3, 'ui-questionnaire-input')}
     <p>A freeform answer, a native text input whose <code>name</code> is its item's.</p>
@@ -564,6 +564,6 @@ async function reference(toc: TocEntry[]) {
       [code('size'), html`a <a href="/ui/docs/components/button">Button</a> size`, code('"default"')],
       [code('class'), code('string'), html`Merged onto the button.`],
     ])}
-    <p><code>&lt;ui-questionnaire-actions&gt;</code> is the layout container shadcn's styled version has: a grid that places Previous at the start and Skip, Next and Submit at the end. It takes a merged <code>class</code>.</p>
+    <p><code>&lt;ui-questionnaire-actions&gt;</code> is the layout container: a grid that places Previous at the start and Skip, Next and Submit at the end. It takes a merged <code>class</code>.</p>
   `;
 }
