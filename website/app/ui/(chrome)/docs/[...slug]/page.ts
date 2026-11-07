@@ -24,12 +24,14 @@ export async function generateMetadata({ params }: PageProps<'/ui/docs/[...slug]
   return { title: `${mod.title} | WebJs UI`, description: mod.description };
 }
 
-export default async function DocPage({ params }: PageProps<'/ui/docs/[...slug]'>) {
+export default async function DocPage({ params, actionData }: PageProps<'/ui/docs/[...slug]'>) {
   const path = await pathOf(params);
   const load = DOC_PAGES[path];
   if (!load) notFound();
   const mod = await load();
   const toc: TocEntry[] = [];
-  const body = await mod.default(toc);
+  // actionData is set on the 422 re-render after a bound form fails, so the
+  // page that owns the form (the Forms guide's live demo) can show its errors.
+  const body = await mod.default(toc, { actionData });
   return docsPage({ href: `/ui/docs/${path}`, title: mod.title, description: mod.description, toc, body });
 }
