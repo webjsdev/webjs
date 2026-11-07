@@ -7,6 +7,7 @@ import { execSync } from 'node:child_process';
 import { getConfig } from '../utils/get-config.js';
 import { logger } from '../utils/logger.js';
 import { resolveTree, collectNpmDeps } from '../registry/resolver.js';
+import { withIconLibrary } from '../registry/icons.js';
 import { DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
 import { isCustomElementSource } from '../registry/local.js';
 import { stripExample } from '../registry/example.js';
@@ -37,7 +38,8 @@ export const add = new Command()
       process.exit(1);
     }
 
-    const tree = await resolveTree(components, opts.registry);
+    // The icon library is the one components.json names, not always Lucide.
+    const tree = await withIconLibrary(await resolveTree(components, opts.registry), config.iconLibrary, opts.registry);
     logger.info(`Installing ${logger.bold(components.join(', '))}…`);
 
     // Self-heal missing theme tokens (#983): the helpers render against CSS
@@ -380,6 +382,10 @@ function helperTarget(config, item, file) {
   const name = basename(file.path || '');
   if (item.name === 'lib-utils' && name === 'utils.ts') return utilsAbs;
   if (item.name === 'lib-dom' && name === 'dom.ts') return join(dirname(utilsAbs), 'dom.ts');
+  // Every icon library (lib-icons, lib-icons-tabler, ...) is the SAME file in
+  // an app, the utils file's sibling `icons.ts`, which is where a block's
+  // `../lib/icons.ts` import is rewritten to (#1666).
+  if (/^lib-icons(-|$)/.test(item.name) && /^icons(-[a-z]+)?\.ts$/.test(name)) return join(dirname(utilsAbs), 'icons.ts');
   return null;
 }
 

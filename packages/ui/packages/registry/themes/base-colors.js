@@ -6,8 +6,14 @@
  *
  * Pure ESM data module: imported at request time by the website's registry
  * composer (`website/modules/ui/queries/registry.server.ts`) to synthesize `theme-<color>` items
- * on demand. No build step, no committed output. Numbers match the values
- * shadcn emits in `apps/v4/public/r/themes/*.json`.
+ * on demand. No build step, no committed output.
+ *
+ * These are the kit's ORIGINAL palettes, which is what a bare
+ * `webjsui init --base-color <color>` writes, and they are kept byte stable
+ * so an existing app and the scaffold do not shift. They are NOT shadcn's
+ * current values: neutral, stone and zinc are close, while mauve, olive, mist
+ * and taupe were approximated. shadcn's palettes, verbatim, are in
+ * `themes.js`, which `init --preset` and the configurator use (#1666).
  */
 
 export const BASE_COLORS = ['neutral', 'stone', 'zinc', 'mauve', 'olive', 'mist', 'taupe'];

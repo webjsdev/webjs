@@ -28,6 +28,76 @@
       ]
     },
     {
+      "name": "lib-icons",
+      "type": "registry:lib",
+      "title": "Lucide",
+      "description": "The kit's icons as inline SVG functions, drawn from Lucide (the default icon library)",
+      "dependencies": ["@webjsdev/core"],
+      "files": [
+        {
+          "path": "lib/icons.ts",
+          "type": "registry:lib",
+          "target": "lib/icons.ts"
+        }
+      ]
+    },
+    {
+      "name": "lib-icons-tabler",
+      "type": "registry:lib",
+      "title": "Tabler Icons",
+      "description": "The kit's icons as inline SVG functions, drawn from Tabler Icons (the same names as lib-icons)",
+      "dependencies": ["@webjsdev/core"],
+      "files": [
+        {
+          "path": "lib/icons-tabler.ts",
+          "type": "registry:lib",
+          "target": "lib/icons.ts"
+        }
+      ]
+    },
+    {
+      "name": "lib-icons-hugeicons",
+      "type": "registry:lib",
+      "title": "Hugeicons",
+      "description": "The kit's icons as inline SVG functions, drawn from Hugeicons (the same names as lib-icons)",
+      "dependencies": ["@webjsdev/core"],
+      "files": [
+        {
+          "path": "lib/icons-hugeicons.ts",
+          "type": "registry:lib",
+          "target": "lib/icons.ts"
+        }
+      ]
+    },
+    {
+      "name": "lib-icons-phosphor",
+      "type": "registry:lib",
+      "title": "Phosphor Icons",
+      "description": "The kit's icons as inline SVG functions, drawn from Phosphor (the same names as lib-icons)",
+      "dependencies": ["@webjsdev/core"],
+      "files": [
+        {
+          "path": "lib/icons-phosphor.ts",
+          "type": "registry:lib",
+          "target": "lib/icons.ts"
+        }
+      ]
+    },
+    {
+      "name": "lib-icons-remixicon",
+      "type": "registry:lib",
+      "title": "Remix Icon",
+      "description": "The kit's icons as inline SVG functions, drawn from Remix Icon (the same names as lib-icons)",
+      "dependencies": ["@webjsdev/core"],
+      "files": [
+        {
+          "path": "lib/icons-remixicon.ts",
+          "type": "registry:lib",
+          "target": "lib/icons.ts"
+        }
+      ]
+    },
+    {
       "name": "theme-neutral",
       "type": "registry:theme",
       "title": "Neutral",
@@ -231,6 +301,26 @@
       "files": [
         {
           "path": "components/card.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "chart",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/chart.ts",
+          "type": "registry:ui"
+        },
+        {
+          "path": "components/chart-geometry.ts",
           "type": "registry:ui"
         }
       ]
@@ -1327,6 +1417,723 @@
           "path": "blocks/signup-05/components/signup-form.ts",
           "type": "registry:component",
           "target": "components/signup-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-07",
+      "type": "registry:block",
+      "title": "Sidebar 07",
+      "description": "A sidebar that collapses to icons.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "collapsible",
+        "dropdown-menu",
+        "avatar"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-07/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-07/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-07/components/nav-main.ts",
+          "type": "registry:component",
+          "target": "components/nav-main.ts"
+        },
+        {
+          "path": "blocks/sidebar-07/components/nav-projects.ts",
+          "type": "registry:component",
+          "target": "components/nav-projects.ts"
+        },
+        {
+          "path": "blocks/sidebar-07/components/nav-user.ts",
+          "type": "registry:component",
+          "target": "components/nav-user.ts"
+        },
+        {
+          "path": "blocks/sidebar-07/components/team-switcher.ts",
+          "type": "registry:component",
+          "target": "components/team-switcher.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-01",
+      "type": "registry:block",
+      "title": "Sidebar 01",
+      "description": "A simple sidebar with navigation grouped by section.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "label",
+        "dropdown-menu"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-01/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-01/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-01/components/search-form.ts",
+          "type": "registry:component",
+          "target": "components/search-form.ts"
+        },
+        {
+          "path": "blocks/sidebar-01/components/version-switcher.ts",
+          "type": "registry:component",
+          "target": "components/version-switcher.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-02",
+      "type": "registry:block",
+      "title": "Sidebar 02",
+      "description": "A sidebar with collapsible sections.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "label",
+        "dropdown-menu",
+        "collapsible"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-02/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-02/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-02/components/search-form.ts",
+          "type": "registry:component",
+          "target": "components/search-form.ts"
+        },
+        {
+          "path": "blocks/sidebar-02/components/version-switcher.ts",
+          "type": "registry:component",
+          "target": "components/version-switcher.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-03",
+      "type": "registry:block",
+      "title": "Sidebar 03",
+      "description": "A sidebar with submenus.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-03/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-03/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-04",
+      "type": "registry:block",
+      "title": "Sidebar 04",
+      "description": "A floating sidebar with submenus.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-04/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-04/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-05",
+      "type": "registry:block",
+      "title": "Sidebar 05",
+      "description": "A sidebar with collapsible submenus.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "label",
+        "collapsible"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-05/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-05/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-05/components/search-form.ts",
+          "type": "registry:component",
+          "target": "components/search-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-06",
+      "type": "registry:block",
+      "title": "Sidebar 06",
+      "description": "A sidebar with submenus as dropdowns.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "card",
+        "button",
+        "dropdown-menu"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-06/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-06/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-06/components/nav-main.ts",
+          "type": "registry:component",
+          "target": "components/nav-main.ts"
+        },
+        {
+          "path": "blocks/sidebar-06/components/sidebar-opt-in-form.ts",
+          "type": "registry:component",
+          "target": "components/sidebar-opt-in-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-08",
+      "type": "registry:block",
+      "title": "Sidebar 08",
+      "description": "An inset sidebar with secondary navigation.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "collapsible",
+        "dropdown-menu",
+        "avatar"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-08/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-08/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-08/components/nav-main.ts",
+          "type": "registry:component",
+          "target": "components/nav-main.ts"
+        },
+        {
+          "path": "blocks/sidebar-08/components/nav-projects.ts",
+          "type": "registry:component",
+          "target": "components/nav-projects.ts"
+        },
+        {
+          "path": "blocks/sidebar-08/components/nav-secondary.ts",
+          "type": "registry:component",
+          "target": "components/nav-secondary.ts"
+        },
+        {
+          "path": "blocks/sidebar-08/components/nav-user.ts",
+          "type": "registry:component",
+          "target": "components/nav-user.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-09",
+      "type": "registry:block",
+      "title": "Sidebar 09",
+      "description": "Collapsible nested sidebars.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "label",
+        "switch",
+        "dropdown-menu",
+        "avatar"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-09/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-09/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-09/components/nav-user.ts",
+          "type": "registry:component",
+          "target": "components/nav-user.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-10",
+      "type": "registry:block",
+      "title": "Sidebar 10",
+      "description": "A sidebar in a popover.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "button",
+        "popover",
+        "collapsible",
+        "dropdown-menu"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-10/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-10/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-10/components/nav-actions.ts",
+          "type": "registry:component",
+          "target": "components/nav-actions.ts"
+        },
+        {
+          "path": "blocks/sidebar-10/components/nav-favorites.ts",
+          "type": "registry:component",
+          "target": "components/nav-favorites.ts"
+        },
+        {
+          "path": "blocks/sidebar-10/components/nav-main.ts",
+          "type": "registry:component",
+          "target": "components/nav-main.ts"
+        },
+        {
+          "path": "blocks/sidebar-10/components/nav-secondary.ts",
+          "type": "registry:component",
+          "target": "components/nav-secondary.ts"
+        },
+        {
+          "path": "blocks/sidebar-10/components/nav-workspaces.ts",
+          "type": "registry:component",
+          "target": "components/nav-workspaces.ts"
+        },
+        {
+          "path": "blocks/sidebar-10/components/team-switcher.ts",
+          "type": "registry:component",
+          "target": "components/team-switcher.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-11",
+      "type": "registry:block",
+      "title": "Sidebar 11",
+      "description": "A sidebar with a collapsible file tree.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "collapsible"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-11/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-11/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-12",
+      "type": "registry:block",
+      "title": "Sidebar 12",
+      "description": "A sidebar with a calendar.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "collapsible",
+        "calendar",
+        "dropdown-menu",
+        "avatar"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-12/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-12/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-12/components/calendars.ts",
+          "type": "registry:component",
+          "target": "components/calendars.ts"
+        },
+        {
+          "path": "blocks/sidebar-12/components/date-picker.ts",
+          "type": "registry:component",
+          "target": "components/date-picker.ts"
+        },
+        {
+          "path": "blocks/sidebar-12/components/nav-user.ts",
+          "type": "registry:component",
+          "target": "components/nav-user.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-13",
+      "type": "registry:block",
+      "title": "Sidebar 13",
+      "description": "A sidebar in a dialog.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "button",
+        "dialog"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-13/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-13/components/settings-dialog.ts",
+          "type": "registry:component",
+          "target": "components/settings-dialog.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-14",
+      "type": "registry:block",
+      "title": "Sidebar 14",
+      "description": "A sidebar on the right.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-14/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-14/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-15",
+      "type": "registry:block",
+      "title": "Sidebar 15",
+      "description": "A left and right sidebar.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "collapsible",
+        "calendar",
+        "dropdown-menu",
+        "avatar"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-15/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/calendars.ts",
+          "type": "registry:component",
+          "target": "components/calendars.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/date-picker.ts",
+          "type": "registry:component",
+          "target": "components/date-picker.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/nav-favorites.ts",
+          "type": "registry:component",
+          "target": "components/nav-favorites.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/nav-main.ts",
+          "type": "registry:component",
+          "target": "components/nav-main.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/nav-secondary.ts",
+          "type": "registry:component",
+          "target": "components/nav-secondary.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/nav-user.ts",
+          "type": "registry:component",
+          "target": "components/nav-user.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/nav-workspaces.ts",
+          "type": "registry:component",
+          "target": "components/nav-workspaces.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/sidebar-left.ts",
+          "type": "registry:component",
+          "target": "components/sidebar-left.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/sidebar-right.ts",
+          "type": "registry:component",
+          "target": "components/sidebar-right.ts"
+        },
+        {
+          "path": "blocks/sidebar-15/components/team-switcher.ts",
+          "type": "registry:component",
+          "target": "components/team-switcher.ts"
+        }
+      ]
+    },
+    {
+      "name": "sidebar-16",
+      "type": "registry:block",
+      "title": "Sidebar 16",
+      "description": "A sidebar with a sticky site header.",
+      "categories": [
+        "sidebar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "sidebar",
+        "breadcrumb",
+        "separator",
+        "collapsible",
+        "dropdown-menu",
+        "avatar",
+        "label"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/sidebar-16/page.ts",
+          "type": "registry:page",
+          "target": "app/dashboard/page.ts"
+        },
+        {
+          "path": "blocks/sidebar-16/components/app-sidebar.ts",
+          "type": "registry:component",
+          "target": "components/app-sidebar.ts"
+        },
+        {
+          "path": "blocks/sidebar-16/components/nav-main.ts",
+          "type": "registry:component",
+          "target": "components/nav-main.ts"
+        },
+        {
+          "path": "blocks/sidebar-16/components/nav-projects.ts",
+          "type": "registry:component",
+          "target": "components/nav-projects.ts"
+        },
+        {
+          "path": "blocks/sidebar-16/components/nav-secondary.ts",
+          "type": "registry:component",
+          "target": "components/nav-secondary.ts"
+        },
+        {
+          "path": "blocks/sidebar-16/components/nav-user.ts",
+          "type": "registry:component",
+          "target": "components/nav-user.ts"
+        },
+        {
+          "path": "blocks/sidebar-16/components/search-form.ts",
+          "type": "registry:component",
+          "target": "components/search-form.ts"
+        },
+        {
+          "path": "blocks/sidebar-16/components/site-header.ts",
+          "type": "registry:component",
+          "target": "components/site-header.ts"
         }
       ]
     }

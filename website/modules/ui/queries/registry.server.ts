@@ -40,6 +40,12 @@ import {
   BASE_OVERRIDES,
   mergeThemeCss,
 } from '../../../../packages/ui/packages/registry/themes/base-colors.js';
+// The accent themes and the font items, built from data (#1666). The CLI's
+// composer (packages/ui/src/registry/local.js) serves the same two calls.
+import {
+  designSystemItem,
+  designSystemItems,
+} from '../../../../packages/ui/packages/registry/themes/items.js';
 
 // modules/ui/queries/ → repo root is four levels up; the registry stays in
 // the ui package (it ships inside the published npm tarball), the same way
@@ -177,6 +183,13 @@ export async function loadRegistryItem(name: string): Promise<RegistryItem | nul
     }
   }
 
+  const data = designSystemItem(name);
+  if (data) {
+    const composed = { $schema: SCHEMA, ...data } as RegistryItem;
+    itemCache.set(name, composed);
+    return composed;
+  }
+
   return null;
 }
 
@@ -203,7 +216,8 @@ export async function loadRegistryIndex(): Promise<RegistryItem[]> {
       type: 'registry:theme',
       description: BASE_DESCRIPTIONS[color as keyof typeof BASE_DESCRIPTIONS],
     }));
-  indexCache = [...fromManifest, ...synthesized];
+  const data = designSystemItems().map(({ name, type, title, description }) => ({ name, type, title, description }));
+  indexCache = [...fromManifest, ...synthesized, ...data];
   return indexCache;
 }
 
@@ -219,7 +233,14 @@ export async function loadRegistryManifest(): Promise<string> {
     .map((color) => synthesizeColorTheme(color))
     .filter((it): it is RegistryItem => it !== null);
   return JSON.stringify(
-    { ...manifest, items: [...manifestItems, ...synthesizedThemes] },
+    {
+      ...manifest,
+      items: [
+        ...manifestItems,
+        ...synthesizedThemes,
+        ...designSystemItems().map((it) => ({ $schema: SCHEMA, ...it })),
+      ],
+    },
     null,
     2,
   );

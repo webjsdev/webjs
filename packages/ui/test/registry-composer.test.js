@@ -108,7 +108,9 @@ test('loadRegistryItem: returns null for unknown slug', { skip }, async () => {
 
 test('loadRegistryItem: returns null for unknown theme colour', { skip }, async () => {
   const { loadRegistryItem } = await import(COMPOSER_PATH);
-  const item = await loadRegistryItem('theme-fuchsia');
+  // fuchsia is one of shadcn's accent themes since #1666, so the probe is a
+  // colour no theme names.
+  const item = await loadRegistryItem('theme-chartreuse');
   assert.equal(item, null);
 });
 
@@ -146,14 +148,14 @@ test('loadRegistryIndex: includes every registry:ui component + lib + theme-neut
   }
 });
 
-test('loadRegistryIndex: total count: ≥32 ui + lib-utils + 7 themes', { skip }, async () => {
+test('loadRegistryIndex: total count: ≥32 ui + lib-utils + 24 themes', { skip }, async () => {
   const { loadRegistryIndex } = await import(COMPOSER_PATH);
   const items = await loadRegistryIndex();
   const ui = items.filter((it) => it.type === 'registry:ui');
   const themes = items.filter((it) => it.type === 'registry:theme');
   const libs = items.filter((it) => it.type === 'registry:lib');
   assert.ok(ui.length >= 32, `expected ≥32 ui items, found ${ui.length}`);
-  assert.equal(themes.length, 7, 'exactly 7 themes (1 neutral + 6 synthesized)');
+  assert.equal(themes.length, 24, 'exactly 24 themes (7 base colours + 17 accents)');
   assert.ok(libs.length >= 1, 'at least lib-utils');
 });
 
@@ -170,17 +172,14 @@ test('loadRegistryManifest: returns valid JSON with every item inlined', { skip 
       assert.ok(typeof f.content === 'string', `${it.name}: file ${f.path} missing inlined content`);
     }
   }
-  // All 7 themes are present.
+  // All 24 of shadcn's themes are present: the 7 base colours and the 17
+  // accent themes (#1666).
   const themeNames = parsed.items.filter((it) => it.type === 'registry:theme').map((it) => it.name).sort();
   assert.deepEqual(themeNames, [
-    'theme-mauve',
-    'theme-mist',
-    'theme-neutral',
-    'theme-olive',
-    'theme-stone',
-    'theme-taupe',
-    'theme-zinc',
-  ]);
+    'amber', 'blue', 'cyan', 'emerald', 'fuchsia', 'green', 'indigo', 'lime', 'mauve', 'mist',
+    'neutral', 'olive', 'orange', 'pink', 'purple', 'red', 'rose', 'sky', 'stone', 'taupe',
+    'teal', 'violet', 'yellow', 'zinc',
+  ].map((n) => `theme-${n}`));
 });
 
 test('loadRegistryManifest: schema field is set on every item', { skip }, async () => {

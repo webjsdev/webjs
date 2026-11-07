@@ -100,7 +100,39 @@ step. Pass `--overwrite` to reset those instead.
 - `components.json`, your project's UI config (aliases, base color, Tailwind path)
 - `lib/utils/cn.ts`, the `cn()` class-merge helper, and `lib/utils/dom.ts`
   beside it for the client-only `onBeforeCache()` helper
-- Tailwind tokens + CSS variables appended to `styles/globals.css`
+- Tailwind tokens + CSS variables appended to `styles/globals.css`, between a
+  `/* @webjsdev/ui theme */` and a `/* @webjsdev/ui theme end */` marker
+
+### Presets, styles and icon libraries
+
+The configurator at [webjs.dev/ui/create](https://webjs.dev/ui/create) builds a
+whole design system (style, base color, theme, chart color, font, radius, icon
+library) and prints one command for it:
+
+```sh
+npx @webjsdev/ui init --preset b0
+```
+
+That writes the style and icon library into `components.json`, the chosen
+icon library to `lib/utils/icons.ts`, and the theme, REPLACING the block
+between the two markers in place, so running it again with another code
+switches the design system without touching the rest of your stylesheet. A
+block from before the end marker existed is left alone and reported. The code
+is shadcn/ui's preset format, so a shadcn code works too. The site serves
+what a code installs at `/ui/init?preset=<code>` (JSON) and
+`/ui/init/md?preset=<code>` (step-by-step markdown).
+
+One choice at a time works the same way:
+
+```sh
+npx @webjsdev/ui init --style nova         # one of the nine styles the bake applies
+npx @webjsdev/ui init --icons tabler       # lucide, tabler, hugeicons, phosphor, remixicon
+```
+
+Every icon library exports the same function names (`ChevronDownIcon('size-4')`
+and so on), so switching libraries changes no import. The themes and fonts
+are registry items too: `theme-<name>` for shadcn's 24 themes and
+`font-<name>` / `font-heading-<name>` for its 26 font families.
 
 ## What `add` does
 
@@ -156,7 +188,7 @@ always compares against the live upstream.
 
 | Command | Effect |
 |---|---|
-| `webjsui init` | Initialize a project (writes `components.json`, `lib/utils/cn.ts`, the theme tokens). Preserves an existing project's settings and helper files; `-o, --overwrite` resets them. Exits non-zero if the tokens cannot be written. |
+| `webjsui init` | Initialize a project (writes `components.json`, `lib/utils/cn.ts`, the theme tokens). Preserves an existing project's settings and helper files; `-o, --overwrite` resets them and replaces the theme block. `--preset <code>`, `--style <name>` and `--icons <library>` apply a design system or one choice of it. Exits non-zero if the tokens cannot be written. |
 | `webjsui add <names...>` | Add components or blocks (copies helpers + a pointer for Tier-1, writes a block's files to their targets, self-heals theme tokens) |
 | `webjsui list [filter]` | List the components, blocks and charts in three labelled groups. `--type <ui\|block\|chart\|all>`, `--category <name>`, and `--json` for one compact array of `{ name, type, categories, description }` |
 | `webjsui view <name>` | A component: its projected view (helpers + paste-ready example) and full source. A block: its description, categories, dependencies, install command and files with targets, then the sources (`--files-only` stops before them, `--json` prints one document) |
