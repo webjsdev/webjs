@@ -45,8 +45,8 @@ const separator = () => html`<div data-slot="separator" data-orientation="horizo
 
 const CLONE_URLS = [
   { value: 'https', id: 'codespaces-https-url', label: 'HTTPS URL', url: 'https://github.com/shadcn-ui/ui.git', hint: html`Clone using the web URL.` },
-  { value: 'ssh', id: 'codespaces-ssh-url', label: 'SSH URL', url: 'git@github.com:shadcn-ui/ui.git', hint: html`Use a password-protected SSH key.` },
-  { value: 'cli', id: 'codespaces-cli-command', label: 'CLI Command', url: 'gh repo clone shadcn-ui/ui', hint: html`Work fast with our official CLI. <a href="#learn-more">Learn more</a>` },
+  { value: 'ssh', id: 'codespaces-ssh-url', label: 'SSH URL', url: 'git@github.com:webjsdev/webjs.git', hint: html`Use a password-protected SSH key.` },
+  { value: 'cli', id: 'codespaces-cli-command', label: 'CLI Command', url: 'gh repo clone webjsdev/webjs', hint: html`Work fast with our official CLI. <a href="#learn-more">Learn more</a>` },
 ];
 
 export function codespacesCard() {
@@ -113,7 +113,7 @@ export function codespacesCard() {
             ${separator()}
             <div class="p-1.5 text-xs text-muted-foreground">
               Codespace usage for this repository is paid for by
-              <span class="font-medium">shadcn</span>.
+              <span class="font-medium">webjsdev</span>.
             </div>
           </ui-tabs-content>
           <ui-tabs-content value="local">

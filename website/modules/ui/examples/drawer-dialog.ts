@@ -18,11 +18,11 @@ function ProfileForm(id: string, className = '') {
     <form class=${cn('grid items-start gap-6', className)}>
       <div class="grid gap-3">
         <label data-slot="label" for=${`email-${id}`} class=${labelClass()}>Email</label>
-        <input data-slot="input" type="email" id=${`email-${id}`} value="shadcn@example.com" class=${inputClass()}>
+        <input data-slot="input" type="email" id=${`email-${id}`} value="vivek@example.com" class=${inputClass()}>
       </div>
       <div class="grid gap-3">
         <label data-slot="label" for=${`username-${id}`} class=${labelClass()}>Username</label>
-        <input data-slot="input" id=${`username-${id}`} value="@shadcn" class=${inputClass()}>
+        <input data-slot="input" id=${`username-${id}`} value="@vivek" class=${inputClass()}>
       </div>
       <button type="submit" data-slot="button" data-variant="default" data-size="default" class=${buttonClass()}>Save changes</button>
     </form>

@@ -21,7 +21,7 @@ import {
 
 // GitHub usernames shown as contributor avatars.
 const USERNAMES = [
-  'shadcn', 'vercel', 'nextjs', 'tailwindlabs', 'typescript-lang', 'eslint', 'prettier', 'babel',
+  'webjsdev', 'vercel', 'nextjs', 'tailwindlabs', 'typescript-lang', 'eslint', 'prettier', 'babel',
   'webpack', 'rollup', 'parcel', 'vite', 'react', 'vue', 'angular', 'solid',
 ];
 

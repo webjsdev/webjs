@@ -31,8 +31,8 @@ const data: {
   projects: NavProject[];
 } = {
   user: {
-    name: 'shadcn',
-    email: 'm@example.com',
+    name: 'vivek',
+    email: 'vivek@example.com',
     avatar: 'https://webjs.dev/public/avatars/vivek.jpg',
   },
   navMain: [

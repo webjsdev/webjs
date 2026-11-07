@@ -25,8 +25,8 @@ import { PlusIcon } from '../../../lib/icons.ts';
 // This is sample data.
 const data = {
   user: {
-    name: 'shadcn',
-    email: 'm@example.com',
+    name: 'vivek',
+    email: 'vivek@example.com',
     avatar: 'https://webjs.dev/public/avatars/vivek.jpg',
   },
   calendars: [

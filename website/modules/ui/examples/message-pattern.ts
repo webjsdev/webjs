@@ -12,7 +12,7 @@ import {
 } from '#lib/ui/lucide.ts';
 
 const inlineCode = 'rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em]';
-const command = 'npx shadcn@latest add dialog';
+const command = 'npx @webjsdev/ui add dialog';
 
 // A ghost icon button with its label in a tooltip, as shadcn's MessageAction.
 function MessageAction(label: string, icon: unknown) {

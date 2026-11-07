@@ -69,7 +69,7 @@ export function inputGroupDemo(lang: RtlLang) {
       </div>
     </div>
     <div data-slot="input-group" role="group" class=${inputGroupClass()}>
-      <input data-slot="input-group-control" placeholder="shadcn" aria-label="Username" class=${inputGroupInputClass()}>
+      <input data-slot="input-group-control" placeholder="vivek" aria-label="Username" class=${inputGroupInputClass()}>
       <div role="group" data-slot="input-group-addon" data-align="inline-end" class=${inputGroupAddonClass({ align: 'inline-end' })}>
         <div class="flex size-4 items-center justify-center rounded-full bg-primary text-foreground">${IconCheck('size-3 text-white')}</div>
       </div>

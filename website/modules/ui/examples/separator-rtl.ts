@@ -5,7 +5,7 @@ const translations = {
   en: {
     dir: 'ltr',
     values: {
-      title: 'shadcn/ui',
+      title: 'WebJs UI',
       subtitle: 'The Foundation for your Design System',
       description:
         'A set of beautifully designed components that you can customize, extend, and build on.',
@@ -14,7 +14,7 @@ const translations = {
   ar: {
     dir: 'rtl',
     values: {
-      title: 'shadcn/ui',
+      title: 'WebJs UI',
       subtitle: 'الأساس لنظام التصميم الخاص بك',
       description:
         'مجموعة من المكونات المصممة بشكل جميل يمكنك تخصيصها وتوسيعها والبناء عليها.',
@@ -23,7 +23,7 @@ const translations = {
   he: {
     dir: 'rtl',
     values: {
-      title: 'shadcn/ui',
+      title: 'WebJs UI',
       subtitle: 'הבסיס למערכת העיצוב שלך',
       description:
         'סט של רכיבים מעוצבים בצורה יפה שאתה יכול להתאים אישית, להרחיב ולבנות עליהם.',

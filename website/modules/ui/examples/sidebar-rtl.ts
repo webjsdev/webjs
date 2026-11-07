@@ -169,8 +169,8 @@ function languageSelector(lang: Lang) {
 }
 
 const user = {
-  name: 'shadcn',
-  email: 'm@example.com',
+  name: 'vivek',
+  email: 'vivek@example.com',
   avatar: '/public/avatars/vivek.jpg',
 };
 

@@ -36,14 +36,14 @@ export function githubProfile() {
           <div data-slot="field-group" class=${fieldGroupClass()}>
             <div role="group" data-slot="field" data-orientation="vertical" class=${fieldClass()}>
               <label data-slot="field-label" for="profile-name" class=${fieldLabelClass()}>Name</label>
-              <input data-slot="input" id="profile-name" name="name" placeholder="shadcn" class=${inputClass()}>
+              <input data-slot="input" id="profile-name" name="name" placeholder="vivek" class=${inputClass()}>
               <p data-slot="field-description" class=${fieldDescriptionClass()}>Your name may appear around GitHub where you contribute or are mentioned. You can remove it at any time.</p>
             </div>
             <div role="group" data-slot="field" data-orientation="vertical" class=${fieldClass()}>
               <label data-slot="field-label" for="profile-email" class=${fieldLabelClass()}>Public Email</label>
               <div data-slot="native-select-wrapper" class=${nativeSelectWrapperClass()}>
                 <select data-slot="native-select" id="profile-email" name="email" class=${nativeSelectClass()}>
-                  <option value="m@shadcn.com">m@shadcn.com</option>
+                  <option value="vivek@example.com">vivek@example.com</option>
                   <option value="m@gmail.com">m@gmail.com</option>
                 </select>
                 ${ChevronDownIcon(nativeSelectIconClass())}

@@ -19,7 +19,7 @@ export default function MessageHeaderFooterDemo() {
         <div data-slot="message-content" class=${messageContentClass()}>
           <div data-slot="bubble" data-variant="default" data-align="start" class=${bubbleClass()}>
             <div data-slot="bubble-content" class=${bubbleContentClass()}>
-              Send the report to the team. Ping @shadcn if you need help.
+              Send the report to the team. Ping @vivek if you need help.
             </div>
           </div>
           <div data-slot="message-footer" class=${messageFooterClass()}>

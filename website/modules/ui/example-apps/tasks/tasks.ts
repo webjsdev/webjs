@@ -65,8 +65,8 @@ function userNav() {
     <ui-dropdown-menu-content class="w-56" align="end">
       <ui-dropdown-menu-label class="font-normal">
         <div class="flex flex-col space-y-1">
-          <p class="text-sm leading-none font-medium">shadcn</p>
-          <p class="text-xs leading-none text-muted-foreground">m@example.com</p>
+          <p class="text-sm leading-none font-medium">vivek</p>
+          <p class="text-xs leading-none text-muted-foreground">vivek@example.com</p>
         </div>
       </ui-dropdown-menu-label>
       <ui-dropdown-menu-separator></ui-dropdown-menu-separator>
