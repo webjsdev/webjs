@@ -1,5 +1,7 @@
 import { html, asset } from '@webjsdev/core';
 import { LEAD_PREVIEWS } from '#modules/ui/docs/lead-previews.ts';
+import { parseCreateParams } from '#modules/ui/create/params.ts';
+import { FULL_SCREEN_DEMOS } from '#lib/ui/full-screen-demos.ts';
 
 /**
  * Which kit styles each /ui page renders, and so which of public/ui-styles/
@@ -14,12 +16,18 @@ import { LEAD_PREVIEWS } from '#modules/ui/docs/lead-previews.ts';
  * The answer lives here, once, because three places emit the links. The root
  * layout emits them in its leading <head> run on a full load (only the root
  * layout's leading links are hoisted, and a body stylesheet is not reliably
- * render-blocking, #406). The page emits them again in its own markup for a
- * SOFT navigation, where the root layout is not re-rendered and the router's
+ * render-blocking, #406). A chrome page emits them again in its own markup for
+ * a SOFT navigation, where the root layout is not re-rendered and the router's
  * head merge only adds; the router loads such a link before it swaps the page
  * in, so the page paints in its style from the first frame. And the /ui
  * chrome layout links new-york, which its header itself renders, for a soft
- * navigation in from the marketing site. The same URL twice costs one fetch.
+ * navigation in from the marketing site.
+ *
+ * The bare frames under /ui/view and /ui/preview are only ever full loads (an
+ * iframe, or "Open in New Tab"), so their styles come from <head> alone and
+ * they carry no body copy. A copy is not free: each <link> is its own
+ * stylesheet, so the browser matches every rule once per copy, :has() rules
+ * included, and an extra copy of a style slows every style recalculation.
  */
 
 /** Pages outside the component docs whose content renders a nova preview. */
@@ -52,15 +60,19 @@ const STYLES_BY_PATH: Record<string, string[]> = {
 
 const COMPONENT_PAGE = '/ui/docs/components/';
 
-/** The kit styles a /ui pathname renders, in link order. */
-export function stylesFor(pathname: string): string[] {
+/**
+ * The kit styles a /ui page renders, in link order. The configurator's frame
+ * renders the style its query names, so it needs the search params too.
+ */
+export function stylesFor(pathname: string, search: URLSearchParams = new URLSearchParams()): string[] {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-  // The configurator's frame links the style it was asked for itself
-  // (app/ui/preview/[name]/page.ts), and the typeset frame renders none.
-  if (path.startsWith('/ui/preview/')) return [];
-  // A block frame is new-york; the one full-screen docs demo it can show
-  // instead links nova itself (app/ui/view/[name]/page.ts).
-  if (path.startsWith('/ui/view/')) return ['new-york'];
+  // The typeset frame renders no kit style. The configurator's frame renders
+  // the one its ?preset or ?style names, read the way the page reads it
+  // (app/ui/preview/[name]/page.ts).
+  if (path.startsWith('/ui/preview/typeset/')) return [];
+  if (path.startsWith('/ui/preview/')) return [parseCreateParams(search).config.style];
+  // A block frame is new-york, and a full-screen docs demo nova.
+  if (path.startsWith('/ui/view/')) return FULL_SCREEN_DEMOS.has(path.slice('/ui/view/'.length)) ? ['nova'] : ['new-york'];
   const styles = new Set(['new-york', ...(STYLES_BY_PATH[path] ?? [])]);
   if (NOVA_PAGES.has(path)) styles.add('nova');
   // The blocks and charts pages' header buttons, which shadcn's layouts
@@ -84,12 +96,15 @@ export function stylesFor(pathname: string): string[] {
   return [...styles].sort();
 }
 
-/** The stylesheet links for a pathname's styles. */
-export function styleLinks(pathname: string) {
-  return stylesFor(pathname).map(styleLink);
+/** The stylesheet links for a page's styles. */
+export function styleLinks(pathname: string, search?: URLSearchParams) {
+  return stylesFor(pathname, search).map((name) => styleLink(name));
 }
 
-/** One style's stylesheet link, for a region that renders a style its path does not imply. */
+/**
+ * One style's stylesheet link. `data-style-sheet` names the style, so the
+ * configurator finds the sheet already in its frame before adding one.
+ */
 export function styleLink(name: string) {
-  return html`<link rel="stylesheet" href=${asset(`/public/ui-styles/${name}.css`)}>`;
+  return html`<link rel="stylesheet" href=${asset(`/public/ui-styles/${name}.css`)} data-style-sheet=${name}>`;
 }

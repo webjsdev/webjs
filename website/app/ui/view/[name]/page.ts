@@ -1,7 +1,7 @@
 import { html, notFound, cspNonce, asset } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 import { unsafeHTML } from '@webjsdev/core/directives';
-import { styleLink } from '#lib/ui/style-links.ts';
+import { FULL_SCREEN_DEMOS } from '#lib/ui/full-screen-demos.ts';
 import { renderBlock } from '#modules/ui/queries/render-block.server.ts';
 import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 // The custom elements the blocks define. The block renders here as a string,
@@ -31,12 +31,9 @@ import '#modules/ui/example-apps/example-bind.ts';
  * selector, `data-view-submit`) is the one that is let through.
  */
 
-/**
- * The docs demos that are whole pages, linked from a docs page to open full
- * screen (shadcn's "View RTL Sidebar"). Any other demo stays a 404 here, so
- * this route keeps serving blocks and nothing a block viewer cannot show.
- */
-const FULL_SCREEN_DEMOS = new Set(['sidebar-rtl']);
+// FULL_SCREEN_DEMOS (lib/ui/full-screen-demos.ts) are the docs demos served
+// here as whole pages. Any other demo stays a 404, so this route keeps serving
+// blocks and nothing a block viewer cannot show.
 
 /** The `?lang=` a full-screen demo renders in, when one is given. */
 function langOf(searchParams: Record<string, string | string[] | undefined>): string | undefined {
@@ -61,7 +58,7 @@ export default async function BlockView({ params, searchParams }: PageProps<'/ui
     <!-- The root layout reserves the fixed header's height on the page body, and
          this frame has no header. -->
     <style>:root { --header-h: 0px; }</style>
-    ${demo ? html`<link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>${styleLink('nova')}` : ''}
+    ${demo ? html`<link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>` : ''}
     <div data-slot="block-view" data-block=${params.name} class=${block ? 'style-new-york bg-background' : 'style-nova bg-background'}>
       ${unsafeHTML(block ? block.html : demo!.html)}
     </div>

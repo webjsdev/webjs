@@ -191,7 +191,7 @@ export default function RootLayout({ children, url }: LayoutProps) {
     </script>
 
     ${ui ? html`<link rel="stylesheet" href=${asset('/public/ui.css')}>
-    ${styleLinks(pathname)}
+    ${styleLinks(pathname, new URL(url).searchParams)}
     <link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : html`<link rel="stylesheet" href=${asset('/public/tailwind.css')}>`}
     <style>

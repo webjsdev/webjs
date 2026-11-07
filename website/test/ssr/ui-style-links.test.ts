@@ -37,7 +37,10 @@ test('a page links only the styles it renders', () => {
   assert.deepEqual(stylesFor('/ui/docs/components/button'), ['new-york', 'nova'], 'the docs previews are nova');
   assert.deepEqual(stylesFor('/ui/docs/components/trace'), ['new-york', 'rhea'], 'a component page with no nova preview carries none, only its lead style');
   assert.deepEqual(stylesFor('/ui/view/dashboard-01'), ['new-york'], 'a block frame is new-york alone');
-  assert.deepEqual(stylesFor('/ui/preview/preview'), [], 'the configurator frame links its own');
+  assert.deepEqual(stylesFor('/ui/view/sidebar-rtl'), ['nova'], 'the full-screen docs demo is nova alone');
+  assert.deepEqual(stylesFor('/ui/preview/preview'), ['nova'], 'the configurator frame renders its default style');
+  assert.deepEqual(stylesFor('/ui/preview/preview', new URLSearchParams('style=lyra')), ['lyra'], 'or the one its query names');
+  assert.deepEqual(stylesFor('/ui/preview/typeset/chat'), [], 'the typeset frame renders none');
 });
 
 test('the home and section pages keep their styles', () => {
@@ -82,6 +85,10 @@ async function uiPaths(): Promise<string[]> {
   const registry = JSON.parse(readFileSync(resolve(WEBSITE_ROOT, '../packages/ui/packages/registry/registry.json'), 'utf8')) as { items: { name: string; type: string }[] };
   for (const item of registry.items) if (item.type === 'registry:block') paths.add(`/ui/view/${item.name}`);
   for (const n of ['preview', 'preview-02', 'preview-03']) { paths.add(`/ui/preview/${n}`); paths.add(`/ui/view/${n}`); }
+  // The configurator frame in a style its query names, and the one docs demo
+  // a frame serves whole.
+  paths.add('/ui/preview/preview?style=lyra');
+  paths.add('/ui/view/sidebar-rtl');
   for (const f of readdirSync(resolve(WEBSITE_ROOT, 'modules/ui/typeset/fixtures'))) {
     const m = /^([a-z0-9-]+)\.(?:server\.)?ts$/.exec(f);
     if (m && m[1] !== 'index') paths.add(`/ui/preview/typeset/${m[1]}`);
@@ -106,6 +113,12 @@ function linked(html: string): Set<string> {
   return new Set([...html.matchAll(/<link rel="stylesheet" href="\/public\/ui-styles\/([a-z-]+)\.css/g)].map((m) => m[1]));
 }
 
+/**
+ * The block frames that answer 404: the chart blocks are in the registry but
+ * render on /ui/charts, not as frames of their own.
+ */
+const EXPECTED_MISSING = /^\/ui\/view\/chart-/;
+
 test('every /ui page and frame links the sheet of every style it renders', async () => {
   const paths = await uiPaths();
   assert.ok(paths.length > 200, `the page list is the whole section (${paths.length})`);
@@ -113,25 +126,33 @@ test('every /ui page and frame links the sheet of every style it renders', async
   let rendered = 0;
   for (const path of paths) {
     const res = await handle(path);
-    if (res.status !== 200) continue;
+    if (res.status !== 200) {
+      // Every page is checked: anything else that does not render is a failure.
+      if (!(res.status === 404 && EXPECTED_MISSING.test(path))) problems.push(`${path}: answered ${res.status}`);
+      continue;
+    }
     rendered++;
     const html = await res.text();
     const split = html.indexOf('</head>');
-    const head = html.slice(0, split);
+    const head = linked(html.slice(0, split));
     const body = html.slice(split);
     const used = wrappers(body);
-    const all = linked(html);
     const frame = path.startsWith('/ui/preview/') || path.startsWith('/ui/view/');
     for (const style of used) {
-      if (!all.has(style)) problems.push(`${path}: renders .style-${style} and links no ${style}.css`);
-      // A page reached by a full load paints its first frame from <head>; a
-      // chrome page reached by a soft navigation has only its own markup.
-      // The frames are full loads only, and the configurator frame names its
-      // style in the query, so it links that one from its body.
-      else if (!frame && !head.includes(`/public/ui-styles/${style}.css`)) problems.push(`${path}: ${style}.css is not in <head>`);
+      // A full load paints its first frame from <head>, the only place a
+      // stylesheet reliably blocks rendering (#406). Every page is reached
+      // that way, the frames only that way.
+      if (!head.has(style)) problems.push(`${path}: renders .style-${style} and has no ${style}.css in <head>`);
+      // A chrome page reached by a soft navigation has only its own markup.
       else if (!frame && !linked(body).has(style)) problems.push(`${path}: ${style}.css is not in the page's own markup (a soft navigation would miss it)`);
     }
+    if (frame) {
+      // A frame is never soft-navigated into, so it links only what it
+      // renders, and only once: every copy of a sheet is matched again.
+      for (const style of head) if (!used.has(style)) problems.push(`${path}: links ${style}.css and renders no .style-${style}`);
+      for (const style of linked(body)) problems.push(`${path}: links ${style}.css again in its body`);
+    }
   }
-  assert.ok(rendered > 120, `rendered ${rendered} pages`);
+  assert.ok(rendered > 180, `rendered ${rendered} pages`);
   assert.deepEqual(problems, []);
 });
