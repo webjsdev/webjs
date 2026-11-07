@@ -148,7 +148,7 @@ import '#components/ui/dropdown-menu.ts';`, { lineNumbers: true })}
     ])}
 
     ${heading(toc, 3, 'ui-dropdown-menu-item')}
-    <p>One action. With <code>type="checkbox"</code> or <code>type="radio"</code> it is a checkable item, shadcn's <code>DropdownMenuCheckboxItem</code> and <code>DropdownMenuRadioItem</code>.</p>
+    <p>One action. With <code>type="checkbox"</code> or <code>type="radio"</code> it is a checkable item that shows its checked state, a checkbox item or one choice in a radio group.</p>
     ${table(['Attribute', 'Type', 'Default'], [
       [html`<code>variant</code>`, html`<code>"default" | "destructive"</code>`, html`<code>"default"</code>`],
       [html`<code>inset</code>`, html`<code>boolean</code>`, html`<code>false</code>`],

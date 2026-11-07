@@ -99,7 +99,7 @@ export default async function body(toc: TocEntry[]) {
 </div>`)}
 
     ${heading(toc, 3, 'inputGroupAddonClass')}
-    <p>Displays icons, text, buttons, or other content alongside inputs. Set <code>data-slot="input-group-addon"</code> and a <code>data-align</code> that matches the <code>align</code> option, since the group reads it to lay itself out. An addon holding only icons or text can be a <code>&lt;label for&gt;</code> pointing at the control, so a click on it focuses the control with no script. An addon holding a button is a <code>&lt;div role="group"&gt;</code>, because a label may not contain a second control. <code>inputGroupAddonVariants()</code> is the same helper under shadcn's name.</p>
+    <p>Displays icons, text, buttons, or other content alongside inputs. Set <code>data-slot="input-group-addon"</code> and a <code>data-align</code> that matches the <code>align</code> option, since the group reads it to lay itself out. An addon holding only icons or text can be a <code>&lt;label for&gt;</code> pointing at the control, so a click on it focuses the control with no script. An addon holding a button is a <code>&lt;div role="group"&gt;</code>, because a label may not contain a second control. <code>inputGroupAddonVariants()</code> is an alias of <code>inputGroupAddonClass()</code> that also merges a <code>className</code>.</p>
     ${callout(html`For proper focus navigation, the addon should be placed after the input. Set the <code>align</code> option to position the addon.`, { icon: IconInfoCircle(), title: 'Focus Navigation' })}
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
@@ -120,7 +120,7 @@ export default async function body(toc: TocEntry[]) {
 </div>`)}
 
     ${heading(toc, 3, 'inputGroupButtonClass')}
-    <p>Displays buttons within input groups. It is the button's own classes with the group's size on top, so put it on a real <code>&lt;button type="button"&gt;</code>, and give an icon-only button an <code>aria-label</code>. <code>inputGroupButtonVariants()</code> is the same helper under shadcn's name.</p>
+    <p>Displays buttons within input groups. It is the button's own classes with the group's size on top, so put it on a real <code>&lt;button type="button"&gt;</code>, and give an icon-only button an <code>aria-label</code>. <code>inputGroupButtonVariants()</code> is an alias of <code>inputGroupButtonClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th></tr></thead>

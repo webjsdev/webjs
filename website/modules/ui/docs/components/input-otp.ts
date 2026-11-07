@@ -107,7 +107,7 @@ import '#components/ui/input-otp.ts';`, { lineNumbers: true })}
       <table>
         <thead><tr><th>Input attribute</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td><code>maxlength</code></td><td>How many characters the code has (shadcn's <code>maxLength</code>). Without it, the number of slots.</td></tr>
+          <tr><td><code>maxlength</code></td><td>How many characters the code has. Without it, the number of slots.</td></tr>
           <tr><td><code>pattern</code></td><td>A keystroke that would make the value stop matching is refused.</td></tr>
           <tr><td><code>value</code></td><td>The starting code.</td></tr>
           <tr><td><code>disabled</code></td><td>Disables the input and dims the slots.</td></tr>
@@ -121,8 +121,8 @@ import '#components/ui/input-otp.ts';`, { lineNumbers: true })}
       <table>
         <thead><tr><th>Event</th><th>Detail</th><th>When</th></tr></thead>
         <tbody>
-          <tr><td><code>ui-value-change</code></td><td><code>{ value: string }</code></td><td>The code changed (shadcn's <code>onChange</code>).</td></tr>
-          <tr><td><code>ui-complete</code></td><td><code>{ value: string }</code></td><td>Every slot is filled (shadcn's <code>onComplete</code>).</td></tr>
+          <tr><td><code>ui-value-change</code></td><td><code>{ value: string }</code></td><td>The code changed.</td></tr>
+          <tr><td><code>ui-complete</code></td><td><code>{ value: string }</code></td><td>Every slot is filled.</td></tr>
         </tbody>
       </table>
     </div>

@@ -104,7 +104,7 @@ export default async function body(toc: TocEntry[]) {
     <p>Every part is a class helper. Set the part's <code>data-slot</code> on the element as well, since the styles use it to lay the parts out relative to each other.</p>
 
     ${heading(toc, 3, 'itemClass')}
-    <p>The main part, for displaying content with media, title, description, and actions. Put it on a <code>&lt;div&gt;</code>, or on an <code>&lt;a&gt;</code> or <code>&lt;button&gt;</code> when the whole row acts. <code>itemVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p>The main part, for displaying content with media, title, description, and actions. Put it on a <code>&lt;div&gt;</code>, or on an <code>&lt;a&gt;</code> or <code>&lt;button&gt;</code> when the whole row acts. <code>itemVariants()</code> is an alias of <code>itemClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th></tr></thead>
@@ -131,7 +131,7 @@ export default async function body(toc: TocEntry[]) {
 </div>`)}
 
     ${heading(toc, 3, 'itemMediaClass')}
-    <p>Use <code>itemMediaClass()</code> to display media content such as icons, images, or avatars. <code>itemMediaVariants()</code> is its shadcn name.</p>
+    <p>Use <code>itemMediaClass()</code> to display media content such as icons, images, or avatars. <code>itemMediaVariants()</code> is an alias of <code>itemMediaClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th></tr></thead>

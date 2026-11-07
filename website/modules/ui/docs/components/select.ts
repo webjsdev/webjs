@@ -24,7 +24,7 @@ import { cn } from '#lib/utils/cn.ts';`, { lineNumbers: true })}
     <option value="system">System</option>
   </select>
 </ui-select>`, { lineNumbers: true })}
-    <p><code>&lt;ui-select&gt;</code> enhances the native <code>&lt;select&gt;</code> inside it. Without JavaScript the native select is what the page shows and what the form submits. With JavaScript the element hides it visually and draws shadcn's trigger and list in its place, writing every choice back into it.</p>
+    <p><code>&lt;ui-select&gt;</code> enhances the native <code>&lt;select&gt;</code> inside it. Without JavaScript the native select is what the page shows and what the form submits. With JavaScript the element hides it visually and draws the styled trigger and list in its place, writing every choice back into it.</p>
 
     ${heading(toc, 2, 'Composition')}
     <p>Use the following composition to build a select. The options stay native elements, because the HTML parser drops a custom element inside a <code>&lt;select&gt;</code>:</p>
@@ -85,14 +85,14 @@ import { cn } from '#lib/utils/cn.ts';`, { lineNumbers: true })}
     </div>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
-        <thead><tr><th>Event</th><th>Detail</th><th>shadcn</th></tr></thead>
+        <thead><tr><th>Event</th><th>Detail</th><th>Fired when</th></tr></thead>
         <tbody>
-          <tr><td><code>ui-value-change</code></td><td><code>{ value: string }</code></td><td><code>onValueChange</code></td></tr>
+          <tr><td><code>ui-value-change</code></td><td><code>{ value: string }</code></td><td>The selected value changes.</td></tr>
         </tbody>
       </table>
     </div>
     <p>The native select also fires <code>input</code> and <code>change</code>. The value, <code>disabled</code>, <code>required</code> and each option's <code>disabled</code> are the native select's own attributes. A placeholder option is one with <code>value=""</code> that is <code>hidden</code> or <code>disabled</code>.</p>
-    <p>The trigger is a <code>role="combobox"</code> button named by the select's <code>&lt;label&gt;</code> or <code>aria-label</code>, and the list a <code>role="listbox"</code>. The keyboard follows Radix's: the arrows, Enter or Space open the list, typing jumps to a matching option, and Escape closes it without a change.</p>
+    <p>The trigger is a <code>role="combobox"</code> button named by the select's <code>&lt;label&gt;</code> or <code>aria-label</code>, and the list a <code>role="listbox"</code>. From the keyboard, the arrows, Enter or Space open the list, typing jumps to a matching option, and Escape closes it without a change.</p>
     ${heading(toc, 3, 'selectTriggerClass')}
     <p>Put <code>selectTriggerClass()</code> on the native select. The drawn trigger takes the classes written there, so <code>cn(selectTriggerClass(), 'w-full')</code> gives a full-width trigger with JavaScript on and off alike.</p>
   `;

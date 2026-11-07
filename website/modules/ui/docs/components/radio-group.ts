@@ -61,7 +61,7 @@ import { radioGroupClass, radioClass } from '#components/ui/radio-group.ts';`, {
     ${await componentPreview('radio-group-rtl', { direction: 'rtl' })}
 
     ${heading(toc, 2, 'API Reference')}
-    <p>shadcn's radio group wraps Radix UI. The kit's is two class helpers over native radio inputs, so the state is the inputs' own: <code>checked</code> sets the default value, the shared <code>name</code> groups them, and a <code>change</code> event reports a new selection.</p>
+    <p>The radio group is two class helpers over native radio inputs, so the state is the inputs' own: <code>checked</code> sets the default value, the shared <code>name</code> groups them, and a <code>change</code> event reports a new selection.</p>
 
     ${heading(toc, 3, 'radioGroupClass')}
     <p>The classes for the group container, a <code>&lt;div role="radiogroup"&gt;</code>. Name the group with <code>aria-label</code> or <code>aria-labelledby</code>, or use a <code>&lt;fieldset&gt;</code> with a <code>&lt;legend&gt;</code> instead.</p>

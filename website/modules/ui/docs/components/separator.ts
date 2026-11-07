@@ -46,6 +46,6 @@ export default async function body(toc: TocEntry[]) {
         </tbody>
       </table>
     </div>
-    <p>A purely decorative divider takes <code>role="none"</code>, as shadcn's default <code>decorative</code> separator does. A divider that carries meaning takes <code>role="separator"</code> plus <code>aria-orientation</code>, so assistive technology announces it.</p>
+    <p>A purely decorative divider takes <code>role="none"</code>, the default for a separator. A divider that carries meaning takes <code>role="separator"</code> plus <code>aria-orientation</code>, so assistive technology announces it.</p>
   `;
 }

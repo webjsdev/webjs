@@ -150,7 +150,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('questionnaire-controlled', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Resume')}
-    <p>Restore saved answers with <code>checked</code> on the choices. The flow always starts on the first item, and <code>&lt;ui-questionnaire-input&gt;</code> takes no saved value yet. shadcn's demo also resets changes back to the saved state; a native <code>&lt;button type="reset"&gt;</code> restores the inputs, but the choices do not redraw on a reset yet, so this demo leaves it out.</p>
+    <p>Restore saved answers with <code>checked</code> on the choices. The flow always starts on the first item, and <code>&lt;ui-questionnaire-input&gt;</code> takes no saved value yet. A native <code>&lt;button type="reset"&gt;</code> restores the inputs, but the choices do not redraw on a reset yet, so the demo has no reset button.</p>
     ${await componentPreview('questionnaire-resume', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Conditional Items')}
@@ -162,7 +162,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('questionnaire-navigation-state', { align: 'end', previewClass: 'min-h-[480px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Custom Progress')}
-    <p><code>&lt;ui-questionnaire-progress&gt;</code> renders a "Question 1 of 4" line and takes no custom render, so a segmented bar like shadcn's is not available yet. Style the line with classes on the element.</p>
+    <p><code>&lt;ui-questionnaire-progress&gt;</code> renders a "Question 1 of 4" line and takes no custom render, so a segmented progress bar is not available yet. Style the line with classes on the element.</p>
     ${await componentPreview('questionnaire-progress', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Animated Items')}
@@ -183,7 +183,7 @@ export default async function body(toc: TocEntry[]) {
     <p>Always give <code>&lt;ui-questionnaire-input&gt;</code> an accessible name with <code>aria-label</code>. A placeholder is not a label.</p>
 
     ${heading(toc, 2, 'Unstyled')}
-    <p>shadcn's behavior comes from its <code>@shadcn/react</code> package. The kit has no separate headless layer: the behavior lives in the <code>&lt;ui-questionnaire-*&gt;</code> elements, and the classes they apply are exported as helpers such as <code>questionnaireChoiceClass()</code>. Since <code>webjs ui add</code> copies the source into your project, change the markup or the classes there.</p>
+    <p>There is no separate headless layer: the behavior lives in the <code>&lt;ui-questionnaire-*&gt;</code> elements, and the classes they apply are exported as helpers such as <code>questionnaireChoiceClass()</code>. Since <code>webjs ui add</code> copies the source into your project, change the markup or the classes there.</p>
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'ui-questionnaire')}

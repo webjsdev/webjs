@@ -50,7 +50,7 @@ export function intro(toc: TocEntry[]) {
     <p><strong>Never move the reader against their intent.</strong></p>
 
     ${heading(toc, 2, 'MessageScroller')}
-    <p>MessageScroller is a chat transcript scroller built for these behaviors. <code>&lt;ui-message-scroller&gt;</code> owns the scroll state and transcript-row behavior: opening position, streamed output, new-turn anchoring, prepended history, visibility, and scroll controls. It is also the styled frame the transcript renders inside, so the kit has one element where shadcn has a provider and a frame.</p>
+    <p>MessageScroller is a chat transcript scroller built for these behaviors. <code>&lt;ui-message-scroller&gt;</code> owns the scroll state and transcript-row behavior: opening position, streamed output, new-turn anchoring, prepended history, visibility, and scroll controls. It is also the styled frame the transcript renders inside, so one element holds both the state and the frame.</p>
     <p>MessageScroller is scoped to the scroll viewport. It does not own messages, AI state, transport, persistence, branching, or model state. Your product code stays focused on composing messages, markers, tools, attachments, and prompt inputs.</p>
     <p>It gives you the scroll behavior that chat needs, without taking over the rest of the chat UI. And it stays fast, even in long conversations with rich markdown.</p>
   `;
@@ -128,10 +128,10 @@ import { messageClass, messageContentClass } from '#components/ui/message.ts';`)
 
     ${heading(toc, 3, 'Keeping Context Visible')}
     <p>When a new turn starts, it should still feel like part of the same continuous thread. The scroller keeps a slice of the previous item visible above the anchor, so the reader keeps their context instead of feeling like the conversation restarted on a blank page.</p>
-    <p>The kit keeps 64px of the previous turn in view, which is shadcn's default for <code>scrollPreviousItemPeek</code>. The amount is fixed: there is no attribute to change it.</p>
+    <p>The kit keeps 64px of the previous turn in view. The amount is fixed: there is no attribute to change it.</p>
     ${codeFigure(`<!-- 64px of the previous turn stays visible above a newly anchored row. -->
 <ui-message-scroller>...</ui-message-scroller>`)}
-    <p>In the example below, the slider is the one shadcn's demo uses to adjust the peek. With the kit it stays at 64px.</p>
+    <p>The example below shows the peek in a live transcript. Its slider leaves the peek at 64px, since the amount is fixed.</p>
     ${await componentPreview('message-scroller-previous-context', PREVIEW)}
 
     ${heading(toc, 3, 'Following the Live Edge')}
@@ -152,7 +152,7 @@ import { messageClass, messageContentClass } from '#components/ui/message.ts';`)
     ${heading(toc, 3, 'Avoiding a Flash on Reload')}
     <p>A scroll container always opens at the top. HTML has no way to set <code>scrollTop</code>, so a server-rendered transcript shows the oldest messages first. After JavaScript runs, <code>default-scroll-position</code> moves the view, and you would see a jump.</p>
     <p>The kit's viewport carries <code>data-pending-scroll</code> from the server render until the element applies the opening position, for every position including <code>"start"</code>. The styled viewport stays hidden while the attribute is present, so you see the frame instead of the jump.</p>
-    <p>shadcn also shows an inline script that scrolls a server-rendered viewport to the end before JavaScript loads. The kit has no such recipe: the element renders its own viewport and applies the position once it upgrades, so the hidden frame is what shows until then.</p>
+    <p>There is no inline script that scrolls a server-rendered viewport before JavaScript loads: the element renders its own viewport and applies the position once it upgrades, so the hidden frame is what shows until then.</p>
 
     ${heading(toc, 3, 'Loading Earlier Messages')}
     <p>Loading earlier messages should not move the conversation the reader is already looking at. When older rows are prepended above the current transcript, the browser's own scroll anchoring keeps the visible row in place, so the reader stays where they are while history loads above them.</p>
@@ -179,7 +179,7 @@ scroller.scrollToEnd();
 scroller.scrollToStart();`)}
     ${await componentPreview('message-scroller-commands', { ...PREVIEW, hideCode: true })}
     <p><code>scrollToMessage</code> targets the <code>message-id</code> on <code>&lt;ui-message-scroller-item&gt;</code>, so rows that need to be addressable should have stable ids. It returns nothing, and does nothing when no mounted row has that id.</p>
-    <p>shadcn's <code>scrollToMessage</code> can queue a target before the rows exist, for a permalink resolved while the transcript mounts. The kit's does not queue: call it once the rows are in the DOM.</p>
+    <p><code>scrollToMessage</code> does not queue a target before the rows exist, so for a permalink resolved while the transcript mounts, call it once the rows are in the DOM.</p>
 
     ${heading(toc, 3, "Tracking the Reader's Position")}
     <p>Use the element's <code>visibleMessageIds</code> and its <code>ui-visibility-change</code> event to track the reader's position in the conversation. A common example is a table-of-contents or a jump menu that highlights the current anchored turn.</p>
@@ -215,7 +215,7 @@ const viewport = scroller.viewport(); // the scrolling element`)}
     ${codeFigure(`<ui-message-scroller-content aria-label="Conversation">
   ...
 </ui-message-scroller-content>`)}
-    <p>The viewport is a plain scroll container: unlike shadcn's, it does not add <code>role="region"</code>, a label, or <code>tabindex="0"</code>, so add those yourself if keyboard users should focus the transcript directly.</p>
+    <p>The viewport is a plain scroll container: it does not add <code>role="region"</code>, a label, or <code>tabindex="0"</code>, so add those yourself if keyboard users should focus the transcript directly.</p>
     <p><code>&lt;ui-message-scroller-button&gt;</code> renders a real button named "Scroll to end" or "Scroll to start". When there is nothing to scroll toward, it uses <code>tabindex="-1"</code> and <code>aria-hidden="true"</code>, and exposes <code>data-active="false"</code>, so inactive scroll controls do not create extra focus stops.</p>
 
     ${heading(toc, 2, 'Unstyled')}

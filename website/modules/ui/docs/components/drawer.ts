@@ -92,7 +92,7 @@ export default async function body(toc: TocEntry[]) {
     <p>Wraps the control that opens the drawer. Put a real <code>&lt;button&gt;</code> inside it.</p>
 
     ${heading(toc, 3, 'ui-drawer-content')}
-    <p>The panel. It renders the drag handle on a bottom drawer and carries <code>data-vaul-drawer-direction</code>, the attribute shadcn's drawer styles key on. Classes you put on it are applied to the panel.</p>
+    <p>The panel. It renders the drag handle on a bottom drawer and carries <code>data-vaul-drawer-direction</code>, the attribute the drawer styles key on. Classes you put on it are applied to the panel.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Attribute</th><th>Type</th><th>Default</th></tr></thead>

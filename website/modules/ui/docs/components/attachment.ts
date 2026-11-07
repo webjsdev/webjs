@@ -136,7 +136,7 @@ export default async function body(toc: TocEntry[]) {
     <p>Every part is a helper that returns classes for a plain element. Set the part's <code>data-slot</code>, and the <code>data-state</code>, <code>data-size</code>, <code>data-orientation</code> and <code>data-variant</code> attributes that match the options you pass, since the styles key on them.</p>
 
     ${heading(toc, 3, 'attachmentClass')}
-    <p>The root attachment container, on <code>data-slot="attachment"</code>. <code>attachmentVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p>The root attachment container, on <code>data-slot="attachment"</code>. <code>attachmentVariants()</code> is an alias of <code>attachmentClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option or attribute</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
@@ -149,7 +149,7 @@ export default async function body(toc: TocEntry[]) {
     </div>
 
     ${heading(toc, 3, 'attachmentMediaClass')}
-    <p>The media slot for an icon or image preview, on <code>data-slot="attachment-media"</code>. <code>attachmentMediaVariants()</code> is its shadcn-named alias.</p>
+    <p>The media slot for an icon or image preview, on <code>data-slot="attachment-media"</code>. <code>attachmentMediaVariants()</code> is an alias of <code>attachmentMediaClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>

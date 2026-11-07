@@ -42,7 +42,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'ui-switch')}
-    <p><code>&lt;ui-switch&gt;</code> renders shadcn's switch, a root and a thumb, around a real <code>&lt;input type="checkbox" role="switch"&gt;</code>. The checkbox is rendered on the server, so the switch submits with its form, takes a <code>&lt;label for&gt;</code>, and toggles with JavaScript off.</p>
+    <p><code>&lt;ui-switch&gt;</code> renders a switch, a root and a thumb, around a real <code>&lt;input type="checkbox" role="switch"&gt;</code>. The checkbox is rendered on the server, so the switch submits with its form, takes a <code>&lt;label for&gt;</code>, and toggles with JavaScript off.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Attribute</th><th>Type</th><th>Default</th></tr></thead>

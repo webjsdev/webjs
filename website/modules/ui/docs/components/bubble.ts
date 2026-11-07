@@ -160,7 +160,7 @@ export function BubbleLinkDemo() {
     <p>Every part is a helper that returns classes for a plain element. Set the part's <code>data-slot</code>, and the <code>data-variant</code>, <code>data-align</code> and <code>data-side</code> attributes that match the options you pass, since the styles key on them.</p>
 
     ${heading(toc, 3, 'bubbleClass')}
-    <p>The root bubble wrapper, on <code>data-slot="bubble"</code>. <code>bubbleVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p>The root bubble wrapper, on <code>data-slot="bubble"</code>. <code>bubbleVariants()</code> is an alias of <code>bubbleClass()</code> that also merges a <code>className</code>.</p>
     ${table(['Option or attribute', 'Type', 'Default', 'Description'], [
       [html`<code>variant</code>`, html`<code>"default" | "secondary" | "muted" | "tinted" | "outline" | "ghost" | "destructive"</code>`, html`<code>"default"</code>`, html`The bubble visual treatment. Mirror it in <code>data-variant</code>.`],
       [html`<code>data-align</code>`, html`<code>"start" | "end"</code>`, html`<code>"start"</code>`, 'The inline alignment of the bubble.'],
@@ -170,7 +170,7 @@ export function BubbleLinkDemo() {
     <p>The bubble content, on <code>data-slot="bubble-content"</code>. Put it on a <code>&lt;div&gt;</code>, or on an <code>&lt;a&gt;</code> or <code>&lt;button&gt;</code> for an interactive bubble. It takes no options.</p>
 
     ${heading(toc, 3, 'bubbleReactionsClass')}
-    <p>Displays overlapped reactions for a bubble, on <code>data-slot="bubble-reactions"</code>. <code>bubbleReactionsVariants()</code> is its shadcn-named alias.</p>
+    <p>Displays overlapped reactions for a bubble, on <code>data-slot="bubble-reactions"</code>. <code>bubbleReactionsVariants()</code> is an alias of <code>bubbleReactionsClass()</code> that also merges a <code>className</code>.</p>
     ${table(['Option', 'Type', 'Default', 'Description'], [
       [html`<code>side</code>`, html`<code>"top" | "bottom"</code>`, html`<code>"bottom"</code>`, 'The side of the bubble to anchor the reactions.'],
       [html`<code>align</code>`, html`<code>"start" | "end"</code>`, html`<code>"end"</code>`, 'The inline alignment of the reactions.'],

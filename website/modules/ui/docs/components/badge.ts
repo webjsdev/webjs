@@ -42,7 +42,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'badgeClass')}
-    <p><code>badgeClass()</code> returns the classes for a badge or an element that looks like a badge. Put them on a <code>&lt;span&gt;</code> for a static badge, or on an <code>&lt;a&gt;</code> or <code>&lt;button&gt;</code> for an interactive one. <code>badgeVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p><code>badgeClass()</code> returns the classes for a badge or an element that looks like a badge. Put them on a <code>&lt;span&gt;</code> for a static badge, or on an <code>&lt;a&gt;</code> or <code>&lt;button&gt;</code> for an interactive one. <code>badgeVariants()</code> is an alias of <code>badgeClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th></tr></thead>

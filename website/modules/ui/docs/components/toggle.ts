@@ -54,7 +54,7 @@ export default async function body(toc: TocEntry[]) {
     <p>It dispatches <code>ui-pressed-change</code> with <code>{ detail: { pressed } }</code> after a click.</p>
 
     ${heading(toc, 3, 'toggleClass')}
-    <p><code>toggleClass()</code> returns the toggle's classes for a native <code>&lt;button&gt;</code> whose pressed state you own, carried on <code>aria-pressed</code> and <code>data-state</code>. <code>toggleVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p><code>toggleClass()</code> returns the toggle's classes for a native <code>&lt;button&gt;</code> whose pressed state you own, carried on <code>aria-pressed</code> and <code>data-state</code>. <code>toggleVariants()</code> is an alias of <code>toggleClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th></tr></thead>

@@ -56,7 +56,7 @@ export default async function body(toc: TocEntry[]) {
         └── ui-command-item`, { lang: 'text' })}
 
     ${heading(toc, 2, 'Basic')}
-    <p>A simple command menu in a dialog. shadcn's <code>CommandDialog</code> is a Dialog around a Command, and so is this: a <a href="/ui/docs/components/dialog">Dialog</a> whose content takes <code>commandDialogClass()</code> and holds the command, with its title and description for screen readers only.</p>
+    <p>A simple command menu in a dialog. It is a <a href="/ui/docs/components/dialog">Dialog</a> whose content takes <code>commandDialogClass()</code> and holds the command, with its title and description for screen readers only.</p>
     ${await componentPreview('command-basic')}
 
     ${heading(toc, 2, 'Shortcuts')}

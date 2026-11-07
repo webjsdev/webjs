@@ -67,8 +67,8 @@ export default async function body(toc: TocEntry[]) {
     <p>Use just the previous and next buttons without page numbers. This is useful for data tables with a rows per page selector.</p>
     ${await componentPreview('pagination-icons-only')}
 
-    ${heading(toc, 2, 'Next.js')}
-    <p>shadcn's React component renders an <code>&lt;a&gt;</code> and asks you to swap in the Next.js <code>&lt;Link&gt;</code> for client-side navigation. In WebJs there is nothing to swap: a page link is a plain <code>&lt;a href&gt;</code>, and the client router picks it up on its own, with prefetch and a soft navigation. Use a real page URL such as <code>?page=3</code> in the <code>href</code> so the links also work with JavaScript off.</p>
+    ${heading(toc, 2, 'Client-Side Navigation')}
+    <p>A page link is a plain <code>&lt;a href&gt;</code>, and the WebJs client router picks it up on its own, with prefetch and a soft navigation. Use a real page URL such as <code>?page=3</code> in the <code>href</code> so the links also work with JavaScript off.</p>
     ${codeFigure(`<a href="?page=3" class=\${paginationLinkClass()}>3</a>`)}
     ${callout(html`<strong>Note:</strong> Because the links are native anchors, no change to <code>pagination.ts</code> is needed for routing.`, { className: 'mt-6' })}
 
@@ -79,7 +79,7 @@ export default async function body(toc: TocEntry[]) {
     ${heading(toc, 2, 'Changelog')}
 
     ${heading(toc, 3, 'RTL Support')}
-    <p>shadcn added a <code>text</code> prop to <code>PaginationPrevious</code> and <code>PaginationNext</code> so their labels can be translated. The kit's helpers style an anchor you write yourself, so the label is already your own text and there is nothing to update. Give the chevrons the <code>rtl:rotate-180</code> class so they point the right way in a right-to-left page, and use the logical <code>ps-1.5!</code> and <code>pe-1.5!</code> paddings, as the RTL example above does.</p>
+    <p>The previous and next labels can be translated as they are: the kit's helpers style an anchor you write yourself, so the label is already your own text. Give the chevrons the <code>rtl:rotate-180</code> class so they point the right way in a right-to-left page, and use the logical <code>ps-1.5!</code> and <code>pe-1.5!</code> paddings, as the RTL example above does.</p>
 
     ${heading(toc, 2, 'API Reference')}
     <p>Every part is a class helper for a native element. The helpers emit no ARIA, so add it yourself: wrap the list in <code>&lt;nav aria-label="pagination"&gt;</code>, set <code>aria-current="page"</code> on the active link, give an icon-only previous or next link an <code>aria-label</code>, and mark the ellipsis <code>aria-hidden="true"</code>.</p>

@@ -74,7 +74,7 @@ div[popover]  popoverContentClass()
     ${await componentPreview('date-picker-time')}
 
     ${heading(toc, 2, 'Natural Language Picker')}
-    <p>shadcn's version uses the <code>chrono-node</code> library to parse natural language dates. The kit ships no date parser, so the demo shows the first paint for "In 2 days" and leaves parsing what the reader types to a library of your choice.</p>
+    <p>A natural language picker turns text such as "In 2 days" into a date. The kit ships no date parser, so the demo shows the first paint for "In 2 days" and leaves parsing what the reader types to a library of your choice.</p>
     ${await componentPreview('date-picker-natural-language')}
 
     ${heading(toc, 2, 'RTL')}

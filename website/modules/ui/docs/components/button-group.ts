@@ -96,7 +96,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'buttonGroupClass')}
-    <p><code>buttonGroupClass()</code> returns the classes for a container that groups related buttons together with consistent styling. Put them on an element with <code>role="group"</code>, <code>data-slot="button-group"</code> and a <code>data-orientation</code> matching the option. <code>buttonGroupVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p><code>buttonGroupClass()</code> returns the classes for a container that groups related buttons together with consistent styling. Put them on an element with <code>role="group"</code>, <code>data-slot="button-group"</code> and a <code>data-orientation</code> matching the option. <code>buttonGroupVariants()</code> is an alias of <code>buttonGroupClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th></tr></thead>

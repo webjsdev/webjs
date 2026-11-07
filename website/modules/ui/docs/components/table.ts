@@ -80,7 +80,7 @@ import { cn } from '#lib/utils/cn.ts';`, { lineNumbers: true })}
     ${await componentPreview('table-actions')}
 
     ${heading(toc, 2, 'Data Table')}
-    <p>You can use the table helpers to build more complex data tables. The kit ships no table engine in the way shadcn pairs its table with <a href="https://tanstack.com/table/latest">@tanstack/react-table</a>, so sorting, filtering and pagination are yours to add: the server can sort and slice the rows before it renders them, driven by the query string, which keeps the table working with JavaScript off.</p>
+    <p>You can use the table helpers to build more complex data tables. The kit ships no table engine, so sorting, filtering and pagination are yours to add: the server can sort and slice the rows before it renders them, driven by the query string, which keeps the table working with JavaScript off.</p>
     <p>See the <a href="/ui/docs/components/data-table">Data Table</a> documentation for more information.</p>
 
     ${heading(toc, 2, 'RTL')}
@@ -91,17 +91,17 @@ import { cn } from '#lib/utils/cn.ts';`, { lineNumbers: true })}
     <p>Each helper returns the classes for one native table element. The native elements keep their semantics, so the accessibility tree works without extra roles. Give every header cell a <code>scope</code> and the table a <code>&lt;caption&gt;</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
-        <thead><tr><th>Helper</th><th>Element</th><th>shadcn</th></tr></thead>
+        <thead><tr><th>Helper</th><th>Element</th><th>Part</th></tr></thead>
         <tbody>
           <tr><td><code>tableContainerClass()</code></td><td><code>&lt;div&gt;</code></td><td>The scroll wrapper</td></tr>
-          <tr><td><code>tableClass()</code></td><td><code>&lt;table&gt;</code></td><td><code>Table</code></td></tr>
-          <tr><td><code>tableHeaderClass()</code></td><td><code>&lt;thead&gt;</code></td><td><code>TableHeader</code></td></tr>
-          <tr><td><code>tableBodyClass()</code></td><td><code>&lt;tbody&gt;</code></td><td><code>TableBody</code></td></tr>
-          <tr><td><code>tableFooterClass()</code></td><td><code>&lt;tfoot&gt;</code></td><td><code>TableFooter</code></td></tr>
-          <tr><td><code>tableRowClass()</code></td><td><code>&lt;tr&gt;</code></td><td><code>TableRow</code></td></tr>
-          <tr><td><code>tableHeadClass()</code></td><td><code>&lt;th&gt;</code></td><td><code>TableHead</code></td></tr>
-          <tr><td><code>tableCellClass()</code></td><td><code>&lt;td&gt;</code></td><td><code>TableCell</code></td></tr>
-          <tr><td><code>tableCaptionClass()</code></td><td><code>&lt;caption&gt;</code></td><td><code>TableCaption</code></td></tr>
+          <tr><td><code>tableClass()</code></td><td><code>&lt;table&gt;</code></td><td>The table</td></tr>
+          <tr><td><code>tableHeaderClass()</code></td><td><code>&lt;thead&gt;</code></td><td>The header rows</td></tr>
+          <tr><td><code>tableBodyClass()</code></td><td><code>&lt;tbody&gt;</code></td><td>The body rows</td></tr>
+          <tr><td><code>tableFooterClass()</code></td><td><code>&lt;tfoot&gt;</code></td><td>The footer rows</td></tr>
+          <tr><td><code>tableRowClass()</code></td><td><code>&lt;tr&gt;</code></td><td>A row</td></tr>
+          <tr><td><code>tableHeadClass()</code></td><td><code>&lt;th&gt;</code></td><td>A header cell</td></tr>
+          <tr><td><code>tableCellClass()</code></td><td><code>&lt;td&gt;</code></td><td>A data cell</td></tr>
+          <tr><td><code>tableCaptionClass()</code></td><td><code>&lt;caption&gt;</code></td><td>The caption</td></tr>
         </tbody>
       </table>
     </div>

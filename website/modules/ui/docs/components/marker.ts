@@ -61,7 +61,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('marker-status', RHEA)}
 
     ${heading(toc, 2, 'Shimmer')}
-    <p>Add the <a href="/ui/docs/utils/shimmer"><code>shimmer</code></a> utility class to the marker content for an animated streaming-text effect. The utility comes from shadcn's Tailwind stylesheet and is not part of the kit's generated CSS, so add it to your stylesheet first. See the shimmer docs for installation.</p>
+    <p>Add the <a href="/ui/docs/utils/shimmer"><code>shimmer</code></a> utility class to the marker content for an animated streaming-text effect. The utility comes from the kit's Tailwind stylesheet and is not part of its generated component CSS, so add it to your stylesheet first. See the shimmer docs for installation.</p>
     ${await componentPreview('marker-shimmer', RHEA)}
 
     ${heading(toc, 2, 'Separator')}
@@ -137,7 +137,7 @@ export function MarkerLinkDemo() {
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'markerClass')}
-    <p><code>markerClass()</code> returns the classes for the root marker element. Set <code>data-variant</code> to the variant you pass. <code>markerVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p><code>markerClass()</code> returns the classes for the root marker element. Set <code>data-variant</code> to the variant you pass. <code>markerVariants()</code> is an alias of <code>markerClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>

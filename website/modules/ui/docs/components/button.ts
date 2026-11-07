@@ -77,7 +77,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'buttonClass')}
-    <p><code>buttonClass()</code> returns the classes for a button. Put them on a native <code>&lt;button&gt;</code>, or on any element that should look like one. <code>buttonVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p><code>buttonClass()</code> returns the classes for a button. Put them on a native <code>&lt;button&gt;</code>, or on any element that should look like one. <code>buttonVariants()</code> is an alias of <code>buttonClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th></tr></thead>

@@ -92,21 +92,21 @@ export default async function body(toc: TocEntry[]) {
     <p>A handle is a focusable <code>role="separator"</code> (the WAI-ARIA window splitter). The arrow keys across the group move it 10 points, with Left and Right swapped under <code>dir="rtl"</code>, and Home and End move it as far as the panel before it allows.</p>
 
     ${heading(toc, 2, 'Changelog')}
-    ${heading(toc, 3, 'react-resizable-panels v4 names')}
-    <p>shadcn moved to react-resizable-panels v4 on 2025-02-02. The kit does not use that library, but its attributes follow the v4 names:</p>
+    ${heading(toc, 3, 'Element and attribute names')}
+    <p>The elements and their attributes use these names:</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
-        <thead><tr><th>react-resizable-panels v4</th><th>Kit</th></tr></thead>
+        <thead><tr><th>Name</th><th>What it is</th></tr></thead>
         <tbody>
-          <tr><td><code>Group</code></td><td><code>&lt;ui-resizable-panel-group&gt;</code></td></tr>
-          <tr><td><code>Separator</code></td><td><code>&lt;ui-resizable-handle&gt;</code></td></tr>
-          <tr><td><code>orientation</code> prop</td><td><code>orientation</code> attribute</td></tr>
-          <tr><td><code>defaultSize="50%"</code></td><td><code>default-size="50"</code></td></tr>
-          <tr><td><code>onLayoutChange</code></td><td><code>ui-layout-change</code> event</td></tr>
-          <tr><td><code>aria-orientation</code></td><td><code>aria-orientation</code></td></tr>
+          <tr><td><code>&lt;ui-resizable-panel-group&gt;</code></td><td>The group that lays its panels out.</td></tr>
+          <tr><td><code>&lt;ui-resizable-panel&gt;</code></td><td>One panel.</td></tr>
+          <tr><td><code>&lt;ui-resizable-handle&gt;</code></td><td>The separator you drag between two panels.</td></tr>
+          <tr><td><code>orientation</code> attribute</td><td>The direction the group lays its panels out in.</td></tr>
+          <tr><td><code>default-size="50"</code></td><td>A panel's starting size, as a percentage.</td></tr>
+          <tr><td><code>ui-layout-change</code> event</td><td>Fired with the panel sizes, as percentages, when the layout changes.</td></tr>
+          <tr><td><code>aria-orientation</code></td><td>Set on each handle to match the group.</td></tr>
         </tbody>
       </table>
     </div>
-    ${callout(html`The element names (<code>&lt;ui-resizable-panel-group&gt;</code>, <code>&lt;ui-resizable-panel&gt;</code>, <code>&lt;ui-resizable-handle&gt;</code>) match shadcn's wrapper components, which remain unchanged.`)}
   `;
 }

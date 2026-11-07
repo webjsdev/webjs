@@ -29,7 +29,7 @@ export default async function body(toc: TocEntry[]) {
     </div>
   </details>
 </div>`, { lineNumbers: true })}
-    <p>The accordion is built on the native <code>&lt;details&gt;</code> and <code>&lt;summary&gt;</code> elements, so it opens and closes with no JavaScript. Giving every item the same <code>name</code> makes them exclusive, which is shadcn's <code>type="single"</code>, and clicking the open item closes it, which is <code>collapsible</code>. Add <code>open</code> to the item that should render expanded.</p>
+    <p>The accordion is built on the native <code>&lt;details&gt;</code> and <code>&lt;summary&gt;</code> elements, so it opens and closes with no JavaScript. Giving every item the same <code>name</code> makes them exclusive, so only one is open at a time, and clicking the open item closes it. Add <code>open</code> to the item that should render expanded.</p>
 
     ${heading(toc, 2, 'Composition')}
     <p>Use the following composition to build an accordion:</p>

@@ -31,7 +31,7 @@ export function intro(toc: TocEntry[]) {
     <p><a href="/ui/charts/area">Browse the Charts Library</a>.</p>
 
     ${heading(toc, 2, 'Component')}
-    <p>The charts are drawn on the server as plain SVG, with no charting library. The layout is a port of <a href="https://recharts.org/">Recharts</a>, which shadcn's charts are built on: the same margins, scales, curves, bar layout and tick thinning, and the same option names.</p>
+    <p>The charts are drawn on the server as plain SVG, with no charting library. The layout engine computes the margins, scales, curves, bar layout and tick thinning on the server, and every option below shapes what it draws.</p>
     <p>We designed the <code>chart</code> component with composition in mind. <strong>Each chart is one function call, with the grid, the axes, the tooltip and the legend as options you add only when and where you need them</strong>.</p>
     ${codeFigure(`import { html } from '@webjsdev/core';
 import { barChart } from '#components/ui/chart.ts';
@@ -132,7 +132,7 @@ const chartConfig = {
 
     ${heading(toc, 3, 'Add Tooltip')}
     <p>So far the chart is static SVG. It looks great out of the box thanks to the chart's container classes.</p>
-    <p>To add a tooltip, we'll use the <code>tooltip</code> option, which draws shadcn's <code>ChartTooltipContent</code>.</p>
+    <p>To add a tooltip, we'll use the <code>tooltip</code> option, which draws the kit's tooltip card.</p>
     <div class=${steps}>
       <h3>Add the <code>tooltip</code> option to your chart.</h3>
       ${codeFigure(`\${barChart({
@@ -158,7 +158,7 @@ const chartConfig = {
     </div>
 
     ${heading(toc, 3, 'Add Legend')}
-    <p>We'll do the same for the legend, with the <code>legend</code> option, which draws shadcn's <code>ChartLegendContent</code>.</p>
+    <p>We'll do the same for the legend, with the <code>legend</code> option, which draws the kit's legend.</p>
     <div class=${steps}>
       <h3>Add the <code>legend</code> option to your chart.</h3>
       ${codeFigure(`\${barChart({
@@ -347,7 +347,7 @@ const chartConfig = {
     <p>This will use <code>Chrome</code> and <code>Safari</code> for the legend names.</p>
 
     ${heading(toc, 2, 'Accessibility')}
-    <p>A chart with a tooltip has an accessible layer by default, Recharts' <code>accessibilityLayer</code>: it takes focus, the arrow keys step through its points, Home and End jump to the first and last, Escape hides the tooltip, and each step is announced to screen readers. Pass <code>accessibilityLayer: false</code> to turn it off.</p>
+    <p>A chart with a tooltip has an accessible layer by default, the <code>accessibilityLayer</code> option: it takes focus, the arrow keys step through its points, Home and End jump to the first and last, Escape hides the tooltip, and each step is announced to screen readers. Pass <code>accessibilityLayer: false</code> to turn it off.</p>
     <p>Give every chart a <code>title</code>, which names it for screen readers, and keep its numbers in the text around it for a reader who cannot use the chart.</p>
     ${codeFigure(`\${lineChart({ config, data, title: 'Visitors by month', tooltip: {}, lines })}`, { title: 'components/example-chart.ts' })}
 

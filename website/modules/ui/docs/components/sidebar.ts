@@ -184,7 +184,7 @@ export function appSidebar() {
     ${table(['Name', 'Type', 'Description'], [
       [html`<code>default-open</code>`, html`<code>"true"</code> or <code>"false"</code>`, html`Default open state of the sidebar. Render it from the <code>sidebar_state</code> cookie on the server so the first paint matches the reader's last choice.`],
       [html`<code>open</code>`, html`<code>boolean</code>`, 'Open state of the sidebar. Written as an attribute it wins over default-open; set as a property it opens or closes the sidebar.'],
-      [html`<code>ui-open-change</code>`, html`<code>CustomEvent&lt;{ open: boolean }&gt;</code>`, 'Fired on the provider when the sidebar opens or closes, shadcn\'s onOpenChange.'],
+      [html`<code>ui-open-change</code>`, html`<code>CustomEvent&lt;{ open: boolean }&gt;</code>`, 'Fired on the provider when the sidebar opens or closes.'],
     ])}
 
     ${heading(toc, 3, 'Width')}
@@ -231,7 +231,7 @@ style="--sidebar-width: var(--sidebar-width-mobile, 18rem)"`, { title: 'componen
 </ui-sidebar-provider>`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'useSidebar')}
-    <p>There is no hook: the provider element is the sidebar's state. From a component inside it, reach it with <code>closest()</code> and read or call what shadcn's <code>useSidebar</code> returns.</p>
+    <p>There is no hook: the provider element is the sidebar's state. From a component inside it, reach it with <code>closest()</code> and read or call the members below.</p>
     ${codeFigure(`import type { UiSidebarProvider } from '#components/ui/sidebar.ts';
 
 const sidebar = this.closest<UiSidebarProvider>('ui-sidebar-provider');
@@ -246,7 +246,7 @@ sidebar.toggle();`, { lineNumbers: true })}
       [html`<code>openMobile</code>`, html`<code>boolean</code>`, 'Whether the sidebar is open on mobile.'],
       [html`<code>setOpenMobile</code>`, html`<code>(open: boolean) =&gt; void</code>`, 'Sets the open state of the sidebar on mobile.'],
       [html`<code>isMobile</code>`, html`<code>boolean</code>`, 'Whether the sidebar is on mobile.'],
-      [html`<code>toggle</code>`, html`<code>() =&gt; void</code>`, 'Toggles the sidebar. Desktop and mobile. shadcn calls it toggleSidebar.'],
+      [html`<code>toggle</code>`, html`<code>() =&gt; void</code>`, 'Toggles the sidebar. Desktop and mobile.'],
     ])}
 
     ${heading(toc, 2, 'SidebarHeader')}
@@ -368,7 +368,7 @@ sidebar.toggle();`, { lineNumbers: true })}
 </li>`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'SidebarMenuSkeleton')}
-    <p><code>sidebarMenuSkeleton()</code> renders a loading placeholder for a menu item. It returns the markup itself, and takes <code>showIcon</code> and the text bar's <code>width</code> (shadcn picks a random width, which would differ between the server and the browser).</p>
+    <p><code>sidebarMenuSkeleton()</code> renders a loading placeholder for a menu item. It returns the markup itself, and takes <code>showIcon</code> and the text bar's <code>width</code> (a fixed width, since a random one would differ between the server and the browser).</p>
     ${codeFigure(`<ul data-slot="sidebar-menu" data-sidebar="menu" class=\${sidebarMenuClass()}>
   \${Array.from({ length: 5 }, (_, index) => html\`
     <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=\${sidebarMenuItemClass()}>
@@ -410,7 +410,7 @@ sidebar.addEventListener('ui-open-change', (e) => {
 });
 
 sidebar.setOpen(false);`, { lineNumbers: true })}
-    <p>The choice is kept in the <code>sidebar_state</code> cookie, as in shadcn, so a layout can read it on the server and render <code>default-open</code> to match, with no flash.</p>
+    <p>The choice is kept in the <code>sidebar_state</code> cookie, so a layout can read it on the server and render <code>default-open</code> to match, with no flash.</p>
     ${codeFigure(`'use server';
 import { cookies } from '@webjsdev/server';
 
@@ -461,7 +461,7 @@ export async function sidebarOpen() {
 
     ${heading(toc, 2, 'Changelog')}
     ${heading(toc, 3, 'RTL Support')}
-    <p>shadcn's changelog lists five edits that add RTL support to an older copy of its sidebar. The kit's sidebar shipped with all of them, so there is nothing to apply:</p>
+    <p>Right-to-left support takes five things, and the kit's sidebar ships with all of them, so there is nothing to apply:</p>
     <div class=${steps}>
       <h3>No <code>dir</code> prop to add.</h3>
       <p>The direction comes from the <code>dir</code> attribute on an ancestor, and the phone sheet inherits it.</p>

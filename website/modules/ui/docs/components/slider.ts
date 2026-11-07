@@ -45,7 +45,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'ui-slider')}
-    <p><code>&lt;ui-slider&gt;</code> enhances one native <code>&lt;input type="range"&gt;</code> per thumb. Without JavaScript the page shows the inputs and the form submits them. With JavaScript the element hides them visually, draws shadcn's track, range and thumbs, and writes every move back into the inputs, so they still submit and reset with the form. <code>min</code>, <code>max</code> and <code>step</code> are read from the first input.</p>
+    <p><code>&lt;ui-slider&gt;</code> enhances one native <code>&lt;input type="range"&gt;</code> per thumb. Without JavaScript the page shows the inputs and the form submits them. With JavaScript the element hides them visually, draws the styled track, range and thumbs, and writes every move back into the inputs, so they still submit and reset with the form. <code>min</code>, <code>max</code> and <code>step</code> are read from the first input.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Attribute</th><th>Type</th><th>Default</th></tr></thead>
@@ -56,10 +56,10 @@ export default async function body(toc: TocEntry[]) {
     </div>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
-        <thead><tr><th>Event</th><th>Detail</th><th>shadcn</th></tr></thead>
+        <thead><tr><th>Event</th><th>Detail</th><th>Fired when</th></tr></thead>
         <tbody>
-          <tr><td><code>ui-value-change</code></td><td><code>{ value: number[] }</code></td><td><code>onValueChange</code></td></tr>
-          <tr><td><code>ui-value-commit</code></td><td><code>{ value: number[] }</code></td><td><code>onValueCommit</code></td></tr>
+          <tr><td><code>ui-value-change</code></td><td><code>{ value: number[] }</code></td><td>A thumb moves.</td></tr>
+          <tr><td><code>ui-value-commit</code></td><td><code>{ value: number[] }</code></td><td>A drag ends or a key press moves a thumb.</td></tr>
         </tbody>
       </table>
     </div>

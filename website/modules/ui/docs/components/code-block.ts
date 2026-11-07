@@ -241,7 +241,7 @@ export default async function Page() {
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'codeBlockClass')}
-    <p>The surface that holds the header, the content and the footer. Put it on a <code>&lt;div data-slot="code-block"&gt;</code> with <code>data-variant</code> and <code>data-size</code> to match. <code>codeBlockVariants()</code> is the same helper under shadcn's name, and it also merges a <code>className</code>.</p>
+    <p>The surface that holds the header, the content and the footer. Put it on a <code>&lt;div data-slot="code-block"&gt;</code> with <code>data-variant</code> and <code>data-size</code> to match. <code>codeBlockVariants()</code> is an alias of <code>codeBlockClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option or attribute</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
@@ -292,7 +292,7 @@ export default async function Page() {
     </div>
 
     ${heading(toc, 3, 'codeBlockLines')}
-    <p><code>codeBlockLines(text, { variants })</code> returns one line span per line of <code>text</code>, keeping an empty line as a newline. <code>codeBlockLineClass({ variant })</code> styles a line span of your own. <code>codeBlockLineVariants()</code> is the same helper under shadcn's name.</p>
+    <p><code>codeBlockLines(text, { variants })</code> returns one line span per line of <code>text</code>, keeping an empty line as a newline. <code>codeBlockLineClass({ variant })</code> styles a line span of your own. <code>codeBlockLineVariants()</code> is an alias of <code>codeBlockLineClass()</code> that also merges a <code>className</code>.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>

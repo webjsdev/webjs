@@ -89,6 +89,6 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'Changelog')}
     ${heading(toc, 3, '2026-05-17 Default Spacing')}
-    <p>shadcn changed its default <code>spacing</code> from <code>0</code> to <code>2</code>, so its toggle groups render with space between items by default. The kit has not followed yet: <code>&lt;ui-toggle-group&gt;</code> still defaults to <code>spacing="0"</code>, joined items, so set <code>spacing</code> for space between them.</p>
+    <p>The default spacing is now <code>2</code>, so toggle groups render with space between items. With <code>spacing</code> left out the style decides: every style but new-york gaps the items by 2 spacing units, and new-york joins them. Set <code>spacing="0"</code> to join the items in any style.</p>
   `;
 }
