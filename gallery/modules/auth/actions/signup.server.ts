@@ -5,9 +5,9 @@ import { users } from '#db/schema.server.ts';
 import { hash } from '../password.server.ts';
 import { signIn } from '../auth.server.ts';
 
-// The action the signup <form> is bound to. It takes the FormData directly:
-// that is what a form-bound action always receives, on the JS path and the
-// no-JS path alike, so validation lives HERE rather than in a per-page adapter.
+// The action the signup <form> is bound to. It receives the submitted fields
+// as one object read by property (`input.email`), on the JS path and the no-JS
+// path alike, so validation lives HERE rather than in a per-page adapter.
 //
 // A validation failure returns fieldErrors + values, which re-renders the SAME
 // page at 422 with the messages and the user's typed input preserved. On
@@ -15,10 +15,16 @@ import { signIn } from '../auth.server.ts';
 // session cookie, and an action may return a Response, which the framework
 // honors verbatim. signIn lives in the server-only auth module, imported here
 // server-to-server, so it never reaches the browser.
-export async function signup(formData: FormData) {
-  const name = String(formData.get('name') || '').trim();
-  const email = String(formData.get('email') || '').trim();
-  const password = String(formData.get('password') || '');
+export interface SignupInput {
+  name?: string;
+  email?: string;
+  password?: string;
+}
+
+export async function signup(input: SignupInput) {
+  const name = String(input.name || '').trim();
+  const email = String(input.email || '').trim();
+  const password = String(input.password || '');
   const values = { name, email };
   const fieldErrors: Record<string, string> = {};
   if (!name) fieldErrors.name = 'Name is required';

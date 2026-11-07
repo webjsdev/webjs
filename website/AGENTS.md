@@ -286,12 +286,14 @@ is split by editorial intent, which is what decides where a piece goes:
 `app/layout.ts` renders the site header on every page. It is
 `position: fixed`, NOT sticky: a sticky header flickers on iOS WebKit during
 a client-router navigation (#610), so the height is reserved on the content
-through a `--header-h` offset, measured by the inline script in the layout
-head and defaulted on `:root` for no-JS and first paint.
+through the `--header-h` token on `:root`. The header is sized BY that token
+(`.site-top > header { height: var(--header-h) }`) and nothing measures it: a
+measuring script read 0 from a detached header after a full-body swap and
+slid the content under the bar (#1660).
 
 There is no announcement banner. One used to sit above the header, and
-`--header-h` is why its removal is not free: re-adding a strip means the
-measurement has to cover it too.
+`--header-h` is why its removal is not free: re-adding a strip means adding
+its height to the token.
 
 The header's mobile menu is `components/site-nav-menu.ts`, and the fixed
 position is why it carries
@@ -303,12 +305,11 @@ reach it. `lib/scroll-lock.ts` publishes that measured width for it to opt into
 
 ## What stays inline script in the root layout
 
-Only two things, and both are genuinely boot work rather than interactivity:
-
-- the **theme bootstrap**, which must run before first paint or a reader who
-  chose dark sees the light palette flash. It cannot import, so it interpolates
-  the storage key from `lib/theme.ts`.
-- the **`--header-h` measurement**, which backs the fixed-header offset above.
+Only one thing, and it is genuinely boot work rather than interactivity: the
+**theme bootstrap**, which must run before first paint or a reader who chose
+dark sees the light palette flash. It cannot import, so it interpolates the
+storage key from `lib/theme.ts`. The header height used to be measured there
+too; it is a CSS token now (see Header above).
 
 Everything else that used to live there is a component now. The drawer and the
 header menu were once one delegated click listener plus one delegated keydown

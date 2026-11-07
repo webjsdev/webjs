@@ -81,7 +81,7 @@ export default function Avatar({ actionData }: {
   \`;
 }</code-block>
 
-    <p>The bound action receives the <code>FormData</code>, pulls the <code>File</code> out of it, and streams it to storage with a generated, traversal-safe key, persisting that key on the DB row.</p>
+    <p>The bound action receives the submitted fields as one object, reads the <code>File</code> off it as <code>input.avatar</code>, and streams it to storage with a generated, traversal-safe key, persisting that key on the DB row.</p>
 
     <code-block>// modules/avatar/actions/save-avatar.server.ts
 'use server';
@@ -90,8 +90,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '#db/connection.server.ts';
 import { users } from '#db/schema.server.ts';
 
-export async function saveAvatar(formData: FormData) {
-  const file = formData.get('avatar');               // a web File
+export async function saveAvatar(input: { avatar?: File | string }) {
+  const file = input.avatar;                         // a web File
   if (!(file instanceof File) || file.size === 0) {
     return { success: false, fieldErrors: { avatar: 'Choose an image' }, status: 422 };
   }

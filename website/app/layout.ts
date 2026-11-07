@@ -181,23 +181,6 @@ export default function RootLayout({ children }: LayoutProps) {
           if (${JSON.stringify(FORCED_THEMES)}.indexOf(t) !== -1) document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // #610: the header uses position fixed (not sticky, which flickers on iOS
-      // WebKit during a client-router nav). --header-h reserves the header
-      // height, measured here so it tracks the real height, with a :root
-      // default for no-JS / first paint.
-      (function(){
-        function measure(){
-          try {
-            var bar = document.querySelector('.site-top');
-            if (!bar) return;
-            var apply = function(){ document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px'); };
-            apply();
-            if (window.ResizeObserver) new ResizeObserver(apply).observe(bar);
-          } catch (_) {}
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
-        else measure();
-      })();
     </script>
 
     <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
@@ -302,7 +285,14 @@ export default function RootLayout({ children }: LayoutProps) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
-      :root { --header-h: 59px; } /* #610 fixed header offset (no banner); kept exact by the script above */
+      /* An in-page #anchor jump (native, or the client router's scrollIntoView)
+         stops below the fixed header instead of under it. */
+      html { scroll-padding-top: var(--header-h); }
+      /* #610: the header is position: fixed (sticky flickers on iOS WebKit during
+         a client-router nav), so the content reserves its height. The header is
+         sized BY this token and nothing measures it, so a swap that replaces the
+         header cannot zero the offset (#1660). */
+      :root { --header-h: 61px; }
       body {
         padding-top: var(--header-h);
         background: var(--bg); color: var(--fg);
@@ -331,7 +321,7 @@ export default function RootLayout({ children }: LayoutProps) {
          whatever padding is already there instead of restating it. The child
          selector outranks the border-* utilities that also set
          border-right-color, so cascade order does not matter. */
-      .site-top > header { border-right: var(--wj-scrollbar-compensation, 0px) solid transparent; }
+      .site-top > header { border-right: var(--wj-scrollbar-compensation, 0px) solid transparent; height: var(--header-h); }
       /* Background glow layer with soft radial ambient glow */
       .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
       .glow-layer::before {
@@ -383,7 +373,7 @@ export default function RootLayout({ children }: LayoutProps) {
 
     <div class="site-top fixed inset-x-0 top-0 z-20">
     <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_50%,transparent)] border-b border-border">
-      <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <div class="max-w-7xl mx-auto px-6 h-full flex items-center justify-between gap-4">
         <a class="inline-flex items-center no-underline text-fg shrink-0 transition-opacity duration-150 hover:opacity-80" href="/" aria-label="WebJs home">
           ${brandLockup('hdr', { height: 26 })}
         </a>

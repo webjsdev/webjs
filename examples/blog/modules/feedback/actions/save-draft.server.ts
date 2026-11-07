@@ -11,8 +11,8 @@
  * binding is that a different one runs for a different button, and "the form
  * submitted successfully" cannot tell those apart.
  */
-export async function saveDraft(formData: FormData) {
-  const note = String(formData.get('note') || '').trim();
+export async function saveDraft(input: { note?: string }) {
+  const note = String(input.note || '').trim();
   if (!note) {
     return {
       success: false as const,

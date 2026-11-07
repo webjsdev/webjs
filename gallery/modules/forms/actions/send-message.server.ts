@@ -1,8 +1,9 @@
 'use server';
 
 // The action a <form action=${sendMessage}> submits to. It receives the
-// FormData directly: a form-bound action always does, on the JS path and the
-// no-JS path alike.
+// submitted fields as one object, read as properties (`input.email`), the same
+// shape this action would get over RPC. The FormData readers work on it too
+// (`input.get('email')`), on the JS path and the no-JS path alike.
 //
 // Return a FAILURE to re-render the SAME page at 422 with the result on
 // `actionData` (so the fields repopulate), or a SUCCESS with a same-site
@@ -20,10 +21,16 @@ export interface Result {
   redirect?: string;
 }
 
-export async function sendMessage(formData: FormData): Promise<Result> {
-  const name = String(formData.get('name') ?? '').trim();
-  const email = String(formData.get('email') ?? '').trim();
-  const message = String(formData.get('message') ?? '').trim();
+export interface MessageInput {
+  name?: string;
+  email?: string;
+  message?: string;
+}
+
+export async function sendMessage(input: MessageInput): Promise<Result> {
+  const name = String(input.name ?? '').trim();
+  const email = String(input.email ?? '').trim();
+  const message = String(input.message ?? '').trim();
   const fieldErrors: Record<string, string> = {};
   if (!name) fieldErrors.name = 'Your name is required.';
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fieldErrors.email = 'A valid email is required.';

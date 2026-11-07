@@ -8,6 +8,7 @@ import { lookupActionIdentity } from './form-action-identity.js';
 import { verifyOrigin } from './csrf.js';
 import { actionMethod, actionConfigFn, actionMiddleware, resolveTags, RESERVED_CONFIG } from './action-config.js';
 import { runValidate } from './actions.js';
+import { formInput } from './action-input.js';
 import { runActionChain } from './action-middleware.js';
 import { runWithActionSignal } from './action-signal.js';
 import { isStreamable } from './action-stream.js';
@@ -527,10 +528,15 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     );
   }
 
-  // A form-bound action always receives the `FormData` (#1155). `validate` is
-  // the typing seam: it takes the FormData and its transform-return becomes the
-  // action's typed input, the same `runValidate` contract the RPC path uses.
-  let args = [formData];
+  // A form-bound action receives the submitted fields as ONE object that reads
+  // both ways (`action-input.js`): `input.title`, the shape the same action gets
+  // over RPC and through `route()`, and `input.get('title')`, the FormData
+  // readers. It used to receive the raw FormData, so a validator written for
+  // the RPC shape read `undefined` and answered every submission with a 422
+  // (#1664). `validate`, middleware, the action and `invalidates` all see it.
+  // The raw `formData` local keeps feeding the #1581 submitted-values path.
+  const warn = ssrOpts.dev ? (logger && logger.warn ? (m) => logger.warn(m) : (m) => console.warn(m)) : undefined;
+  let args = [formInput(formData, { warn, label: fnName })];
   const validate = actionConfigFn(mod, 'validate');
   if (typeof validate === 'function') {
     const v = runValidate(validate, args[0]);

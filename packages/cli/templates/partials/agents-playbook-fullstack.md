@@ -76,8 +76,11 @@ Structure the product as real routes, not one page that swaps client state:
 
 Give `app/layout.ts` a navbar that links the main pages, pinned with
 `position: fixed` (never `position: sticky`, which flickers on iOS during a
-client-router navigation), and reserve its height on the content with a
-`--header-height` offset. In a list or table, clicking a row or card navigates
+client-router navigation). Size it with the layout's `--header-h` token
+(`h-[var(--header-h)]`) and never measure it with JavaScript, since a
+client-router swap that replaces the header leaves a `ResizeObserver` reading
+a detached node of height 0. The scaffold's `body:has(> header.fixed)` rule
+already reserves the space, so pinning is adding `fixed inset-x-0 top-0 z-20`. In a list or table, clicking a row or card navigates
 to that item's detail page. Wrap each row action button (edit, delete, status)
 so its handler calls `event.stopPropagation()`, letting the button run its own
 action without also triggering the row navigation.
@@ -101,7 +104,11 @@ same list; `.agents/rules/workflow.md` has what each gate checks. While
 iterating, `npm run ci -- --only Tests` runs one layer. Then
 `npm run css:build` (compile Tailwind).
 
-Then boot `npm run dev`, confirm every page route returns HTTP 200, and open
+Then boot `npm run dev`. After each edit, run `npx webjs status /the-route /another`
+instead of sleeping and fetching a page: it waits until the dev server has
+rebuilt and re-analysed the app, requests each path, and prints every error
+since the last rebuild (render, server action, TypeScript, middleware) with its
+file and line, exiting non-zero on any problem. Confirm every page route returns HTTP 200, and open
 every route you changed in a real browser and play through its states: `check`
 and `typecheck` pass even when a layout collapses, so the browser is the real
 check for UI work.

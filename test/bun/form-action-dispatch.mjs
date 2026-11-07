@@ -42,9 +42,14 @@ function write(rel, body) {
 
 write('signup.server.js', `
 'use server';
-export async function signup(formData) {
-  const email = String(formData.get('email') || '').trim();
-  const file = formData.get('avatar');
+export async function signup(input) {
+  // #1664: the input reads as properties (the RPC shape) AND through the
+  // FormData readers, and a File field is a real File either way.
+  const email = String(input.email || '').trim();
+  if (input.get('email') !== input.email) return { success: false, error: 'reader and property disagree' };
+  const file = input.avatar;
+  // By name, not identity: Bun's FormData.get() hands back a fresh File each call.
+  if (file && input.get('avatar').name !== file.name) return { success: false, error: 'file reader and property disagree' };
   if (!email.includes('@')) {
     return { success: false, fieldErrors: { email: 'bad email' }, values: { email }, status: 422 };
   }

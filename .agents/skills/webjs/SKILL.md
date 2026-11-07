@@ -106,10 +106,10 @@ Common bundles:
 3. **Put code in the narrowest owner.** Route-local first (`modules/<feature>/`), promote to `lib/` or `components/` only when reuse is real.
 4. **Keep server-only code behind `.server.ts`** (Core WebJs Rules 1 and 2).
 5. **Add interactivity per behaviour.** Reach for a component (and a signal or `@event`) only where the UI is genuinely interactive. A display-only component is elided from the browser. Then wrap the interactive part and STOP: the static markup around it stays in the page, where it costs nothing.
-6. **Validate input at the boundary.** Declare `export const validate` on an action; the RPC and `route()` boundaries run it.
+6. **Validate input at the boundary.** Declare `export const validate` on an action; the RPC, `route()` and bound-form boundaries all run it, and all hand it the same shape (fields read by property, `raw.title`).
 7. **Default mutations to optimistic UI** where the client can predict the result (`optimistic()` from `@webjsdev/core`).
 8. **Type every boundary from its source, never `unknown` or `any`.** The row type comes from the schema (`typeof todos.$inferSelect`), the action's input from a named `interface` and its result from `ActionResult<T>`, the routing files from `PageProps` / `LayoutProps` / `RouteHandlerContext`. `unknown` belongs on a payload nothing has vouched for yet that the next line narrows, and on a parameter of your own helper that forwards into an `html` template hole. Everywhere else, including a layout's `children`, it is a missing type. Carry a row type into a shipping component with `import type` (erased before the browser sees it). Nothing enforces this (both spellings are valid TypeScript, so `webjs check` and `tsc` pass either way), which is why it is written down. See `references/typescript.md`.
-9. **Test the narrowest meaningful layer**, and look at any UI change in a real browser (see Testing Defaults).
+9. **Test the narrowest meaningful layer**, and look at any UI change in a real browser (see Testing Defaults). With `npm run dev` running, run `npx webjs status /the-route` after each edit instead of sleeping and fetching: it waits for the reload to settle and prints every error since the last rebuild with its file and line (`references/runtime.md`).
 
 ## Project Layout
 
@@ -237,8 +237,8 @@ Counter.register('my-counter');
 ```ts
 // modules/contact/actions/send-message.server.ts
 'use server';
-export async function sendMessage(formData: FormData) {
-  const email = String(formData.get('email') || '');
+export async function sendMessage(input: { email?: string }) {
+  const email = String(input.email || '');
   if (!email) return { success: false, fieldErrors: { email: 'required' } };
   return { success: true, redirect: '/thanks' };
 }
@@ -250,7 +250,7 @@ export default function Contact({ actionData }) {
 }
 ```
 
-Binding the action is the whole wiring: the renderer omits `action` (so the form posts to the page's own url), supplies `method="post"` and an enctype, and emits a hidden `__webjs_action` identity field. A form-bound action always receives the `FormData`.
+Binding the action is the whole wiring: the renderer omits `action` (so the form posts to the page's own url), supplies `method="post"` and an enctype, and emits a hidden `__webjs_action` identity field. A form-bound action receives the submitted fields as ONE object read by property (`input.email`), the same shape it gets over RPC, which also answers the `FormData` readers (`input.get('email')`, `input.getAll('tags')`). A name ending in `[]` arrives as an array (`name="tags[]"` gives `input.tags`), a file field is a real `File`, and it is still a real `FormData`.
 
 Success is a 303 (PRG); failure re-renders the page at 422 with the result on `actionData`. With JS the client router applies the response in place. A submission that binds nothing is a 405, and the submission is Origin-verified like an RPC call.
 

@@ -201,7 +201,7 @@ export async function tryServePublicAsset(path, ctx) {
 }
 
 export async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev, reportError, reportDevError, hasOnError, logger, cspEnabled, allowedOrigins } = ctx;
+  const { state, appDir, coreDir, dev, reportError, reportDevError, recordDevStatus, hasOnError, logger, cspEnabled, allowedOrigins } = ctx;
   const url = new URL(req.url);
   // Decode percent-encoded characters so filesystem lookups match real
   // filenames. Dynamic route segments like `[slug]` and route groups like
@@ -240,7 +240,7 @@ export async function handleCore(req, ctx) {
     // Pass the onError sink (issue #239): a server action that throws
     // unexpectedly is reported to the APM hook before the sanitized 500.
     const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
-    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins);
+    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins, logger);
   }
 
   // Static: /public/*, the #830 root remaps, and /favicon.ico. In dev this
@@ -387,7 +387,14 @@ export async function handleCore(req, ctx) {
   // API route (route.js handler)
   const api = matchApi(state.routeTable, path);
   if (api) {
-    const handler = () => handleApi(api.route, api.params, req, dev);
+    // A handler that throws is recorded in the dev status as a `route` error
+    // HERE, before a root middleware wrapping `next()` reports the same error
+    // as its own (#1664). The rethrow keeps the response path unchanged.
+    const handler = recordDevStatus
+      ? async () => {
+        try { return await handleApi(api.route, api.params, req, dev); } catch (e) { recordDevStatus(e, req, 'route'); throw e; }
+      }
+      : () => handleApi(api.route, api.params, req, dev);
     return runWithSegmentMiddleware(req, api.route.middlewares, handler, dev);
   }
 
@@ -456,10 +463,11 @@ export async function handleCore(req, ctx) {
         // to turn any page into an error.
         reportFormSubmittedAsGet(
           url, req,
-          // Gated on hasOnError, not on `reportError`: that is always a
-          // function here and no-ops internally, so passing it would spend a
-          // dedupe slot on a report nobody receives.
-          hasOnError ? (e) => reportError(e, req, 'action') : undefined,
+          // Gated on a sink OR dev, not on `reportError` alone, which is
+          // always a function: with neither, nobody receives the report and it
+          // would only spend a dedupe slot. In dev the dev status receives it
+          // (#1664), the same as the POST variant below.
+          hasOnError || dev ? (e) => reportError(e, req, 'action') : undefined,
           logger, dev, page.route,
         );
         // A successful render of URL U supersedes a RETAINED render error for
@@ -490,7 +498,9 @@ export async function handleCore(req, ctx) {
       const deps = {
         actionIndex: state.actionIndex,
         allowedOrigins,
-        onError: hasOnError ? (e) => reportError(e, req, 'action') : undefined,
+        // Also passed in dev with no sink, so a failing form action reaches the
+        // dev status error list (#1664); `reportError` records it first.
+        onError: hasOnError || dev ? (e) => reportError(e, req, 'action') : undefined,
         logger,
       };
       const handler = () => runFormAction(page.route, page.params, url, req, ssrOpts, deps);
