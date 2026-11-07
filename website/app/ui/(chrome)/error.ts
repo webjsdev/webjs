@@ -4,7 +4,8 @@ import { html } from '@webjsdev/core';
  * Error boundary for the /ui section. An uncaught error thrown while
  * rendering a /ui page renders this INSIDE app/ui/(chrome)/layout.ts, so the
  * reader keeps the /ui header and footer. A crash in that layout itself falls
- * through to the root app/error.ts. Receives the thrown value as ctx.error.
+ * through to app/ui/error.ts, which renders with no chrome. Receives the
+ * thrown value as ctx.error.
  *
  * Keep this file's import graph minimal: it MUST stay importable when the
  * rest of the app is broken. Only @webjsdev/core.

@@ -477,3 +477,22 @@ test('each kit style is scoped to its nearest wrapper, so a nested region takes 
   assert.match(build, /SCOPED_DIR/, 'the per-style build compiles the scoped copies');
   assert.ok(!/registry\/styles\/style-/.test(build), 'and not the unscoped originals');
 });
+
+test('a /ui path that 404s or throws outside the chrome renders in /ui classes, with a way back', async () => {
+  // app/ui/not-found.ts and app/ui/error.ts catch the bare frames and a crash
+  // in the chrome layout itself. The root boundaries are written in the
+  // marketing site's classes, which a /ui path does not load.
+  const { renderToString } = await import('@webjsdev/core/server');
+  const { default: UiFrameNotFound } = await import('#app/ui/not-found.ts');
+  const { default: UiFrameError } = await import('#app/ui/error.ts');
+  const missing = await renderToString(UiFrameNotFound());
+  const crashed = await renderToString(UiFrameError({ error: new Error('boom <b>') }));
+  for (const [name, out] of [['not-found', missing], ['error', crashed]]) {
+    assert.match(out, /<main id="main"[^>]*class="flex min-h-svh/, `${name} fills the frame`);
+    assert.match(out, /href="\/ui">Back to WebJs UI<\/a>/, `${name} links back to /ui`);
+  }
+  assert.match(crashed, /boom &lt;b&gt;/, 'the error message is escaped');
+  const res = await handle('/ui/view/no-such-block');
+  assert.equal(res.status, 404);
+  assert.match(await res.text(), /Page not found[\s\S]*Back to WebJs UI/, 'a missing frame renders the /ui 404');
+});
