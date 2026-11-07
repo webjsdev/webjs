@@ -11,20 +11,20 @@ import {
 import { inputClass } from '#modules/ui/components/input.ts';
 import { textareaClass } from '#modules/ui/components/textarea.ts';
 import { spinner } from '#modules/ui/components/spinner.ts';
-import { submitBugReport } from './form-next-demo-action.server.ts';
+import type { submitBugReport } from './form-next-demo-action.server.ts';
 
 export interface BugReportState {
   fieldErrors?: Partial<Record<'title' | 'description', string>>;
   values?: Partial<Record<'title' | 'description', string>>;
 }
 
-// One template renders the first paint and the 422 re-render: the page
-// passes its actionData in as `state` after a failed submission.
-export default function BugReportForm(state: BugReportState = {}) {
+// One template renders the first paint and the 422 re-render: the page binds
+// the action and passes its actionData in as `state` after a failed submission.
+export default function BugReportForm(state: BugReportState = {}, action?: typeof submitBugReport) {
   const errors = state.fieldErrors ?? {};
   const values = state.values ?? {};
   return html`
-    <form id="bug-report" action=${submitBugReport} novalidate class="group w-full max-w-md">
+    <form id="bug-report" action=${action} novalidate class="group w-full max-w-md">
       <div data-slot="card" data-size="default" class=${cardClass()}>
         <div data-slot="card-header" class=${cardHeaderClass()}>
           <div data-slot="card-title" class=${cardTitleClass()}>Bug Report</div>

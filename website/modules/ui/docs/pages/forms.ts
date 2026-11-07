@@ -4,6 +4,7 @@ import { codeFigure } from '#lib/ui/docs/code.ts';
 import { callout } from '#lib/ui/docs/callout.ts';
 import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 import BugReportForm, { type BugReportState } from '#modules/ui/examples/form-next-demo.ts';
+import { submitBugReport } from '#modules/ui/examples/form-next-demo-action.server.ts';
 import type { DocPageContext } from './index.ts';
 
 /**
@@ -13,8 +14,10 @@ import type { DocPageContext } from './index.ts';
  * pick. The sections follow next.mdx; React's `useActionState`, `pending`
  * and Zod are replaced by what WebJs does: `ctx.actionData` with
  * `fieldErrors` and `values`, the router's `aria-busy` on a submitting form,
- * and validation written in the action. The demo is live: its form binds
- * examples/form-next-demo-action.server.ts, so a submission posts to this
+ * and validation written in the action. The demo is live: this page binds
+ * examples/form-next-demo-action.server.ts to the demo's form (renderDemo's
+ * renderToString runs outside a request, where no action can be bound, so
+ * the demo takes the action as an argument), so a submission posts to this
  * page, and the 422 re-render hands `actionData` to the body through the
  * docs route's `ctx`, which renders the form with the errors and the typed
  * values. That is also why the demo is rendered here rather than through
@@ -157,7 +160,7 @@ async function liveDemo(state: BugReportState) {
     <div id="demo-form" data-slot="component-preview" data-not-typeset class="group relative mt-4 mb-12 flex scroll-mt-24 flex-col overflow-hidden rounded-2xl border">
       <div data-slot="preview" dir="ltr">
         <div data-align="center" class="preview style-nova relative flex h-auto w-full items-center justify-center p-10">
-          ${BugReportForm(state)}
+          ${BugReportForm(state, submitBugReport)}
         </div>
       </div>
       ${demo ? html`
