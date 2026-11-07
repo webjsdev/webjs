@@ -48,6 +48,8 @@ test('/ui/colors renders every swatch as markup, with its values to copy', async
   assert.match(body, /<color-swatches[\s>]/, 'the copy element wraps the palettes');
   assert.equal(body.match(/<select[^>]*data-color-format/g)?.length, 26, 'one format menu per palette');
   assert.match(body, /<option value="hsl"[^>]*selected/, 'hsl is the default format');
+  assert.equal(body.match(/<template data-select-trigger>/g)?.length, 26, 'each trigger reads "Format: <format>"');
+  assert.match(body, /<span class="font-medium">hex<\/span><span class="font-mono text-xs text-muted-foreground">#fafafa<\/span>/, 'a menu item shows the format beside its value');
   assert.match(body, /href="#colors"/, 'Browse Colors jumps to the palettes');
 });
 
