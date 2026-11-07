@@ -53,6 +53,9 @@ export function preloadStyles(root, now, timeoutMs) {
   const kept = Object.create(null);
   const current = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
   for (const el of current) {
+    // A section sheet the client router switched off (#1669) is not in use,
+    // and a re-requested copy of it would come back switched on.
+    if (el.hasAttribute('data-wj-style-off')) continue;
     let url;
     try { url = new URL(el.getAttribute('href'), location.href); } catch (_) { continue; }
     if (url.origin !== location.origin) continue;
