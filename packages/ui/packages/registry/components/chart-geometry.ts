@@ -132,6 +132,22 @@ export function niceTicks(min: number, max: number, count = 5, allowDecimals = t
   return min > max ? out.reverse() : out;
 }
 
+/**
+ * d3's linear ticks: about `count` round values inside `[start, stop]`,
+ * stepping by 1, 2 or 5 times a power of ten. Recharts uses them for an axis
+ * with no tick count of its own, a radial bar chart's angle axis.
+ */
+export function linearTicks(start: number, stop: number, count = 10): number[] {
+  const raw = Math.abs(stop - start) / count;
+  if (!(raw > 0) || !Number.isFinite(raw)) return [start];
+  const power = Math.floor(Math.log10(raw));
+  const error = raw / 10 ** power;
+  const step = (error >= Math.sqrt(50) ? 10 : error >= Math.sqrt(10) ? 5 : error >= Math.sqrt(2) ? 2 : 1) * 10 ** power;
+  const out: number[] = [];
+  for (let v = Math.ceil(start / step) * step; v <= stop + step * 1e-9; v = snap(v + step)) out.push(snap(v));
+  return out;
+}
+
 /** A linear scale from a domain onto a range. */
 export function linearScale(domain: [number, number], range: [number, number]): (v: number) => number {
   const [d0, d1] = domain;

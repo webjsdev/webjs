@@ -286,6 +286,23 @@ test('an authored aspect ratio replaces the default one', async () => {
   assert.match(out, /aspect-square/);
 });
 
+test('linearTicks steps by 1, 2 or 5 times a power of ten, as d3 does', () => {
+  assert.deepEqual(c.linearTicks(0, 275), [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260], 'the radial grid spokes');
+  assert.deepEqual(c.linearTicks(0, 1, 5), [0, 0.2, 0.4, 0.6, 0.8, 1]);
+});
+
+test('a label takes its bar\'s colour, sizes in em of the chart text, and a tooltip opens where Recharts\' does', async () => {
+  const data = MONTHS.map((m, i) => ({ ...m, fill: i % 2 ? 'red' : 'blue' }));
+  const out = await ssr(c.barChart({
+    config: CONFIG, data, xAxis: { dataKey: 'month' }, tooltip: { defaultIndex: 1 },
+    bars: [{ dataKey: 'desktop', labels: [{ position: 'top', fontSize: 12 }, { position: 'center', fill: 'white', fontSize: 9 }] }],
+  }));
+  assert.match(out, /<text x="[\d.]+" y="[\d.]+" text-anchor="middle" fill="blue"[^>]*font-size="1em"/, 'the first label is the bar\'s colour at 12px');
+  assert.match(out, /fill="white"[^>]*font-size="0.75em"/, 'a named colour wins');
+  assert.match(out, /data-plot="5 5 440 213"/, 'the plot area the tooltip stays inside');
+  assert.match(out, /<div data-index="1" data-x="115" data-y="129"/, 'the band centre, halfway down from the plot top to the chart bottom');
+});
+
 test('a tooltip with a custom row or an icon is served as markup', async () => {
   const out = await ssr(c.barChart({
     config: { ...CONFIG, mobile: { label: 'Mobile', icon: () => c.chartText(0, 0, 'i') } },
@@ -331,7 +348,7 @@ test('add chart-area-interactive installs the block with its kit, and the page r
   }
 });
 
-test('add chart installs chart.ts and chart-geometry.ts, and the installed copy renders', async () => {
+test('add chart installs chart.ts, chart-element.ts and chart-geometry.ts, and the installed copy renders', async () => {
   const { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } = await import('node:fs');
   const { pathToFileURL } = await import('node:url');
   const { add } = await import('../src/commands/add.js');
@@ -354,6 +371,7 @@ test('add chart installs chart.ts and chart-geometry.ts, and the installed copy 
     const chartFile = join(d, 'components', 'ui', 'chart.ts');
     assert.ok(existsSync(chartFile), 'chart.ts lands in components/ui');
     assert.ok(existsSync(join(d, 'components', 'ui', 'chart-geometry.ts')), 'and its geometry beside it');
+    assert.ok(existsSync(join(d, 'components', 'ui', 'chart-element.ts')), 'and its element');
     assert.match(readFileSync(chartFile, 'utf8'), /from '\.\/chart-geometry\.ts'/, 'the sibling import still resolves');
     const installed = await import(pathToFileURL(chartFile).href);
     const out = await ssr(installed.barChart({ config: CONFIG, data: MONTHS, bars: [{ dataKey: 'desktop' }] }));

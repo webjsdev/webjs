@@ -152,6 +152,31 @@ suite('ui-chart', () => {
     root.remove();
   });
 
+  test('a tooltip that would leave the plot area opens above and to the left of its point', async () => {
+    const root = await mount(chart.barChart({
+      config: CONFIG, data: MONTHS, xAxis: { dataKey: 'month' }, tooltip: {},
+      bars: [{ dataKey: 'desktop', fill: 'var(--color-desktop)' }],
+    }));
+    const { svg, clientX } = pointAt(root, 3);
+    const box = svg.getBoundingClientRect();
+    svg.dispatchEvent(new PointerEvent('pointermove', { clientX, clientY: box.bottom - 40, bubbles: true }));
+    await tick();
+    // The suite has no stylesheet, so read the translate the element chose
+    // rather than where an unpositioned box lands.
+    const el = tooltip(root);
+    const [tx, ty] = el.style.transform.match(/-?[\d.]+/g).map(Number);
+    const [x, y, w, h] = svg.dataset.plot.split(' ').map(Number);
+    const m = svg.getScreenCTM();
+    const wrap = svg.parentElement.getBoundingClientRect();
+    const bottom = m.d * (y + h) + m.f - wrap.top;
+    const pointerY = box.bottom - 40 - wrap.top;
+    assert.ok(ty + el.offsetHeight <= bottom + 1, `stays above the plot bottom (${ty} + ${el.offsetHeight} vs ${bottom})`);
+    assert.ok(ty < pointerY, 'so it opens above the pointer');
+    // (Across is not checked: with no stylesheet the tooltip box is a full-width block.)
+    assert.ok(tx >= m.a * x + m.e - wrap.left - 1, 'it never starts left of the plot');
+    root.remove();
+  });
+
   test('a defaultIndex is showing from the start', async () => {
     const root = await mount(chart.barChart({
       config: CONFIG, data: MONTHS, tooltip: { defaultIndex: 1 },

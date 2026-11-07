@@ -320,6 +320,10 @@
           "type": "registry:ui"
         },
         {
+          "path": "components/chart-element.ts",
+          "type": "registry:ui"
+        },
+        {
           "path": "components/chart-geometry.ts",
           "type": "registry:ui"
         }
@@ -3012,6 +3016,1507 @@
           "path": "blocks/charts/chart-area-axes.ts",
           "type": "registry:component",
           "target": "components/charts/chart-area-axes.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-interactive",
+      "type": "registry:block",
+      "title": "Bar Chart - Interactive",
+      "description": "An interactive bar chart",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-interactive.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-interactive.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-default",
+      "type": "registry:block",
+      "title": "Bar Chart",
+      "description": "A bar chart",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-default.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-default.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-horizontal",
+      "type": "registry:block",
+      "title": "Bar Chart - Horizontal",
+      "description": "A horizontal bar chart",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-horizontal.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-horizontal.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-multiple",
+      "type": "registry:block",
+      "title": "Bar Chart - Multiple",
+      "description": "A multiple bar chart",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-multiple.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-multiple.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-stacked",
+      "type": "registry:block",
+      "title": "Bar Chart - Stacked + Legend",
+      "description": "A stacked bar chart with a legend",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-stacked.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-stacked.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-label",
+      "type": "registry:block",
+      "title": "Bar Chart - Label",
+      "description": "A bar chart with a label",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-label.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-label.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-label-custom",
+      "type": "registry:block",
+      "title": "Bar Chart - Custom Label",
+      "description": "A bar chart with a custom label",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-label-custom.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-label-custom.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-mixed",
+      "type": "registry:block",
+      "title": "Bar Chart - Mixed",
+      "description": "A mixed bar chart",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-mixed.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-mixed.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-active",
+      "type": "registry:block",
+      "title": "Bar Chart - Active",
+      "description": "A bar chart with an active bar",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-active.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-active.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-bar-negative",
+      "type": "registry:block",
+      "title": "Bar Chart - Negative",
+      "description": "A bar chart with negative values",
+      "categories": [
+        "chart",
+        "bar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-bar-negative.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-bar-negative.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-interactive",
+      "type": "registry:block",
+      "title": "Line Chart - Interactive",
+      "description": "An interactive line chart",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-interactive.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-interactive.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-default",
+      "type": "registry:block",
+      "title": "Line Chart",
+      "description": "A line chart",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-default.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-default.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-linear",
+      "type": "registry:block",
+      "title": "Line Chart - Linear",
+      "description": "A linear line chart",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-linear.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-linear.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-step",
+      "type": "registry:block",
+      "title": "Line Chart - Step",
+      "description": "A line chart with step",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-step.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-step.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-multiple",
+      "type": "registry:block",
+      "title": "Line Chart - Multiple",
+      "description": "A multiple line chart",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-multiple.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-multiple.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-dots",
+      "type": "registry:block",
+      "title": "Line Chart - Dots",
+      "description": "A line chart with dots",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-dots.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-dots.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-dots-custom",
+      "type": "registry:block",
+      "title": "Line Chart - Custom Dots",
+      "description": "A line chart with custom dots",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-dots-custom.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-dots-custom.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-dots-colors",
+      "type": "registry:block",
+      "title": "Line Chart - Dots Colors",
+      "description": "A line chart with dots and colors",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-dots-colors.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-dots-colors.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-label",
+      "type": "registry:block",
+      "title": "Line Chart - Label",
+      "description": "A line chart with a label",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-label.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-label.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-line-label-custom",
+      "type": "registry:block",
+      "title": "Line Chart - Custom Label",
+      "description": "A line chart with a custom label",
+      "categories": [
+        "chart",
+        "line"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-line-label-custom.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-line-label-custom.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-simple",
+      "type": "registry:block",
+      "title": "Pie Chart",
+      "description": "A simple pie chart",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-simple.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-simple.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-separator-none",
+      "type": "registry:block",
+      "title": "Pie Chart - Separator None",
+      "description": "A pie chart with no separator",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-separator-none.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-separator-none.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-label",
+      "type": "registry:block",
+      "title": "Pie Chart - Label",
+      "description": "A pie chart with a label",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-label.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-label.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-label-custom",
+      "type": "registry:block",
+      "title": "Pie Chart - Custom Label",
+      "description": "A pie chart with a custom label",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-label-custom.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-label-custom.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-label-list",
+      "type": "registry:block",
+      "title": "Pie Chart - Label List",
+      "description": "A pie chart with a label list",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-label-list.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-label-list.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-legend",
+      "type": "registry:block",
+      "title": "Pie Chart - Legend",
+      "description": "A pie chart with a legend",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-legend.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-legend.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-donut",
+      "type": "registry:block",
+      "title": "Pie Chart - Donut",
+      "description": "A donut chart",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-donut.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-donut.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-donut-active",
+      "type": "registry:block",
+      "title": "Pie Chart - Donut Active",
+      "description": "A donut chart with an active sector",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-donut-active.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-donut-active.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-donut-text",
+      "type": "registry:block",
+      "title": "Pie Chart - Donut with Text",
+      "description": "A donut chart with text",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-donut-text.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-donut-text.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-stacked",
+      "type": "registry:block",
+      "title": "Pie Chart - Stacked",
+      "description": "A pie chart with stacked sections",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-stacked.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-stacked.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-pie-interactive",
+      "type": "registry:block",
+      "title": "Pie Chart - Interactive",
+      "description": "An interactive pie chart",
+      "categories": [
+        "chart",
+        "pie"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart",
+        "select"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-pie-interactive.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-pie-interactive.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-default",
+      "type": "registry:block",
+      "title": "Radar Chart",
+      "description": "A radar chart",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-default.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-default.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-dots",
+      "type": "registry:block",
+      "title": "Radar Chart - Dots",
+      "description": "A radar chart with dots",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-dots.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-dots.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-lines-only",
+      "type": "registry:block",
+      "title": "Radar Chart - Lines Only",
+      "description": "A radar chart with lines only",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-lines-only.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-lines-only.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-label-custom",
+      "type": "registry:block",
+      "title": "Radar Chart - Custom Label",
+      "description": "A radar chart with a custom label",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-label-custom.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-label-custom.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-grid-custom",
+      "type": "registry:block",
+      "title": "Radar Chart - Grid Custom",
+      "description": "A radar chart with a custom grid",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-grid-custom.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-grid-custom.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-grid-none",
+      "type": "registry:block",
+      "title": "Radar Chart - Grid None",
+      "description": "A radar chart with no grid",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-grid-none.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-grid-none.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-grid-circle",
+      "type": "registry:block",
+      "title": "Radar Chart - Grid Circle",
+      "description": "A radar chart with a grid and circle",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-grid-circle.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-grid-circle.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-grid-circle-no-lines",
+      "type": "registry:block",
+      "title": "Radar Chart - Grid Circle - No lines",
+      "description": "A radar chart with a grid and circle fill",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-grid-circle-no-lines.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-grid-circle-no-lines.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-grid-circle-fill",
+      "type": "registry:block",
+      "title": "Radar Chart - Grid Circle Filled",
+      "description": "A radar chart with a grid and circle fill",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-grid-circle-fill.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-grid-circle-fill.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-grid-fill",
+      "type": "registry:block",
+      "title": "Radar Chart - Grid Filled",
+      "description": "A radar chart with a grid filled",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-grid-fill.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-grid-fill.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-multiple",
+      "type": "registry:block",
+      "title": "Radar Chart - Multiple",
+      "description": "A radar chart with multiple data",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-multiple.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-multiple.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-legend",
+      "type": "registry:block",
+      "title": "Radar Chart - Legend",
+      "description": "A radar chart with a legend",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-legend.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-legend.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-icons",
+      "type": "registry:block",
+      "title": "Radar Chart - Icons",
+      "description": "A radar chart with icons",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-icons.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-icons.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radar-radius",
+      "type": "registry:block",
+      "title": "Radar Chart - Radius Axis",
+      "description": "A radar chart with a radius axis",
+      "categories": [
+        "chart",
+        "radar"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radar-radius.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radar-radius.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radial-simple",
+      "type": "registry:block",
+      "title": "Radial Chart",
+      "description": "A radial chart",
+      "categories": [
+        "chart",
+        "radial"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radial-simple.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radial-simple.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radial-label",
+      "type": "registry:block",
+      "title": "Radial Chart - Label",
+      "description": "A radial chart with a label",
+      "categories": [
+        "chart",
+        "radial"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radial-label.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radial-label.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radial-grid",
+      "type": "registry:block",
+      "title": "Radial Chart - Grid",
+      "description": "A radial chart with a grid",
+      "categories": [
+        "chart",
+        "radial"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radial-grid.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radial-grid.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radial-text",
+      "type": "registry:block",
+      "title": "Radial Chart - Text",
+      "description": "A radial chart with text",
+      "categories": [
+        "chart",
+        "radial"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radial-text.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radial-text.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radial-shape",
+      "type": "registry:block",
+      "title": "Radial Chart - Shape",
+      "description": "A radial chart with a custom shape",
+      "categories": [
+        "chart",
+        "radial"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radial-shape.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radial-shape.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-radial-stacked",
+      "type": "registry:block",
+      "title": "Radial Chart - Stacked",
+      "description": "A radial chart with stacked sections",
+      "categories": [
+        "chart",
+        "radial"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-radial-stacked.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-radial-stacked.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-default",
+      "type": "registry:block",
+      "title": "Tooltip - Default",
+      "description": "A stacked bar chart with the default tooltip",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-default.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-default.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-indicator-line",
+      "type": "registry:block",
+      "title": "Tooltip - Line Indicator",
+      "description": "A stacked bar chart whose tooltip uses a line indicator",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-indicator-line.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-indicator-line.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-indicator-none",
+      "type": "registry:block",
+      "title": "Tooltip - No Indicator",
+      "description": "A stacked bar chart whose tooltip has no indicator",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-indicator-none.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-indicator-none.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-label-custom",
+      "type": "registry:block",
+      "title": "Tooltip - Custom label",
+      "description": "A stacked bar chart whose tooltip label comes from the config",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-label-custom.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-label-custom.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-label-formatter",
+      "type": "registry:block",
+      "title": "Tooltip - Label Formatter",
+      "description": "A stacked bar chart whose tooltip formats its label",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-label-formatter.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-label-formatter.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-label-none",
+      "type": "registry:block",
+      "title": "Tooltip - No Label",
+      "description": "A stacked bar chart whose tooltip has no label or indicator",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-label-none.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-label-none.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-formatter",
+      "type": "registry:block",
+      "title": "Tooltip - Formatter",
+      "description": "A stacked bar chart whose tooltip formats each row",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-formatter.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-formatter.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-icons",
+      "type": "registry:block",
+      "title": "Tooltip - Icons",
+      "description": "A stacked bar chart whose tooltip shows each series icon",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-icons.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-icons.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-tooltip-advanced",
+      "type": "registry:block",
+      "title": "Tooltip - Advanced",
+      "description": "A stacked bar chart whose tooltip adds a total row",
+      "categories": [
+        "chart",
+        "tooltip"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-tooltip-advanced.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-tooltip-advanced.ts"
         }
       ]
     }
