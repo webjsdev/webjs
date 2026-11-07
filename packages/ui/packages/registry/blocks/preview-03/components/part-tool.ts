@@ -10,6 +10,7 @@ import { html } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import { badgeClass } from '../../../components/badge.ts';
 import { separatorClass } from '../../../components/separator.ts';
+import { SettingsIcon } from '../../../lib/icons.ts';
 
 export interface ToolPart {
   /** `tool-<name>`, or `dynamic-tool` with a `toolName`. */
@@ -22,8 +23,6 @@ export interface ToolPart {
   output?: unknown;
   errorText?: string;
 }
-
-const SettingsIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
 
 function toolName(part: ToolPart): string {
   return part.type === 'dynamic-tool' ? (part.toolName ?? 'dynamicTool') : part.type.replace('tool-', '');

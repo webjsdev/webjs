@@ -60,6 +60,7 @@ function installedPath(regPath: string, own: Map<string, RegistryFile>): string 
   if (ownFile?.target) return ownFile.target;
   if (regPath === 'lib/utils.ts') return 'lib/utils/cn.ts';
   if (regPath === 'lib/dom.ts') return 'lib/utils/dom.ts';
+  if (regPath === 'lib/icons.ts') return 'lib/utils/icons.ts';
   if (/^components\/[^/]+\.ts$/.test(regPath)) return `components/ui/${posix.basename(regPath)}`;
   return null;
 }

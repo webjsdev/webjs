@@ -147,16 +147,23 @@ function tsFiles(dir, base = '') {
   return out;
 }
 
-/** A block file's imports that leave the block, onto the site's aliases. */
+/**
+ * A block file's imports that leave the block, onto the site's aliases. Its
+ * absolute links to this site's own assets (the sample avatar,
+ * `https://webjs.dev/public/avatars/vivek.jpg`, which an installed block
+ * hotlinks) become site-relative, so the local /ui/view frame shows the file
+ * from public/ before it is deployed.
+ */
 function rewriteBlockImports(source, file) {
   return source.replace(/((?:from|import)\s*\(?\s*)(['"])(\.{1,2}\/[^'"]+)\2/g, (whole, lead, q, spec) => {
     const reg = posix.normalize(posix.join('blocks', posix.dirname(file), spec));
     let to = null;
     if (reg === 'lib/utils.ts') to = '#lib/utils/cn.ts';
     else if (reg === 'lib/dom.ts') to = '#lib/utils/dom.ts';
+    else if (reg === 'lib/icons.ts') to = '#lib/utils/icons.ts';
     else if (/^components\/[^/]+\.ts$/.test(reg)) to = `#modules/ui/${reg}`;
     return to ? `${lead}${q}${to}${q}` : whole;
-  });
+  }).replaceAll('https://webjs.dev/public/', '/public/');
 }
 
 const blockFiles = tsFiles(BLOCKS_SRC).filter((f) => !f.startsWith('_'));

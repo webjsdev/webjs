@@ -42,9 +42,7 @@ import { radioClass, radioGroupClass } from '../../../components/radio-group.ts'
 import { sliderClass } from '../../../components/slider.ts';
 import '../../../components/switch.ts';
 import { textareaClass } from '../../../components/textarea.ts';
-
-const SearchIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>`;
-const ChevronUpIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>`;
+import { ChevronUpIcon, SearchIcon } from '../../../lib/icons.ts';
 
 /**
  * `id` names this copy, since shadcn renders the card twice on the board (one

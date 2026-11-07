@@ -148,6 +148,28 @@ test('/ui/blocks features dashboard-01 first, and /ui/blocks/dashboard lists it'
   assert.deepEqual(viewers(await page('/ui/blocks/dashboard')), ['dashboard-01']);
 });
 
+test('the sample avatar is the WebJs one, hotlinked by an install and site-relative in the frame', async () => {
+  // The registry source carries the absolute URL an installed block hotlinks.
+  const source = readFileSync(join(REGISTRY, 'blocks', 'sidebar-07', 'components', 'app-sidebar.ts'), 'utf8');
+  assert.match(source, /https:\/\/webjs\.dev\/public\/avatars\/vivek\.jpg/);
+  assert.doesNotMatch(source, /github\.com\/shadcn\.png/);
+  // The site's mirror rewrites it (scripts/copy-registry.mjs), so the local
+  // frame serves the photo from public/ before it is deployed.
+  const mirror = readFileSync(join(WEBSITE_ROOT, 'modules', 'ui', 'blocks', 'sidebar-07', 'components', 'app-sidebar.ts'), 'utf8');
+  assert.match(mirror, /'\/public\/avatars\/vivek\.jpg'/);
+  assert.doesNotMatch(mirror, /https:\/\/webjs\.dev\/public\//);
+  const html = await page('/ui/view/sidebar-07');
+  assert.match(html, /<img data-slot="avatar-image" src="\/public\/avatars\/vivek\.jpg" alt="@vivek"/);
+  assert.match(html, />VK<\/span>/, 'the initials fallback');
+  assert.equal((await handle('/public/avatars/vivek.jpg')).status, 200, 'the photo is served');
+  // No block anywhere still points at shadcn's avatar.
+  for (const b of manifest.items.filter((i) => i.type === 'registry:block')) {
+    for (const f of b.files || []) {
+      if (f.path.endsWith('.ts')) assert.doesNotMatch(readFileSync(join(REGISTRY, f.path), 'utf8'), /github\.com\/shadcn\.png/, f.path);
+    }
+  }
+});
+
 /** Every .ts file under a block's directory. */
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

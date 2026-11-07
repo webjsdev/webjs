@@ -1435,7 +1435,8 @@
         "separator",
         "collapsible",
         "dropdown-menu",
-        "avatar"
+        "avatar",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1487,7 +1488,8 @@
         "breadcrumb",
         "separator",
         "label",
-        "dropdown-menu"
+        "dropdown-menu",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1530,7 +1532,8 @@
         "separator",
         "label",
         "dropdown-menu",
-        "collapsible"
+        "collapsible",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1570,7 +1573,8 @@
         "lib-utils",
         "sidebar",
         "breadcrumb",
-        "separator"
+        "separator",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1600,7 +1604,8 @@
         "lib-utils",
         "sidebar",
         "breadcrumb",
-        "separator"
+        "separator",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1632,7 +1637,8 @@
         "breadcrumb",
         "separator",
         "label",
-        "collapsible"
+        "collapsible",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1670,7 +1676,8 @@
         "separator",
         "card",
         "button",
-        "dropdown-menu"
+        "dropdown-menu",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1713,7 +1720,8 @@
         "separator",
         "collapsible",
         "dropdown-menu",
-        "avatar"
+        "avatar",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1767,7 +1775,8 @@
         "label",
         "switch",
         "dropdown-menu",
-        "avatar"
+        "avatar",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1806,7 +1815,8 @@
         "button",
         "popover",
         "collapsible",
-        "dropdown-menu"
+        "dropdown-menu",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1867,7 +1877,8 @@
         "sidebar",
         "breadcrumb",
         "separator",
-        "collapsible"
+        "collapsible",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1901,7 +1912,8 @@
         "collapsible",
         "calendar",
         "dropdown-menu",
-        "avatar"
+        "avatar",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1947,7 +1959,8 @@
         "sidebar",
         "breadcrumb",
         "button",
-        "dialog"
+        "dialog",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -1976,7 +1989,8 @@
       "registryDependencies": [
         "lib-utils",
         "sidebar",
-        "breadcrumb"
+        "breadcrumb",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -2010,7 +2024,8 @@
         "collapsible",
         "calendar",
         "dropdown-menu",
-        "avatar"
+        "avatar",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -2089,7 +2104,8 @@
         "collapsible",
         "dropdown-menu",
         "avatar",
-        "label"
+        "label",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -2176,7 +2192,8 @@
         "textarea",
         "toggle-group",
         "tooltip",
-        "progress"
+        "progress",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -2383,7 +2400,8 @@
         "sidebar",
         "combobox",
         "spinner",
-        "calendar"
+        "calendar",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -2583,7 +2601,8 @@
         "message",
         "message-scroller",
         "separator",
-        "spinner"
+        "spinner",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -2681,7 +2700,8 @@
         "input",
         "label",
         "table",
-        "tabs"
+        "tabs",
+        "lib-icons"
       ],
       "dependencies": [
         "@webjsdev/core"

@@ -325,8 +325,12 @@ shadcn reads `data-[state=open]`; a `SidebarMenuAction` that opens a menu stays
 the menu button's SIBLING (its position is a `peer-*` rule) and the menu names
 it through `trigger="<id>"`. React state (the active team, the selected
 version) renders as its initial value, and each such file's header says to
-render the real value on the server. Icons are inline lucide SVGs, one
-`(cls = '') => html` constant per icon, in the file that uses it.
+render the real value on the server. Icons come from the kit's
+`lib/icons.ts` (`import { ChevronRightIcon } from '../../../lib/icons.ts'`,
+with `lib-icons` in the block's `registryDependencies`), never inline, so an
+app's icon library choice reaches every block it installs. The sample avatar
+is `https://webjs.dev/public/avatars/vivek.jpg` (alt `@vivek`, fallback `VK`),
+hotlinked by an installed block; the site's mirror makes it site-relative.
 
 **The projector** (`registry/extract.js`), shared by `view` and the MCP `ui`
 tool: `uiBlocks({ type, category })` (one compact `{ name, type, categories,

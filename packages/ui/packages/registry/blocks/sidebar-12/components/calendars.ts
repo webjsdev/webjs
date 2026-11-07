@@ -20,9 +20,7 @@ import {
   sidebarMenuItemClass,
   sidebarSeparatorClass,
 } from '../../../components/sidebar.ts';
-
-const ChevronRightIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>`;
-const CheckIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
+import { CheckIcon, ChevronRightIcon } from '../../../lib/icons.ts';
 
 export function calendars({ calendars }: { calendars: { name: string; items: string[] }[] }) {
   return calendars.map((calendar, index) => html`

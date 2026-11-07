@@ -24,17 +24,13 @@ import {
   sidebarMenuSubClass,
   sidebarMenuSubItemClass,
 } from '../../../components/sidebar.ts';
+import { GalleryVerticalEndIcon, MinusIcon, PlusIcon } from '../../../lib/icons.ts';
 
 interface NavSection {
   title: string;
   url: string;
   items: { title: string; url: string; isActive?: boolean }[];
 }
-
-const GalleryVerticalEndIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2h10"></path><path d="M5 6h14"></path><rect width="18" height="12" x="3" y="10" rx="2"></rect></svg>`;
-
-const PlusIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>`;
-const MinusIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path></svg>`;
 
 // This is sample data.
 const data: { navMain: NavSection[] } = {

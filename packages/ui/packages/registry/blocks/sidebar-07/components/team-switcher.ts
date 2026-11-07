@@ -17,15 +17,13 @@ import {
   sidebarMenuClass,
   sidebarMenuItemClass,
 } from '../../../components/sidebar.ts';
+import { ChevronsUpDownIcon, PlusIcon } from '../../../lib/icons.ts';
 
 export interface Team {
   name: string;
   logo: (cls?: string) => TemplateResult;
   plan: string;
 }
-
-const ChevronsUpDownIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>`;
-const PlusIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>`;
 
 export function teamSwitcher({ teams }: { teams: Team[] }) {
   const active = teams[0];

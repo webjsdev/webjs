@@ -18,10 +18,9 @@ import {
 } from '../../components/breadcrumb.ts';
 import '../../components/sidebar.ts';
 import { appSidebar } from './components/app-sidebar.ts';
+import { ChevronRightIcon } from '../../lib/icons.ts';
 
 export const metadata: Metadata = { title: 'Dashboard' };
-
-const ChevronRightIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>`;
 
 export default function DashboardPage() {
   return html`

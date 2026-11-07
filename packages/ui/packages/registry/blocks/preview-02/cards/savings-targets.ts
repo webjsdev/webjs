@@ -45,8 +45,7 @@ import {
   nativeSelectWrapperClass,
 } from '../../../components/native-select.ts';
 import { progressClass } from '../../../components/progress.ts';
-
-const ChevronDownIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>`;
+import { ChevronDownIcon } from '../../../lib/icons.ts';
 
 function target(label: string, amount: string, pct: number, saved: string) {
   return html`<div role="listitem" data-slot="item" data-variant="muted" data-size="default" class=${cn(itemClass({ variant: 'muted' }), 'flex-col items-stretch')}>

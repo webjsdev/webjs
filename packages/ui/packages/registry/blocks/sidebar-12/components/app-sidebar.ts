@@ -20,15 +20,14 @@ import {
 import { calendars } from './calendars.ts';
 import { datePicker } from './date-picker.ts';
 import { navUser } from './nav-user.ts';
-
-const PlusIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>`;
+import { PlusIcon } from '../../../lib/icons.ts';
 
 // This is sample data.
 const data = {
   user: {
     name: 'shadcn',
     email: 'm@example.com',
-    avatar: 'https://github.com/shadcn.png',
+    avatar: 'https://webjs.dev/public/avatars/vivek.jpg',
   },
   calendars: [
     { name: 'My Calendars', items: ['Personal', 'Work', 'Family'] },

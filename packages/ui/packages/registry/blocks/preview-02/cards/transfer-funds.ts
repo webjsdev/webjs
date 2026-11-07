@@ -31,8 +31,7 @@ import { selectTriggerClass } from '../../../components/select.ts';
 import { separatorClass } from '../../../components/separator.ts';
 import { cn } from '../../../lib/utils.ts';
 import '../../../components/select.ts';
-
-const XIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
+import { XIcon } from '../../../lib/icons.ts';
 
 function accountSelect(id: string, name: string, value: string, options: { value: string; label: string }[]) {
   return html`<ui-select class="w-full">

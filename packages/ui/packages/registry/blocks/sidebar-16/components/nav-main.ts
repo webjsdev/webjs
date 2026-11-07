@@ -19,6 +19,7 @@ import {
   sidebarMenuSubClass,
   sidebarMenuSubItemClass,
 } from '../../../components/sidebar.ts';
+import { ChevronRightIcon } from '../../../lib/icons.ts';
 
 export interface NavMainItem {
   title: string;
@@ -27,8 +28,6 @@ export interface NavMainItem {
   isActive?: boolean;
   items?: { title: string; url: string }[];
 }
-
-const ChevronRightIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>`;
 
 export function navMain({ items }: { items: NavMainItem[] }) {
   return html`

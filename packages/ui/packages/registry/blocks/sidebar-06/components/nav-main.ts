@@ -16,6 +16,7 @@ import {
   sidebarMenuClass,
   sidebarMenuItemClass,
 } from '../../../components/sidebar.ts';
+import { MoreHorizontalIcon } from '../../../lib/icons.ts';
 
 export interface NavMainItem {
   title: string;
@@ -24,8 +25,6 @@ export interface NavMainItem {
   isActive?: boolean;
   items?: { title: string; url: string; isActive?: boolean }[];
 }
-
-const MoreHorizontalIcon = (cls = '') => html`<svg class=${cls || null} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>`;
 
 export function navMain({ items }: { items: NavMainItem[] }) {
   return html`
