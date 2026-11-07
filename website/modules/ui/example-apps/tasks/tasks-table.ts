@@ -124,6 +124,7 @@ export class TasksTable extends WebComponent {
     const data = (e as FormDataEvent).formData;
     if (!String(data.get('q') ?? '').trim()) data.delete('q');
     if (data.get('size') === '25') data.delete('size');
+    if (data.get('theme') === 'neutral') data.delete('theme');
   };
 
   // A click on a faceted item's label toggles its checkbox natively (and the

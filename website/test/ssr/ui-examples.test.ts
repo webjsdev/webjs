@@ -63,13 +63,16 @@ test('the examples nav carries the theme selector, and ?theme= themes the region
   assert.ok(/data-theme-target class="[^"]*\btheme-blue\b/.test(blue), 'the region wears theme-blue');
   assert.ok(/href="\/ui\/examples\/tasks\?theme=blue"/.test(blue), 'the nav links carry the theme');
   assert.ok(/<option value="blue"[^>]*selected/.test(blue), 'the select shows it');
+  const tasks = await page('/ui/examples/tasks?theme=blue');
+  assert.ok(/<input type="hidden" name="theme" value="blue" data-theme-field>/.test(tasks), 'the tasks filter form carries the theme');
+  assert.ok(/href="\/ui\/examples\/tasks\?page=2&amp;theme=blue"/.test(tasks), 'the tasks table links carry it');
   const unknown = await page('/ui/examples/dashboard?theme=nope');
   assert.ok(/<option value="neutral"[^>]*selected/.test(unknown), 'an unknown theme falls back to neutral');
 });
 
 test('the tasks state round-trips through the query string, leaving out the defaults', () => {
   const s = parseState(new URLSearchParams('q=pixel&status=todo&status=done&sort=title.desc&hide=priority&size=10&page=2'));
-  assert.deepEqual(s, { q: 'pixel', status: ['todo', 'done'], priority: [], sort: { id: 'title', desc: true }, hide: ['priority'], size: 10, page: 2 });
+  assert.deepEqual(s, { q: 'pixel', status: ['todo', 'done'], priority: [], sort: { id: 'title', desc: true }, hide: ['priority'], size: 10, page: 2, theme: 'neutral' });
   assert.equal(hrefFor(s), '/ui/examples/tasks?q=pixel&status=todo&status=done&sort=title.desc&hide=priority&size=10&page=2');
   assert.equal(hrefFor(parseState(new URLSearchParams('size=25&page=1&sort=bogus.asc&hide=id'))), '/ui/examples/tasks');
 });

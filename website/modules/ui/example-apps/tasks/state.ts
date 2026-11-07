@@ -1,4 +1,5 @@
 import type { Task } from './data.ts';
+import { readSelectorTheme, DEFAULT_SELECTOR_THEME } from '#lib/ui/selector-themes.ts';
 
 /**
  * The tasks table's state, read from and written to the query string (#1666).
@@ -13,6 +14,8 @@ import type { Task } from './data.ts';
  *   hide      a column to hide, repeatable (title, status or priority)
  *   size      rows per page (10, 20, 25, 30, 40 or 50; 25 by default)
  *   page      the 1-based page
+ *   theme     the examples theme (lib/ui/selector-themes.ts), carried along
+ *             so a filter, a sort or a page keeps it
  */
 
 export const PATH = '/ui/examples/tasks';
@@ -30,6 +33,7 @@ export interface TasksState {
   hide: Column[];
   size: number;
   page: number;
+  theme: string;
 }
 
 const isColumn = (v: string): v is Column => (SORTABLE as readonly string[]).includes(v);
@@ -46,6 +50,7 @@ export function parseState(params: URLSearchParams): TasksState {
     hide: params.getAll('hide').filter(isColumn),
     size: PAGE_SIZES.includes(size) ? size : DEFAULT_SIZE,
     page: page >= 1 ? page : 1,
+    theme: readSelectorTheme(params),
   };
 }
 
@@ -60,6 +65,7 @@ export function hrefFor(state: TasksState, patch: Partial<TasksState> = {}): str
   for (const v of s.hide) p.append('hide', v);
   if (s.size !== DEFAULT_SIZE) p.set('size', String(s.size));
   if (s.page > 1) p.set('page', String(s.page));
+  if (s.theme !== DEFAULT_SELECTOR_THEME) p.set('theme', s.theme);
   const qs = p.toString();
   return qs ? `${PATH}?${qs}` : PATH;
 }

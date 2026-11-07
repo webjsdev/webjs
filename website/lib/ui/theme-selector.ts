@@ -5,6 +5,7 @@ import { selectTriggerClass } from '#modules/ui/components/select.ts';
 import { dialogHeaderClass, dialogTitleClass, dialogDescriptionClass } from '#modules/ui/components/dialog.ts';
 import { buildThemeVars, getTheme } from '#modules/ui/design-system/themes.js';
 import { codeFigure } from '#lib/ui/docs/code.ts';
+import { SELECTOR_THEMES } from '#lib/ui/selector-themes.ts';
 
 /**
  * shadcn/ui's ThemeSelector and CopyCodeButton (apps/v4/components/
@@ -21,25 +22,7 @@ import { codeFigure } from '#lib/ui/docs/code.ts';
  * code in the dialog.
  */
 
-/** shadcn's THEMES: its legacy base colours without slate, stone, gray and zinc, by name. */
-export const SELECTOR_THEMES = ['blue', 'green', 'neutral', 'orange', 'red', 'rose', 'violet', 'yellow'];
-export const DEFAULT_SELECTOR_THEME = 'neutral';
-
-/** The theme a request asks for, or the default. */
-export function readSelectorTheme(params: URLSearchParams): string {
-  const t = params.get('theme') ?? '';
-  return SELECTOR_THEMES.includes(t) ? t : DEFAULT_SELECTOR_THEME;
-}
-
-/** The class a themed region wears; the default theme wears none. */
-export function themeClass(name: string): string {
-  return name === DEFAULT_SELECTOR_THEME ? '' : `theme-${name}`;
-}
-
-/** A link that carries the theme, as the selector's links do. */
-export function withTheme(href: string, name: string): string {
-  return name === DEFAULT_SELECTOR_THEME ? href : `${href}?theme=${name}`;
-}
+export { SELECTOR_THEMES, DEFAULT_SELECTOR_THEME, readSelectorTheme, themeClass, withTheme } from '#lib/ui/selector-themes.ts';
 
 const title = (name: string) => getTheme(name)?.title ?? name;
 

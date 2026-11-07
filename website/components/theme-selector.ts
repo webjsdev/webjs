@@ -8,7 +8,8 @@ import { WebComponent, html } from '@webjsdev/core';
  * - the region marked `data-theme-target` swaps its `theme-<name>` class (the
  *   default theme wears none), so it repaints at once;
  * - the URL's `?theme=` follows, without a history entry, and so does every
- *   link marked `data-theme-link`, so the theme carries to the next page;
+ *   link marked `data-theme-link` and every input marked `data-theme-field`,
+ *   so the theme carries to the next page;
  * - the copy dialog shows the chosen theme's name and code.
  */
 export class ThemeSelector extends WebComponent {
@@ -49,6 +50,10 @@ export class ThemeSelector extends WebComponent {
       else href.searchParams.set('theme', name);
       link.setAttribute('href', href.pathname + href.search);
     }
+
+    // A form elsewhere on the page that carries the theme (the tasks table's
+    // filters) submits the new one.
+    for (const field of Array.from(document.querySelectorAll<HTMLInputElement>('input[data-theme-field]'))) field.value = name;
 
     for (const out of Array.from(this.querySelectorAll<HTMLElement>('[data-theme-name]'))) out.textContent = name;
     for (const block of Array.from(this.querySelectorAll<HTMLElement>('[data-theme-code]'))) block.hidden = block.dataset.themeCode !== name;

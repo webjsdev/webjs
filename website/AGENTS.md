@@ -366,6 +366,15 @@ website/
                        the /ui/examples page chrome: header, examples nav
                        (shadcn's examples-nav.tsx) and the example's frame. A
                        fragment for the same reason as blocks-shell.ts
+      selector-themes.ts
+                       the 8 themes the ThemeSelector offers and the pure
+                       ?theme= helpers, apart so a pure module can read them
+      theme-selector.ts
+                       shadcn's ThemeSelector and CopyCodeButton for a section
+                       nav: a GET form on ?theme= (works with JS off) whose
+                       region wears the .theme-<name> class, and a dialog with
+                       the theme's CSS; components/theme-selector.ts applies a
+                       change in place and keeps data-theme-link links on it
       data-table-demo.ts
                        the payments table both Data Table docs demos render
       cta-panel.ts     the closing call to action

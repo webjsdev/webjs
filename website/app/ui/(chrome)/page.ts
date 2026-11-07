@@ -1,10 +1,10 @@
 import { html, asset } from '@webjsdev/core';
 import type { Metadata, PageProps } from '@webjsdev/core';
 import { buttonClass } from '#modules/ui/components/button.ts';
-import { badgeClass } from '#modules/ui/components/badge.ts';
 import { cn } from '#lib/utils/cn.ts';
 import { extraStyleLinks } from '#lib/ui/style-links.ts';
 import { cardsDemo } from '#modules/ui/home/cards-demo.ts';
+import { announcement } from '#lib/ui/ui-page-header.ts';
 // The card grid's interactive parts. A page never hydrates, so it imports
 // the elements its markup uses to register them.
 import '#modules/ui/components/alert-dialog.ts';
@@ -19,7 +19,8 @@ import '#components/message-scroller-demo.ts';
  *
  * The layout, type and card grid are shadcn's. The copy is true for WebJs UI
  * (D1): the headline and description hold as they are, and the announcement
- * names what this kit shipped rather than shadcn's release.
+ * is the one every /ui section page shows (lib/ui/ui-page-header.ts), shadcn's
+ * current text, which names parts this kit ships too.
  *
  * The hero's two buttons render in shadcn's luma style and the card grid in
  * rhea, exactly as shadcn's home does, so this page links both of those
@@ -35,9 +36,6 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
 };
 
-// lucide's arrow-right, which shadcn's announcement badge uses.
-const arrowRight = html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>`;
-
 export default function UiHome({ url }: Pick<PageProps, 'url'>) {
   const { pathname } = new URL(url);
   return html`
@@ -46,11 +44,7 @@ export default function UiHome({ url }: Pick<PageProps, 'url'>) {
       <section class="border-grid md:**:[.container]:pb-8 lg:**:[.container]:pb-12">
         <div class="container-wrapper">
           <div class="container flex flex-col items-center gap-2 px-6 py-8 text-center md:py-16 lg:py-20 xl:gap-4">
-            <span class="style-new-york contents">
-              <a href="/ui/docs/changelog" data-slot="badge" class=${cn(badgeClass({ variant: 'secondary' }), 'bg-muted no-underline')}>
-                Sidebar, Carousel and Code Block ${arrowRight}
-              </a>
-            </span>
+            ${announcement()}
             <h1 class="leading-tighter max-w-4xl text-3xl font-semibold tracking-tight text-balance text-primary lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">${TITLE}</h1>
             <p class="max-w-4xl text-base text-balance text-foreground sm:text-lg">${DESCRIPTION}</p>
             <div class="style-luma flex w-full items-center justify-center gap-2 pt-2 **:data-[slot=button]:shadow-none">

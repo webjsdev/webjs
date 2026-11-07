@@ -118,7 +118,7 @@ function facetedFilter(s: TasksState, key: 'status' | 'priority', title: string,
           ${selected.size ? html`
             <ui-command-separator></ui-command-separator>
             <ui-command-group>
-              <ui-command-item value="Clear filters" class="justify-center text-center"><a href=${hrefFor(s, { [key]: [], page: 1 })} class="flex-1 text-center no-underline">Clear filters</a></ui-command-item>
+              <ui-command-item value="Clear filters" class="justify-center text-center"><a data-theme-link href=${hrefFor(s, { [key]: [], page: 1 })} class="flex-1 text-center no-underline">Clear filters</a></ui-command-item>
             </ui-command-group>` : ''}
         </ui-command-list>
       </ui-command>
@@ -135,7 +135,7 @@ function viewOptions(s: TasksState) {
       ${HIDEABLE.map((col) => {
         const visible = !s.hide.includes(col);
         const hide = visible ? [...s.hide, col] : s.hide.filter((c) => c !== col);
-        return html`<a href=${hrefFor(s, { hide })} role="menuitemcheckbox" aria-checked=${visible ? 'true' : 'false'} class=${cn(dropdownMenuCheckboxItemClass(), 'capitalize no-underline text-popover-foreground')}>
+        return html`<a data-theme-link href=${hrefFor(s, { hide })} role="menuitemcheckbox" aria-checked=${visible ? 'true' : 'false'} class=${cn(dropdownMenuCheckboxItemClass(), 'capitalize no-underline text-popover-foreground')}>
           <span class="pointer-events-none absolute start-2 flex size-3.5 items-center justify-center">${visible ? CheckIcon('size-4') : ''}</span>
           ${col}
         </a>`;
@@ -152,7 +152,7 @@ function toolbar(s: TasksState, v: TasksView) {
       <input id="tasks-q" name="q" type="search" value=${s.q} placeholder="Filter tasks..." autocomplete="off" data-slot="input" data-filter-text class=${cn(inputClass(), 'h-8 w-[150px] lg:w-[250px]')}>
       ${facetedFilter(s, 'status', 'Status', statuses, v.facets.status)}
       ${facetedFilter(s, 'priority', 'Priority', priorities, v.facets.priority)}
-      ${filtered ? html`<a href=${hrefFor(s, { q: '', status: [], priority: [], page: 1 })} data-slot="button" class=${cn(ghostSm(), 'no-underline')}>Reset ${XIcon()}</a>` : ''}
+      ${filtered ? html`<a data-theme-link href=${hrefFor(s, { q: '', status: [], priority: [], page: 1 })} data-slot="button" class=${cn(ghostSm(), 'no-underline')}>Reset ${XIcon()}</a>` : ''}
     </div>
     <div class="flex items-center gap-2">
       ${viewOptions(s)}
@@ -172,10 +172,10 @@ function columnHeader(s: TasksState, col: Column, title: string) {
       <span class="sr-only">${dir ? `, sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}</span>
     </button>
     <div id=${id} popover role="dialog" aria-label=${`${title} column`} class=${cn(menuPanel('start', 'w-32'), 'font-normal')}>
-      <a href=${hrefFor(s, { sort: { id: col, desc: false } })} class=${menuItem()} aria-current=${dir === 'asc' ? 'true' : null}>${ArrowUpIcon()} Asc</a>
-      <a href=${hrefFor(s, { sort: { id: col, desc: true } })} class=${menuItem()} aria-current=${dir === 'desc' ? 'true' : null}>${ArrowDownIcon()} Desc</a>
+      <a data-theme-link href=${hrefFor(s, { sort: { id: col, desc: false } })} class=${menuItem()} aria-current=${dir === 'asc' ? 'true' : null}>${ArrowUpIcon()} Asc</a>
+      <a data-theme-link href=${hrefFor(s, { sort: { id: col, desc: true } })} class=${menuItem()} aria-current=${dir === 'desc' ? 'true' : null}>${ArrowDownIcon()} Desc</a>
       <div role="none" class=${dropdownMenuSeparatorClass()}></div>
-      <a href=${hrefFor(s, { hide: [...s.hide, col] })} class=${menuItem()}>${EyeOffIcon()} Hide</a>
+      <a data-theme-link href=${hrefFor(s, { hide: [...s.hide, col] })} class=${menuItem()}>${EyeOffIcon()} Hide</a>
     </div>
   </div>`;
 }
@@ -253,7 +253,7 @@ function table(s: TasksState, v: TasksView) {
 /** shadcn's DataTablePagination: the selection count, rows per page, the page and its four buttons. */
 function pagination(s: TasksState, v: TasksView) {
   const iconBtn = (href: string | null, label: string, icon: unknown, cls = '') => href
-    ? html`<a href=${href} data-slot="button" class=${cn(buttonClass({ variant: 'outline', size: 'icon' }), 'size-8 no-underline', cls)}><span class="sr-only">${label}</span>${icon}</a>`
+    ? html`<a data-theme-link href=${href} data-slot="button" class=${cn(buttonClass({ variant: 'outline', size: 'icon' }), 'size-8 no-underline', cls)}><span class="sr-only">${label}</span>${icon}</a>`
     : html`<button type="button" disabled data-slot="button" class=${cn(buttonClass({ variant: 'outline', size: 'icon' }), 'size-8', cls)}><span class="sr-only">${label}</span>${icon}</button>`;
   const prev = v.page > 1;
   const next = v.page < v.pageCount;
@@ -294,6 +294,7 @@ export function tasksExample(tasks: Task[], s: TasksState) {
       <form method="get" action=${PATH} class="flex flex-col gap-4" data-tasks-form>
         ${s.sort ? html`<input type="hidden" name="sort" value=${`${s.sort.id}.${s.sort.desc ? 'desc' : 'asc'}`}>` : ''}
         ${s.hide.map((h) => html`<input type="hidden" name="hide" value=${h}>`)}
+        <input type="hidden" name="theme" value=${s.theme} data-theme-field>
         ${toolbar(s, v)}
         ${table(s, v)}
         ${pagination(s, v)}
