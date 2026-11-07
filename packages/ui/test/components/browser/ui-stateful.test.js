@@ -1486,6 +1486,51 @@ suite('ui-select: an unlabelled optgroup', () => {
   });
 });
 
+suite('ui-select: an item with more in it than its label', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/select.ts`);
+  });
+
+  // shadcn's /colors format picker: each SelectItem is a name over a muted
+  // value, while the trigger names the format alone. Parsed from markup, as a
+  // server-rendered page is, since that is the parser path a <template> inside
+  // an <option> has to survive.
+  test('a <template> in an option fills its item, and the trigger and the native select keep the label', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    root.innerHTML = '<ui-select><select aria-label="Format">'
+      + '<option value="hex" class="gap-2 rounded-lg" selected><template><span class="font-medium">hex</span><span class="font-mono text-xs">#3b82f6</span></template>hex</option>'
+      + '<option value="rgb">rgb</option>'
+      + '</select></ui-select>';
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      await tick();
+      const select = root.querySelector('select');
+      assert.equal(select.options[0].text, 'hex', 'the template adds no text to the option');
+      const items = () => root.querySelectorAll('[data-slot="select-item"]');
+      const hexText = items()[0].lastElementChild;
+      assert.equal(hexText.children.length, 2, 'the item renders the template\'s two parts');
+      assert.equal(hexText.querySelector('.font-mono')?.textContent, '#3b82f6');
+      assert.ok(items()[0].classList.contains('rounded-lg'), 'the option\'s class lands on its item');
+      assert.ok(items()[0].classList.contains('cn-select-item'), 'beside the item\'s own classes');
+      assert.equal(items()[1].lastElementChild.textContent, 'rgb', 'an option with no template shows its label');
+      const value = () => root.querySelector('[data-slot="select-value"]').textContent.trim();
+      assert.equal(value(), 'hex', 'the trigger shows the label alone');
+
+      items()[1].click();
+      await tick();
+      assert.equal(select.value, 'rgb');
+      items()[0].click();
+      await tick();
+      assert.equal(select.value, 'hex');
+      assert.equal(value(), 'hex', 'chosen again, the trigger still shows the label alone');
+      assert.equal(items()[0].lastElementChild.querySelector('.font-mono')?.textContent, '#3b82f6', 'and the item keeps its content');
+    } finally {
+      root.remove();
+    }
+  });
+});
+
 suite('ui-message-scroller: the parts render the boxes, not their hosts', () => {
   suiteSetup(async () => {
     await import(`${COMPONENTS_DIR}/message-scroller.ts`);

@@ -15,6 +15,8 @@
  *                              `"popper"` opens below it)
  *   SelectGroup + SelectLabel→ <optgroup label="...">
  *   SelectItem               → <option value="...">
+ *   SelectItem children      → a <template> inside the <option> (see below)
+ *   SelectItem className     → the <option>'s class
  *   SelectSeparator          → <hr> between options
  *   SelectScrollUp/DownButton→ drawn when the list overflows
  *   onValueChange            → `ui-value-change` ({ detail: { value } }); the
@@ -24,6 +26,15 @@
  * element inside a `<select>`. A placeholder option is one with `value=""`
  * that is `hidden` or `disabled`: it is not listed, and its text is the
  * placeholder unless the `placeholder` attribute names one.
+ *
+ * An item shows its option's label (the `label` attribute, else its text),
+ * and so does the trigger once it is chosen. For an item with more in it,
+ * shadcn's SelectItem children such as a name over a muted value, put a
+ * `<template>` inside the `<option>`: the list renders the template's content
+ * in that item, and the trigger and the native select keep the label. The
+ * parser keeps a `<template>` inside an `<option>`, and it adds no text to the
+ * option, so the no-JavaScript select shows the label alone. A class on the
+ * `<option>` lands on its item, as SelectItem's `className` does.
  *
  * Keyboard (as Radix's): on the trigger, ArrowDown / ArrowUp, Enter or Space
  * open the list on the selected option, and typing selects the first option
@@ -71,7 +82,8 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { templateContent } from '@webjsdev/core/directives';
+import { cn, ensureId } from '../lib/utils.ts';
 import { positionFloating } from './popover.ts';
 
 /** The trigger's classes: the element's drawn trigger, and the native select's no-JavaScript look. */
@@ -109,7 +121,7 @@ export const selectScrollDownButtonClass = (): string =>
   'cn-select-scroll-down-button sticky bottom-0 z-10 bg-inherit';
 
 type Entry =
-  | { kind: 'option'; index: number; value: string; label: string; disabled: boolean }
+  | { kind: 'option'; index: number; value: string; label: string; disabled: boolean; content: HTMLTemplateElement | null; cls: string }
   | { kind: 'group'; label: string; options: Entry[] }
   | { kind: 'separator' };
 
@@ -275,7 +287,15 @@ export class UiSelect extends WebComponent({
     const toOption = (o: HTMLOptionElement): Entry | null =>
       UiSelect._isPlaceholder(o)
         ? null
-        : { kind: 'option', index: options.indexOf(o), value: o.value, label: o.label || o.text, disabled: o.disabled || !!(o.parentElement as HTMLOptGroupElement | null)?.disabled };
+        : {
+          kind: 'option',
+          index: options.indexOf(o),
+          value: o.value,
+          label: o.label || o.text,
+          disabled: o.disabled || !!(o.parentElement as HTMLOptGroupElement | null)?.disabled,
+          content: Array.from(o.children).find((c): c is HTMLTemplateElement => c instanceof HTMLTemplateElement) ?? null,
+          cls: o.getAttribute('class') ?? '',
+        };
     const out: Entry[] = [];
     for (const child of Array.from(select.children)) {
       if (child instanceof HTMLOptionElement) {
@@ -343,12 +363,12 @@ export class UiSelect extends WebComponent({
         data-state=${selected ? 'checked' : 'unchecked'}
         aria-disabled=${e.disabled ? 'true' : null}
         ?data-disabled=${e.disabled}
-        class=${selectItemClass()}
+        class=${e.cls ? cn(selectItemClass(), e.cls) : selectItemClass()}
         @click=${() => this._choose(e.index)}
         @pointermove=${this._onOptionPointerMove}
       ><span data-slot="select-item-indicator" class=${selectItemIndicatorClass()}>${selected
         ? html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class=${selectItemIndicatorIconClass()}><path d="M20 6 9 17l-5-5"></path></svg>`
-        : ''}</span><span>${e.label}</span></div>`;
+        : ''}</span><span>${e.content ? templateContent(e.content) : e.label}</span></div>`;
     };
     return html`<div data-slot="select" class="contents"><slot></slot><button
       type="button"
