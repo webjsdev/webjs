@@ -74,7 +74,7 @@ export class UiCarousel extends WebComponent({
   orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
   loop: Boolean,
 }) {
-  #edges = signal<{ prev: boolean; next: boolean }>({ prev: false, next: false });
+  readonly #edges = signal<{ prev: boolean; next: boolean }>({ prev: false, next: false });
   /** The slide nearest the start of the scroller. */
   selectedIndex = 0;
   _frame = 0;

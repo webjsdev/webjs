@@ -227,10 +227,10 @@ export class UiSidebarProvider extends WebComponent({
   defaultOpen: prop(String, { attribute: 'default-open' }),
   open: prop(Boolean, { reflect: true }),
 }) {
-  #openMobile = signal(false);
+  readonly #openMobile = signal(false);
   get openMobile() { return this.#openMobile.get(); }
   set openMobile(v) { this.#openMobile.set(v); }
-  #isMobile = signal(false);
+  readonly #isMobile = signal(false);
   get isMobile() { return this.#isMobile.get(); }
   set isMobile(v) { this.#isMobile.set(v); }
   _query: MediaQueryList | null = null;

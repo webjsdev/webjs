@@ -156,11 +156,11 @@ export class UiSelect extends WebComponent({
   open: prop(Boolean, { reflect: true }),
 }) {
   // Set once the element has taken over from the native select.
-  #enhanced = signal(false);
+  readonly #enhanced = signal(false);
   // Bumped whenever the native select changes under the element.
-  #revision = signal(0);
+  readonly #revision = signal(0);
   // A failed constraint check, until the value is valid again.
-  #invalid = signal(false);
+  readonly #invalid = signal(false);
   _id = '';
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;

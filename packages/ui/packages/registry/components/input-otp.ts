@@ -71,8 +71,8 @@ const OVERLAY =
 const ROOT = 'ui-input-otp';
 
 export class UiInputOtp extends WebComponent {
-  #enhanced = signal(false);
-  #revision = signal(0);
+  readonly #enhanced = signal(false);
+  readonly #revision = signal(0);
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
   _form: HTMLFormElement | null = null;
@@ -248,13 +248,13 @@ export class UiInputOtp extends WebComponent {
       const char = value[i] ?? '';
       const active = this._focused && (end > start ? i >= start && i < end : i === start);
       const next = { shown: true, char, active, caret: active && !char, invalid };
-      const s = slot.state;
+      const s = slot.state.get();
       if (s.shown !== next.shown || s.char !== next.char || s.active !== next.active || s.caret !== next.caret || s.invalid !== next.invalid) {
-        slot.state = next;
+        slot.state.set(next);
       }
     });
     this.querySelectorAll<UiInputOtpGroup | UiInputOtpSeparator>(`${ROOT}-group, ${ROOT}-separator`).forEach((part) => {
-      if (!part.shown) part.shown = true;
+      if (!part.shown.get()) part.shown.set(true);
     });
     const disabled = !!input.disabled;
     if (disabled !== this._disabled) {
@@ -270,9 +270,7 @@ UiInputOtp.register('ui-input-otp');
 // --------------------------------------------------------------------------
 
 export class UiInputOtpGroup extends WebComponent {
-  #shown = signal(false);
-  get shown() { return this.#shown.get(); }
-  set shown(v) { this.#shown.set(v); }
+  readonly shown = signal(false);
   constructor() {
     super();
   }
@@ -283,7 +281,7 @@ export class UiInputOtpGroup extends WebComponent {
   }
 
   render() {
-    return html`<div data-slot="input-otp-group" ?hidden=${!this.shown} class=${inputOtpGroupClass()}><slot></slot></div>`;
+    return html`<div data-slot="input-otp-group" ?hidden=${!this.shown.get()} class=${inputOtpGroupClass()}><slot></slot></div>`;
   }
 }
 UiInputOtpGroup.register('ui-input-otp-group');
@@ -297,9 +295,7 @@ type SlotState = { shown: boolean; char: string; active: boolean; caret: boolean
 export class UiInputOtpSlot extends WebComponent({
   index: Number,
 }) {
-  #state = signal<SlotState>({ shown: false, char: '', active: false, caret: false, invalid: false });
-  get state() { return this.#state.get(); }
-  set state(v) { this.#state.set(v); }
+  readonly state = signal<SlotState>({ shown: false, char: '', active: false, caret: false, invalid: false });
   _authored: string | null = null;
 
   constructor() {
@@ -321,7 +317,7 @@ export class UiInputOtpSlot extends WebComponent({
   // invalidates style, and the page re-checks its :has() rules for it.
   updated(changedProperties: Map<string, unknown>): void {
     super.updated?.(changedProperties);
-    const s = this.state;
+    const s = this.state.get();
     const set = (name: string, value: string | null) => {
       if (this.getAttribute(name) === value) return;
       if (value === null) this.removeAttribute(name);
@@ -340,7 +336,7 @@ export class UiInputOtpSlot extends WebComponent({
   // page, which on a page carrying the kit's styles took longer than a frame
   // on each keystroke; a class change on a leaf is nearly free.
   render() {
-    const s = this.state;
+    const s = this.state.get();
     return html`${s.char}<div class=${s.caret ? inputOtpCaretClass() : 'hidden'}><div class=${inputOtpCaretLineClass()}></div></div>`;
   }
 }
@@ -351,9 +347,7 @@ UiInputOtpSlot.register('ui-input-otp-slot');
 // --------------------------------------------------------------------------
 
 export class UiInputOtpSeparator extends WebComponent {
-  #shown = signal(false);
-  get shown() { return this.#shown.get(); }
-  set shown(v) { this.#shown.set(v); }
+  readonly shown = signal(false);
   constructor() {
     super();
   }
@@ -364,7 +358,7 @@ export class UiInputOtpSeparator extends WebComponent {
   }
 
   render() {
-    return html`<div data-slot="input-otp-separator" role="separator" aria-hidden="true" ?hidden=${!this.shown} class=${inputOtpSeparatorClass()}><svg
+    return html`<div data-slot="input-otp-separator" role="separator" aria-hidden="true" ?hidden=${!this.shown.get()} class=${inputOtpSeparatorClass()}><svg
       xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
     ><path d="M5 12h14"></path></svg></div>`;
   }

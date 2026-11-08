@@ -80,8 +80,8 @@ const HIDDEN_CONTROL =
 export class UiSlider extends WebComponent({
   orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
 }) {
-  #enhanced = signal(false);
-  #revision = signal(0);
+  readonly #enhanced = signal(false);
+  readonly #revision = signal(0);
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
   _form: HTMLFormElement | null = null;

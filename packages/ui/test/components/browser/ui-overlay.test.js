@@ -2298,7 +2298,7 @@ suite('ui-command', () => {
     const input = el.querySelector('input[data-slot="command-input"]');
     const items = () => [...el.querySelectorAll('ui-command-item')];
     const shown = () => el.visibleItems().map((i) => i.itemValue);
-    const selected = () => items().find((i) => i.state.selected)?.itemValue ?? null;
+    const selected = () => items().find((i) => i.state.get().selected)?.itemValue ?? null;
     return { el, input, items, shown, selected };
   };
   const search = async (input, text) => {

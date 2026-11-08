@@ -208,9 +208,9 @@ export class UiCalendar extends WebComponent({
   locale: String,
 }) {
   // The live state: what is chosen, which month is shown, which day has focus.
-  #selection = signal<{ days: string[]; from: string; to: string }>({ days: [], from: '', to: '' });
-  #shown = signal('');
-  #focused = signal('');
+  readonly #selection = signal<{ days: string[]; from: string; to: string }>({ days: [], from: '', to: '' });
+  readonly #shown = signal('');
+  readonly #focused = signal('');
   _id = '';
   _parsed = false;
 

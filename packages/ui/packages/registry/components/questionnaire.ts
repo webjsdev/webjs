@@ -182,8 +182,8 @@ export class UiQuestionnaire extends WebComponent({
   // Drive the author's own <form> instead of rendering one.
   asChild: prop(Boolean, { attribute: 'as-child' }),
 }) {
-  #enhanced = signal(false);
-  #active = signal('');
+  readonly #enhanced = signal(false);
+  readonly #active = signal('');
   _queued = false;
 
   constructor() {
@@ -299,14 +299,14 @@ export class UiQuestionnaire extends WebComponent({
     const at = item ? items.indexOf(item) : -1;
     const last = at === items.length - 1;
     for (const i of this._all(ITEM) as UiQuestionnaireItem[]) {
-      i.flow = { enhanced: !!this.#enhanced.get(), active: i === item };
+      i.flow.set({ enhanced: !!this.#enhanced.get(), active: i === item });
     }
     for (const c of this._all('ui-questionnaire-choice') as UiQuestionnaireChoice[]) c._syncChecked();
     for (const p of this._all('ui-questionnaire-progress') as UiQuestionnaireProgress[]) {
-      p.progress = { current: at + 1, total: items.length };
+      p.progress.set({ current: at + 1, total: items.length });
     }
     const show = (tag: string, visible: boolean) => {
-      for (const b of this._all(tag) as UiQuestionnaireButton[]) b.visible = visible;
+      for (const b of this._all(tag) as UiQuestionnaireButton[]) b.visible.set(visible);
     };
     if (!this.#enhanced.get()) {
       show('ui-questionnaire-previous', false);
@@ -349,7 +349,7 @@ export class UiQuestionnaire extends WebComponent({
   validate(item = this._activeItem()): boolean {
     if (!item) return true;
     const ok = !item.required || this.answered(item);
-    item.invalid = !ok;
+    item.invalid.set(!ok);
     if (!ok) item.inputs().find((i) => !i.disabled)?.focus();
     return ok;
   }
@@ -378,7 +378,7 @@ export class UiQuestionnaire extends WebComponent({
       if (i.type === 'radio' || i.type === 'checkbox') i.checked = false;
       else i.value = '';
     }
-    item.invalid = false;
+    item.invalid.set(false);
     const items = this.items();
     const after = items[items.indexOf(item) + 1];
     if (after) this._go(after);
@@ -433,7 +433,7 @@ export class UiQuestionnaire extends WebComponent({
         for (const i of item.inputs()) if (i.matches('[data-slot="questionnaire-input"]')) i.value = '';
       }
     }
-    if (item.invalid && this.answered(item)) item.invalid = false;
+    if (item.invalid.get() && this.answered(item)) item.invalid.set(false);
     this.sync();
   };
 }
@@ -444,9 +444,7 @@ UiQuestionnaire.register('ui-questionnaire');
 // --------------------------------------------------------------------------
 
 export class UiQuestionnaireProgress extends WebComponent {
-  #progress = signal<{ current: number; total: number }>({ current: 0, total: 0 });
-  get progress() { return this.#progress.get(); }
-  set progress(v) { this.#progress.set(v); }
+  readonly progress = signal<{ current: number; total: number }>({ current: 0, total: 0 });
   constructor() {
     super();
   }
@@ -457,7 +455,7 @@ export class UiQuestionnaireProgress extends WebComponent {
   }
 
   render() {
-    const { current, total } = this.progress;
+    const { current, total } = this.progress.get();
     const label = total ? `Question ${current} of ${total}` : '';
     return html`<div
       data-slot="questionnaire-progress"
@@ -484,13 +482,9 @@ export class UiQuestionnaireItem extends WebComponent({
   multiple: Boolean,
   disabled: Boolean,
 }) {
-  #flow = signal<{ enhanced: boolean; active: boolean }>({ enhanced: false, active: false });
-  get flow() { return this.#flow.get(); }
-  set flow(v) { this.#flow.set(v); }
+  readonly flow = signal<{ enhanced: boolean; active: boolean }>({ enhanced: false, active: false });
   // The item's error line reads this signal, so it redraws when it changes.
-  #invalid = signal(false);
-  get invalid() { return this.#invalid.get(); }
-  set invalid(v) { this.#invalid.set(v); }
+  readonly invalid = signal(false);
   _id = '';
 
   constructor() {
@@ -538,19 +532,19 @@ export class UiQuestionnaireItem extends WebComponent({
   }
 
   render() {
-    const hide = this.flow.enhanced && !this.flow.active;
+    const hide = this.flow.get().enhanced && !this.flow.get().active;
     const hasTitle = this._has('ui-questionnaire-title');
     const hasDescription = this._has('ui-questionnaire-description');
-    const described = [hasDescription ? this.descriptionId : '', this.invalid ? this.errorId : ''].filter(Boolean).join(' ');
+    const described = [hasDescription ? this.descriptionId : '', this.invalid.get() ? this.errorId : ''].filter(Boolean).join(' ');
     return html`<fieldset
       data-slot="questionnaire-item"
       ?disabled=${this.disabled}
-      ?data-active=${this.flow.active}
+      ?data-active=${this.flow.get().active}
       ?hidden=${hide}
       ?inert=${hide}
       aria-labelledby=${hasTitle && this._id ? this.titleId : null}
       aria-describedby=${described || null}
-      aria-invalid=${this.invalid ? 'true' : null}
+      aria-invalid=${this.invalid.get() ? 'true' : null}
       class=${cn(questionnaireItemClass(), takeAuthored(this))}
     ><slot></slot></fieldset>`;
   }
@@ -603,7 +597,7 @@ export class UiQuestionnaireChoice extends WebComponent({
   checked: Boolean,
   disabled: Boolean,
 }) {
-  #live = signal(false);
+  readonly #live = signal(false);
   constructor() {
     super();
     this.value = '';
@@ -727,7 +721,7 @@ export class UiQuestionnaireError extends WebComponent {
 
   render() {
     const item = itemOf(this);
-    const invalid = !!item?.invalid;
+    const invalid = !!item?.invalid.get();
     const fallback = item?.required ? 'Choose an answer to continue.' : 'Choose an answer or skip this question.';
     return html`<p
       data-slot="questionnaire-error"
@@ -765,9 +759,7 @@ export class UiQuestionnaireButton extends WebComponent({
   static defaultVariant = 'outline';
 
   // Submit shows from the first paint; the others wait for the flow.
-  #visible = signal((this.constructor as typeof UiQuestionnaireButton).submits);
-  get visible() { return this.#visible.get(); }
-  set visible(v) { this.#visible.set(v); }
+  readonly visible = signal((this.constructor as typeof UiQuestionnaireButton).submits);
 
   constructor() {
     super();
@@ -789,10 +781,10 @@ export class UiQuestionnaireButton extends WebComponent({
       data-slot=${`questionnaire-${ctor.part}`}
       data-size=${this.size}
       data-variant=${this.variant}
-      ?hidden=${!this.visible}
+      ?hidden=${!this.visible.get()}
       ?disabled=${this.disabled}
-      aria-hidden=${this.visible ? null : 'true'}
-      aria-keyshortcuts=${this.visible && !this.disabled && (ctor.part === 'next' || ctor.part === 'submit') ? 'Enter' : null}
+      aria-hidden=${this.visible.get() ? null : 'true'}
+      aria-keyshortcuts=${this.visible.get() && !this.disabled && (ctor.part === 'next' || ctor.part === 'submit') ? 'Enter' : null}
       class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), ctor.place, takeAuthored(this))}
       @click=${this._onClick}
     ><slot>${ctor.label}</slot></button>`;

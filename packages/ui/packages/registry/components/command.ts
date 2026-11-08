@@ -141,7 +141,7 @@ export class UiCommand extends WebComponent({
   // The selected item's value.
   value: prop(String, { reflect: true }),
 }) {
-  #search = signal('');
+  readonly #search = signal('');
   _id = '';
 
   constructor() {
@@ -189,8 +189,8 @@ export class UiCommand extends WebComponent({
   /** The items currently shown, in the order they are shown. */
   visibleItems(): UiCommandItem[] {
     return this._own<UiCommandItem>(`${ROOT}-item`)
-      .filter((i) => i.state.visible)
-      .sort((a, b) => a.state.order - b.state.order);
+      .filter((i) => i.state.get().visible)
+      .sort((a, b) => a.state.get().order - b.state.get().order);
   }
 
   /** Set the search text, as typing does. */
@@ -236,25 +236,25 @@ export class UiCommand extends WebComponent({
     }
     for (const item of items) {
       const r = rank.get(item);
-      item.state = { visible: r !== undefined, selected: item === selected, order: sorting && r !== undefined ? r : items.indexOf(item) };
+      item.state.set({ visible: r !== undefined, selected: item === selected, order: sorting && r !== undefined ? r : items.indexOf(item) });
     }
     for (const g of groups) {
       const r = groupRank.get(g) ?? Infinity;
-      g.shown = r !== Infinity;
-      g.order = sorting && r !== Infinity ? r : 0;
+      g.shown.set(r !== Infinity);
+      g.order.set(sorting && r !== Infinity ? r : 0);
     }
-    for (const sep of this._own<UiCommandSeparator>(`${ROOT}-separator`)) sep.shown = !search;
-    for (const empty of this._own<UiCommandEmpty>(`${ROOT}-empty`)) empty.shown = visible.length === 0;
+    for (const sep of this._own<UiCommandSeparator>(`${ROOT}-separator`)) sep.shown.set(!search);
+    for (const empty of this._own<UiCommandEmpty>(`${ROOT}-empty`)) empty.shown.set(visible.length === 0);
     this._select(selected);
   }
 
   _select(item: UiCommandItem | null): void {
     const value = item?.itemValue ?? '';
     for (const i of this._own<UiCommandItem>(`${ROOT}-item`)) {
-      if (i.state.selected !== (i === item)) i.state = { ...i.state, selected: i === item };
+      if (i.state.get().selected !== (i === item)) i.state.set({ ...i.state.get(), selected: i === item });
     }
     const input = this._own<UiCommandInput>(`${ROOT}-input`)[0];
-    if (input) input.activeId = item?.optionId ?? '';
+    if (input) input.activeId.set(item?.optionId ?? '');
     if (item) item.scrollIntoViewIfShown();
     if (value !== this.value) {
       this.value = value;
@@ -264,7 +264,7 @@ export class UiCommand extends WebComponent({
 
   /** Move the selection to an item (used by pointing). */
   selectItem(item: UiCommandItem): void {
-    if (item.disabled || !item.state.visible) return;
+    if (item.disabled || !item.state.get().visible) return;
     this._select(item);
   }
 
@@ -279,7 +279,7 @@ export class UiCommand extends WebComponent({
   _move(by: number | 'first' | 'last'): void {
     const enabled = this.visibleItems().filter((i) => !i.disabled);
     if (!enabled.length) return;
-    const at = enabled.findIndex((i) => i.state.selected);
+    const at = enabled.findIndex((i) => i.state.get().selected);
     let next: number;
     if (by === 'first') next = 0;
     else if (by === 'last') next = enabled.length - 1;
@@ -300,7 +300,7 @@ export class UiCommand extends WebComponent({
     else if (e.key === 'End') { e.preventDefault(); this._move('last'); }
     else if (e.key === 'Enter') {
       e.preventDefault();
-      this.run(this.visibleItems().find((i) => i.state.selected) ?? null);
+      this.run(this.visibleItems().find((i) => i.state.get().selected) ?? null);
     }
   };
 
@@ -323,9 +323,7 @@ UiCommand.register('ui-command');
 export class UiCommandInput extends WebComponent({
   placeholder: String,
 }) {
-  #activeId = signal('');
-  get activeId() { return this.#activeId.get(); }
-  set activeId(v) { this.#activeId.set(v); }
+  readonly activeId = signal('');
   constructor() {
     super();
     this.placeholder = '';
@@ -358,7 +356,7 @@ export class UiCommandInput extends WebComponent({
       aria-controls=${root?.listId || null}
       aria-labelledby=${named}
       aria-label=${named ? null : this.getAttribute?.('aria-label') || this.placeholder || null}
-      aria-activedescendant=${this.activeId || null}
+      aria-activedescendant=${this.activeId.get() || null}
       placeholder=${this.placeholder || null}
       class=${cn(commandInputClass(), takeAuthored(this))}
       @input=${this._onInput}
@@ -398,9 +396,7 @@ UiCommandList.register('ui-command-list');
 // --------------------------------------------------------------------------
 
 export class UiCommandEmpty extends WebComponent {
-  #shown = signal(false);
-  get shown() { return this.#shown.get(); }
-  set shown(v) { this.#shown.set(v); }
+  readonly shown = signal(false);
   constructor() {
     super();
   }
@@ -411,7 +407,7 @@ export class UiCommandEmpty extends WebComponent {
   }
 
   render() {
-    return html`<div data-slot="command-empty" cmdk-empty="" role="presentation" ?hidden=${!this.shown} class=${cn(commandEmptyClass(), takeAuthored(this))}><slot></slot></div>`;
+    return html`<div data-slot="command-empty" cmdk-empty="" role="presentation" ?hidden=${!this.shown.get()} class=${cn(commandEmptyClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }
 UiCommandEmpty.register('ui-command-empty');
@@ -423,12 +419,8 @@ UiCommandEmpty.register('ui-command-empty');
 export class UiCommandGroup extends WebComponent({
   heading: String,
 }) {
-  #shown = signal(true);
-  get shown() { return this.#shown.get(); }
-  set shown(v) { this.#shown.set(v); }
-  #order = signal(0);
-  get order() { return this.#order.get(); }
-  set order(v) { this.#order.set(v); }
+  readonly shown = signal(true);
+  readonly order = signal(0);
   _id = '';
 
   constructor() {
@@ -444,8 +436,8 @@ export class UiCommandGroup extends WebComponent({
 
   updated(changedProperties: Map<string, unknown>): void {
     super.updated?.(changedProperties);
-    this.style.order = this.order ? String(this.order) : '';
-    this.hidden = !this.shown;
+    this.style.order = this.order.get() ? String(this.order.get()) : '';
+    this.hidden = !this.shown.get();
   }
 
   render() {
@@ -464,9 +456,7 @@ UiCommandGroup.register('ui-command-group');
 // --------------------------------------------------------------------------
 
 export class UiCommandSeparator extends WebComponent {
-  #shown = signal(true);
-  get shown() { return this.#shown.get(); }
-  set shown(v) { this.#shown.set(v); }
+  readonly shown = signal(true);
   constructor() {
     super();
   }
@@ -477,7 +467,7 @@ export class UiCommandSeparator extends WebComponent {
   }
 
   render() {
-    return html`<div data-slot="command-separator" cmdk-separator="" role="separator" ?hidden=${!this.shown} class=${commandSeparatorClass()}></div>`;
+    return html`<div data-slot="command-separator" cmdk-separator="" role="separator" ?hidden=${!this.shown.get()} class=${commandSeparatorClass()}></div>`;
   }
 }
 UiCommandSeparator.register('ui-command-separator');
@@ -492,9 +482,7 @@ export class UiCommandItem extends WebComponent({
   disabled: Boolean,
   checked: Boolean,
 }) {
-  #state = signal<ItemState>({ visible: true, selected: false, order: 0 });
-  get state() { return this.#state.get(); }
-  set state(v) { this.#state.set(v); }
+  readonly state = signal<ItemState>({ visible: true, selected: false, order: 0 });
   _id = '';
 
   constructor() {
@@ -529,12 +517,12 @@ export class UiCommandItem extends WebComponent({
 
   updated(changedProperties: Map<string, unknown>): void {
     super.updated?.(changedProperties);
-    this.style.order = this.state.order ? String(this.state.order) : '';
-    this.hidden = !this.state.visible;
+    this.style.order = this.state.get().order ? String(this.state.get().order) : '';
+    this.hidden = !this.state.get().visible;
   }
 
   render() {
-    const s = this.state;
+    const s = this.state.get();
     return html`<div
       data-slot="command-item"
       cmdk-item=""
@@ -556,7 +544,7 @@ export class UiCommandItem extends WebComponent({
   }
 
   _onPointerMove = (): void => {
-    if (this.state.selected) return;
+    if (this.state.get().selected) return;
     (this.closest(ROOT) as UiCommand | null)?.selectItem(this);
   };
 

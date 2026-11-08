@@ -141,7 +141,7 @@ export class UiCodeBlockCopyButton extends WebComponent({
   variant: String,
   size: String,
 }) {
-  #copied = signal(false);
+  readonly #copied = signal(false);
   _timer = 0;
 
   constructor() {

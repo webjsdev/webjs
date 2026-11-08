@@ -363,7 +363,7 @@ export class UiNavigationMenuItem extends WebComponent({
     const root = this._root();
     this.querySelectorAll<UiNavigationMenuTrigger | UiNavigationMenuContent>(
       `${ROOT}-trigger, ${ROOT}-content`,
-    ).forEach((part) => { part.open = this.isOpen; });
+    ).forEach((part) => { part.open.set(this.isOpen); });
     const button = this._button();
     const panel = this._panel();
     if (button && panel) {
@@ -386,9 +386,7 @@ UiNavigationMenuItem.register('ui-navigation-menu-item');
 // --------------------------------------------------------------------------
 
 export class UiNavigationMenuTrigger extends WebComponent {
-  #open = signal(false);
-  get open() { return this.#open.get(); }
-  set open(v) { this.#open.set(v); }
+  readonly open = signal(false);
   // After a click closes the panel, the pointer still on the trigger must not
   // reopen it until it leaves.
   _clickClosed = false;
@@ -401,8 +399,8 @@ export class UiNavigationMenuTrigger extends WebComponent {
     return html`<button
       type="button"
       data-slot="navigation-menu-trigger"
-      data-state=${this.open ? 'open' : 'closed'}
-      aria-expanded=${this.open ? 'true' : 'false'}
+      data-state=${this.open.get() ? 'open' : 'closed'}
+      aria-expanded=${this.open.get() ? 'true' : 'false'}
       class=${navigationMenuTriggerClass()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
@@ -455,9 +453,7 @@ UiNavigationMenuTrigger.register('ui-navigation-menu-trigger');
 // --------------------------------------------------------------------------
 
 export class UiNavigationMenuContent extends WebComponent {
-  #open = signal(false);
-  get open() { return this.#open.get(); }
-  set open(v) { this.#open.set(v); }
+  readonly open = signal(false);
   constructor() {
     super();
   }
@@ -465,8 +461,8 @@ export class UiNavigationMenuContent extends WebComponent {
   render() {
     return html`<div
       data-slot="navigation-menu-content"
-      data-state=${this.open ? 'open' : 'closed'}
-      ?hidden=${!this.open}
+      data-state=${this.open.get() ? 'open' : 'closed'}
+      ?hidden=${!this.open.get()}
       class=${navigationMenuContentClass()}
       @pointerenter=${this._onPointerEnter}
       @pointerleave=${this._onPointerLeave}
