@@ -17,7 +17,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -51,7 +51,7 @@ test('core dist build replaces a symlinked out dir instead of writing into its t
     for (const f of ['webjs-core.js', 'webjs-core-browser.js', 'webjs-core-lazy-loader.js', 'webjs-core-testing.js']) {
       assert.ok(existsSync(join(out, f)), `${f} is built into the real out dir`);
     }
-    assert.match(log, /was a symlink at .*replaced it with a real directory/, 'the replacement is reported, not silent');
+    assert.match(log, /was a symlink at .*Replaced it with a real directory/, 'the replacement is reported, not silent');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -65,6 +65,34 @@ test('core dist build leaves a real out dir alone apart from the build itself', 
     const log = execFileSync(process.execPath, [SCRIPT, out], { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' });
     assert.ok(existsSync(join(out, 'webjs-core-browser.js')));
     assert.doesNotMatch(log, /was a symlink/, 'no replacement is reported for a real directory');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('a FAILED build leaves a symlinked out dir exactly as it was', () => {
+  // The link is swapped only after esbuild succeeds. Removing it first left a
+  // worktree with an empty dist and no link whenever the build failed (a syntax
+  // error in packages/core/src is the usual reason to rebuild), and opened the
+  // empty-dist window the staging directory exists to close (#1474). A bogus
+  // ESBUILD_BINARY_PATH makes esbuild fail without touching any source.
+  const tmp = mkdtempSync(join(tmpdir(), 'webjs-dist-fail-'));
+  try {
+    const foreign = join(tmp, 'primary-dist');
+    mkdirSync(foreign);
+    writeFileSync(join(foreign, 'MARKER'), 'the primary checkout\'s own build');
+    const out = join(tmp, 'worktree-dist');
+    symlinkSync(foreign, out, 'junction');
+
+    const r = spawnSync(process.execPath, [SCRIPT, out], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, ESBUILD_BINARY_PATH: join(tmp, 'no-such-esbuild') },
+    });
+    assert.notEqual(r.status, 0, 'the build must fail for this test to mean anything');
+    assert.ok(lstatSync(out).isSymbolicLink(), 'the link is still there after a failed build');
+    assert.ok(existsSync(join(out, 'MARKER')), 'and still resolves to its target');
+    assert.deepEqual(readdirSync(tmp).filter((f) => f.includes('.building-')), [], 'no staging dir is left behind');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

@@ -58,35 +58,58 @@ const ENTRIES = [
 ];
 
 /**
- * Make sure the build writes INTO the directory it names, never through a
- * symlink standing at that path (#1671).
+ * Never write THROUGH a symlink standing at the out dir (#1671).
  *
- * `npm run worktree:link` plants `packages/core/dist` in a linked worktree as a
- * symlink at the PRIMARY checkout's dist. `mkdir(dist, { recursive: true })`
- * succeeds silently on such a link, and then both the `rename` into place and
- * the stale-file cleanup below act on the link's TARGET: the worktree's bundle
- * replaces the primary's, and every file the primary had that this build did
- * not produce is deleted. Core's `prepare` runs this script during `npm ci`, and
- * `release-gate.mjs` / `npm run build:dist` run it too, so any of them in a
- * linked worktree silently put another branch's code under every consumer of
- * the primary.
+ * `mkdir(dist, { recursive: true })` succeeds silently on a symlink to a
+ * directory, and then both the per-file `rename` into place and the stale-file
+ * cleanup act on the link's TARGET: the bundles land in whatever checkout the
+ * link points at, and every file there that this build did not produce is
+ * deleted. Linked worktrees made by `npm run worktree:link` before #1671 carry
+ * `packages/core/dist` as exactly such a link at the primary checkout's dist,
+ * and core's `prepare` runs this script during `npm ci`.
  *
- * The link is replaced with a real directory rather than refused, because every
- * caller wants a dist for THIS checkout, and a refusal from inside `prepare`
- * would leave `npm ci` half done. Only the link itself is removed (`unlink`
- * never follows it), so the target is left exactly as it was.
+ * Called only AFTER esbuild has succeeded, with the finished bundles sitting in
+ * `staging`. Until then the link is left alone, so a failed build (a syntax
+ * error in `packages/core/src` is the usual one) leaves the worktree exactly as
+ * it was, and a concurrent reader never sees an empty `dist` while esbuild
+ * runs, which is the window the staging directory exists to close (#1474).
  *
- * @param {string} dist the out dir the build is about to write
- * @returns {Promise<void>}
+ * The link is replaced rather than refused, because every caller wants a dist
+ * for THIS checkout, and a refusal from inside `prepare` would leave `npm ci`
+ * half done. `unlink` removes the link only and never follows it, so the target
+ * is left exactly as it was. The finished staging directory is then renamed
+ * into the freed path in one step.
+ *
+ * @param {string} dist the out dir
+ * @param {string} staging the finished build, a sibling of `dist`
+ * @returns {Promise<boolean>} true when `staging` became `dist` whole, false
+ *   when `dist` was not a link (or another build replaced it first), in which
+ *   case the caller moves the bundles in file by file as usual
  */
-async function replaceSymlinkedOutDir(dist) {
+async function takeOverSymlinkedOutDir(dist, staging) {
   let isLink = false;
-  try { isLink = (await lstat(dist)).isSymbolicLink(); } catch { return; }
-  if (!isLink) return;
+  try { isLink = (await lstat(dist)).isSymbolicLink(); } catch { return false; }
+  if (!isLink) return false;
   let target = '(unreadable)';
   try { target = await readlink(dist); } catch { /* reported as unreadable */ }
-  await unlink(dist);
-  console.log(`[build-framework-dist] ${dist} was a symlink at ${target}; replaced it with a real directory so the build cannot write into the link's target.`);
+  try {
+    await unlink(dist);
+  } catch (err) {
+    // A concurrent build saw the same link and removed it first. Not an error:
+    // whichever build gets the rename below in first owns the directory.
+    if (/** @type {NodeJS.ErrnoException} */ (err).code !== 'ENOENT') throw err;
+  }
+  try {
+    await rename(staging, dist);
+  } catch (err) {
+    // That concurrent build already renamed its own staging directory into
+    // place. Fall back to the per-file move into the directory it created.
+    const code = /** @type {NodeJS.ErrnoException} */ (err).code;
+    if (code === 'EEXIST' || code === 'ENOTEMPTY' || code === 'ENOTDIR' || code === 'EISDIR') return false;
+    throw err;
+  }
+  console.log(`[build-framework-dist] ${dist} was a symlink at ${target}. Replaced it with a real directory holding this build. The link's target was not touched.`);
+  return true;
 }
 
 async function main() {
@@ -106,8 +129,6 @@ async function main() {
   const staging = `${dist}.building-${process.pid}`;
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
-  await replaceSymlinkedOutDir(dist);
-  await mkdir(dist, { recursive: true });
 
   const produced = new Set();
   try {
@@ -135,16 +156,18 @@ async function main() {
       legalComments: 'none',
     });
 
-    // Move every bundle into place (a rename over an existing file is atomic
-    // on the same filesystem), then drop whatever the previous build left that
-    // this one did not produce.
-    for (const outFile of Object.keys(result.metafile.outputs)) {
-      const name = basename(outFile);
-      await rename(outFile, join(dist, name));
-      produced.add(name);
-    }
-    for (const stale of await readdir(dist)) {
-      if (!produced.has(stale)) await rm(join(dist, stale), { recursive: true, force: true });
+    const outputs = Object.keys(result.metafile.outputs);
+    for (const outFile of outputs) produced.add(basename(outFile));
+    // A symlink at the out dir is swapped for the finished build only now that
+    // the build has succeeded (#1671). Otherwise move every bundle into place
+    // (a rename over an existing file is atomic on the same filesystem), then
+    // drop whatever the previous build left that this one did not produce.
+    if (!(await takeOverSymlinkedOutDir(dist, staging))) {
+      await mkdir(dist, { recursive: true });
+      for (const outFile of outputs) await rename(outFile, join(dist, basename(outFile)));
+      for (const stale of await readdir(dist)) {
+        if (!produced.has(stale)) await rm(join(dist, stale), { recursive: true, force: true });
+      }
     }
   } finally {
     // On every path, including an esbuild failure: the staging sibling is not
