@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { META_KEY_CSP_NONCE } from './constants.js';
+import { META_KEY_CSP_NONCE, relTokens } from './constants.js';
 import { isStylesheetLink, stylesheetMerge } from './owned-styles.js';
 
 /**
@@ -222,7 +222,9 @@ function reconcileHeadMetas(newHead) {
  *   owned stylesheet on (owned-styles.js `stylesheetMerge`).
  */
 export function addNewHeadElements(newHead, opts = {}) {
-  const mergeSheet = stylesheetMerge(opts);
+  // `styles: false` leaves the stylesheet links to `mergeHeadStylesheets`,
+  // which the boundary swap calls inside its commit (#1669).
+  const mergeSheet = opts.styles === false ? null : stylesheetMerge(opts);
   const newTitle = newHead.querySelector('title');
   if (newTitle) document.title = newTitle.textContent || '';
 
@@ -245,7 +247,9 @@ export function addNewHeadElements(newHead, opts = {}) {
     // here to avoid appending a duplicate when its content changed.
     if (el.tagName === 'META' && metaIdentity(el)) continue;
     // One link per stylesheet, and an owned one placed root to leaf (#1669).
-    if (isStylesheetLink(el) && mergeSheet(el, cloneElementWithCorrectNonce)) continue;
+    if (isStylesheetLink(el)) {
+      if (!mergeSheet || mergeSheet(el, cloneElementWithCorrectNonce)) continue;
+    }
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         document.head.appendChild(
@@ -260,6 +264,26 @@ export function addNewHeadElements(newHead, opts = {}) {
   // Reconcile keyed <meta> tags so a stale page-scoped meta is removed, not
   // leaked onto every later page (#1046).
   reconcileHeadMetas(newHead);
+}
+
+/**
+ * The stylesheet half of `addNewHeadElements`, for the boundary swap to run
+ * INSIDE its commit (#1669): adopting the router's loading copies, switching
+ * a sheet back on, and inserting an owned one all take effect with the swap,
+ * so the outgoing page, and a view transition's capture of it, never paint
+ * with the incoming page's CSS. A stylesheet the merge does not handle (an
+ * unowned one the head lacks) is appended, as the full merge does.
+ * @param {HTMLHeadElement} newHead
+ * @param {{ base?: string | null, segment?: string | null, leaving?: (el: Element) => boolean }} [opts]
+ */
+export function mergeHeadStylesheets(newHead, opts = {}) {
+  const mergeSheet = stylesheetMerge(opts);
+  const currentSet = new Set();
+  for (const el of document.head.children) currentSet.add(outerHTMLForDiff(el));
+  for (const el of newHead.children) {
+    if (!isStylesheetLink(el) || mergeSheet(el, cloneElementWithCorrectNonce)) continue;
+    if (!currentSet.has(outerHTMLForDiff(el))) document.head.appendChild(cloneElementWithCorrectNonce(el));
+  }
 }
 
 /**
@@ -278,15 +302,17 @@ export function addNewHeadElements(newHead, opts = {}) {
  * reload (build-id mismatch), not a soft swap. A section's own stylesheet is
  * the one case that does leave, and it is decided elsewhere, by ownership
  * rather than by head absence: `owned-styles.js` switches a sheet off when the
- * boundary REPLACE that owns it runs (#1669), which this merge never does.
+ * boundary that owns it is swapped, a replace or a morph, or on a full-body
+ * swap whose response is complete (#1669). This merge itself never removes
+ * one.
  *
  * @param {Element} el
  * @returns {boolean}
  */
 function isPersistentHeadStyle(el) {
   if (el.tagName === 'STYLE') return true;
-  return el.tagName === 'LINK' &&
-    (el.getAttribute('rel') || '').toLowerCase().split(/\s+/).includes('stylesheet');
+  // Any stylesheet link, an alternate one included, so not `relIsStylesheet`.
+  return el.tagName === 'LINK' && relTokens(el).includes('stylesheet');
 }
 
 /**
@@ -294,7 +320,9 @@ function isPersistentHeadStyle(el) {
  * @param {{ base?: string | null, segment?: string | null }} [opts]  the URL the incoming page came from, and the range being replaced
  */
 export function mergeHead(newHead, opts = {}) {
-  const mergeSheet = stylesheetMerge(opts);
+  // `styles: false` leaves the stylesheet links to `mergeHeadStylesheets`,
+  // which the full-body swap calls inside its commit (#1669).
+  const mergeSheet = opts.styles === false ? null : stylesheetMerge(opts);
   const currentHead = document.head;
 
   const newTitle = newHead.querySelector('title');
@@ -346,7 +374,7 @@ export function mergeHead(newHead, opts = {}) {
     // A stylesheet the head already links is not appended twice, and an owned
     // one is placed root to leaf (#1669). Nothing here REMOVES a sheet: this
     // head can be a reduced one (#936).
-    if (isStylesheetLink(el) && mergeSheet(el, cloneElementWithCorrectNonce)) continue;
+    if (isStylesheetLink(el) && (!mergeSheet || mergeSheet(el, cloneElementWithCorrectNonce))) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         currentHead.appendChild(

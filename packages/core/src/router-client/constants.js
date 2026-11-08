@@ -220,6 +220,17 @@ export const PRELOAD_ATTR = 'data-webjs-preload-style';
  * @param {Element} el
  */
 export function relIsStylesheet(el) {
-  const rel = (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
+  const rel = relTokens(el);
   return rel.includes('stylesheet') && !rel.includes('alternate');
+}
+
+/**
+ * The lowercased tokens of `el`'s `rel`, the one parse every stylesheet test
+ * in the router builds on (`relIsStylesheet` here, and the head merge's
+ * never-remove rule, which counts an alternate stylesheet too).
+ * @param {Element} el
+ * @returns {string[]}
+ */
+export function relTokens(el) {
+  return (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
 }

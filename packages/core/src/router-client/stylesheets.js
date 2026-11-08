@@ -31,7 +31,7 @@
  * the wait, and so does a timeout, Turbo's 2 seconds.
  */
 import { PRELOAD_ATTR, relIsStylesheet } from './constants.js';
-import { OWNER_ATTR, placeOwnedLink } from './owned-styles.js';
+import { HELD_MEDIA_ATTR, OWNER_ATTR, holdMedia, placeOwnedLink } from './owned-styles.js';
 import { getCspNonce } from './head-merge.js';
 
 /** How long a navigation waits for one stylesheet before it swaps anyway. */
@@ -50,7 +50,8 @@ export { PRELOAD_ATTR };
 function isActiveStylesheet(el) {
   if (!relIsStylesheet(el)) return false;
   if (el.hasAttribute('disabled') || !el.getAttribute('href')) return false;
-  const media = el.getAttribute('media');
+  // A held link (owned-styles.js) applies under its author's media once released.
+  const media = el.hasAttribute(HELD_MEDIA_ATTR) ? el.getAttribute(HELD_MEDIA_ATTR) : el.getAttribute('media');
   if (media && typeof matchMedia === 'function') {
     try { if (!matchMedia(media).matches) return false; } catch { /* an unparseable query applies to nothing */ return false; }
   }
@@ -142,6 +143,10 @@ export function loadIncomingStylesheets(doc, baseUrl, frameId, timeout = STYLESH
     }
     if (nonce) link.setAttribute('nonce', nonce);
     link.href = href;
+    // Loaded without applying: the outgoing page, and a view transition's
+    // capture of it, must not paint with the incoming CSS. The swap commit
+    // releases it (owned-styles.js `releaseIncomingSheets`).
+    holdMedia(link);
     copies.push(link);
     waits.push(waitForLoad(link, timeout));
     // A sheet a layout owns (#1669) goes where the page's own link belongs,

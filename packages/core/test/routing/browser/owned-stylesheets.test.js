@@ -301,6 +301,116 @@ suite('Client router: owned stylesheets leave with their layout (#1669)', () => 
     assert.equal(document.head.querySelectorAll(`link[${PRELOAD_ATTR}][href="${href}"]`).length, 0, 'and the copy was not appended');
   });
 
+  test('a sheet the incoming page links only in its body is not switched off', async () => {
+    const href = sheet('#wj-owned-probe { width: 127px; display: block; }');
+    const link = await addLiveSheet(href, '/');
+    // The incoming page links the file inside its body (not first in its
+    // range, so the server left it there).
+    const doc = incoming('b', 'body-link');
+    const bodyLink = doc.createElement('link');
+    bodyLink.rel = 'stylesheet';
+    bodyLink.href = href;
+    doc.querySelector('p').append(bodyLink);
+    _applySwap(doc, null, true, null);
+    assert.equal(link.hasAttribute(OFF_ATTR), false, 'still on: the page uses it');
+    assert.equal(probeWidth(), '127px');
+    document.querySelectorAll(`body link[href="${href}"]`).forEach((l) => l.remove());
+  });
+
+  test('a full-body swap with a complete response retires a departed sheet; the background restore path does not', async () => {
+    const href = sheet('#wj-owned-probe { width: 128px; display: block; }');
+    const link = await addLiveSheet(href, '/');
+    // A shell refresh renders with no X-Webjs-Have, so its response is complete.
+    _applySwap(incoming('b', 'shell'), null, true, null, undefined, undefined, 'shell');
+    assert.equal(link.hasAttribute(OFF_ATTR), true, 'retired by the complete full-body swap');
+    // Switch it back on, then take the background path: a document with no
+    // boundaries, whose head may be a reduced one, so nothing goes off.
+    addNewHeadElements(incoming('c', 'x', ownedLink(href, '/')).head, { segment: '/' });
+    assert.equal(link.hasAttribute(OFF_ATTR), false);
+    const bare = new DOMParser().parseFromString('<!doctype html><html><head></head><body><div id="wj-owned-probe">bare</div><p>bare</p></body></html>', 'text/html');
+    _applySwap(bare, null, true, null);
+    assert.equal(link.hasAttribute(OFF_ATTR), false, 'kept: that head cannot say the sheet is gone');
+    // The bare swap replaced the body, so put the harness boundaries back.
+    document.body.querySelectorAll('#wj-owned-probe, p').forEach((n) => n.remove());
+    const host = document.createElement('div');
+    host.innerHTML = bodyHtml('a', 'restored');
+    document.body.append(...host.childNodes);
+  });
+
+  test('the incoming page\'s sheets do not apply to the outgoing page before the swap', async () => {
+    const href = sheet('#wj-owned-probe { width: 129px; display: block; }');
+    const doc = incoming('b', 'held', ownedLink(href, '/p'));
+    const pending = loadIncomingStylesheets(doc, location.href, null);
+    await pending.ready;
+    assert.equal(pending.copies[0].getAttribute('media'), 'not all', 'loaded held');
+    assert.notEqual(probeWidth(), '129px', 'the outgoing page is not restyled while it waits');
+    _applySwap(doc, null, true, null);
+    assert.equal(probeWidth(), '129px', 'applied with the swap');
+    assert.equal(pending.copies[0].hasAttribute('media'), false, 'its own media is back');
+    releaseIncomingStylesheets(pending);
+  });
+
+  test('a live body link outside the replaced range counts as linked; one inside it does not', async () => {
+    const href = sheet('.wj-body-dup {}');
+    const outside = document.createElement('link');
+    outside.rel = 'stylesheet';
+    outside.href = href;
+    outside.setAttribute(TEST_ATTR, '');
+    document.body.prepend(outside);
+    try {
+      _applySwap(incoming('b', 'x', ownedLink(href, '/')), null, true, null);
+      assert.equal(headLinksTo(href).filter((l) => l.parentNode === document.head).length, 0, 'no second link: the body one stays');
+    } finally {
+      outside.remove();
+    }
+    const href2 = sheet('.wj-body-dup-2 {}');
+    const inside = document.createElement('link');
+    inside.rel = 'stylesheet';
+    inside.href = href2;
+    document.getElementById('wj-owned-probe').after(inside);
+    _applySwap(incoming('c', 'x', ownedLink(href2, '/')), null, true, null);
+    assert.equal(headLinksTo(href2).filter((l) => l.parentNode === document.head).length, 1, 'linked in the head: the body one left with its range');
+  });
+
+  test('a sheet that failed to load gets its own media back when it is switched on', async () => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.media = 'screen';
+    link.setAttribute(OWNER_ATTR, '/');
+    link.setAttribute(TEST_ATTR, '');
+    const failed = new Promise((r) => { link.onerror = r; link.onload = r; });
+    link.href = '/__wj-owned-missing-1669.css';
+    document.head.appendChild(link);
+    await failed;
+    switchOffDepartedStylesheets('/', document.implementation.createHTMLDocument(''));
+    assert.equal(link.hasAttribute(OFF_ATTR), true);
+    // An engine that gives a failed link no sheet holds it under `not all`
+    // (one that gives it an empty sheet disables that instead).
+    if (!link.sheet) assert.equal(link.getAttribute('media'), 'not all', 'held while off');
+    addNewHeadElements(incoming('b', 'x', ownedLink('/__wj-owned-missing-1669.css', '/', 'media="screen"')).head, { segment: '/' });
+    assert.equal(link.hasAttribute(OFF_ATTR), false);
+    assert.equal(link.getAttribute('media'), 'screen', 'its own media is back, though no load event will ever come');
+  });
+
+  test('a loading sheet switched off and back on before it loads gets its media back at once and applies', async () => {
+    const href = sheet('#wj-owned-probe { width: 130px; display: block; }');
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.setAttribute(OWNER_ATTR, '/');
+    link.setAttribute(TEST_ATTR, '');
+    const loaded = new Promise((r) => { link.onload = r; link.onerror = r; });
+    link.href = href;
+    document.head.appendChild(link);
+    switchOffDepartedStylesheets('/', document.implementation.createHTMLDocument(''));
+    assert.equal(link.getAttribute('media'), 'not all', 'held while it loads');
+    addNewHeadElements(incoming('b', 'x', ownedLink(href, '/')).head, { segment: '/' });
+    assert.equal(link.hasAttribute('media'), false, 'released at once, not on a load event');
+    await loaded;
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(link.sheet.disabled, false, 'and it applies when it loads');
+    assert.equal(probeWidth(), '130px');
+  });
+
   test('the router\'s temporary copies are never switched off', async () => {
     const href = sheet('#wj-owned-probe { width: 119px; display: block; }');
     const copy = await addLiveSheet(href, '/', { [PRELOAD_ATTR]: '' });

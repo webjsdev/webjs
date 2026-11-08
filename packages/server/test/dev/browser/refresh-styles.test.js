@@ -158,6 +158,26 @@ suite('dev stylesheet re-request (#1398, #1535)', () => {
     }
   });
 
+  test('a sheet the client router switches off during the refresh ends up off, and the old link is gone (#1669)', async () => {
+    setup();
+    try {
+      const old = link(container, SHEET);
+      await settled(old);
+      const pending = preloadStyles(container);
+      // The router switches the sheet off while the refresh is loading.
+      old.setAttribute('data-wj-style-off', '');
+      old.sheet.disabled = true;
+      const { links, commit } = await pending;
+      const next = links[0];
+      assert.equal(next.hasAttribute('data-wj-style-off'), true, 'the copy carries the state at load, not at the start');
+      assert.equal(next.sheet && next.sheet.disabled, true);
+      commit();
+      assert.deepEqual([...container.querySelectorAll('link')], [next], 'and the old link is removed');
+    } finally {
+      teardown();
+    }
+  });
+
   test('a sheet the client router switched off is refreshed too, and its copy stays off (#1669)', async () => {
     setup();
     try {

@@ -66,6 +66,7 @@ export function preloadStyles(root, now, timeoutMs) {
   // Drop every other copy of this sheet (the old link, a copy the head merge
   // re-appended) so exactly the replacement is left.
   const settleLoaded = function (pair) {
+    if (pair.old.parentNode) pair.old.parentNode.removeChild(pair.old);
     const links = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
     for (const el of links) {
       if (el === pair.next) continue;
@@ -82,25 +83,26 @@ export function preloadStyles(root, now, timeoutMs) {
     url.searchParams.set('__webjs_dev', String(stamp()));
     const next = /** @type {Element} */ (old.cloneNode(false));
     next.setAttribute('href', url.pathname + url.search);
-    // A switched-off sheet's copy loads under a media query that matches
-    // nothing, so it never applies for the frame before its load handler
-    // switches it off; the handler then puts the original media back.
-    const off = next.hasAttribute('data-wj-style-off');
-    const media = next.getAttribute('media');
-    if (off) next.setAttribute('media', 'not all');
+    // The copy loads under a media query that matches nothing, so it never
+    // applies before its load handler has decided whether it should: the
+    // client router can switch the link off or on (#1669) while this refresh
+    // waits, so that state is read at load, not now.
+    const media = authoredMedia(old);
+    next.removeAttribute('data-wj-style-media');
+    next.setAttribute('media', 'not all');
     const pair = { key, old, next, state: 'pending' };
     pairs.push(pair);
     waits.push(new Promise(function (resolve) {
       next.addEventListener('load', function () {
-        // A section sheet the client router switched off (#1669) is refreshed
-        // too, so returning to the section switches on the edited file, but
-        // its copy stays off until then, like the link it replaces.
-        if (off) {
-          // Media first: Firefox and WebKit give the link a new sheet object
-          // when its media changes, so disabling before would be lost.
-          if (media === null) next.removeAttribute('media'); else next.setAttribute('media', media);
-          if (next.sheet) next.sheet.disabled = true;
-        }
+        // A section sheet the router switched off is refreshed too, so going
+        // back to the section switches on the edited file, but the copy stays
+        // off until then, like the link it replaces. Media first: Firefox and
+        // WebKit give the link a new sheet object when its media changes, so
+        // disabling before would be lost.
+        const off = old.parentNode ? old.hasAttribute('data-wj-style-off') : next.hasAttribute('data-wj-style-off');
+        if (off) next.setAttribute('data-wj-style-off', ''); else next.removeAttribute('data-wj-style-off');
+        if (media) next.setAttribute('media', media); else next.removeAttribute('media');
+        if (next.sheet) next.sheet.disabled = off;
         pair.state = 'load';
         if (committed) settleLoaded(pair);
         resolve(undefined);
@@ -138,9 +140,21 @@ function identityKey(el, url) {
   const parts = [];
   const attrs = el.attributes;
   for (let a = 0; a < attrs.length; a++) {
-    if (attrs[a].name === 'href') continue;
-    parts.push([attrs[a].name, attrs[a].value]);
+    const name = attrs[a].name;
+    // The client router's switch-off state (#1669) is not part of which sheet
+    // a link is, and neither is a held `not all` media: the author's is.
+    if (name === 'href' || name === 'data-wj-style-off' || name === 'data-wj-style-media') continue;
+    parts.push([name, name === 'media' ? authoredMedia(el) : attrs[a].value]);
   }
   parts.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
   return JSON.stringify([url.pathname, parts]);
+}
+
+/**
+ * The media a link applies under: the author's, also while the client router
+ * holds it under `not all` (`data-wj-style-media`, owned-styles.js).
+ * @param {Element} el
+ */
+function authoredMedia(el) {
+  return el.hasAttribute('data-wj-style-media') ? el.getAttribute('data-wj-style-media') : el.getAttribute('media');
 }
