@@ -353,7 +353,7 @@ function init(modules) {
     const member =
       hit.attr.modifier === 'property'
         ? ref.members.find((mm) => mm.propName === hit.attr.name)
-        : ref.members.find((mm) => mm.attrName === hit.attr.name);
+        : ref.members.find((mm) => !mm.state && mm.attrName === hit.attr.name);
     return { tag: hit.node.tag, attr: hit.attr, ref, member, program };
   }
 
@@ -1409,7 +1409,7 @@ function init(modules) {
         const member =
           attr.modifier === 'property'
             ? ref.members.find((m) => m.propName === attr.name)
-            : ref.members.find((m) => m.attrName === attr.name);
+            : ref.members.find((m) => !m.state && m.attrName === attr.name);
         if (!member) continue;
         const propType = resolvePropType(program, ref, member.propName, checker);
         if (!propType) continue; // no `declare` annotation → can't check
