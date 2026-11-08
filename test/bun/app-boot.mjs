@@ -28,6 +28,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
+import { envWithLocalBin } from '../../packages/cli/lib/run-tasks.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
@@ -51,13 +52,15 @@ const APPS = [
  *  same way `webjs start` does, so the boot sees the assets a prod start bakes.
  *  These are Node-tooling steps (tailwindcss, the copy-registry script); the CI
  *  `bun` job has Node + `npm ci` available before it, and they run identically
- *  under a local Node invocation. */
+ *  under a local Node invocation. The PATH carries every ancestor
+ *  node_modules/.bin, as `webjs start` gives its before-steps, so a step naming
+ *  the CLI (the regenerate build, #1672) resolves the workspace's copy. */
 function runStartBefore(appDir) {
   let pkg;
   try { pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8')); }
   catch { return; }
   const before = pkg?.webjs?.start?.before || [];
-  for (const cmd of before) execSync(cmd, { cwd: appDir, stdio: 'inherit' });
+  for (const cmd of before) execSync(cmd, { cwd: appDir, stdio: 'inherit', env: envWithLocalBin(appDir) });
 }
 
 let failed = false;

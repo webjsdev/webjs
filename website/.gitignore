@@ -21,9 +21,9 @@
 # landed here and sat unimported until they were noticed.
 /components/ui/
 
-# The /ui stylesheet, compiled from public/ui-input.css by `npm run
-# css:build:ui` (and by webjs.dev.before / webjs.start.before / the
-# Dockerfile), the same way public/tailwind.css is built. A build output.
+# The /ui stylesheet, compiled from public/ui-input.css by its
+# webjs.dev.regenerate rule (`webjs regenerate` in the before steps, or `npm run
+# css:build:ui` by hand), the same way public/tailwind.css is built. A build output.
 /public/ui.css
 # The seven kit styles ui.css does not carry, one file each, compiled by
 # scripts/build-ui-styles.mjs (`npm run css:build:ui-styles`). Build outputs.

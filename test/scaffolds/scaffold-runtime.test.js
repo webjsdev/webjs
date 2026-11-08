@@ -54,7 +54,7 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     // the css:build script AND the before / regenerate hooks (never `npm run`).
     const bunCompile = 'bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify';
     assert.equal(p.scripts['css:build'], bunCompile);
-    assert.deepEqual(p.webjs.start.before, ['webjs db migrate', bunCompile]);
+    assert.deepEqual(p.webjs.start.before, ['webjs db migrate', 'webjs regenerate']);
     // On-request regenerate (#967), runtime-aware, replaces the --watch parallel.
     assert.equal(p.webjs.dev.parallel, undefined, 'no --watch parallel task (#967)');
     assert.deepEqual(p.webjs.dev.regenerate, [{

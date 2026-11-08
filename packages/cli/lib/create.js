@@ -606,25 +606,30 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // above) behave identically. Both apply pending migrations via `webjs db
     // migrate` (idempotent, a no-op when the db is current), so a freshly
     // generated migration is applied without a manual step (#725). For a UI
-    // template it ALSO compiles Tailwind in `before` so a freshly cloned app is
-    // styled on the very first boot with no manual step. The compile command is
-    // the runtime-aware `cssBuildCmd` (a Bun app runs it under Bun, since its
-    // image has no npm or Node), NOT `npm run css:build`. The api template has no
-    // CSS, so it gets neither.
+    // template it ALSO runs `webjs regenerate` in `before`, so a freshly cloned app is
+    // styled on the very first boot with no manual step. That builds every
+    // `regenerate` output that is not fresh and RECORDS each build in
+    // .webjs/regenerate.json (#1672), which is how the dev server and
+    // `webjs doctor` know the output is current. A raw compile in `before`
+    // writes no record, so the first request after every boot would compile
+    // again. The rule's command is the runtime-aware `cssBuildCmd` (a Bun app
+    // runs it under Bun, since its image has no npm or Node), NOT `npm run
+    // css:build`. The api template has no CSS, so it gets neither.
     //
     // In dev the static public/tailwind.css is kept fresh by `dev.regenerate`
     // (#967), NOT a background `tailwindcss --watch`. A watch that dies mid-
     // session or never starts serves stale/missing CSS with no error (a newly
     // added utility class has no backing rule, so the app renders unstyled
     // locally while prod is fine). `regenerate` instead recompiles ON REQUEST
-    // when the output is older than a source (or missing): the framework rebuilds
-    // it before serving `/public/tailwind.css`, so there is no watch process to
-    // die and no staleness window. Same `cssBuildCmd` as prod, so dev and prod
-    // resolve classes identically (nothing to diverge). `inputs` mirrors the
+    // when the output does not match its build record (or is missing): the
+    // framework rebuilds it before serving `/public/tailwind.css`, so there is
+    // no watch process to die and no staleness window. Same `cssBuildCmd` as
+    // prod, so dev and prod resolve classes identically (nothing to diverge).
+    // `inputs` mirrors the
     // input.css @source globs (the dirs Tailwind scans for classes).
     webjs: {
       dev: {
-        before: isApi ? ['webjs db migrate'] : ['webjs db migrate', cssBuildCmd],
+        before: isApi ? ['webjs db migrate'] : ['webjs db migrate', 'webjs regenerate'],
         ...(isApi ? {} : {
           regenerate: [{
             output: 'public/tailwind.css',
@@ -633,7 +638,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
           }],
         }),
       },
-      start: { before: isApi ? ['webjs db migrate'] : ['webjs db migrate', cssBuildCmd] },
+      start: { before: isApi ? ['webjs db migrate'] : ['webjs db migrate', 'webjs regenerate'] },
       // No `db` block on purpose (#1468). `webjs db` defaults to drizzle-kit,
       // and Drizzle is the scaffold default by OMISSION: an app that swaps the
       // ORM adds `"db": { "migrate": "prisma migrate deploy", ... }` here and
