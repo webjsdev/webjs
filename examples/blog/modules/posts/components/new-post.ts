@@ -10,8 +10,8 @@ import { alertClass, alertDescriptionClass } from '#components/ui/alert.ts';
 import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 export class NewPost extends WebComponent {
-  busy = signal(false);
-  error = signal<string | null>(null);
+  readonly #busy = signal(false);
+  readonly #error = signal<string | null>(null);
 
   firstUpdated() {
     this.querySelector<HTMLInputElement>('input[name="title"]')?.focus();
@@ -27,30 +27,30 @@ export class NewPost extends WebComponent {
     const title = String(data.get('title') || '');
     const body = String(data.get('body') || '');
     if (!title || !body) {
-      this.error.set('Title and body are required');
+      this.#error.set('Title and body are required');
       return;
     }
-    this.busy.set(true);
-    this.error.set(null);
+    this.#busy.set(true);
+    this.#error.set(null);
     try {
       const result = await createPost({ title, body });
       if (!result.success) {
-        this.busy.set(false);
-        this.error.set(result.error);
+        this.#busy.set(false);
+        this.#error.set(result.error);
         return;
       }
       // TS knows result.data is PostFormatted here.
       location.href = `/blog/${result.data.slug}`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.busy.set(false);
-      this.error.set(msg);
+      this.#busy.set(false);
+      this.#error.set(msg);
     }
   }
 
   render() {
-    const busy = this.busy.get();
-    const error = this.error.get();
+    const busy = this.#busy.get();
+    const error = this.#error.get();
     return html`
       <div class=${cardClass()}>
         <div class=${cardContentClass()}>

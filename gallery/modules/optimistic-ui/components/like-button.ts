@@ -14,17 +14,17 @@ import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { likePost } from '../actions/like-post.server.ts';
 
 export class LikeButton extends WebComponent {
-  private liked = signal(false);
+  readonly #liked = signal(false);
 
   private async toggle() {
-    const next = !this.liked.get();
+    const next = !this.#liked.get();
     // optimistic(signal, value, action) flips `liked` to `next` immediately,
     // runs the action, and restores the old value if the action rejects.
-    await optimistic(this.liked, next, () => likePost({ liked: next }));
+    await optimistic(this.#liked, next, () => likePost({ liked: next }));
   }
 
   render() {
-    const liked = this.liked.get();
+    const liked = this.#liked.get();
     // Build ON the design system, do not re-implement it. The like toggle IS the
     // button variants: unliked reads as `secondary` (card surface), liked as
     // `default` (primary fill). So compose buttonClass() for the base + colors +

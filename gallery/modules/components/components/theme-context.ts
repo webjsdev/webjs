@@ -43,14 +43,14 @@ ThemeProvider.register('theme-provider');
 export class ThemeConsumer extends WebComponent {
   // subscribe: true re-renders this element whenever the provider calls setValue.
   private consumer = new ContextConsumer<Theme>(this, { context: themeContext, subscribe: true });
-  private lastRead = signal<Theme | 'not read yet'>('not read yet');
+  readonly #lastRead = signal<Theme | 'not read yet'>('not read yet');
 
   // The imperative escape hatch: dispatch a ContextRequestEvent yourself to
   // grab the current value ONCE without subscribing. It bubbles up to the
   // nearest provider, which answers via the callback.
   private readOnce() {
     this.dispatchEvent(
-      new ContextRequestEvent<Theme>(themeContext, (value) => this.lastRead.set(value), false),
+      new ContextRequestEvent<Theme>(themeContext, (value) => this.#lastRead.set(value), false),
     );
   }
 
@@ -61,7 +61,7 @@ export class ThemeConsumer extends WebComponent {
         <span>child sees: <strong>${theme}</strong></span>
         <button @click=${() => this.readOnce()}
           class=${buttonClass({ variant: 'secondary', size: 'xs' })}>read once</button>
-        <span class="text-muted-foreground text-sm">last one-shot: ${this.lastRead.get()}</span>
+        <span class="text-muted-foreground text-sm">last one-shot: ${this.#lastRead.get()}</span>
       </div>
     `;
   }

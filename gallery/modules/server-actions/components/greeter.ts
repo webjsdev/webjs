@@ -7,7 +7,7 @@ import { bareInputClass } from '#modules/gallery/ui/input.ts';
 import { greet } from '../actions/greet.server.ts';
 
 export class Greeter extends WebComponent {
-  private msg = signal('');
+  readonly #msg = signal('');
 
   async run(e: SubmitEvent) {
     e.preventDefault();
@@ -18,7 +18,7 @@ export class Greeter extends WebComponent {
     const r = await greet({ name });
     // Narrow on r.success so TS knows `data` (success) vs `error` (failure). A
     // middleware short-circuit arrives here as a normal failure envelope.
-    this.msg.set(r.success ? (r.data?.message ?? '') : (r.error ?? 'error'));
+    this.#msg.set(r.success ? (r.data?.message ?? '') : (r.error ?? 'error'));
   }
   render() {
     return html`
@@ -31,7 +31,7 @@ export class Greeter extends WebComponent {
             class="${buttonClass()} shrink-0">Greet</button>
         </form>
         <p class="m-0 text-sm text-muted-foreground">The action is gated by requireAuth. <a class="text-primary underline underline-offset-2" href="/features/auth/login">Sign in</a> to greet; signed out returns a real 401.</p>
-        ${this.msg.get() ? html`<p class="m-0 font-semibold text-foreground">${this.msg.get()}</p>` : ''}
+        ${this.#msg.get() ? html`<p class="m-0 font-semibold text-foreground">${this.#msg.get()}</p>` : ''}
       </div>
     `;
   }

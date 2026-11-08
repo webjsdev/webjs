@@ -26,8 +26,8 @@ export class AuthForms extends WebComponent({
   then: String,
   mode: prop<Mode>(String),
 }) {
-  busy = signal(false);
-  error = signal<string | null>(null);
+  readonly #busy = signal(false);
+  readonly #error = signal<string | null>(null);
 
   constructor() {
     super();
@@ -38,8 +38,8 @@ export class AuthForms extends WebComponent({
   async onSubmit(e: SubmitEvent) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget as HTMLFormElement));
-    this.busy.set(true);
-    this.error.set(null);
+    this.#busy.set(true);
+    this.#error.set(null);
     try {
       const url = this.mode === 'login' ? '/api/auth/login' : '/api/auth/signup';
       const r = await fetch(url, {
@@ -54,15 +54,15 @@ export class AuthForms extends WebComponent({
       location.href = this.then || '/dashboard';
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.busy.set(false);
-      this.error.set(msg);
+      this.#busy.set(false);
+      this.#error.set(msg);
     }
   }
 
   render() {
     const mode = this.mode;
-    const busy = this.busy.get();
-    const error = this.error.get();
+    const busy = this.#busy.get();
+    const error = this.#error.get();
     const submitLabel = busy ? '…' : (mode === 'login' ? 'Sign in' : 'Create account');
     const pillBase =
       'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150';
@@ -74,10 +74,10 @@ export class AuthForms extends WebComponent({
           <div class="grid grid-cols-2 p-1 rounded-full bg-muted border border-border" role="tablist">
             <button role="tab"
                     class=${mode === 'login' ? pillActive : pillInactive}
-                    @click=${() => { this.mode = 'login'; this.error.set(null); }}>Sign in</button>
+                    @click=${() => { this.mode = 'login'; this.#error.set(null); }}>Sign in</button>
             <button role="tab"
                     class=${mode === 'signup' ? pillActive : pillInactive}
-                    @click=${() => { this.mode = 'signup'; this.error.set(null); }}>Create account</button>
+                    @click=${() => { this.mode = 'signup'; this.#error.set(null); }}>Create account</button>
           </div>
         </div>
         <div class=${cardContentClass()}>

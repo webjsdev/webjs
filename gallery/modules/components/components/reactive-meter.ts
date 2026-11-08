@@ -25,10 +25,10 @@ export class ReactiveMeter extends WebComponent {
     .muted { opacity: 0.6; font-size: 13px; }
   `;
 
-  private count = signal(0);
+  readonly #count = signal(0);
   // computed: recomputed lazily when count changes, cached otherwise.
-  private doubled = computed(() => this.count.get() * 2);
-  private lastLogged = signal('');
+  readonly #doubled = computed(() => this.#count.get() * 2);
+  readonly #lastLogged = signal('');
   private disposeEffect?: () => void;
 
   connectedCallback() {
@@ -37,7 +37,7 @@ export class ReactiveMeter extends WebComponent {
     // (SSR never calls connectedCallback), so it is the place for reactive
     // side effects.
     this.disposeEffect = effect(() => {
-      this.lastLogged.set('count is ' + this.count.get());
+      this.#lastLogged.set('count is ' + this.#count.get());
     });
   }
   disconnectedCallback() {
@@ -46,13 +46,13 @@ export class ReactiveMeter extends WebComponent {
   }
 
   private bump(n: number) {
-    this.count.set(this.count.get() + n);
+    this.#count.set(this.#count.get() + n);
   }
   // batch: both writes commit together, so the component re-renders ONCE.
   private reset() {
     batch(() => {
-      this.count.set(0);
-      this.lastLogged.set('reset');
+      this.#count.set(0);
+      this.#lastLogged.set('reset');
     });
   }
 
@@ -60,12 +60,12 @@ export class ReactiveMeter extends WebComponent {
     return html`
       <div class="row">
         <button @click=${() => this.bump(-1)}>-1</button>
-        <span class="val">${this.count.get()}</span>
+        <span class="val">${this.#count.get()}</span>
         <button @click=${() => this.bump(1)}>+1</button>
-        <span class="muted">doubled: ${this.doubled.get()}</span>
+        <span class="muted">doubled: ${this.#doubled.get()}</span>
         <button @click=${() => this.reset()}>reset</button>
       </div>
-      <p class="muted">${this.lastLogged.get()}</p>
+      <p class="muted">${this.#lastLogged.get()}</p>
     `;
   }
 }

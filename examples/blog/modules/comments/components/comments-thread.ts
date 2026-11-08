@@ -13,9 +13,9 @@ export class CommentsThread extends WebComponent({
   initial:  prop<CommentFormatted[]>(Array),
   signedIn: Boolean,
 }) {
-  comments = signal<CommentFormatted[]>([]);
-  busy = signal(false);
-  error = signal<string | null>(null);
+  readonly #comments = signal<CommentFormatted[]>([]);
+  readonly #busy = signal(false);
+  readonly #error = signal<string | null>(null);
   _conn: ReturnType<typeof connectWS> | null = null;
   _seeded = false;
 
@@ -37,7 +37,7 @@ export class CommentsThread extends WebComponent({
     if (!this._seeded && changed.has('initial')) {
       this._seeded = true;
       if (Array.isArray(this.initial) && this.initial.length) {
-        this.comments.set(this.initial);
+        this.#comments.set(this.initial);
       }
     }
   }
@@ -46,9 +46,9 @@ export class CommentsThread extends WebComponent({
     super.connectedCallback();
     this._conn = connectWS(`/api/comments/${this.postId}`, {
       onMessage: (msg: CommentFormatted) => {
-        const cur = this.comments.get();
+        const cur = this.#comments.get();
         if (cur.some((c) => c.id === msg.id)) return;
-        this.comments.set([...cur, msg]);
+        this.#comments.set([...cur, msg]);
       },
     });
   }
@@ -59,8 +59,8 @@ export class CommentsThread extends WebComponent({
     const form = e.currentTarget as HTMLFormElement;
     const body = String(new FormData(form).get('body') ?? '').trim();
     if (!body) return;
-    this.busy.set(true);
-    this.error.set(null);
+    this.#busy.set(true);
+    this.#error.set(null);
     try {
       const r = await fetch(`/api/comments/${this.postId}`, {
         method: 'POST',
@@ -72,23 +72,23 @@ export class CommentsThread extends WebComponent({
         throw new Error(j.error || `${r.status}`);
       }
       const created: CommentFormatted = await r.json();
-      const cur = this.comments.get();
+      const cur = this.#comments.get();
       if (!cur.some((c) => c.id === created.id)) {
-        this.comments.set([...cur, created]);
+        this.#comments.set([...cur, created]);
       }
-      this.busy.set(false);
+      this.#busy.set(false);
       form.reset();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.busy.set(false);
-      this.error.set(msg);
+      this.#busy.set(false);
+      this.#error.set(msg);
     }
   }
 
   render() {
-    const comments = this.comments.get();
-    const busy = this.busy.get();
-    const error = this.error.get();
+    const comments = this.#comments.get();
+    const busy = this.#busy.get();
+    const error = this.#error.get();
     return html`
       ${comments.length === 0
         ? html`<div class="p-6 text-center text-muted-foreground/70 font-serif text-sm leading-relaxed italic border border-dashed border-border rounded-xl mb-5">No comments yet: be the first.</div>`

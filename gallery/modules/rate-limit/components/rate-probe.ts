@@ -10,22 +10,22 @@ import { buttonClass } from '#modules/gallery/ui/button.ts';
 interface Probe { n: number; status: number; remaining: string }
 
 export class RateProbe extends WebComponent {
-  private log = signal<Probe[]>([]);
-  private busy = signal(false);
+  readonly #log = signal<Probe[]>([]);
+  readonly #busy = signal(false);
   #n = 0;
 
   private async ping() {
-    if (this.busy.get()) return;
-    this.busy.set(true);
+    if (this.#busy.get()) return;
+    this.#busy.set(true);
     try {
       const res = await fetch('/features/rate-limit/ping', { headers: { accept: 'application/json' } });
       this.#n += 1;
-      this.log.set([
+      this.#log.set([
         { n: this.#n, status: res.status, remaining: res.headers.get('x-ratelimit-remaining') ?? '?' },
-        ...this.log.get(),
+        ...this.#log.get(),
       ].slice(0, 8));
     } finally {
-      this.busy.set(false);
+      this.#busy.set(false);
     }
   }
 
@@ -35,7 +35,7 @@ export class RateProbe extends WebComponent {
         <button @click=${() => this.ping()}
           class="${buttonClass({ size: 'sm' })} w-fit">Ping the endpoint</button>
         <ul class="grid gap-1.5 list-none m-0 p-0">
-          ${this.log.get().map((p) => html`
+          ${this.#log.get().map((p) => html`
             <li class="flex items-center justify-between px-3 py-2 rounded-xl bg-card border border-border text-sm">
               <span class="text-muted-foreground">#${p.n}</span>
               <span class="font-mono ${p.status === 429 ? 'text-destructive' : 'text-primary'}">${p.status === 429 ? '429 limited' : '200 ok'}</span>

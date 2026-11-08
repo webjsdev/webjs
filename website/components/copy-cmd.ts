@@ -61,12 +61,12 @@ export class CopyCmd extends WebComponent({
    */
   inline: prop(Boolean),
 }) {
-  copied = signal(false);
+  readonly #copied = signal(false);
   // Increments on every successful copy. The live-region text is keyed off its
   // parity so a repeat copy within the reset window still changes the text node
   // (an aria-live region only announces on a content CHANGE), re-announcing
   // "Copied" even though `copied` is already true.
-  private _copies = signal(0);
+  readonly #_copies = signal(0);
   private _resetTimer: ReturnType<typeof setTimeout> | undefined;
   /**
    * The command line, bound through the ref directive rather than looked up
@@ -91,10 +91,10 @@ export class CopyCmd extends WebComponent({
       // silently. The whole feature is progressive enhancement.
       return;
     }
-    this.copied.set(true);
-    this._copies.set(this._copies.get() + 1);
+    this.#copied.set(true);
+    this.#_copies.set(this.#_copies.get() + 1);
     if (this._resetTimer) clearTimeout(this._resetTimer);
-    this._resetTimer = setTimeout(() => this.copied.set(false), 1500);
+    this._resetTimer = setTimeout(() => this.#copied.set(false), 1500);
     // Record install-intent. A copied command (almost always the
     // `npm create webjs@latest` line) is the cleanest human-adoption
     // signal we have, far more trustworthy than npm download counts.
@@ -113,11 +113,11 @@ export class CopyCmd extends WebComponent({
   };
 
   render() {
-    const isCopied = this.copied.get();
+    const isCopied = this.#copied.get();
     // Trailing space toggles per copy so the live-region text differs on a
     // repeat copy (forcing a re-announce). trim() still yields "Copied", so a
     // screen reader reads the same word and assertions stay simple.
-    const announce = isCopied ? (this._copies.get() % 2 ? 'Copied ' : 'Copied') : '';
+    const announce = isCopied ? (this.#_copies.get() % 2 ? 'Copied ' : 'Copied') : '';
     if (this.inline) {
       // The icon sits INSIDE the [data-copy-text] target, which is safe because
       // an svg contributes no text nodes: _copy reads textContent and still gets

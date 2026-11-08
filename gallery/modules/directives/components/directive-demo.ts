@@ -22,15 +22,15 @@ interface Item { id: number; label: string }
 let nextId = 4;
 
 export class DirectiveDemo extends WebComponent {
-  private items = signal<Item[]>([
+  readonly #items = signal<Item[]>([
     { id: 1, label: 'Alpha' },
     { id: 2, label: 'Bravo' },
     { id: 3, label: 'Charlie' },
   ]);
-  private ticks = signal(0);
+  readonly #ticks = signal(0);
   // A controlled value (for `live`) and a key (for `keyed`).
-  private text = signal('type here');
-  private variant = signal(0);
+  readonly #text = signal('type here');
+  readonly #variant = signal(0);
   // A handle to the input node, attached by `ref` in the browser. A ref rather
   // than a `querySelector` because the template already owns the node, so the
   // handle flows out of `render()` instead of being re-found by a selector that
@@ -41,8 +41,8 @@ export class DirectiveDemo extends WebComponent {
   private asyncValue: Promise<string> = this.later();
   // Which cached branch is showing (for `cache`), and a counter that lets us
   // prove `guard` skips its recompute unless its dep actually changes.
-  private tab = signal<'a' | 'b'>('a');
-  private guardBumps = signal(0);
+  readonly #tab = signal<'a' | 'b'>('a');
+  readonly #guardBumps = signal(0);
   // Async iterables consumed on the client (both render empty at SSR). The
   // generators are lazy, so the field initializer just creates the iterator
   // without running the body. Both are FINITE and run ONCE: they animate on
@@ -52,12 +52,12 @@ export class DirectiveDemo extends WebComponent {
   // the swap triggers a re-render.
   private logIter: AsyncIterable<string> = this.log();
   private countIter: AsyncIterable<number> = this.countdown();
-  private streamRun = signal(0);
+  readonly #streamRun = signal(0);
 
   private restartStreams() {
     this.logIter = this.log();
     this.countIter = this.countdown();
-    this.streamRun.set(this.streamRun.get() + 1);
+    this.#streamRun.set(this.#streamRun.get() + 1);
   }
   // For `templateContent`: a real <template> element on the CLIENT (the client
   // directive clones its `.content`), and a plain { innerHTML } object at SSR
@@ -92,11 +92,11 @@ export class DirectiveDemo extends WebComponent {
   }
 
   private reverse() {
-    this.items.set(this.items.get().slice().reverse());
+    this.#items.set(this.#items.get().slice().reverse());
   }
   private add() {
     const id = nextId++;
-    this.items.set([...this.items.get(), { id, label: 'Item ' + id }]);
+    this.#items.set([...this.#items.get(), { id, label: 'Item ' + id }]);
   }
   private focusInput() {
     this.inputRef.value?.focus();
@@ -107,7 +107,7 @@ export class DirectiveDemo extends WebComponent {
   }
 
   render() {
-    const variant = this.variant.get();
+    const variant = this.#variant.get();
     return html`
       <div class="grid gap-6 max-w-[420px]">
         <div class="grid gap-4">
@@ -119,15 +119,15 @@ export class DirectiveDemo extends WebComponent {
           </div>
           <!-- repeat keyed by item.id: reversing reuses the existing <li> nodes. -->
           <ul class="grid gap-2 list-none m-0 p-0">
-            ${repeat(this.items.get(), (it: Item) => it.id, (it: Item) => html`
+            ${repeat(this.#items.get(), (it: Item) => it.id, (it: Item) => html`
               <li class="flex items-center gap-2 px-3 py-2 rounded-xl bg-card border border-border text-[15px] text-foreground">
                 <span class="text-muted-foreground tabular-nums text-[13px]">#${it.id}</span>${it.label}
               </li>
             `)}
           </ul>
           <!-- watch(signal) swaps only this node when ticks changes. -->
-          <button @click=${() => this.ticks.set(this.ticks.get() + 1)}
-            class="${buttonClass({ variant: 'link', size: 'none' })} w-fit">ticks: ${watch(this.ticks)}</button>
+          <button @click=${() => this.#ticks.set(this.#ticks.get() + 1)}
+            class="${buttonClass({ variant: 'link', size: 'none' })} w-fit">ticks: ${watch(this.#ticks)}</button>
         </div>
 
         <div class="grid gap-3 border-t border-border pt-4">
@@ -139,8 +139,8 @@ export class DirectiveDemo extends WebComponent {
               ${ref(this.inputRef)}
               aria-label="Editable text for the ref focus demo"
               class=${inputClass('flex-1 min-w-0')}
-              .value=${live(this.text.get())}
-              @input=${(e: Event) => this.text.set((e.target as HTMLInputElement).value)}>
+              .value=${live(this.#text.get())}
+              @input=${(e: Event) => this.#text.set((e.target as HTMLInputElement).value)}>
             <button @click=${() => this.focusInput()}
               class=${buttonClass({ variant: 'secondary', size: 'sm' })}>Focus</button>
           </div>
@@ -148,7 +148,7 @@ export class DirectiveDemo extends WebComponent {
           <p class="text-sm text-muted-foreground">async: ${until(this.asyncValue, 'loading...')}</p>
           <!-- keyed discards and rebuilds this subtree when the key changes;
                unsafeHTML injects trusted, author-written HTML (NEVER user input). -->
-          <button @click=${() => this.variant.set(variant + 1)}
+          <button @click=${() => this.#variant.set(variant + 1)}
             class="${buttonClass({ variant: 'link', size: 'none' })} w-fit">rekey</button>
           ${keyed(variant, html`<div class="text-[15px] text-foreground">${unsafeHTML('<em>fresh subtree</em>')} #${variant}</div>`)}
         </div>
@@ -157,9 +157,9 @@ export class DirectiveDemo extends WebComponent {
           <!-- guard([deps], fn) only re-runs fn when a dep changes. Bumping the
                guard counter re-renders it; the OTHER counter (ticks above) does
                not, so the guarded value stays put. -->
-          <button @click=${() => this.guardBumps.set(this.guardBumps.get() + 1)}
+          <button @click=${() => this.#guardBumps.set(this.#guardBumps.get() + 1)}
             class="${buttonClass({ variant: 'link', size: 'none' })} w-fit">bump guard dep</button>
-          <p class="text-sm text-foreground">guarded: ${guard([this.guardBumps.get()], () => html`computed at bump #${this.guardBumps.get()}`)}</p>
+          <p class="text-sm text-foreground">guarded: ${guard([this.#guardBumps.get()], () => html`computed at bump #${this.#guardBumps.get()}`)}</p>
 
           <!-- cache(value) keeps the inactive tab's DOM alive while you toggle,
                so switching back is instant and preserves any element state. -->
@@ -168,13 +168,13 @@ export class DirectiveDemo extends WebComponent {
                (same weight, border, padding) and cn() overrides only the active
                COLORS, never the box. -->
           <div class="flex gap-2">
-            <button @click=${() => this.tab.set('a')}
-              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.tab.get() === 'a' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab A</button>
-            <button @click=${() => this.tab.set('b')}
-              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.tab.get() === 'b' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab B</button>
+            <button @click=${() => this.#tab.set('a')}
+              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.#tab.get() === 'a' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab A</button>
+            <button @click=${() => this.#tab.set('b')}
+              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.#tab.get() === 'b' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab B</button>
           </div>
           <div class="text-[15px] text-foreground">${cache(
-            this.tab.get() === 'a'
+            this.#tab.get() === 'a'
               ? html`<span>Panel A content</span>`
               : html`<span>Panel B content</span>`,
           )}</div>
@@ -192,7 +192,7 @@ export class DirectiveDemo extends WebComponent {
           <div class="flex items-center gap-3">
             <button @click=${() => this.restartStreams()}
               class="${buttonClass({ variant: 'secondary', size: 'sm' })} w-fit">restart streams</button>
-            <span class="text-sm text-muted-foreground">run #${this.streamRun.get()}</span>
+            <span class="text-sm text-muted-foreground">run #${this.#streamRun.get()}</span>
           </div>
           <div class="text-sm text-muted-foreground">log (asyncAppend, one row per value):</div>
           <ul class="grid gap-1 list-none m-0 p-0 text-sm text-muted-foreground min-h-[1.25rem]">${asyncAppend(this.logIter, (line: string) => html`<li>· ${line}</li>`)}</ul>

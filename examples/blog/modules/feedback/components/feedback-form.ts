@@ -30,8 +30,8 @@ class FeedbackForm extends WebComponent({
   error: prop(String),
   value: prop(String),
 }) {
-  #rows = signal(1);
-  #attempts = signal(0);
+  readonly #rows = signal(1);
+  readonly #attempts = signal(0);
 
   constructor() {
     super();

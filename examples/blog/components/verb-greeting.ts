@@ -9,14 +9,14 @@ import { bumpGreeting } from '#modules/verbdemo/actions/bump-greeting.server.ts'
  * re-render; the re-read sees the invalidation and fetches fresh.
  */
 export class VerbGreeting extends WebComponent {
-  private tick = signal(0);
+  readonly #tick = signal(0);
 
   async render() {
-    this.tick.get(); // re-render dependency
+    this.#tick.get(); // re-render dependency
     const g = await getGreeting();
     return html`<div class="verb-greeting">
       <span class="vg-text">${g.text}</span>
-      <button class="vg-bump" @click=${async () => { await bumpGreeting(); this.tick.set(this.tick.get() + 1); }}>bump</button>
+      <button class="vg-bump" @click=${async () => { await bumpGreeting(); this.#tick.set(this.#tick.get() + 1); }}>bump</button>
     </div>`;
   }
 }

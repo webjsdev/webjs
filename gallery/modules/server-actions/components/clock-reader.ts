@@ -19,9 +19,9 @@ interface Row {
 }
 
 export class ClockReader extends WebComponent {
-  private rows = signal<Row[]>([]);
-  private busy = signal(false);
-  private error = signal('');
+  readonly #rows = signal<Row[]>([]);
+  readonly #busy = signal(false);
+  readonly #error = signal('');
 
   // Both timestamps are formatted here, in the visitor's timezone, so the server
   // instant and the click time are directly comparable wherever this is deployed.
@@ -32,47 +32,47 @@ export class ClockReader extends WebComponent {
   async read() {
     // `?disabled` only lands on the next render commit, so a second click in the
     // same task would fire a second request. The signal is the real guard.
-    if (this.busy.get()) return;
-    this.busy.set(true);
-    this.error.set('');
+    if (this.#busy.get()) return;
+    this.#busy.set(true);
+    this.#error.set('');
     const clickedAt = this.clock(new Date());
     try {
       // A GET action returns its value directly. The stub THROWS on a transport
       // failure, so the call is guarded the same way the envelope is narrowed.
       const r = await readClock();
-      this.rows.set([{ ...r, clickedAt }, ...this.rows.get()].slice(0, 6));
+      this.#rows.set([{ ...r, clickedAt }, ...this.#rows.get()].slice(0, 6));
     } catch {
-      this.error.set('The read failed. Is the server still running?');
+      this.#error.set('The read failed. Is the server still running?');
     } finally {
-      this.busy.set(false);
+      this.#busy.set(false);
     }
   }
 
   async bump() {
-    if (this.busy.get()) return;
-    this.busy.set(true);
-    this.error.set('');
+    if (this.#busy.get()) return;
+    this.#busy.set(true);
+    this.#error.set('');
     try {
       // A mutation returns the ActionResult envelope, so narrow on success.
       const r = await bumpClock();
-      if (!r.success) this.error.set(r.error ?? 'The bump failed.');
+      if (!r.success) this.#error.set(r.error ?? 'The bump failed.');
     } catch {
-      this.error.set('The bump failed. Is the server still running?');
+      this.#error.set('The bump failed. Is the server still running?');
     } finally {
-      this.busy.set(false);
+      this.#busy.set(false);
     }
   }
 
   render() {
-    const rows = this.rows.get();
+    const rows = this.#rows.get();
     return html`
       <div class="${cardClass()} grid gap-4 p-5 max-w-[520px]">
         <div class="flex flex-wrap gap-2">
-          <button type="button" @click=${() => this.read()} ?disabled=${this.busy.get()}
-            aria-busy=${this.busy.get() ? 'true' : 'false'}
+          <button type="button" @click=${() => this.read()} ?disabled=${this.#busy.get()}
+            aria-busy=${this.#busy.get() ? 'true' : 'false'}
             class=${buttonClass()}>Read</button>
-          <button type="button" @click=${() => this.bump()} ?disabled=${this.busy.get()}
-            aria-busy=${this.busy.get() ? 'true' : 'false'}
+          <button type="button" @click=${() => this.bump()} ?disabled=${this.#busy.get()}
+            aria-busy=${this.#busy.get() ? 'true' : 'false'}
             class=${buttonClass({ variant: 'secondary' })}>Bump the counter</button>
         </div>
         <!-- The results are swapped in after a click, so they are announced. -->
@@ -90,7 +90,7 @@ export class ClockReader extends WebComponent {
               `
             : html`<p class="m-0 text-sm text-muted-foreground">Press Read twice in a row, then bump and read again.</p>`}
         </div>
-        ${this.error.get() ? html`<p role="alert" class="m-0 text-sm text-destructive">${this.error.get()}</p>` : ''}
+        ${this.#error.get() ? html`<p role="alert" class="m-0 text-sm text-destructive">${this.#error.get()}</p>` : ''}
       </div>
     `;
   }

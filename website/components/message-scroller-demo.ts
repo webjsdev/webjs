@@ -70,12 +70,8 @@ export class MessageScrollerDemo extends WebComponent({
   thinkMs: prop(Number, { attribute: 'think-ms' }),
   tokenMs: prop(Number, { attribute: 'token-ms' }),
 }) {
-  #messages = signal<ChatMessage[]>([]);
-  get messages() { return this.#messages.get(); }
-  set messages(v) { this.#messages.set(v); }
-  #status = signal<Status>('ready');
-  get status() { return this.#status.get(); }
-  set status(v) { this.#status.set(v); }
+  readonly #messages = signal<ChatMessage[]>([]);
+  readonly #status = signal<Status>('ready');
   // Bumped by a reset, so a reply still streaming stops writing.
   _run = 0;
   // The user turns that have already played their entrance.
@@ -89,39 +85,39 @@ export class MessageScrollerDemo extends WebComponent({
 
   /** The next question in the script, or null once all have been asked. */
   next(): string | null {
-    const asked = this.messages.filter((m) => m.role === 'user').length;
+    const asked = this.#messages.get().filter((m) => m.role === 'user').length;
     return SCRIPT[asked]?.user ?? null;
   }
 
   busy(): boolean {
-    return this.status !== 'ready';
+    return this.#status.get() !== 'ready';
   }
 
   async send(): Promise<void> {
     const question = this.next();
     if (!question || this.busy()) return;
     const run = this._run;
-    const turn = this.messages.filter((m) => m.role === 'user').length;
-    this.messages = [...this.messages, { id: `u${turn}`, role: 'user', text: question }];
-    this.status = 'submitted';
+    const turn = this.#messages.get().filter((m) => m.role === 'user').length;
+    this.#messages.set([...this.#messages.get(), { id: `u${turn}`, role: 'user', text: question }]);
+    this.#status.set('submitted');
     await wait(this.thinkMs);
     if (run !== this._run) return;
     const id = `a${turn}`;
-    this.messages = [...this.messages, { id, role: 'assistant', text: '' }];
-    this.status = 'streaming';
+    this.#messages.set([...this.#messages.get(), { id, role: 'assistant', text: '' }]);
+    this.#status.set('streaming');
     for (const delta of deltas(SCRIPT[turn].assistant)) {
       await wait(this.tokenMs);
       if (run !== this._run) return;
-      this.messages = this.messages.map((m) => (m.id === id ? { ...m, text: m.text + delta } : m));
+      this.#messages.set(this.#messages.get().map((m) => (m.id === id ? { ...m, text: m.text + delta } : m)));
     }
-    this.status = 'ready';
+    this.#status.set('ready');
   }
 
   reset(): void {
     this._run++;
     this._entered.clear();
-    this.messages = [];
-    this.status = 'ready';
+    this.#messages.set([]);
+    this.#status.set('ready');
   }
 
   // shadcn's MessageAnimated slides a user turn up as it arrives with motion's
@@ -132,7 +128,7 @@ export class MessageScrollerDemo extends WebComponent({
   updated(changed: Map<string, unknown>): void {
     super.updated?.(changed);
     const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    for (const m of this.messages) {
+    for (const m of this.#messages.get()) {
       if (m.role !== 'user' || this._entered.has(m.id)) continue;
       this._entered.add(m.id);
       if (still) continue;
@@ -170,7 +166,7 @@ export class MessageScrollerDemo extends WebComponent({
   }
 
   _body() {
-    if (this.messages.length === 0) {
+    if (this.#messages.get().length === 0) {
       return html`<div data-slot="empty" class=${cn(emptyClass(), 'h-full')}>
         <div data-slot="empty-header" class=${emptyHeaderClass()}>
           <div data-slot="empty-icon" data-variant="icon" class=${emptyMediaClass({ variant: 'icon' })}>${MessageCircleDashedIcon()}</div>
@@ -182,7 +178,7 @@ export class MessageScrollerDemo extends WebComponent({
     return html`<ui-message-scroller>
       <ui-message-scroller-viewport>
         <ui-message-scroller-content aria-label="Conversation" aria-busy=${this.busy() ? 'true' : 'false'} class="p-(--card-spacing)">
-          ${repeat(this.messages, (m) => m.id, (m) => this._message(m))}
+          ${repeat(this.#messages.get(), (m) => m.id, (m) => this._message(m))}
         </ui-message-scroller-content>
       </ui-message-scroller-viewport>
       <ui-message-scroller-button></ui-message-scroller-button>
@@ -212,7 +208,7 @@ export class MessageScrollerDemo extends WebComponent({
           <form class="w-full" @submit=${this._onSubmit}>
             <div data-slot="input-group" role="group" class=${inputGroupClass()}>
               <div class="h-14 w-full px-3 py-2.5">
-                <span class="line-clamp-2 opacity-60 data-[status=ready]:opacity-100" data-status=${this.status}>${next ?? html`<span class="text-muted-foreground">No messages queued. Reset the conversation.</span>`}</span>
+                <span class="line-clamp-2 opacity-60 data-[status=ready]:opacity-100" data-status=${this.#status.get()}>${next ?? html`<span class="text-muted-foreground">No messages queued. Reset the conversation.</span>`}</span>
               </div>
               <div role="group" data-slot="input-group-addon" data-align="block-end" class=${cn(inputGroupAddonClass({ align: 'block-end' }), 'pt-1')}>
                 <button type="button" id=${addId} data-slot="dropdown-menu-trigger" data-variant="outline" data-size="icon-sm" aria-label="Add files" class=${inputGroupButtonClass({ size: 'icon-sm', variant: 'outline' })}>${PlusIcon()}</button>

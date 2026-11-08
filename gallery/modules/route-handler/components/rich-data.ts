@@ -11,12 +11,12 @@ import { buttonClass } from '#modules/gallery/ui/button.ts';
 interface RichPayload { at: Date; ip: string; requestId: string; cookieCount: number }
 
 export class RichData extends WebComponent {
-  private line = signal('click to fetch');
+  readonly #line = signal('click to fetch');
 
   private async load() {
     const data = await richFetch<RichPayload>('/features/route-handler/data');
     // data.at is a Date, so Date methods work with no manual parsing.
-    this.line.set(`at ${data.at.toLocaleTimeString()} · id ${data.requestId} · ${data.cookieCount} cookie(s)`);
+    this.#line.set(`at ${data.at.toLocaleTimeString()} · id ${data.requestId} · ${data.cookieCount} cookie(s)`);
   }
 
   render() {
@@ -24,7 +24,7 @@ export class RichData extends WebComponent {
       <div class="flex items-center gap-3 text-[15px]">
         <button @click=${() => this.load()}
           class=${buttonClass({ size: 'sm' })}>richFetch() the route</button>
-        <span class="text-muted-foreground">${this.line.get()}</span>
+        <span class="text-muted-foreground">${this.#line.get()}</span>
       </div>
     `;
   }

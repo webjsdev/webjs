@@ -64,7 +64,7 @@ export class CodeBlock extends WebComponent({
    * null branch is what the server renders, so the two states are "the
    * browser has not read this yet" and "here are its tokens", never "empty".
    */
-  private _code = signal<string | null>(null);
+  readonly #_code = signal<string | null>(null);
 
   connectedCallback() {
     // Read BEFORE the base hook, which is what takes the light DOM over and
@@ -72,12 +72,12 @@ export class CodeBlock extends WebComponent({
     // nothing to read. Works from either starting point: the authored
     // children on a fresh element, or the server's projected text on
     // hydration. Both spell the same code, so re-connecting is idempotent.
-    if (this._code.get() === null) this._code.set(trimBlock(this.textContent ?? ''));
+    if (this.#_code.get() === null) this.#_code.set(trimBlock(this.textContent ?? ''));
     super.connectedCallback?.();
   }
 
   render() {
-    const code = this._code.get();
+    const code = this.#_code.get();
     const body = code === null
       ? html`<slot></slot>`
       : tokenize(code).map((tok) => {

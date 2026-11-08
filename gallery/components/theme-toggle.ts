@@ -10,21 +10,21 @@ import { WebComponent, html, signal } from '@webjsdev/core';
 type Theme = 'system' | 'light' | 'dark';
 
 export class ThemeToggle extends WebComponent {
-  theme = signal<Theme>('system');
+  readonly #theme = signal<Theme>('system');
 
   connectedCallback() {
     super.connectedCallback();
     let saved: string | null = null;
     try { saved = localStorage.getItem('webjs_theme'); } catch {}
-    this.theme.set(saved === 'light' || saved === 'dark' ? saved : 'system');
+    this.#theme.set(saved === 'light' || saved === 'dark' ? saved : 'system');
   }
 
   cycle() {
-    const t = this.theme.get();
+    const t = this.#theme.get();
     const next: Theme =
       t === 'system' ? 'light'
       : t === 'light' ? 'dark' : 'system';
-    this.theme.set(next);
+    this.#theme.set(next);
     try {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
@@ -48,7 +48,7 @@ export class ThemeToggle extends WebComponent {
   }
 
   render() {
-    const t = this.theme.get();
+    const t = this.#theme.get();
     const label = t === 'system' ? 'AUTO' : t === 'light' ? 'LIGHT' : 'DARK';
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html`
