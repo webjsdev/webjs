@@ -11,7 +11,7 @@ import {
 } from '../js-scan.js';
 import {
   isComponentFile, arrayPropUsesObject, declaresStateOption, findFieldInitializers,
-  methodBodyOf, findBrowserMemberUses,
+  findSignalFieldWrites, methodBodyOf, findBrowserMemberUses,
 } from './helpers.js';
 
 /**
@@ -116,6 +116,37 @@ export function checkNoStateProperty(files, violations) {
             file: rel,
             message: `Reactive property \`${key}\` declares the \`state\` option, which is no longer supported (the factory throws). Internal state is an instance signal.`,
             fix: `Remove \`${key}\` from the factory and hold it in a signal: \`#${key} = signal(initial)\`, read with \`this.#${key}.get()\`, written with \`this.#${key}.set(value)\`. A parent that assigns it can keep doing so through a getter/setter over the signal.`,
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Rule: `no-signal-field-assignment`.
+ *
+ * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
+ * @param {Violation[]} violations  accumulator the rule pushes onto
+ * @returns {void}
+ */
+export function checkNoSignalFieldAssignment(files, violations) {
+  // --- Rule: no-signal-field-assignment ---
+  // A signal field is written through `.set()`, never by assignment, which
+  // swaps the signal object out from under the component (#1679). TypeScript
+  // `readonly` catches this where tsc runs; this rule covers plain `.js` and a
+  // forgotten `readonly`. It only sees writes inside the declaring class,
+  // which for a `#private` field is every write there can be.
+  {
+    for (const { rel, scan } of files) {
+      if (!/class\s+\w+(?:\s*<[^{}();]*?>)?\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const { body } of extractWebComponentClassBodies(scan)) {
+        for (const name of findSignalFieldWrites(body)) {
+          violations.push({
+            rule: 'no-signal-field-assignment',
+            file: rel,
+            message: `\`this.${name}\` holds a signal and is assigned to. Assignment replaces the signal object: the component stays subscribed to the old one, nothing re-renders, and the next \`.get()\` throws.`,
+            fix: `Write through the signal: \`this.${name}.set(value)\` (or \`this.${name}.set(this.${name}.get() + 1)\` for a counter), and declare the field \`readonly\` in TypeScript so the compiler catches the next one.`,
           });
         }
       }

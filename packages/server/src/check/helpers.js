@@ -231,6 +231,54 @@ const HTMLELEMENT_MEMBERS = [
  * @param {string} classBody
  * @param {string} name
  */
+/**
+ * Writes to a signal field of a WebComponent class body: any `this.<name>`
+ * assignment (plain, compound, `++` / `--`) where `<name>` is a field the same
+ * class creates with `signal(` / `computed(`, either as a class-field
+ * initializer (`readonly #open = signal(false)`) or in the constructor
+ * (`this.open = signal(false)`). That creation is the one write allowed.
+ * Assigning to the field replaces the signal object: the component stays
+ * subscribed to the old one, so nothing re-renders, and the next `.get()`
+ * throws. Expects the redacted body (strings and template text blanked,
+ * holes kept).
+ *
+ * @param {string} body
+ * @returns {string[]} the offending field names, each once, `#` kept
+ */
+export function findSignalFieldWrites(body) {
+  const MAKE = String.raw`(?:signal|computed)\s*(?:<[^()]*>)?\s*\(`;
+  // Brace depth at each index, so a field initializer counts only at the
+  // class body's own level.
+  const depth = new Int32Array(body.length + 1);
+  for (let i = 0, d = 0; i < body.length; i++) {
+    if (body[i] === '{') d++;
+    else if (body[i] === '}') d--;
+    depth[i + 1] = d;
+  }
+  const fields = new Set();
+  const field = new RegExp(String.raw`(?:^|[;\s])(?:(?:public|private|protected|readonly|static|declare)\s+)*(#?[A-Za-z_$][\w$]*)\s*[!?]?\s*(?::[^=;{}]*)?=\s*` + MAKE, 'g');
+  let m;
+  while ((m = field.exec(body))) {
+    if (depth[m.index] === 0 && !/\bstatic\s/.test(m[0])) fields.add(m[1]);
+  }
+  const ctor = methodBodyOf(body, 'constructor');
+  const made = new RegExp(String.raw`this\.(#?[A-Za-z_$][\w$]*)\s*=\s*` + MAKE, 'g');
+  const created = new Set();
+  while ((m = made.exec(ctor))) { fields.add(m[1]); created.add(m.index); }
+  if (!fields.size) return [];
+  const bad = new Set();
+  const write = /this\.(#?[A-Za-z_$][\w$]*)\s*(?:(\+\+|--)|(?:[-+*\/%]|\*\*|\|\||&&|\?\?|<<|>>>?|[&|^])?=(?![=>]))|(?:\+\+|--)\s*this\.(#?[A-Za-z_$][\w$]*)/g;
+  const ctorStart = ctor ? body.indexOf(ctor) : -1;
+  while ((m = write.exec(body))) {
+    const name = m[1] || m[3];
+    if (!fields.has(name)) continue;
+    // The creation in the constructor is the one allowed write.
+    if (ctorStart !== -1 && m.index >= ctorStart && m.index < ctorStart + ctor.length && created.has(m.index - ctorStart)) continue;
+    bad.add(name);
+  }
+  return [...bad];
+}
+
 export function methodBodyOf(classBody, name) {
   const re = new RegExp(`(?:^|[\\s;}])(?:async\\s+)?${name}\\s*\\([^)]*\\)\\s*(?::[^{]*)?\\{`, 'g');
   const m = re.exec(classBody);

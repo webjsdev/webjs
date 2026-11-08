@@ -321,10 +321,10 @@ lit keeps internal reactive state in a property marked `@state()` or `{ state: t
 @state() private open = false;
 
 // WebJs
-#open = signal(false);   // read: this.#open.get(), write: this.#open.set(true)
+readonly #open = signal(false);   // read: this.#open.get(), write: this.#open.set(true)
 ```
 
-Leave it a bare private signal unless something outside the class touches it. Only when a parent element, a test, or a documented API reaches the value does it get a getter/setter over the signal (`get open() { return this.#open.get(); } set open(v) { this.#open.set(v); }`), never a public signal field, which `el.open = true` would silently replace. In an `async render()`, read the signal before the first `await`, since reads after it are not tracked, and have an event handler read the live signal (`this.#n.set(this.#n.get() + 1)`) rather than that render-time local, or two clicks before the re-render lands count once.
+Keep it `#private` unless another element needs it; then make it a `readonly` public signal field (`readonly open = signal(false)`, used as `part.open.set(true)`). Never ASSIGN a signal field, the lit reflex `this.open = true`: it replaces the signal object, the component stays subscribed to the old one, and the next `.get()` throws. `readonly` makes that a compile error, and `no-signal-field-assignment` in `webjs check` flags it inside the declaring class. A getter/setter over a private signal is only for a documented plain-value API users assign like a property. In an `async render()`, read the signal before the first `await`, since reads after it are not tracked, and have an event handler read the live signal (`this.#n.set(this.#n.get() + 1)`) rather than that render-time local, or two clicks before the re-render lands count once.
 
 ### Passing a method straight to an `@event` binding
 

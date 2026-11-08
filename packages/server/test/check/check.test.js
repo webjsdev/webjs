@@ -482,6 +482,66 @@ Fine.register('fine-el');
   }
 });
 
+test('no-signal-field-assignment: flags every write that replaces a signal field', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'writes.ts'),
+      `import { WebComponent, html, signal } from '@webjsdev/core';
+class Writes extends WebComponent {
+  readonly #open = signal(false);
+  count = signal<number>(0);
+  constructor() {
+    super();
+    this.made = signal('');
+  }
+  toggle() { this.#open = true; }
+  bump() { this.count++; }
+  rename() { this.made = 'x'; }
+  render() { return html\`<button @click=\${() => { this.count += 1; }}>x</button>\`; }
+}
+Writes.register('signal-writes');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const names = violations.filter((v) => v.rule === 'no-signal-field-assignment').map((v) => v.message.match(/\`this\.([#\w]+)\`/)[1]).sort();
+    assert.deepEqual(names, ['#open', 'count', 'made']);
+    const v = violations.find((v) => v.rule === 'no-signal-field-assignment');
+    assert.ok(v.fix.includes('.set('), 'the fix names .set()');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-signal-field-assignment: passes reads, .set() writes, the constructor creation and plain fields', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'reads.ts'),
+      `import { WebComponent, html, signal } from '@webjsdev/core';
+class Reads extends WebComponent {
+  readonly #open = signal(false);
+  readonly shown = signal(true);
+  label = '';
+  constructor() {
+    super();
+    this.made = signal(0);
+  }
+  toggle() { this.#open.set(!this.#open.get()); this.label = 'x'; }
+  render() { return html\`<p>\${this.shown.get() === true ? this.made.get() : ''}</p>\`; }
+}
+Reads.register('signal-reads');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.filter((v) => v.rule === 'no-signal-field-assignment').length, 0);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no-static-properties: passes for the factory form', async () => {
   const appDir = await makeTempApp();
   try {

@@ -52,6 +52,11 @@ export const RULES = [
       'A reactive property declared via the `extends WebComponent({ … })` factory must not carry the `state` option (`prop({ state: true })`, `prop(Number, { state: true })`): the factory throws on it. Internal state is an instance signal: `#open = signal(false)`, read with `this.#open.get()` in render() or any update hook, written with `this.#open.set(v)`. A value a parent assigns can keep its property API through a getter/setter over the signal. A value that rides an attribute or a `.prop` binding stays a reactive property, without `state`.',
   },
   {
+    name: 'no-signal-field-assignment',
+    description:
+      'A field a WebComponent class creates with `signal(` / `computed(` (a class-field initializer like `readonly #open = signal(false)`, or `this.open = signal(false)` in the constructor) is written through `.set()`, never assigned. `this.open = true` replaces the signal object: the component stays subscribed to the old signal, nothing re-renders, and the next `this.open.get()` throws. Fix: `this.open.set(true)`. Declare signal fields `readonly` in TypeScript so the compiler catches it too; this rule covers plain `.js` and a forgotten `readonly`, for writes inside the declaring class.',
+  },
+  {
     name: 'reactive-props-no-class-field',
     description:
       'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field declaration (`count = 0`, `count: number = 0`, `count!: number`, or `count?: number`) in the class body. Under modern class-field semantics (including `erasableSyntaxOnly: true`) every class-field declaration compiles to Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super().',

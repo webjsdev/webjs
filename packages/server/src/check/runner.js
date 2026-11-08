@@ -8,6 +8,7 @@ import {
   checkComponentsHaveRegister,
   checkNoStaticProperties,
   checkNoStateProperty,
+  checkNoSignalFieldAssignment,
   checkReactivePropsNoClassField,
   checkArrayPropUsesArrayType,
   checkNoBrowserGlobalsInRender,
@@ -92,6 +93,7 @@ export async function checkConventions(appDir) {
   checkComponentsHaveRegister(files, violations);
   checkNoStaticProperties(files, violations);
   checkNoStateProperty(files, violations);
+  checkNoSignalFieldAssignment(files, violations);
   checkReactivePropsNoClassField(files, violations);
   checkArrayPropUsesArrayType(files, violations);
   checkNoBrowserGlobalsInRender(files, violations);
