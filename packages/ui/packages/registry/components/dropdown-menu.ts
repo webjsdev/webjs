@@ -393,7 +393,7 @@ export class UiDropdownMenu extends WebComponent({
     }
     // Close (and tear down) before a back/forward snapshot so the menu does not
     // restore open (#766). Closing the root also hides any open submenu.
-    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; this.removeAttribute('open'); });
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
   }
 
   _afterRender(): void {

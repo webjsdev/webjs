@@ -152,6 +152,9 @@ function installAccessors(Ctor, props) {
         if (!changedCheck(newVal, oldVal)) return;
         // Reflect to attribute if requested (_reflectAttribute skips a prop
         // with no attribute: `state: true` or `attribute: false`).
+        if (d.reflect && this._connected) {
+          this._reflectAttribute(propName, newVal, d);
+        }
         if (d.reflect) (this.__reflectPending ??= new Set()).add(propName);
         // requestUpdate records the (name, oldValue) entry AND schedules a
         // render. During the update phase the scheduler short-circuits and

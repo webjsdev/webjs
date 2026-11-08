@@ -296,7 +296,7 @@ export class UiAlertDialog extends WebComponent({
     super.connectedCallback?.();
     // Close before a back/forward snapshot: a modal restored half-open (the
     // `open` attr without the native showModal top-layer state) is broken (#766).
-    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; this.removeAttribute('open'); });
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
   }
 
   disconnectedCallback(): void {
