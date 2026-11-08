@@ -143,9 +143,12 @@ function setOff(link, off) {
  * For each incoming stylesheet:
  * - The live head already links the file: no second copy (two links to one
  *   URL are two active sheets). An owned one that was off is switched back
- *   on. The owner moves only OUTWARD: a sheet a layout and a page under it
- *   both link belongs to the layout, so it stays while the layout does, even
- *   when this response re-rendered only the page.
+ *   on. Its owner is the outermost boundary still on screen that links it: a
+ *   sheet a layout and a page under it both link stays the layout's while the
+ *   layout is held (a reduced response re-rendered only the page), and is
+ *   handed to the incoming owner once the old one is gone (the swap replaces
+ *   it, or the sheet was off), so a later swap of the new owner's range can
+ *   retire it.
  * - The incoming link is one a snapshot recorded as off: nothing to do, since
  *   that page did not use it.
  * - An incoming OWNED sheet the head lacks is inserted root to leaf: after the
@@ -159,8 +162,10 @@ function setOff(link, off) {
  * the frame decides which sheets apply, and a frame swap never switches one
  * off either.
  *
- * @param {{ base?: string | null, frame?: boolean }} [opts]  `base` is the URL
- *   the incoming document came from, which its relative hrefs resolve against.
+ * @param {{ base?: string | null, frame?: boolean, segment?: string | null }} [opts]
+ *   `base` is the URL the incoming document came from, which its relative
+ *   hrefs resolve against; `segment` is the range this swap replaces (`/` for
+ *   a full-body swap), whose owners are on their way out.
  * @returns {(el: Element, clone: (el: Element) => Element) => boolean}
  */
 export function stylesheetMerge(opts = {}) {
@@ -180,9 +185,20 @@ export function stylesheetMerge(opts = {}) {
     const existing = live.get(key);
     if (existing) {
       if (opts.frame) return true;
-      if (existing.hasAttribute(OFF_ATTR)) setOff(existing, false);
+      const wasOff = existing.hasAttribute(OFF_ATTR);
+      if (wasOff) setOff(existing, false);
       const held = existing.getAttribute(OWNER_ATTR);
-      if (owner && held !== null && ownedWithin(held, owner)) existing.setAttribute(OWNER_ATTR, owner);
+      if (owner && held !== null && held !== owner) {
+        // The owner is the outermost boundary still on screen that links the
+        // file. The held owner stays only while it is on screen and encloses
+        // the incoming one: a layout this response did not re-render. A held
+        // owner the swap replaces, one whose sheet was off, or one inside the
+        // incoming owner gives way.
+        const heldStays = !wasOff
+          && !(opts.segment != null && ownedWithin(held, opts.segment))
+          && ownedWithin(owner, held);
+        if (!heldStays) existing.setAttribute(OWNER_ATTR, owner);
+      }
       return true;
     }
     if (!owner) return false;

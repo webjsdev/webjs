@@ -387,7 +387,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
     // ahead of the commit, as the incoming sheets' load-before-swap copies
     // already do (#1666, Turbo's order), so the new page's sheets apply from
     // the swap's first frame.
-    addNewHeadElements(doc.head, { base: incomingBase });
+    addNewHeadElements(doc.head, { base: incomingBase, segment: plan.segment });
     _swapCommit = runWithTransition(() => {
       if (mode === 'replace') replaceBoundaryRange(live, incoming);
       else swapMarkerRange(live, incoming, doc);
@@ -481,7 +481,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
  * @param {string} incomingBase  the URL the incoming page came from
  */
 function swapFullBody(doc, incomingBase) {
-  mergeHead(doc.head, { base: incomingBase });
+  mergeHead(doc.head, { base: incomingBase, segment: '/' });
   // Persist permanent elements by node identity across the full-body
   // swap: move each live [data-webjs-permanent][id] node into the matching
   // position in the incoming body BEFORE replaceChildren reads it, so the

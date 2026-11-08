@@ -12,7 +12,7 @@
  * Sheets are `blob:` URLs, loaded before each test so `link.sheet` exists.
  */
 import { _applySwap } from '../../../src/router-client.js';
-import { OFF_ATTR, OWNER_ATTR, primeLiveStylesheetKeys } from '../../../src/router-client/owned-styles.js';
+import { OFF_ATTR, OWNER_ATTR, primeLiveStylesheetKeys, switchOffDepartedStylesheets } from '../../../src/router-client/owned-styles.js';
 import { addNewHeadElements } from '../../../src/router-client/head-merge.js';
 import { PRELOAD_ATTR } from '../../../src/router-client/stylesheets.js';
 import { assert } from '../../../../../test/browser-assert.js';
@@ -131,17 +131,36 @@ suite('Client router: owned stylesheets leave with their layout (#1669)', () => 
     assert.equal(link.hasAttribute(OFF_ATTR), false, 'the morph is at /p; this sheet belongs to /');
   });
 
-  test('a sheet a layout and a page both link stays owned by the layout', async () => {
+  test('a sheet a held layout and a page under it both link stays the layout\'s', async () => {
     const href = sheet('.wj-owned-shared {}');
-    const link = await addLiveSheet(href, '/');
-    // A reduced render re-rendered only the page, which links the same file.
-    _applySwap(incoming('b', 'after', ownedLink(href, '/p')), null, true, null);
-    assert.equal(link.getAttribute(OWNER_ATTR), '/', 'the owner moves only outward');
+    const link = await addLiveSheet(href, '/a');
+    // A reduced render re-rendered only the page under /a, which links the
+    // same file; the swap replaces /a/p and holds the /a layout.
+    const doc = incoming('b', 'after', ownedLink(href, '/a/p'));
+    addNewHeadElements(doc.head, { segment: '/a/p' });
+    assert.equal(link.getAttribute(OWNER_ATTR), '/a', 'the held layout keeps it');
     // The reverse: a page-owned sheet that the layout turns out to link too.
     const href2 = sheet('.wj-owned-shared-2 {}');
-    const link2 = await addLiveSheet(href2, '/p');
-    _applySwap(incoming('c', 'after', ownedLink(href2, '/')), null, true, null);
-    assert.equal(link2.getAttribute(OWNER_ATTR), '/', 'it moves out to the layout');
+    const link2 = await addLiveSheet(href2, '/a/p');
+    addNewHeadElements(incoming('c', 'after', ownedLink(href2, '/a')).head, { segment: '/a/p' });
+    assert.equal(link2.getAttribute(OWNER_ATTR), '/a', 'it moves out to the layout');
+  });
+
+  test('a sheet whose owner the swap replaces is handed to the incoming owner', async () => {
+    // The /ui home page owns rhea; a docs page linking rhea too replaces the
+    // home page. Kept on the home page's owner, a later swap of the docs
+    // range could never retire it.
+    const href = sheet('#wj-owned-probe { width: 124px; display: block; }');
+    const link = await addLiveSheet(href, '/');
+    _applySwap(incoming('b', 'docs', ownedLink(href, '/p')), null, true, null);
+    assert.equal(link.getAttribute(OWNER_ATTR), '/p', 'the replaced owner gave way');
+    // A switched-off sheet always takes the owner that switches it back on.
+    const href2 = sheet('.wj-owned-reown {}');
+    const link2 = await addLiveSheet(href2, '/a');
+    switchOffDepartedStylesheets('/a', null);
+    addNewHeadElements(incoming('c', 'x', ownedLink(href2, '/a/p')).head, { segment: '/a/p' });
+    assert.equal(link2.hasAttribute(OFF_ATTR), false, 'switched back on');
+    assert.equal(link2.getAttribute(OWNER_ATTR), '/a/p', 'and owned by the page that brought it back');
   });
 
   test('a sheet still loading is switched off, not removed, and disabled once it loads', async () => {

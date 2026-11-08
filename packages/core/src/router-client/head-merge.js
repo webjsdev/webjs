@@ -217,7 +217,7 @@ function reconcileHeadMetas(newHead) {
 
 /**
  * @param {HTMLHeadElement} newHead
- * @param {{ base?: string | null, frame?: boolean }} [opts]  `base` is the URL
+ * @param {{ base?: string | null, frame?: boolean, segment?: string | null }} [opts]  `base` is the URL
  *   the incoming page came from; `frame` marks a frame swap, which switches no
  *   owned stylesheet on (owned-styles.js `stylesheetMerge`).
  */
@@ -291,7 +291,7 @@ function isPersistentHeadStyle(el) {
 
 /**
  * @param {HTMLHeadElement} newHead
- * @param {{ base?: string | null }} [opts]  the URL the incoming page came from
+ * @param {{ base?: string | null, segment?: string | null }} [opts]  the URL the incoming page came from, and the range being replaced
  */
 export function mergeHead(newHead, opts = {}) {
   const mergeSheet = stylesheetMerge(opts);
