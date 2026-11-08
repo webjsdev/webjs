@@ -70,12 +70,11 @@
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
-// cursor-pointer + select-none on BASE for both call sites: the
-// class-helper applied to a native <button> (where shadcn's upstream
-// also omits it; see the same convention the button fix applies) and
-// the <ui-toggle> custom element. select-none prevents drag-selecting
-// icon/label glyphs that aren't meant to be selectable. disabled:
-// pointer-events-none below already suppresses cursor for disabled buttons.
+// shadcn's base form, verbatim, so it sets no cursor. On a native <button> the
+// browser supplies one (the default arrow), and new-york adds cursor-pointer
+// plus select-none on `.cn-toggle` as the kit's own convention.
+// <ui-toggle-group-item>, whose host is the button, gets no browser default, so
+// it takes its cursor from `.cn-toggle-group-item` (styles/supplement.json).
 const BASE =
   'cn-toggle group/toggle inline-flex items-center justify-center whitespace-nowrap outline-none hover:bg-muted focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 

@@ -97,7 +97,10 @@ export function toggleGroupSpacing(raw: string | null | undefined): string | nul
 // which only ever matches a real form control. An item's host IS the button
 // here (a custom element), so `disabled` on it is inert as far as CSS and the
 // browser are concerned, and the disabled look has to come from the
-// aria-disabled variant instead.
+// aria-disabled variant instead. The same goes for the non-text cursor and
+// unselectable label a native button gets from the browser. All of those live
+// on `.cn-toggle-group-item` in each style (styles/supplement.json for the
+// ported ones), so a style that sets its own cursor keeps it.
 const ITEM_EXTRA =
   'cn-toggle-group-item shrink-0 focus:z-10 focus-visible:z-10';
 

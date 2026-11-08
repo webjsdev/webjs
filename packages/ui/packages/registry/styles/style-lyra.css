@@ -1957,7 +1957,7 @@
     @apply flex-row gap-[--spacing(var(--gap))] data-vertical:flex-col data-vertical:items-stretch;
   }
   .cn-toggle-group-item {
-    @apply group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-s-0 group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-s group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t;
+    @apply cursor-default select-none aria-disabled:pointer-events-none aria-disabled:opacity-50 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-s-0 group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-s group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t;
   }
   .cn-tooltip-content {
     @apply max-w-xs origin-(--radix-tooltip-content-transform-origin);
