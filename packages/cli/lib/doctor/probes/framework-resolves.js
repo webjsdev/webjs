@@ -107,19 +107,30 @@ function modulesAreLinked(dir) {
  * @returns {string} a leading-space sentence, or the empty string
  */
 function linkScriptHint(appDir) {
+  return declaresScript(appDir, 'worktree:link')
+    ? ' In this repo, `npm run worktree:link` does the whole setup and also repairs the shared tree.'
+    : '';
+}
+
+/**
+ * Whether `appDir` or an ancestor has a package.json declaring `script`.
+ *
+ * @param {string} appDir
+ * @param {string} script
+ * @returns {boolean}
+ */
+function declaresScript(appDir, script) {
   let dir = resolve(appDir);
   for (let i = 0; i < 8; i += 1) {
     try {
       const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-      if (pkg?.scripts?.['worktree:link']) {
-        return ' In this repo, `npm run worktree:link` does the whole setup and also repairs the shared tree.';
-      }
+      if (pkg?.scripts?.[script]) return true;
     } catch { /* no package.json here, keep walking */ }
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;
   }
-  return '';
+  return false;
 }
 
 /**
@@ -147,11 +158,20 @@ function freshWorktreeFix(appDir) {
  */
 function linkAwareReinstallFix(appDir) {
   if (modulesAreLinked(appDir)) {
+    // A repo that ships `worktree:unlink` (the WebJs monorepo) also links a
+    // built `packages/core/dist`, which the `find` below misses and an
+    // install's build used to write through (#1671). Name the script that
+    // removes every planted link there; the app-generic `find` stays for
+    // everyone else, whose worktree has only node_modules links.
+    const removeLinks = declaresScript(appDir, 'worktree:unlink')
+      ? 'remove every link the link script planted first (`npm run worktree:unlink`, which also ' +
+        'removes the packages/core/dist link)'
+      : 'remove every node_modules symlink first, nested ones included ' +
+        '(`find . -maxdepth 5 -type l -name node_modules -delete`)';
     return (
       'node_modules here is a SYMLINK at another checkout, so do NOT run `npm install`: it would act ' +
       'on that checkout, not this one (#1442). Either reinstall in the checkout that owns the tree, ' +
-      'or remove every node_modules symlink first, nested ones included ' +
-      '(`find . -maxdepth 5 -type l -name node_modules -delete`), and install here.' + linkScriptHint(appDir)
+      `or ${removeLinks}, and install here.` + linkScriptHint(appDir)
     );
   }
   return 'Reinstall dependencies (`npm install`, or remove node_modules and reinstall).';

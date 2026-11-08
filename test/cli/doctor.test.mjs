@@ -1902,6 +1902,29 @@ test('framework-resolve stops recommending a bare npm install through a symlink'
   assert.match(r.fix, /checkout that owns the tree/);
 });
 
+test('a linked node_modules remedy names worktree:unlink only where the repo declares it (#1671)', () => {
+  const target = tmpDir();
+  mkdirSync(join(target, 'node_modules'), { recursive: true });
+
+  // An app-generic worktree: the find recipe, never a script it does not have.
+  const app = tmpDir();
+  write(app, 'package.json', JSON.stringify({ name: 'my-app' }));
+  symlinkSync(join(target, 'node_modules'), join(app, 'node_modules'));
+  const generic = checkFrameworkResolves(app).fix;
+  assert.match(generic, /find \. -maxdepth 5 -type l -name node_modules -delete/);
+  assert.doesNotMatch(generic, /worktree:unlink/);
+
+  // The monorepo shape: the unlink script, which also clears the dist link the
+  // find misses and an install's build used to write through.
+  const mono = tmpDir();
+  write(mono, 'package.json', JSON.stringify({ name: 'repo', scripts: { 'worktree:link': 'a', 'worktree:unlink': 'b' } }));
+  symlinkSync(join(target, 'node_modules'), join(mono, 'node_modules'));
+  const fix = checkFrameworkResolves(mono).fix;
+  assert.match(fix, /npm run worktree:unlink/);
+  assert.match(fix, /packages\/core\/dist/);
+  assert.doesNotMatch(fix, /maxdepth/);
+});
+
 test('the published-CLI remedies never name a script a scaffolded app does not have', () => {
   // These strings ship in the published CLI, and `bin/webjs.js` prints them
   // verbatim as the `webjs dev` / `webjs start` preflight failure. The #954

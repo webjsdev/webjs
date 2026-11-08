@@ -157,7 +157,11 @@ edit is invisible and a counterfactual passes vacuously), and run
    Published-to-npm copies ship pre-built `dist/` bundles alongside
    `src/`; the browser fetches them when `dist/` is present
    (`scripts/build-framework-dist.js` is wired to the `prepare`
-   lifecycle so `npm publish` always rebuilds). The browser surface is
+   lifecycle so `npm publish` always rebuilds). The build never writes
+   through a symlink at its out dir: in a linked worktree
+   `packages/core/dist` is a link at the primary checkout's dist, and
+   the build replaces it with a real directory rather than overwriting
+   the primary's bundles (#1671). The browser surface is
    ONE self-contained file, `dist/webjs-core-browser.js` (built with
    `splitting` off, so no `chunk-*.js`): it re-exports the whole browser
    API, so the bare specifier and the `/directives`, `/context`,
