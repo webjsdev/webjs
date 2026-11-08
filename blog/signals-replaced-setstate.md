@@ -48,7 +48,7 @@ The algorithm is what the spec-shaped signal-polyfill uses. Each producer (State
 
 # How the integration works
 
-Every `WebComponent` ships with a built-in `Signal.subtle.Watcher`. The default `update()` wraps `render()` in `watcher.observe(...)`, so any signal read inside `render()` registers as a dependency. When any read signal changes, the watcher's `notify` calls `requestUpdate()` and the component re-renders through the normal lifecycle.
+Every `WebComponent` ships with a built-in `Signal.subtle.Watcher`. Each update runs inside `watcher.observe(...)`, so any signal read during the update (in `willUpdate()`, `render()`, or `updated()`) registers as a dependency. The DOM commit runs untracked, which keeps a `watch()` binding fine-grained. When any read signal changes, the watcher's `notify` calls `requestUpdate()` and the component re-renders through the normal lifecycle.
 
 ```ts
 const count = signal(0);

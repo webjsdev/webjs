@@ -115,7 +115,7 @@ class UserCard extends WebComponent({
 UserCard.register('user-card');</code-block>
 
     <h3>Property options and narrowed types with prop()</h3>
-    <p>When a property needs options (reflection, a renamed attribute, internal-only state) or a narrowed TypeScript type, wrap the type in the <code>prop()</code> helper. A bare constructor (<code>name: String</code>) is shorthand for <code>name: prop(String)</code>.</p>
+    <p>When a property needs options (reflection, a renamed attribute, a declarative default) or a narrowed TypeScript type, wrap the type in the <code>prop()</code> helper. A bare constructor (<code>name: String</code>) is shorthand for <code>name: prop(String)</code>.</p>
 
     <code-block>import { WebComponent, html, prop } from '@webjsdev/core';
 

@@ -55,7 +55,7 @@ has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
 
 1. Scans the program at boot for `Class.register('tag', …)` /
    `customElements.define('tag', Class)` registrations into a registry of
-   per-member records (`{ propName, attrName, state }`, where `attrName` is
+   per-member records (`{ propName, attrName }`, where `attrName` is
    the hyphenated form of `propName`).
 2. For every `.ts` / `.js` file being edited, computes its **import
    graph** transitively. Only tags whose registering file is reachable
