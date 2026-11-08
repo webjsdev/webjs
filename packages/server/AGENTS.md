@@ -186,18 +186,20 @@ in THREE co-located places that MUST stay in lockstep:
    `readRegenerateRules` (`dev-regenerate.js`, `dev.regenerate`, #967), and
    `readDevWatchPathsFromApp` (`dev.js`, `dev.watch`, #894), and
    `readDevToolingFromApp` (`dev/config.js`, `dev.embedOrigins` /
-   `dev.sourceLocations` / `dev.reloadIdle`, #1504, #1507; the env vars override it). Six readers
+   `dev.sourceLocations` / `dev.reloadIdle`, #1504, #1507; the env vars override it). Five readers
    live in the CLI rather than here: `readAppTasks`
    (`packages/cli/lib/app-tasks.js`, `dev.before` / `dev.parallel` /
    `start.before`, #550), `readDbCommands` (`packages/cli/lib/app-tasks.js`,
    `db`, #1468), `readCiConfig` (`packages/cli/lib/ci-config.js`, `ci.steps`,
    #1471, the local-CI step list `webjs ci` runs), `readDoctorPolicy`
-   (`packages/cli/lib/doctor.js`, `doctor.gate`, #1257), and two more inside
-   `lib/doctor.js` that read keys the server also reads, so a change to
-   either key's semantics needs BOTH implementations updated:
-   `checkStaticAssetFreshness` re-reads `dev.regenerate`, and
-   `readAppBasePath` is a hand-maintained port of `readBasePath`'s
-   normalization (its own docblock says "ported rather than imported").
+   (`packages/cli/lib/doctor.js`, `doctor.gate`, #1257), and one more inside
+   `lib/doctor.js` that reads a key the server also reads, so a change to
+   its semantics needs BOTH implementations updated: `readAppBasePath` is a
+   hand-maintained port of `readBasePath`'s normalization (its own docblock
+   says "ported rather than imported"). `dev.regenerate` is read by the
+   server only: the doctor's `checkStaticAssetFreshness` and `webjs
+   regenerate` both go through `regenerateStatus` / `regenerateOutputs`
+   (#1672), so there is no second reading to keep in step.
 
    **THIS list is the canonical one.** It used to be duplicated in the JSON
    Schema's `$comment`, the `WebjsConfig` docblock, and the drift test's

@@ -134,7 +134,8 @@ Counter.register('my-counter');</code-block>
     <p>
       <strong><code>npm run dev</code> and a bare <code>webjs&nbsp;dev</code>
       are equivalent.</strong> The scaffold puts <code>webjs db migrate</code>
-      and the Tailwind compile under <code>webjs.dev.before</code> in the
+      and <code>webjs regenerate</code> (the Tailwind compile, run only when the
+      stylesheet is not fresh) under <code>webjs.dev.before</code> in the
       <code>webjs</code> block of package.json, and the dev server runs them
       before serving, so a pending migration is applied and the stylesheet is
       built before the first request. In dev the stylesheet is then kept fresh
