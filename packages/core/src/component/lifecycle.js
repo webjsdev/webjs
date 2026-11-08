@@ -874,10 +874,34 @@ class WebComponentBase extends Base {
    *   7. `firstUpdated(changedProperties)` runs once, on the first render only
    *   8. `updated(changedProperties)` runs after every commit
    *   9. Resolve `updateComplete` promise
+   *
+   * Every signal the SYNCHRONOUS part of that cycle reads is tracked, not
+   * only the ones `render()` reads: `shouldUpdate`, `willUpdate`, the
+   * controllers' hooks, `render()` and the post-commit hooks of a sync
+   * commit. So a signal read only in `updated()` (a host attribute derived
+   * from internal state) still re-renders the component when it changes.
+   * lit-labs/signals tracks the same span, by running `performUpdate` inside
+   * a computed. The DOM commit is the one part left untracked (see
+   * `update()`). The watcher is lazy-allocated on the first cycle and
+   * disposed in `disconnectedCallback`; `observe()` re-records the read set
+   * on every cycle.
    * @private
    */
   _performRender() {
     if (!this._renderRoot) return;
+    if (!this.__signalWatcher) {
+      this.__signalWatcher = new Signal.subtle.Watcher(() => {
+        if (this._connected) this.requestUpdate();
+      });
+    }
+    this.__signalWatcher.observe(() => this._runUpdateCycle());
+  }
+
+  /**
+   * The update cycle {@link _performRender} tracks.
+   * @private
+   */
+  _runUpdateCycle() {
 
     // Hold a stable reference to the current Map so all hooks see the same
     // snapshot. During the update phase (steps 3-6) the Map is mutated in
@@ -1154,16 +1178,8 @@ class WebComponentBase extends Base {
    * @param {Map<string, unknown>} _changedProperties
    */
   update(_changedProperties) {
-    // Track signal reads during render so the component re-renders when
-    // any of them change. The watcher is lazy-allocated on first
-    // render and disposed in disconnectedCallback. observe() clears
-    // prior dep edges before fn(), so each render re-records its own
-    // (possibly different) read set.
-    if (!this.__signalWatcher) {
-      this.__signalWatcher = new Signal.subtle.Watcher(() => {
-        if (this._connected) this.requestUpdate();
-      });
-    }
+    // The signal reads render() makes are tracked by the watcher
+    // _performRender runs the whole cycle under.
     let tpl;
     // Bind this render's abort signal (#492) around the synchronous part of
     // render() ONLY, so the RPC stub ties an action called there to this
@@ -1176,7 +1192,7 @@ class WebComponentBase extends Base {
     const outer = activeActionSignal();
     setActiveActionSignal(this.__renderAbort ? this.__renderAbort.signal : null);
     try {
-      this.__signalWatcher.observe(() => { tpl = this.render(); });
+      tpl = this.render();
     } finally {
       setActiveActionSignal(outer || null);
     }
@@ -1191,7 +1207,10 @@ class WebComponentBase extends Base {
     if (tpl && typeof (/** @type any */ (tpl).then) === 'function') {
       return this._commitAsync(/** @type {Promise<unknown>} */ (tpl));
     }
-    clientRender(tpl, this._renderRoot);
+    // The commit is untracked: a signal read while the DOM is patched (a
+    // `watch()` part, a child's synchronous work) belongs to whatever read
+    // it, not to this component's next render.
+    Signal.subtle.untrack(() => clientRender(tpl, this._renderRoot));
     return undefined;
   }
 

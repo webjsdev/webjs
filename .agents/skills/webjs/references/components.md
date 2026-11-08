@@ -202,7 +202,7 @@ const cart = signal<Item[]>([]);                 // module-scope: shared across 
 const count = computed(() => cart.get().length); // derived
 ```
 
-Read with `signal.get()` inside `render()`; the built-in `SignalWatcher` tracks the read and re-renders on change. An instance signal created in the constructor is component-local. For a fine-grained DOM swap use `${watch(signal)}` from `@webjsdev/core/directives`.
+Read with `signal.get()` inside `render()`; the built-in `SignalWatcher` tracks the read and re-renders on change. It tracks every read the synchronous update cycle makes, not only `render()`'s (the span lit-labs/signals tracks), so a signal read only in `willUpdate()` or `updated()` (a host attribute derived from internal state) re-renders too. The DOM commit itself is untracked, which is why a `watch()` part swaps without re-rendering its host. An instance signal created in the constructor is component-local. For a fine-grained DOM swap use `${watch(signal)}` from `@webjsdev/core/directives`.
 
 Two more signal primitives from `@webjsdev/core` cover client-side reactions and batched writes:
 
