@@ -438,10 +438,12 @@ test('no-signal-field-assignment: flags every write that replaces a signal field
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
       join(appDir, 'components', 'writes.ts'),
-      `import { WebComponent, html, signal } from '@webjsdev/core';
+      `import { WebComponent, html, signal, type Signal } from '@webjsdev/core';
 class Writes extends WebComponent {
   readonly #open = signal(false);
   count = signal<number>(0);
+  readonly box: Signal<{ open: boolean }> = signal({ open: false });
+  cb: Signal<() => void> = signal(() => {});
   constructor() {
     super();
     this.made = signal('');
@@ -449,6 +451,7 @@ class Writes extends WebComponent {
   toggle() { this.#open = true; }
   bump() { this.count++; }
   rename() { this.made = 'x'; }
+  reset() { this.box = { open: true }; this.cb = () => {}; }
   render() { return html\`<button @click=\${() => { this.count += 1; }}>x</button>\`; }
 }
 Writes.register('signal-writes');
@@ -456,7 +459,7 @@ Writes.register('signal-writes');
     );
     const violations = await checkConventions(appDir);
     const names = violations.filter((v) => v.rule === 'no-signal-field-assignment').map((v) => v.message.match(/\`this\.([#\w]+)\`/)[1]).sort();
-    assert.deepEqual(names, ['#open', 'count', 'made']);
+    assert.deepEqual(names, ['#open', 'box', 'cb', 'count', 'made']);
     const v = violations.find((v) => v.rule === 'no-signal-field-assignment');
     assert.ok(v.fix.includes('.set('), 'the fix names .set()');
   } finally {

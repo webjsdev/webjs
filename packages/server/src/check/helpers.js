@@ -180,12 +180,6 @@ const HTMLELEMENT_MEMBERS = [
 ];
 
 /**
- * Extract the body text of a named method from a (redacted) class body, or
- * '' if absent. Handles `async`, a TS return-type annotation, and params.
- * @param {string} classBody
- * @param {string} name
- */
-/**
  * Writes to a signal field of a WebComponent class body: any `this.<name>`
  * assignment (plain, compound, `++` / `--`) where `<name>` is a field the same
  * class creates with `signal(` / `computed(`, either as a class-field
@@ -210,10 +204,17 @@ export function findSignalFieldWrites(body) {
     depth[i + 1] = d;
   }
   const fields = new Set();
-  const field = new RegExp(String.raw`(?:^|[;\s])(?:(?:public|private|protected|readonly|static|declare)\s+)*(#?[A-Za-z_$][\w$]*)\s*[!?]?\s*(?::[^=;{}]*)?=\s*` + MAKE, 'g');
+  // Find each class-level `= signal(` / `= computed(`, then read the field
+  // name from the start of its line, so a type annotation of any shape
+  // (`Signal<{ open: boolean }>`, `Signal<() => void>`) sits in between.
+  const make = new RegExp(String.raw`(?<![=!<>])=(?!=)\s*` + MAKE, 'g');
+  const head = /^\s*((?:(?:public|private|protected|readonly|static|declare|override)\s+)*)(#?[A-Za-z_$][\w$]*)/;
   let m;
-  while ((m = field.exec(body))) {
-    if (depth[m.index] === 0 && !/\bstatic\s/.test(m[0])) fields.add(m[1]);
+  while ((m = make.exec(body))) {
+    if (depth[m.index] !== 0) continue;
+    const lineStart = body.lastIndexOf('\n', m.index) + 1;
+    const h = head.exec(body.slice(lineStart, m.index));
+    if (h && !/\bstatic\s/.test(h[1])) fields.add(h[2]);
   }
   const ctor = methodBodyOf(body, 'constructor');
   const made = new RegExp(String.raw`this\.(#?[A-Za-z_$][\w$]*)\s*=\s*` + MAKE, 'g');
@@ -233,6 +234,12 @@ export function findSignalFieldWrites(body) {
   return [...bad];
 }
 
+/**
+ * Extract the body text of a named method from a (redacted) class body, or
+ * '' if absent. Handles `async`, a TS return-type annotation, and params.
+ * @param {string} classBody
+ * @param {string} name
+ */
 export function methodBodyOf(classBody, name) {
   const re = new RegExp(`(?:^|[\\s;}])(?:async\\s+)?${name}\\s*\\([^)]*\\)\\s*(?::[^{]*)?\\{`, 'g');
   const m = re.exec(classBody);

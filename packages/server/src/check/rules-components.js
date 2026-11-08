@@ -89,7 +89,6 @@ export function checkNoStaticProperties(files, violations) {
 }
 
 /**
-/**
  * Rule: `no-signal-field-assignment`.
  *
  * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
