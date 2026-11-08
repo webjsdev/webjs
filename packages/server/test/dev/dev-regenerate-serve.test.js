@@ -68,36 +68,50 @@ test('GET /public/tailwind.css recompiles when a source is newer, serving the fr
   assert.match(readFileSync(join(appDir, 'public', 'tailwind.css'), 'utf8'), /grid-cols-4/);
 });
 
-test('GET /public/tailwind.css does NOT recompile when the output is already fresh', async () => {
+// The compile plus a run counter, so a test can tell a served-from-disk
+// response from one that recompiled.
+const COUNTED = `${COMPILE} && node -e "require('fs').appendFileSync('ran.log','x')"`;
+const runs = (appDir) => { try { return readFileSync(join(appDir, 'ran.log'), 'utf8').length; } catch { return 0; } };
+
+test('GET /public/tailwind.css does NOT recompile an output whose recorded build is still fresh (#1672)', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'grid-cols-4';`,
     'public/input.css': `@import "tailwindcss";`,
-    // A command that would OVERWRITE with a sentinel if it ever ran; it must not.
     'package.json': JSON.stringify({
       name: 'regen-fresh',
-      webjs: {
-        dev: {
-          regenerate: [
-            {
-              output: 'public/tailwind.css',
-              command: `node -e "require('fs').writeFileSync('public/tailwind.css','.RECOMPILED{x:1}')"`,
-              inputs: ['app', 'public/input.css'],
-            },
-          ],
-        },
-      },
+      webjs: { dev: { regenerate: [{ output: 'public/tailwind.css', command: COUNTED, inputs: ['app', 'public/input.css'] }] } },
     }),
   });
-  writeFileSync(join(appDir, 'public', 'tailwind.css'), `.grid-cols-4{display:grid}`);
-  // Sources old, output new (fresh).
-  const past = new Date(Date.now() - 60_000);
-  utimesSync(join(appDir, 'app', 'page.ts'), past, past);
-  utimesSync(join(appDir, 'public', 'input.css'), past, past);
-
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/public/tailwind.css'));
-  assert.equal(resp.status, 200);
-  const css = await resp.text();
-  assert.doesNotMatch(css, /RECOMPILED/, 'fresh output must not be rebuilt');
-  assert.match(css, /grid-cols-4/);
+  const first = await app.handle(new Request('http://x/public/tailwind.css'));
+  assert.match(await first.text(), /grid-cols-4/);
+  assert.equal(runs(appDir), 1, 'the missing output is built and recorded');
+
+  const second = await app.handle(new Request('http://x/public/tailwind.css'));
+  assert.equal(second.status, 200);
+  assert.match(await second.text(), /grid-cols-4/);
+  assert.equal(runs(appDir), 1, 'a fresh output is served from disk');
+
+  // An edit that adds no class: the compile runs once and writes the same
+  // bytes, and the next request is fresh again (the #1672 loop is gone).
+  writeFileSync(join(appDir, 'app', 'page.ts'), `export default () => 'grid-cols-4' + '';`);
+  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
+  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
+  assert.equal(runs(appDir), 2, 'one compile for the edit, none after it');
+});
+
+test('GET /public/tailwind.css rebuilds once an output compiled by hand, which carries no record (#1672)', async () => {
+  const appDir = makeApp({
+    'app/page.ts': `export default () => 'grid-cols-4';`,
+    'public/input.css': `@import "tailwindcss";`,
+    'public/tailwind.css': `.grid-cols-4{display:grid}`, // `npm run css:build` by hand
+    'package.json': JSON.stringify({
+      name: 'regen-unrecorded',
+      webjs: { dev: { regenerate: [{ output: 'public/tailwind.css', command: COUNTED, inputs: ['app', 'public/input.css'] }] } },
+    }),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
+  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
+  assert.equal(runs(appDir), 1);
 });

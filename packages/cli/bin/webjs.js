@@ -110,6 +110,9 @@ const USAGE = `webjs commands:
   webjs audit [--json]                            Run the npm / bun dependency audit, failing at "webjs": { "audit": { "level" } } (default high)
                                                   and above, minus the advisories "webjs.audit.ignore" accepts, each with its reason
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
+  webjs regenerate [--force] [--json]             Build every "webjs.dev.regenerate" output that is not fresh and record what each was
+                                                  built from (.webjs/regenerate.json). Use it in dev.before / start.before / CI in place
+                                                  of the raw compile command; exit 1 if a rule fails or does not write its output
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install] [--skip-ci]  Scaffold a new webjs app
                                                   <name> must be a valid package name (letters, digits, - . _, starts with a letter or digit)
@@ -270,6 +273,22 @@ const HELP = {
     usage: 'webjs types',
     summary: 'Generate .webjs/routes.d.ts (the typed Route href union + per-route params).',
     examples: ['webjs types'],
+  },
+  regenerate: {
+    usage: 'webjs regenerate [--force] [--json]',
+    summary: 'Build every webjs.dev.regenerate output that is not fresh, and record what each was built from.',
+    options: [
+      { flag: '--force', description: 'Rebuild every rule, fresh or not.' },
+      { flag: '--json', description: 'Emit one result per rule: output, state, built, ok (and reason on a failure).' },
+    ],
+    notes: [
+      'Each build is recorded in .webjs/regenerate.json: the command, a fingerprint of',
+      'the files under its inputs taken before it ran, and the output it produced. The',
+      'dev server and the doctor read that record, so put this command in dev.before,',
+      'start.before and any CI step that builds the outputs, instead of the raw compile.',
+      'Exits 1 when a rule fails or exits 0 without writing its output.',
+    ],
+    examples: ['webjs regenerate', 'webjs regenerate --force', 'webjs regenerate --json'],
   },
   typecheck: {
     usage: 'webjs typecheck [tsc args...]',
@@ -1608,6 +1627,33 @@ async function main() {
         `webjs types: wrote .webjs/routes.d.ts (${count} route${count === 1 ? '' : 's'} typed). ` +
         `Ensure tsconfig "include" lists ".webjs/routes.d.ts" so tsserver picks it up.`,
       );
+      break;
+    }
+    case 'regenerate': {
+      // Build every stale `webjs.dev.regenerate` output and record it (#1672),
+      // through the same server code the dev request path runs, so a build in
+      // dev.before / start.before / CI counts as fresh for the dev server and
+      // for the doctor. Outputs build one at a time.
+      const { regenerateOutputs } = await import('@webjsdev/server');
+      if (typeof regenerateOutputs !== 'function') {
+        // A @webjsdev/server older than this CLI: name the cause, not a TypeError.
+        console.error('The installed @webjsdev/server predates the regenerate build record (#1672). Install the @webjsdev/server release that matches this CLI.');
+        process.exit(1);
+      }
+      const force = rest.includes('--force');
+      const json = rest.includes('--json');
+      const results = await regenerateOutputs(process.cwd(), { force });
+      if (json) {
+        console.log(JSON.stringify(results, null, 2));
+      } else if (results.length === 0) {
+        console.log('webjs regenerate: no "webjs.dev.regenerate" rules declared in package.json.');
+      } else {
+        for (const r of results) {
+          const what = !r.built ? 'fresh' : r.ok ? `built (was ${r.state})` : r.reason === 'no-output' ? 'FAILED: exited 0 without writing it' : 'FAILED';
+          console.log(`webjs regenerate: ${r.output} ${what}`);
+        }
+      }
+      if (results.some((r) => !r.ok)) process.exit(1);
       break;
     }
     case 'typecheck': {

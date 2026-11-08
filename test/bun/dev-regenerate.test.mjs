@@ -9,6 +9,6 @@
  */
 import { test } from 'node:test';
 
-test('on-request dev regeneration rebuilds a stale output and skips a fresh one on this runtime (#967)', async () => {
+test('on-request regeneration and its build record behave the same on this runtime (#967, #1672)', async () => {
   await import('./dev-regenerate.mjs');
 });

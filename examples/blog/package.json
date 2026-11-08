@@ -21,7 +21,7 @@
     "dev": {
       "before": [
         "webjs db migrate",
-        "npm run css:build"
+        "webjs regenerate"
       ],
       "regenerate": [
         {
@@ -34,7 +34,7 @@
     "start": {
       "before": [
         "webjs db migrate",
-        "npm run css:build"
+        "webjs regenerate"
       ]
     },
     "doctor": {

@@ -584,6 +584,12 @@
     "redisStore": {
       "exempt": "internal: Redis session-store adapter, a deployment wiring choice not a page demo"
     },
+    "regenerateOutputs": {
+      "exempt": "internal: framework/CLI plumbing (the engine behind `webjs regenerate`, which the scaffold runs in its before steps)"
+    },
+    "regenerateStatus": {
+      "exempt": "internal: framework/CLI plumbing (the build-record reader behind the doctor's STATIC_ASSET_FRESHNESS check)"
+    },
     "requestId": {
       "demoed": true
     },

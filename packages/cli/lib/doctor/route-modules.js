@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Directories the route-module walk never descends into (deps, VCS, framework
-// and build caches). Mirrors FRESHNESS_IGNORE; kept separate so either walk can
+// and build caches). Mirrors the server regenerate walker's IGNORE_DIRS; kept separate so either walk can
 // change its exclusions without silently moving the other.
 export const ROUTE_WALK_IGNORE = new Set(['node_modules', '.git', '.webjs', 'dist', '.next', 'coverage']);
 

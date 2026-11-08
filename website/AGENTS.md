@@ -747,8 +747,9 @@ sections replaces, so the chrome swaps with no full page load. That is also why
 the root layout must keep rendering `${children}` with nothing around it.
 
 `/ui` also has its own stylesheet, `public/ui.css`, built from
-`public/ui-input.css` (`npm run css:build:ui`, and in `webjs.dev.before`,
-`webjs.dev.regenerate`, `webjs.start.before` and the Dockerfile). It carries
+`public/ui-input.css` (`npm run css:build:ui` by hand, and `webjs.dev.regenerate`,
+which `webjs regenerate` runs from `webjs.dev.before`, `webjs.start.before` and
+`pretest`, recording each build so the dev server and the doctor see it fresh). It carries
 no kit style. All nine compile one file each into
 `public/ui-styles/<name>.css` (`scripts/build-ui-styles.mjs`, run by the same
 four hooks), and a page links only the styles its `.style-<name>` wrappers

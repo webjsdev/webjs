@@ -1,4 +1,3 @@
-import { statSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -88,38 +87,6 @@ export function parseEnvKeys(text) {
     if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) keys.add(key);
   }
   return keys;
-}
-
-// Directories never worth walking for the CSS-freshness advisory (mirrors
-// dev-regenerate's IGNORE_DIRS): build output, deps, VCS + framework caches.
-const FRESHNESS_IGNORE = new Set(['node_modules', '.git', '.webjs', 'dist', '.next', 'coverage']);
-
-/**
- * Newest mtime (ms) of any FILE under a path (a file's own, or the max over the
- * files in a directory tree, skipping dependencies / dotfiles). Directory-node
- * mtimes are NOT counted, matching dev-regenerate's walker: a content edit only
- * shows through the file mtime, and a directory mtime is a flaky moving target.
- * A missing path is 0. Best-effort: never throws.
- * @param {string} abs
- * @returns {number}
- */
-export function newestMtimeMs(abs) {
-  let st;
-  try { st = statSync(abs); } catch { return 0; }
-  if (!st.isDirectory()) return st.mtimeMs;
-  let newest = 0;
-  let entries;
-  try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return newest; }
-  for (const e of entries) {
-    if (e.name.startsWith('.') || FRESHNESS_IGNORE.has(e.name)) continue;
-    // Skip symlinks: following one can cycle into unbounded recursion (a stack
-    // overflow here) or escape into node_modules. Same tradeoff as the server
-    // walker in dev-regenerate.js.
-    if (e.isSymbolicLink()) continue;
-    const m = newestMtimeMs(join(abs, e.name));
-    if (m > newest) newest = m;
-  }
-  return newest;
 }
 
 /**

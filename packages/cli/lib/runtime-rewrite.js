@@ -144,8 +144,9 @@ export function bunifyDockerfile(s) {
       '# `bun --bun run start` runs the `start` script on Bun (the server serves via\n' +
       '# Bun.serve). `webjs start` runs the `webjs.start.before` steps: `webjs db migrate`\n' +
       '# (resolves drizzle-kit and runs it under Bun, no npx, #570) and, for a UI app,\n' +
-      '# the Tailwind compile under `bun --bun` (no Node / npm in the image, #947), both\n' +
-      '# idempotent, then serves on $PORT.\n' +
+      '# `webjs regenerate`, which runs the Tailwind compile under `bun --bun` (no Node /\n' +
+      '# npm in the image, #947) only when the stylesheet is not fresh, both idempotent,\n' +
+      '# then serves on $PORT.\n' +
       'CMD ["bun", "--bun", "run", "start"]',
     );
 }

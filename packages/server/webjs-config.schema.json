@@ -175,7 +175,7 @@
           "items": { "type": "string" }
         },
         "regenerate": {
-          "description": "On-request build-output regeneration (#967), DEV-ONLY. Each rule rebuilds a stale `output` before the server serves it, instead of relying on a live watcher that can die and serve stale output. The scaffold uses this to keep the static public/tailwind.css fresh (#947) with no `tailwindcss --watch`. Read by the server (readRegenerateRules in dev-regenerate.js).",
+          "description": "On-request build-output regeneration (#967). In dev, each rule rebuilds an `output` that does not match its build record (.webjs/regenerate.json, #1672) before the server serves it, and `webjs regenerate` runs the same rules from dev.before / start.before / CI, instead of relying on a live watcher that can die and serve stale output. The scaffold uses this to keep the static public/tailwind.css fresh (#947) with no `tailwindcss --watch`. Read by the server (readRegenerateRules in dev-regenerate.js).",
           "type": "array",
           "items": {
             "type": "object",
@@ -191,7 +191,7 @@
                 "type": "string"
               },
               "inputs": {
-                "description": "Source paths (files or directories) whose newest mtime is compared to `output`'s. If any is newer (or the output is missing), the command runs. For Tailwind: the @source dirs plus public/input.css.",
+                "description": "Source paths (files or directories) the output is built from. Every build records a fingerprint of the files under them (path, size, mtime) in .webjs/regenerate.json, and the command runs again when that fingerprint, the command, or the output no longer matches the record, or the output is missing (#1672). For Tailwind: the @source dirs plus public/input.css.",
                 "type": "array",
                 "items": { "type": "string" }
               }
