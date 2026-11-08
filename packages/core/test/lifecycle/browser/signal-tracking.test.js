@@ -189,6 +189,27 @@ suite('Signal tracking across the update cycle', () => {
     el.remove();
   });
 
+  test('a value written before the element upgrades reaches a getter/setter over a signal', async () => {
+    const el = document.createElement('sig-track-pre-upgrade');
+    el.values = ['early'];
+    document.body.appendChild(el);
+    class SigPreUpgradeEl extends WebComponent {
+      #values = signal([]);
+      get values() { return this.#values.get(); }
+      set values(v) { this.#values.set(v); }
+      render() { return html`<p>${this.values.join(',')}</p>`; }
+    }
+    customElements.define('sig-track-pre-upgrade', SigPreUpgradeEl);
+    await el.updateComplete;
+    assert.equal(el.querySelector('p').textContent, 'early', 'the early value went through the setter');
+    assert.equal(Object.hasOwn(el, 'values'), false, 'no own property hides the accessor');
+    el.values = ['later'];
+    await tick();
+    await el.updateComplete;
+    assert.equal(el.querySelector('p').textContent, 'later', 'later writes still reach the signal');
+    el.remove();
+  });
+
   test('a watch() part swaps on its own and does not re-render its host', async () => {
     let renders = 0;
     const value = signal('x');

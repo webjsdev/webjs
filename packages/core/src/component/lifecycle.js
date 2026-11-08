@@ -574,6 +574,17 @@ class WebComponentBase extends Base {
 
   _activate() {
     this._connected = true;
+    // A value written on the element before its class was defined is an own
+    // data property, and it hides any accessor of the same name for good.
+    // `_initializeProperties` lifts the declared properties in the
+    // constructor; an accessor the subclass defines itself (a getter/setter
+    // over a private signal, the shape internal state another element assigns
+    // takes) gets the same lift here, on the first connect, since its private
+    // field does not exist yet while the base constructor runs.
+    if (!this.__accessorsLifted) {
+      this.__accessorsLifted = true;
+      liftShadowedAccessors(this);
+    }
     // Reflect declared reflect:true properties from their current value now
     // that the element is connected. Constructor / willUpdate defaults were
     // set while disconnected (the setter skips reflection then), so this is
@@ -1606,6 +1617,28 @@ export function WebComponent(properties) {
       static properties = properties;
       static [FACTORY_PROPS] = true;
     };
+  }
+}
+
+/**
+ * Re-assign every own data property of `el` that hides a setter defined on
+ * its class chain below the WebJs base, so the value goes through the
+ * accessor instead of shadowing it.
+ *
+ * @param {any} el
+ */
+function liftShadowedAccessors(el) {
+  for (const key of Object.keys(el)) {
+    for (let p = Object.getPrototypeOf(el); p && p !== WebComponentBase.prototype; p = Object.getPrototypeOf(p)) {
+      const d = Object.getOwnPropertyDescriptor(p, key);
+      if (!d) continue;
+      if (d.set) {
+        const value = el[key];
+        delete el[key];
+        el[key] = value;
+      }
+      break;
+    }
   }
 }
 
