@@ -432,56 +432,6 @@ OldStyle.register('old-style');
   }
 });
 
-test('no-state-property: flags every spelling of the state option (#1677)', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'components'), { recursive: true });
-    await writeFile(
-      join(appDir, 'components', 'stateful.ts'),
-      `import { WebComponent, prop } from '@webjsdev/core';
-class Stateful extends WebComponent({
-  a: prop({ state: true }),
-  b: prop(Number, { reflect: false, state: true }),
-  c: { type: String, state: false },
-  d: prop<boolean>({ state: true }),
-  label: String,
-}) {}
-Stateful.register('state-ful');
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const flagged = violations.filter((v) => v.rule === 'no-state-property').map((v) => v.message.match(/`(\w+)`/)[1]);
-    assert.deepEqual(flagged, ['a', 'b', 'c', 'd']);
-    const v = violations.find((v) => v.rule === 'no-state-property');
-    assert.ok(v.fix.includes('signal('), 'the fix names the signal replacement');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-state-property: ignores a nested state key, a string that spells one, and a type argument', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'components'), { recursive: true });
-    await writeFile(
-      join(appDir, 'components', 'fine.ts'),
-      `import { WebComponent, prop } from '@webjsdev/core';
-class Fine extends WebComponent({
-  n: prop(Number, { converter: { fromAttribute: () => ({ state: true }) } }),
-  v: prop(String, { attribute: 'data-state: true' }),
-  item: prop<{ state: 'open' | 'closed' }>(Object),
-  pick: prop<(next: { state: boolean }) => void>(Function),
-}) {}
-Fine.register('fine-el');
-`,
-    );
-    const violations = await checkConventions(appDir);
-    assert.equal(violations.filter((v) => v.rule === 'no-state-property').length, 0);
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
 test('no-signal-field-assignment: flags every write that replaces a signal field', async () => {
   const appDir = await makeTempApp();
   try {

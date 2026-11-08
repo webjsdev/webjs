@@ -170,7 +170,7 @@ const STATIC_FIELD_REASONS = {
  * component with no OTHER client signal renders identical HTML with or
  * without its JS and is elidable like any display-only component, saving a
  * module download plus a redundant on-hydration re-fetch. It ships only when
- * it ALSO carries an independent signal: an `@event`, a declared reactive
+ * it ALSO carries an independent signal: an `@event`, a non-`state` reactive
  * prop, a reactive import, a lifecycle hook (`renderFallback()` included, via
  * CLIENT_LIFECYCLE_HOOKS), a `<slot>`, `static shadow = true`, `static
  * interactive = true`, cross-module observation, or a transitively-reachable
@@ -546,7 +546,7 @@ export function hasModuleScopeSideEffect(src, literals) {
     // statement. Exempt it so a display-only factory-form component stays
     // elidable; a genuinely interactive one still ships via the per-class and
     // module-level signal checks below (events, slots, shadow, lifecycle, a
-    // declared factory prop, a reactive import). Scoped to the `extends`
+    // non-state factory prop, a reactive import). Scoped to the `extends`
     // position, so a top-level `WebComponent(...)` call used anywhere else
     // still counts as a side effect (#604).
     if (ident === 'WebComponent' && /\bextends\s+$/.test(frame.slice(0, m.index))) continue;
@@ -764,10 +764,10 @@ export function analyzeComponentSource(src) {
         return { interactive: true, reason: `calls '${call}'` };
       }
     }
-    if (hasReactiveProperty(body) || hasFactoryProperty(factoryArg)) {
+    if (hasNonStateReactiveProperty(body) || hasNonStateFactoryProperty(factoryArg)) {
       return {
         interactive: true,
-        reason: 'declares a reactive property',
+        reason: 'declares a reactive property that is not { state: true }',
       };
     }
   }
@@ -854,62 +854,113 @@ function importsReactivePrimitive(src, literals) {
 
 /**
  * True if the class body declares a `static properties` block with any
- * entry. A reactive property rides an attribute or a `.prop` binding, the
- * channel through which a parent pushes updates, which is client-side
- * reactivity. Internal state is a signal, not a declared property (the
- * factory refuses a `state` option, #1677), so every entry counts.
+ * entry that is NOT marked `{ state: true }`. Non-state reactive
+ * properties ride an attribute or a `.prop` binding, the channel through
+ * which a parent pushes updates, which is client-side reactivity.
  *
- * Conservative on parse failure: a `static get properties()` accessor, a
- * non-literal assignment, a spread, or an unbalanced object literal returns
- * true (ship).
+ * Conservative on parse failure: a `static get properties()` accessor or
+ * an unbalanced object literal returns true (ship).
  *
  * @param {string} classBody
  * @returns {boolean}
  */
-function hasReactiveProperty(classBody) {
+function hasNonStateReactiveProperty(classBody) {
   // No reactive properties declared at all: nothing rides an attribute.
   if (!/\bstatic\s+(?:get\s+)?properties\b/.test(classBody)) return false;
+  // Properties ARE declared. We can only clear a component as inert when
+  // the declaration is a brace literal whose every entry is { state: true }.
   // A getter (`static get properties()`) or a non-literal assignment
-  // (`= buildProps()`, `= SHARED_PROPS`) cannot be read, so ship
-  // conservatively. `[^=]*` tolerates a TS type annotation between the name
-  // and `=` without crossing the `=`.
+  // (`= buildProps()`, `= SHARED_PROPS`, `= Object.assign(...)`) cannot be
+  // parsed for state flags, so ship conservatively. `[^=]*` tolerates a TS
+  // type annotation between the name and `=` without crossing the `=`.
   const m = /\bstatic\s+properties\b[^=]*=\s*\{/.exec(classBody);
   if (!m) return true;
   const objStart = m.index + m[0].length;
   const objEnd = matchClosingBrace(classBody, objStart);
   if (objEnd === -1) return true;
-  return declaresAnyEntry(classBody.slice(objStart, objEnd));
+  const obj = classBody.slice(objStart, objEnd);
+  // A spread (`...BASE_PROPS`) can inject reactive properties we cannot
+  // see; ship rather than guess they are all { state: true }.
+  if (/\.\.\./.test(obj)) return true;
+  for (const entry of topLevelPropertyValues(obj)) {
+    // Object-literal descriptor: inert only when it carries `state: true` at
+    // its top level (descriptorDeclaresState blanks strings and ignores a
+    // nested state flag, e.g. inside a converter, so it cannot be forged).
+    if (entry.startsWith('{')) {
+      if (!descriptorDeclaresState(entry)) return true;
+    } else {
+      // Shorthand like `count: Number` rides an attribute, not state.
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
  * True if the class factory argument (`extends WebComponent({ … })`) declares
- * any reactive property. Each one rides an HTML attribute or a `.prop`
- * hydration binding, the channel that forces the component to ship.
- * Conservative on a spread or an unbalanced brace (ship).
+ * any reactive property that is NOT `{ state: true }`. A non-state property
+ * rides an HTML attribute or a `.prop` hydration binding, the channel that
+ * forces the component to ship; a `state: true` property is component-local
+ * reactive state with no such channel, so a component whose only signal is
+ * state props stays elidable.
+ *
+ * A property value is treated as state ONLY when its descriptor declares
+ * `state: true` at the TOP LEVEL (see `descriptorDeclaresState`), which covers
+ * the bare descriptor `{ state: true }` and the `prop()` helper forms
+ * `prop({ state: true })` / `prop(Type, { state: true })`. Anything else (a bare
+ * type `Number`, `prop(Number)`, an options object without `state: true`) is
+ * non-state and ships. Conservative on a spread or an unbalanced brace (cannot
+ * prove every entry is state, so ship).
  *
  * @param {string} factoryArg
  * @returns {boolean}
  */
-function hasFactoryProperty(factoryArg) {
+function hasNonStateFactoryProperty(factoryArg) {
   if (!factoryArg) return false;
   const objStart = factoryArg.indexOf('{');
   if (objStart === -1) return false;
   // matchClosingBrace starts at depth 1, so pass the index AFTER the brace.
   const objEnd = matchClosingBrace(factoryArg, objStart + 1);
   if (objEnd === -1) return true;
-  return declaresAnyEntry(factoryArg.slice(objStart + 1, objEnd));
+  const obj = factoryArg.slice(objStart + 1, objEnd);
+  if (/\.\.\./.test(obj)) return true; // spread: cannot prove all entries state
+  for (const entry of topLevelPropertyValues(obj)) {
+    if (!descriptorDeclaresState(entry)) return true;
+  }
+  return false;
 }
 
 /**
- * True if a properties object body holds at least one entry. A spread
- * (`...BASE_PROPS`) can inject entries we cannot see, so it counts.
+ * True if a reactive-property descriptor declares `state: true` at the TOP
+ * LEVEL of its options object (brace-depth 1). Restricting to depth 1 is a
+ * direction-of-safety fix: a `state: true` buried deeper (a converter /
+ * hasChanged body that happens to return `{ state: true }`) must NOT forge the
+ * flag, because wrongly treating an attribute-riding property as state would
+ * ELIDE an interactive component and break the page. Strings / templates are
+ * blanked first, so `attribute: 'data-state: true'` does not match, and the
+ * `\b` word boundary keeps a key like `firstate: true` from matching. In every
+ * legitimate shape (`{ state: true }`, `prop({ state: true })`,
+ * `prop(Type, { state: true })`) the descriptor object is the only brace group,
+ * so its `state` key sits at depth 1.
  *
- * @param {string} obj  the body between the outer braces
+ * @param {string} entry  the property VALUE text
  * @returns {boolean}
  */
-function declaresAnyEntry(obj) {
-  if (/\.\.\./.test(obj)) return true;
-  return topLevelPropertyValues(obj).length > 0;
+function descriptorDeclaresState(entry) {
+  const code = entry
+    .replace(/'[^'\n]*'/g, "''")
+    .replace(/"[^"\n]*"/g, '""')
+    .replace(/`[^`]*`/g, '``');
+  // Keep only text at brace-depth <= 1 (the descriptor's own level); blank
+  // deeper nesting so a nested `state: true` cannot count.
+  let depth = 0;
+  let shallow = '';
+  for (const c of code) {
+    if (c === '{') { depth++; if (depth <= 1) shallow += c; continue; }
+    if (c === '}') { if (depth <= 1) shallow += c; if (depth > 0) depth--; continue; }
+    if (depth <= 1) shallow += c;
+  }
+  return /\bstate\s*:\s*true\b/.test(shallow);
 }
 
 /**

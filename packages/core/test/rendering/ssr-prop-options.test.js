@@ -173,6 +173,12 @@ test('a prop with NO converter is byte-identical to what SSR emitted before the 
 // The browser half of each case is asserted for real, through an element
 // upgrade, in `browser/ssr-client-parity.test.js`. These are the SSR halves.
 
+class SsrStateObj extends WebComponent({ cfg: prop(Object, { state: true }) }) {
+  constructor() { super(); this.cfg = { fromCtor: true }; }
+  render() { return html`<i>val=${JSON.stringify(this.cfg)}</i>`; }
+}
+SsrStateObj.register('ssr-state-obj');
+
 class SsrCamel extends WebComponent({ cfgData: prop(String) }) {
   constructor() { super(); this.cfgData = 'CTOR'; }
   render() { return html`<i>val=${String(this.cfgData)}</i>`; }
@@ -199,10 +205,34 @@ class SsrObj extends WebComponent({ cfg: prop(Object) }) {
 }
 SsrObj.register('ssr-obj');
 
-test('an Object prop receives a .prop binding at SSR (#1341)', async () => {
-  // `consumePropAttrs` reads and deletes every `data-webjs-prop-*` entry BEFORE
-  // `applyAttrsToInstance` runs, so the attribute reader cannot reach it.
-  const out = await renderToString(html`<ssr-obj .cfg=${{ viaProp: 1 }}></ssr-obj>`);
+test('a state:true prop is not populated from a source attribute at SSR (#1341)', async () => {
+  // `observedAttributes` excludes state props, so the browser never delivers
+  // this attribute to any reader and the upgraded element keeps the
+  // constructor value. SSR now skips it for the same reason.
+  const out = await renderToString(html([`<ssr-state-obj cfg="oops"></ssr-state-obj>`]));
+  assert.ok(out.includes('val={"fromCtor":true}'), out);
+  assert.ok(!out.includes('val=null'), `the attribute still reached the reader: ${out}`);
+});
+
+class SsrAttrFalse extends WebComponent({ cfg: prop(Object, { attribute: false }) }) {
+  constructor() { super(); this.cfg = { fromCtor: true }; }
+  render() { return html`<i>val=${JSON.stringify(this.cfg)}</i>`; }
+}
+SsrAttrFalse.register('ssr-attr-false');
+
+test('an attribute: false prop is not read from a source attribute at SSR, and a .prop binding reaches it (#1679)', async () => {
+  const out = await renderToString(html([`<ssr-attr-false cfg="oops"></ssr-attr-false>`]));
+  assert.ok(out.includes('val={"fromCtor":true}'), `the attribute was read: ${out}`);
+  const bound = await renderToString(html`<ssr-attr-false .cfg=${{ viaProp: 1 }}></ssr-attr-false>`);
+  assert.ok(bound.includes('val={"viaProp":1}'), bound);
+});
+
+test('a state:true prop still receives a .prop binding at SSR (#1341)', async () => {
+  // The hydration channel a `state` prop is SUPPOSED to receive an SSR value
+  // through: `consumePropAttrs` reads and deletes every `data-webjs-prop-*`
+  // entry BEFORE `applyAttrsToInstance` runs, so the Decision 1 filter cannot
+  // reach it. This must stay green across the whole change.
+  const out = await renderToString(html`<ssr-state-obj .cfg=${{ viaProp: 1 }}></ssr-state-obj>`);
   assert.ok(out.includes('val={"viaProp":1}'), out);
 });
 

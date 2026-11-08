@@ -28,6 +28,8 @@ export interface PropertyDeclaration<T = unknown> {
   type?: PropertyConstructor<T>;
   /** Write property changes back to the HTML attribute (kebab-cased). */
   reflect?: boolean;
+  /** Internal-only: no attribute, no reflection, but still reactive. */
+  state?: boolean;
   /** Rename the attribute, or pass `false` to suppress it entirely. */
   attribute?: string | false;
   /** Custom attribute ⇄ property serialisation. Takes precedence over `type`. */
@@ -83,10 +85,11 @@ interface WebComponentBase extends HTMLElement {
    * Schedule a re-render. Optionally record a property change so lifecycle
    * hooks can branch on what changed via `changedProperties`.
    *
-   * For instance-local state, use a signal from `@webjsdev/core`'s
-   * `signal()`. The framework's built-in SignalWatcher wires every signal
-   * the update cycle reads to a re-render automatically; explicit
-   * `requestUpdate()` is rarely needed.
+   * For instance-local state, prefer a reactive property (`WebComponent({
+   * foo: prop({ state: true }) })`) or a signal from
+   * `@webjsdev/core`'s `signal()`. The framework's built-in
+   * SignalWatcher wires every signal read in `render()` to a re-render
+   * automatically; explicit `requestUpdate()` is rarely needed.
    */
   requestUpdate(name?: string, oldValue?: unknown): void;
   /** A Promise that resolves after the next render commit. */

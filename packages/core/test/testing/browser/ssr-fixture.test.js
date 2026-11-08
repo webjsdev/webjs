@@ -13,7 +13,7 @@
  *      (SSR == hydrated) is paired with the divergence case.
  */
 import { html } from '../../../src/html.js';
-import { WebComponent } from '../../../src/component.js';
+import { WebComponent, prop } from '../../../src/component.js';
 import { signal } from '../../../src/signal.js';
 import { renderToString } from '../../../src/render-server.js';
 import { ssrFixture, waitForUpdate } from '../../../src/testing.js';
@@ -51,10 +51,10 @@ suite('ssrFixture() (#268)', () => {
     // await the real updateComplete, the DOM would still show the SSR default
     // (the connectedCallback-scheduled re-render is microtask-deferred), so the
     // 'hydrated' value genuinely proves the await happened.
-    class SF1 extends WebComponent {
-      #label = signal('ssr-default');
-      connectedCallback() { super.connectedCallback(); this.#label.set('hydrated'); }
-      render() { return html`<output>${this.#label.get()}</output>`; }
+    class SF1 extends WebComponent({ label: prop(String, { state: true }) }) {
+      constructor() { super(); this.label = 'ssr-default'; }
+      connectedCallback() { super.connectedCallback(); this.label = 'hydrated'; }
+      render() { return html`<output>${this.label}</output>`; }
     }
     SF1.register('ssrf-cycle');
 

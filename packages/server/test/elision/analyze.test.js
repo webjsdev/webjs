@@ -14,13 +14,14 @@ import {
   computeElidableComponents,
 } from '../../src/component-elision.js';
 
-// Canonical display-only fixture: no reactive property, so nothing rides an
-// attribute and the component is elidable. (The dedicated `static properties`
-// tests below keep covering the legacy analyser path, which #599 bans at
-// runtime but the analyser still classifies defensively.)
+// Canonical display-only fixture in the declare-free factory DX (#597 / #599):
+// a single { state: true } prop, so nothing rides an attribute and the
+// component is elidable. (The dedicated `static properties` tests below keep
+// covering the legacy analyser path, which #599 bans at runtime but the
+// analyser still classifies defensively.)
 const DISPLAY_ONLY = `
-import { WebComponent, html } from '@webjsdev/core';
-class StudentCard extends WebComponent {
+import { WebComponent, html, prop } from '@webjsdev/core';
+class StudentCard extends WebComponent({ student: prop({ state: true }) }) {
   constructor() { super(); this.student = { name: '' }; }
   render() { return html\`<p>\${this.student.name}</p>\`; }
 }
@@ -46,7 +47,7 @@ test('component with no static properties at all is not interactive', () => {
 // Before #604 the factory CALL `extends WebComponent({ … })` was read as a
 // module-scope side effect by `hasModuleScopeSideEffect`, so EVERY factory-form
 // component shipped, even a display-only one. The exemption (scoped to the
-// `extends` position) plus the `hasFactoryProperty` check make the
+// `extends` position) plus the `hasNonStateFactoryProperty` fix make the
 // factory matrix classify the same way the legacy `static properties` form did.
 
 const factory = (header, body = 'render() { return html`<span>x</span>`; }') =>
@@ -57,26 +58,31 @@ test('factory WebComponent({}) display-only is ELIDABLE (#604)', () => {
   assert.equal(analyzeComponentSource(factory('WebComponent({})')).interactive, false);
 });
 
-test('a stray state option still ships: every declared property counts (#1677)', () => {
-  // The factory throws on `state` at runtime; the analyser must not read it as
-  // a reason to elide.
-  for (const header of ['WebComponent({ n: prop({ state: true }) })', 'WebComponent({ n: prop(Number, { state: true }) })']) {
-    const r = analyzeComponentSource(factory(header));
-    assert.equal(r.interactive, true, header);
-    assert.match(r.reason, /reactive property/);
-  }
+test('factory state-only prop({ state: true }) is ELIDABLE (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ n: prop({ state: true }) })'));
+  assert.equal(r.interactive, false);
 });
 
-test('factory prop (bare type) ships (#604)', () => {
+test('factory prop(Type, { state: true }) is ELIDABLE (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ n: prop(Number, { state: true }) })'));
+  assert.equal(r.interactive, false);
+});
+
+test('factory NON-state prop (bare type) ships (#604)', () => {
   const r = analyzeComponentSource(factory('WebComponent({ n: Number })', 'render() { return html`<span>${this.n}</span>`; }'));
   assert.equal(r.interactive, true);
   assert.match(r.reason, /reactive property/);
 });
 
-test('factory prop(Number) ships (#604)', () => {
+test('factory prop(Number) (no state) ships (#604)', () => {
   const r = analyzeComponentSource(factory('WebComponent({ n: prop(Number) })', 'render() { return html`<span>${this.n}</span>`; }'));
   assert.equal(r.interactive, true);
   assert.match(r.reason, /reactive property/);
+});
+
+test('factory mixed state + non-state ships (the non-state prop is the signal, #604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ a: prop({ state: true }), b: Number })', 'render() { return html`<span>${this.b}</span>`; }'));
+  assert.equal(r.interactive, true);
 });
 
 test('factory {} with an @event ships (#604)', () => {
@@ -100,9 +106,12 @@ test('the WebComponent exemption is scoped: a top-level non-extends WebComponent
   assert.match(r.reason, /module scope/);
 });
 
-test('a prop with a converter ships (#604)', () => {
+test('a non-state prop with a NESTED state:true (a converter) still ships (#604 direction-of-safety)', () => {
+  // The state flag counts only at the descriptor top level. A `state: true`
+  // buried in a converter body must NOT forge the flag, or an attribute-riding
+  // (interactive) prop would be wrongly elided and the page would break.
   const r = analyzeComponentSource(factory(
-    'WebComponent({ n: prop(Number, { converter: { fromAttribute: (v) => Number(v) } }) })',
+    'WebComponent({ n: prop(Number, { converter: { fromAttribute: () => ({ state: true }) } }) })',
     'render() { return html`<span>${this.n}</span>`; }',
   ));
   assert.equal(r.interactive, true);
@@ -134,7 +143,7 @@ test('importing renderStream forces interactive (it does client DOM work, #248)'
 
 test('a BARE async render() is ELIDABLE (data is baked into first paint, #474)', () => {
   // A light-DOM async-display leaf with no other client signal (no @event, no
-  // declared prop, no reactive import, no lifecycle hook, no slot/shadow). Its
+  // non-state prop, no reactive import, no lifecycle hook, no slot/shadow). Its
   // SSR pass resolves the data into the HTML, so the elided HTML is identical
   // and the on-hydration re-fetch is redundant. #470 shipped it; #474 elides it.
   const src = `
@@ -153,11 +162,11 @@ test('a bare `render = async ()` arrow field is also ELIDABLE (#474)', () => {
     'render() { return html`<p>${this.student.name}</p>`; }',
     'render = async () => html`<p>${this.student.name}</p>`;',
   );
-  // DISPLAY_ONLY declares no reactive property, so nothing else ships it.
+  // DISPLAY_ONLY's only prop is { state: true }, so nothing else ships it.
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
-test('async render() + a reactive prop ships (the prop is the signal, #474)', () => {
+test('async render() + a non-state reactive prop ships (the prop is the signal, #474)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     import { getUser } from '../actions/get-user.server.ts';
@@ -495,6 +504,7 @@ test('live directive import forces interactive', () => {
     import { WebComponent, html } from '@webjsdev/core';
     import { live } from '@webjsdev/core/directives';
     class Field extends WebComponent {
+      static properties = { v: { state: true } };
       render() { return html\`<input .value=\${live('x')}>\`; }
     }
     Field.register('field-el');
@@ -507,6 +517,7 @@ test('a render-time directive (repeat) does NOT force interactive', () => {
     import { WebComponent, html } from '@webjsdev/core';
     import { repeat } from '@webjsdev/core/directives';
     class List extends WebComponent {
+      static properties = { items: { state: true } };
       render() { return html\`<ul>\${repeat([], (x) => x, (x) => html\`<li>\${x}</li>\`)}</ul>\`; }
     }
     List.register('list-el');
@@ -522,7 +533,7 @@ test('addController forces interactive', () => {
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
-test('a reactive property forces interactive', () => {
+test('non-state reactive property forces interactive', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     class Counter extends WebComponent {
@@ -534,7 +545,7 @@ test('a reactive property forces interactive', () => {
   `;
   const r = analyzeComponentSource(src);
   assert.equal(r.interactive, true);
-  assert.match(r.reason, /reactive property/);
+  assert.match(r.reason, /state/);
 });
 
 test('shorthand reactive property (count: Number) forces interactive', () => {
@@ -549,20 +560,31 @@ test('shorthand reactive property (count: Number) forces interactive', () => {
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
-test('an empty static properties block stays display-only, a stray state option ships (#1677)', () => {
-  const block = (props) => `
+test('mixed state + non-state property still ships (non-state wins)', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Mixed extends WebComponent {
+      static properties = { label: { type: String }, open: { type: Boolean, state: true } };
+      render() { return html\`<p>\${this.label}</p>\`; }
+    }
+    Mixed.register('mixed-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('only state properties stays display-only', () => {
+  const src = `
     import { WebComponent, html } from '@webjsdev/core';
     class Internal extends WebComponent {
-      static properties = ${props};
+      static properties = { a: { type: String, state: true }, b: { state: true } };
       render() { return html\`<p>x</p>\`; }
     }
     Internal.register('internal-el');
   `;
-  assert.equal(analyzeComponentSource(block('{}')).interactive, false);
-  assert.equal(analyzeComponentSource(block('{ a: { type: String, state: true }, b: { state: true } }')).interactive, true);
+  assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
-test('static properties assigned a function call ships (cannot be read)', () => {
+test('static properties assigned a function call ships (cannot parse state flags)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     class Built extends WebComponent {
@@ -587,12 +609,12 @@ test('static properties assigned an identifier ships', () => {
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
-test('static properties with a spread ships (a spread can inject props)', () => {
+test('static properties with a spread ships (spread can inject non-state props)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     import { BASE } from './base.js';
     class Spread extends WebComponent {
-      static properties = { ...BASE, mode: { type: String } };
+      static properties = { ...BASE, mode: { state: true } };
       render() { return html\`<p>x</p>\`; }
     }
     Spread.register('spread-el');
@@ -609,7 +631,21 @@ test('static properties with a TS type annotation is still parsed', () => {
     }
     Typed.register('typed-el');
   `;
-  // count is declared, so it must ship even through the annotation.
+  // count is non-state, so it must ship even through the annotation.
+  assert.equal(analyzeComponentSource(src).interactive, true);
+});
+
+test('a string descriptor value containing "state: true" does not forge the flag', () => {
+  // `attribute` is a real descriptor option. The literal text inside the
+  // string must not be mistaken for the state flag.
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Variant extends WebComponent {
+      static properties = { variant: { type: String, attribute: 'data-state: true' } };
+      render() { return html\`<p>x</p>\`; }
+    }
+    Variant.register('variant-el');
+  `;
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
@@ -644,7 +680,7 @@ test('static get properties is conservative (ships)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     class Old extends WebComponent {
-      static get properties() { return { x: { type: Number } }; }
+      static get properties() { return { x: { state: true } }; }
       render() { return html\`<p>x</p>\`; }
     }
     Old.register('old-el');
