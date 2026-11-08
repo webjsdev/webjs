@@ -157,7 +157,12 @@ edit is invisible and a counterfactual passes vacuously), and run
    Published-to-npm copies ship pre-built `dist/` bundles alongside
    `src/`; the browser fetches them when `dist/` is present
    (`scripts/build-framework-dist.js` is wired to the `prepare`
-   lifecycle so `npm publish` always rebuilds). The browser surface is
+   lifecycle so `npm publish` always rebuilds). The build never writes
+   through a symlink at its out dir (#1671): once esbuild succeeds it
+   swaps such a link for a real directory holding the new bundles and
+   leaves the link's target untouched, and a failed build leaves the
+   link in place. In a linked worktree `npm run worktree:link` builds
+   this dist from the worktree's sources rather than linking it. The browser surface is
    ONE self-contained file, `dist/webjs-core-browser.js` (built with
    `splitting` off, so no `chunk-*.js`): it re-exports the whole browser
    API, so the bare specifier and the `/directives`, `/context`,
