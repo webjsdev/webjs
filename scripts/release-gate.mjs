@@ -281,8 +281,16 @@ async function scaffoldStage(runtime, tarballs, port) {
       const from = process.env.GATE_POISON_FROM || '0.8.86';
       const prior = JSON.parse(readFileSync(pkgPath, 'utf8'));
       const old = { ...prior, overrides: {}, dependencies: { ...prior.dependencies, '@webjsdev/server': from, '@webjsdev/cli': process.env.GATE_POISON_CLI || '0.10.68', '@webjsdev/core': process.env.GATE_POISON_CORE || '0.7.64' } };
+      // The old CLI must resolve its own compatible transitive dependencies.
+      // Keeping a new UI tarball here would demand an unpublished core minor
+      // while the root intentionally pins the previous core release.
+      for (const name of Object.keys(tarballs)) {
+        if (!['@webjsdev/core', '@webjsdev/server', '@webjsdev/cli'].includes(name)) delete old.dependencies[name];
+      }
       writeFileSync(pkgPath, JSON.stringify(old, null, 2));
-      if (run('bun', ['install'], { cwd: appDir, quiet: true }).ok) {
+      const previousInstall = run('bun', ['install'], { cwd: appDir, quiet: true, timeoutMs: 120_000 });
+      record(stage, `install previous release ${from} to warm the cache`, previousInstall.ok, previousInstall.ok ? '' : previousInstall.out.slice(-800));
+      if (previousInstall.ok) {
         const d0 = await startDev(appDir, 'bun', ['run', 'dev'], port, devEnv).catch(() => null);
         if (d0) { const r = await fetch(base + '/zzgate').catch(() => ({ status: 0 })); console.log(`  (${from} served /zzgate ${r.status} while warming the cache)`); await d0.stop(); }
       }
