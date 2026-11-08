@@ -67,7 +67,7 @@
  * <span class=${switchTrackClass({ size: 'sm' })}></span>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
 /** Hidden native checkbox: handles form value + keyboard activation. */
@@ -156,22 +156,22 @@ export class UiSwitch extends WebComponent({
       data-slot="switch"
       data-size=${size}
       data-state=${state}
-      aria-invalid=${this.invalid === 'true' ? 'true' : null}
+      aria-invalid=${this.invalid === 'true' ? 'true' : nothing}
       ?data-disabled=${this.disabled}
       class=${cn('cn-switch peer group/switch relative inline-flex items-center transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 data-disabled:cursor-not-allowed data-disabled:opacity-50 has-[>input:focus-visible]:ring-[3px] has-[>input:focus-visible]:ring-ring/50', TRACK_SIZES[size])}
     ><input
       type="checkbox"
       role="switch"
-      id=${this.inputId || null}
-      name=${this.name || null}
-      value=${this.value || null}
+      id=${this.inputId || nothing}
+      name=${this.name || nothing}
+      value=${this.value || nothing}
       ?checked=${this.checked}
       ?disabled=${this.disabled}
       ?required=${this.required}
-      aria-label=${this._attr('aria-label')}
-      aria-labelledby=${this._attr('aria-labelledby')}
-      aria-describedby=${this._attr('aria-describedby')}
-      aria-invalid=${this.invalid === 'true' ? 'true' : null}
+      aria-label=${this._attr('aria-label') ?? nothing}
+      aria-labelledby=${this._attr('aria-labelledby') ?? nothing}
+      aria-describedby=${this._attr('aria-describedby') ?? nothing}
+      aria-invalid=${this.invalid === 'true' ? 'true' : nothing}
       class="peer absolute inset-0 z-10 m-0 size-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
       @change=${this._onChange}
     ><span

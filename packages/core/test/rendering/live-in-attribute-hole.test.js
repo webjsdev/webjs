@@ -27,6 +27,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { html } from '../../src/html.js';
+import { nothing } from '../../src/sentinels.js';
 import { renderToString, renderToStream } from '../../src/render-server.js';
 import { live } from '../../src/directives.js';
 
@@ -105,11 +106,12 @@ test('a mixed attribute hole resolves live() in every position (#1443)', async (
   });
 });
 
-test('a null attribute hole is omitted through live() exactly like a bare null (#1443, #1573)', async () => {
-  // A nullish plain-attribute hole omits the attribute on both renderers
-  // (#1573). Unwrapping live() must reach that rule, not stringify the wrapper.
+test('a nullish attribute hole behaves through live() exactly like a bare value (#1443, #1682)', async () => {
   await bothRenderers(() => html`<div title=${live(null)}></div>`, (out, who) => {
-    assert.doesNotMatch(out, /title=/, `${who}: live(null) must omit title like a bare null, got ${out}`);
+    assert.match(out, /title=""/, `${who}: live(null) renders title="" like a bare null, got ${out}`);
+  });
+  await bothRenderers(() => html`<div title=${live(nothing)}></div>`, (out, who) => {
+    assert.doesNotMatch(out, /title=/, `${who}: live(nothing) must omit title, got ${out}`);
   });
 });
 

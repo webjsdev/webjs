@@ -148,13 +148,11 @@ function installAccessors(Ctor, props) {
       get() { return this.__propValues[propName]; },
       set(newVal) {
         const oldVal = this.__propValues[propName];
-        if (!changedCheck(newVal, oldVal)) return;
         this.__propValues[propName] = newVal;
+        if (!changedCheck(newVal, oldVal)) return;
         // Reflect to attribute if requested (_reflectAttribute skips a prop
         // with no attribute: `state: true` or `attribute: false`).
-        if (d.reflect && this._connected) {
-          this._reflectAttribute(propName, newVal, d);
-        }
+        if (d.reflect) (this.__reflectPending ??= new Set()).add(propName);
         // requestUpdate records the (name, oldValue) entry AND schedules a
         // render. During the update phase the scheduler short-circuits and
         // the entry folds into the current cycle's changedProperties.
@@ -1027,10 +1025,6 @@ class WebComponentBase extends Base {
         }
 
         if (!pendingCommit) {
-          // --- 6. controllers' hostUpdated (sync commit) ---
-          for (const c of this.__controllers || NO_CONTROLLERS) {
-            if (c.hostUpdated) c.hostUpdated();
-          }
           didCommit = true;
         }
       }
@@ -1044,9 +1038,7 @@ class WebComponentBase extends Base {
       // The snapshot is consumed once the commit is DISPATCHED. For an async
       // render it resets here too, so a property change during the in-flight
       // fetch starts a fresh cycle (whose render token supersedes this one).
-      if (didCommit || pendingCommit) {
-        this._changedProperties = new Map();
-      }
+      this._changedProperties = new Map();
     }
 
     // --- Async render: finish the cycle when the pending commit settles. ---
@@ -1063,10 +1055,6 @@ class WebComponentBase extends Base {
         this.__pendingAsyncCommits--;
         // A newer render superseded this one; let the newer cycle finish.
         if (token !== this.__renderToken) return;
-        // --- 6. controllers' hostUpdated (after the async commit) ---
-        for (const c of this.__controllers || NO_CONTROLLERS) {
-          if (c.hostUpdated) c.hostUpdated();
-        }
         // --- 7-8 + updateComplete ---
         this._postCommit(changedProperties);
       };
@@ -1129,7 +1117,7 @@ class WebComponentBase extends Base {
    */
   _resolveUpdate() {
     if (this._updateResolve) {
-      const settled = this._changedProperties.size === 0;
+      const settled = !this._scheduled;
       this._updateResolve(settled);
       this._updateResolve = null;
     }
@@ -1255,6 +1243,12 @@ class WebComponentBase extends Base {
    * @param {Map<string, unknown>} _changedProperties
    */
   update(_changedProperties) {
+    const pendingReflection = this.__reflectPending;
+    this.__reflectPending = undefined;
+    for (const name of pendingReflection || []) {
+      const def = this.constructor.properties[name];
+      this._reflectAttribute(name, this[name], def);
+    }
     // The signal reads render() makes are tracked by the watcher
     // _performRender runs the whole cycle under.
     let tpl;
@@ -1385,8 +1379,11 @@ class WebComponentBase extends Base {
    * @private
    */
   _postCommit(changedProperties) {
+    const resolve = this._updateResolve;
+    this._updateResolve = null;
     try {
       this._tracked('__postWatcher', () => {
+        for (const c of this.__controllers || NO_CONTROLLERS) c.hostUpdated?.();
         if (!this.__firstRendered) {
           this.__firstRendered = true;
           this.firstUpdated(changedProperties);
@@ -1396,7 +1393,7 @@ class WebComponentBase extends Base {
     } catch (postCommitError) {
       console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
     } finally {
-      this._resolveUpdate();
+      resolve?.(!this._scheduled);
     }
   }
 

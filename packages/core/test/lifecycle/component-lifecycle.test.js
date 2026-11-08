@@ -212,18 +212,20 @@ test('attributeChangedCallback sets property when called with new value', () => 
 
 /* -------------------- property reflection -------------------- */
 
-test('reflect: true writes property back to attribute (Boolean)', () => {
+test('reflect: true writes property back to attribute (Boolean)', async () => {
   class C extends WebComponent({ on: prop(Boolean, { reflect: true }) }) {}
   C.register('reflect-bool');
   const el = document.createElement('reflect-bool');
   document.body.appendChild(el);
   el.on = true;
+  await el.updateComplete;
   assert.equal(el.getAttribute('on'), '');
   el.on = false;
+  await el.updateComplete;
   assert.equal(el.hasAttribute('on'), false);
 });
 
-test('reflect: true writes property back to attribute (Object / Array as JSON)', () => {
+test('reflect: true writes property back to attribute (Object / Array as JSON)', async () => {
   class C extends WebComponent({
     data: prop(Object, { reflect: true }),
     tags: prop(Array, { reflect: true }),
@@ -232,23 +234,27 @@ test('reflect: true writes property back to attribute (Object / Array as JSON)',
   const el = document.createElement('reflect-json');
   document.body.appendChild(el);
   el.data = { a: 1 };
+  await el.updateComplete;
   assert.equal(el.getAttribute('data'), '{"a":1}');
   el.tags = ['x'];
+  await el.updateComplete;
   assert.equal(el.getAttribute('tags'), '["x"]');
 });
 
-test('reflect: true removes attribute when value is null', () => {
+test('reflect: true removes attribute when value is null', async () => {
   class C extends WebComponent({ s: prop(String, { reflect: true }) }) {}
   C.register('reflect-null');
   const el = document.createElement('reflect-null');
   document.body.appendChild(el);
   el.s = 'hi';
+  await el.updateComplete;
   assert.equal(el.getAttribute('s'), 'hi');
   el.s = null;
+  await el.updateComplete;
   assert.equal(el.hasAttribute('s'), false);
 });
 
-test('reflect uses converter.toAttribute when provided', () => {
+test('reflect uses converter.toAttribute when provided', async () => {
   class C extends WebComponent({
     v: prop(Object, {
       reflect: true,
@@ -259,8 +265,10 @@ test('reflect uses converter.toAttribute when provided', () => {
   const el = document.createElement('reflect-to-attr');
   document.body.appendChild(el);
   el.v = { n: 42 };
+  await el.updateComplete;
   assert.equal(el.getAttribute('v'), 'x:42');
   el.v = null;
+  await el.updateComplete;
   assert.equal(el.hasAttribute('v'), false);
 });
 
@@ -566,8 +574,6 @@ test('WebComponent without static properties still constructs cleanly', () => {
 });
 
 test('default hasChanged treats NaN !== NaN correctly (via strict inequality semantics)', () => {
-  // Default is strict inequality: NaN !== NaN is true, so setting a NaN
-  // triggers a change. Document the behaviour so callers know.
   class C extends WebComponent({ n: Number }) {}
   C.register('nan-el');
   const el = document.createElement('nan-el');
@@ -576,8 +582,11 @@ test('default hasChanged treats NaN !== NaN correctly (via strict inequality sem
   const orig = el.requestUpdate.bind(el);
   el.requestUpdate = () => { updates++; orig(); };
   el.n = NaN;
-  el.n = NaN;   // same NaN, but strict inequality says changed
-  assert.equal(updates, 2);
+  el.n = NaN;   // same NaN, Object.is says no change
+  assert.equal(updates, 1);
+  el.n = +0;
+  el.n = -0;    // signed-zero difference triggers change
+  assert.equal(updates, 3);
 });
 
 /* -------------------- Phase 2: lit lifecycle hooks -------------------- */

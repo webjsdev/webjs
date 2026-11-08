@@ -366,3 +366,15 @@ for the browser tests.
 Framework-wide rules and full API reference:
 
 @../../AGENTS.md
+
+## Lit JavaScript API compatibility
+
+WebJs keeps `WebComponent({ ... })` for inferred reactive properties, including `state: true` and `attribute: false`. App TypeScript must erase to whitespace; decorators and compiler transforms are unnecessary.
+
+- Function event listeners receive the rendering component as `this`. Arrow and bound functions preserve their JavaScript receiver. Listener objects use `handleEvent()` and support `capture`, `once`, and `passive`.
+- Quoted and unquoted single-expression `@event`, `.property`, and `?boolean` bindings behave identically. Surrounding text or multiple expressions are invalid. Form-action bindings retain their separate contract.
+- Ordinary attribute values stringify booleans; nullish values become empty strings. Use `?disabled=${disabled}` for boolean attributes and `title=${value ?? nothing}` for omission, including inside mixed attributes.
+- Boolean child values render text. Use `${condition ? html`<p>Visible</p>` : nothing}` for conditional content.
+- `nothing` clears children, removes attributes, and assigns `undefined` to properties. `noChange` preserves the previously committed value.
+- `classMap`, `styleMap`, and `ifDefined` are available from `@webjsdev/core/directives`. Map helpers require their matching class/style attribute with one expression; static text around it is supported. They preserve static tokens while removing obsolete dynamic entries.
+- Normal lifecycle timing follows Lit: skipped updates consume their change map; `hasChanged` gates updates without discarding assignments; post-update writes schedule a new cycle; `updateComplete` reports whether another cycle is pending. WebJs retains its component error boundaries and recovery.

@@ -93,13 +93,14 @@ test('attribute option: the custom attribute maps to the property', () => {
   assert.equal(el.open, true, 'setting the custom attribute updates the prop');
 });
 
-test('attribute option: reflect writes to the custom attribute name', () => {
+test('attribute option: reflect writes to the custom attribute name', async () => {
   class C extends WebComponent({ active: prop(Boolean, { attribute: 'data-active', reflect: true }) }) {}
   customElements.define('attr-reflect', C);
   document.body.innerHTML = '<attr-reflect></attr-reflect>';
   const el = /** @type any */ (document.querySelector('attr-reflect'));
   el.connectedCallback();
   el.active = true;
+  await el.updateComplete;
   assert.ok(el.hasAttribute('data-active'), 'reflects to the custom attribute name');
   assert.ok(!el.hasAttribute('active'), 'does not reflect to the property name');
 });

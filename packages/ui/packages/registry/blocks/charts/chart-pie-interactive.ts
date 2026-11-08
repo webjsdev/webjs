@@ -108,7 +108,7 @@ export default function ChartPieInteractive() {
         </div>
         <ui-select class="ml-auto w-fit">
           <select aria-label="Select a value" class=${cn(selectTriggerClass(), 'h-7 w-[130px] rounded-lg pl-2.5')}>
-            ${months.map((key, i) => html`<option value=${key} selected=${i === 0}>${chartConfig[key as keyof typeof chartConfig].label}</option>`)}
+            ${months.map((key, i) => html`<option value=${key} ?selected=${i === 0}>${chartConfig[key as keyof typeof chartConfig].label}</option>`)}
           </select>
         </ui-select>
       </div>

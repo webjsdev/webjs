@@ -1,17 +1,14 @@
 /**
- * A plain attribute hole that holds `null` / `undefined` / `false` (#1573).
+ * Plain attribute hole and boolean attribute semantics aligned with Lit.
  *
- * The server used to stringify it (`attr=""`, `attr="false"`) while the client
- * removed it, so a layout's `aria-current=${active ? 'page' : null}` served an
- * empty `aria-current` on every inactive link, and layouts never hydrate to
- * repair it. Both renderers now follow `attrHoleValue` in binding-prefixes.js:
- * nullish omits, `false` omits except on an aria-* name, where it is "false".
+ * In Lit, ordinary attribute holes stringify nullish values to empty strings
+ * (`attr=""`) and stringify booleans (`attr="false"` / `attr="true"`). Attribute
+ * omission is achieved using the `nothing` sentinel (or `noChange`). Boolean
+ * attribute toggling is done using boolean attribute bindings (`?attr=${...}`).
  *
  * Every server case runs through BOTH machines (the buffered `renderToString`
- * and the streaming `renderToStream(v, { ssr: false })`), since they are
- * independent hole dispatchers. The client half runs the real client renderer
- * over linkedom. Flat tests, no nested subtests: this file runs in the Bun
- * parity matrix, whose node:test shim refuses a nested subtest.
+ * and the streaming `renderToStream(v, { ssr: false })`). The client half
+ * runs the real client renderer over linkedom.
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,6 +16,7 @@ import { parseHTML } from 'linkedom';
 import { html } from '../../src/html.js';
 import { renderToString, renderToStream } from '../../src/render-server.js';
 import { attrHoleValue } from '../../src/binding-prefixes.js';
+import { nothing, noChange } from '../../src/sentinels.js';
 
 async function drain(stream) {
   let out = '';
@@ -58,41 +56,50 @@ function clientEl(tpl) {
 }
 
 test('attrHoleValue: the shared rule (#1573)', () => {
-  assert.equal(attrHoleValue('title', null), null);
-  assert.equal(attrHoleValue('title', undefined), null);
-  assert.equal(attrHoleValue('hidden', false), null);
+  assert.equal(attrHoleValue('title', nothing), null);
+  assert.equal(attrHoleValue('title', noChange), null);
+  assert.equal(attrHoleValue('title', null), '');
+  assert.equal(attrHoleValue('title', undefined), '');
+  assert.equal(attrHoleValue('hidden', false), 'false');
   assert.equal(attrHoleValue('aria-expanded', false), 'false');
   assert.equal(attrHoleValue('ARIA-Pressed', false), 'false');
-  assert.equal(attrHoleValue('aria-current', null), null);
+  assert.equal(attrHoleValue('aria-current', null), '');
   assert.equal(attrHoleValue('title', 0), '0');
   assert.equal(attrHoleValue('title', ''), '');
   assert.equal(attrHoleValue('aria-expanded', true), 'true');
-  // #1579: a boolean attribute takes `true` the way `?attr` does.
-  assert.equal(attrHoleValue('checked', true), '');
-  assert.equal(attrHoleValue('SELECTED', true), '');
-  assert.equal(attrHoleValue('checked', false), null);
-  assert.equal(attrHoleValue('data-on', true), 'true', 'a non-boolean attribute still stringifies true');
+  assert.equal(attrHoleValue('checked', true), 'true');
+  assert.equal(attrHoleValue('SELECTED', true), 'true');
+  assert.equal(attrHoleValue('checked', false), 'false');
+  assert.equal(attrHoleValue('data-on', true), 'true');
 });
 
-test('server: a null or undefined plain hole omits the attribute (#1573)', async () => {
+test('server: a null or undefined plain hole renders empty string attribute', async () => {
   for (const v of [null, undefined]) {
     await bothServers(() => html`<a href="/x" aria-current=${v} title=${v}>x</a>`, (out, who) => {
-      assert.doesNotMatch(out, /aria-current/, `${who}: aria-current=\${${v}} must be omitted, got ${out}`);
-      assert.doesNotMatch(out, /title/, `${who}: title=\${${v}} must be omitted, got ${out}`);
-      assert.match(out, /<a href="\/x"\s*>x<\/a>/, `${who}: the rest of the tag is intact, got ${out}`);
+      assert.match(out, /aria-current=""/, `${who}: aria-current=\${${v}} must be empty string, got ${out}`);
+      assert.match(out, /title=""/, `${who}: title=\${${v}} must be empty string, got ${out}`);
+      assert.match(out, /<a href="\/x"\s+aria-current="" title="">x<\/a>/, `${who}: the rest of the tag is intact, got ${out}`);
     });
   }
 });
 
-test('server: false omits a plain attribute but writes "false" on aria-* (#1573)', async () => {
+test('server: nothing omits the attribute', async () => {
+  await bothServers(() => html`<a href="/x" aria-current=${nothing} title=${nothing}>x</a>`, (out, who) => {
+    assert.doesNotMatch(out, /aria-current/, `${who}: aria-current=\${nothing} must be omitted, got ${out}`);
+    assert.doesNotMatch(out, /title/, `${who}: title=\${nothing} must be omitted, got ${out}`);
+    assert.match(out, /<a href="\/x"\s*>x<\/a>/, `${who}: the rest of the tag is intact, got ${out}`);
+  });
+});
+
+test('server: false writes "false" on plain attributes and aria-*', async () => {
   await bothServers(() => html`<button data-on=${false} aria-expanded=${false} aria-pressed=${true}>x</button>`, (out, who) => {
-    assert.doesNotMatch(out, /data-on/, `${who}: data-on=\${false} must be omitted, got ${out}`);
+    assert.match(out, /data-on="false"/, `${who}: data-on=\${false} must be "false", got ${out}`);
     assert.match(out, /aria-expanded="false"/, `${who}: aria-expanded=\${false} must be "false", got ${out}`);
     assert.match(out, /aria-pressed="true"/, `${who}: got ${out}`);
   });
 });
 
-test('server: a present value, and a quoted or mixed hole, are unchanged (#1573)', async () => {
+test('server: a present value, and a quoted or mixed hole, are unchanged', async () => {
   await bothServers(() => html`<a aria-current=${'page'} title="${null}" class="a ${null}">x</a>`, (out, who) => {
     assert.match(out, /aria-current="page"/, `${who}: got ${out}`);
     assert.match(out, /title=""/, `${who}: a QUOTED hole keeps its statically written attribute, got ${out}`);
@@ -100,46 +107,47 @@ test('server: a present value, and a quoted or mixed hole, are unchanged (#1573)
   });
 });
 
-test('client: the same rule, so hydration changes nothing (#1573)', () => {
+test('client: nullish values write empty string; nothing omits', () => {
   const a = clientEl(html`<a aria-current=${null} title=${undefined} data-on=${false} aria-expanded=${false}>x</a>`);
-  assert.equal(a.hasAttribute('aria-current'), false);
-  assert.equal(a.hasAttribute('title'), false);
-  assert.equal(a.hasAttribute('data-on'), false);
-  assert.equal(a.getAttribute('aria-expanded'), 'false', 'aria-* false is written, not removed');
+  assert.equal(a.getAttribute('aria-current'), '');
+  assert.equal(a.getAttribute('title'), '');
+  assert.equal(a.getAttribute('data-on'), 'false');
+  assert.equal(a.getAttribute('aria-expanded'), 'false');
+
+  const b = clientEl(html`<a aria-current=${nothing} title=${nothing}>x</a>`);
+  assert.equal(b.hasAttribute('aria-current'), false);
+  assert.equal(b.hasAttribute('title'), false);
 });
 
-test('client: an aria-* hole flipping true -> false keeps the attribute as "false" (#1573)', () => {
+test('client: an aria-* hole flipping true -> false keeps the attribute as "false"', () => {
   const host = document.createElement('div');
   const tpl = (v) => html`<button aria-pressed=${v}>x</button>`;
   render(tpl(true), host);
   assert.equal(host.firstElementChild.getAttribute('aria-pressed'), 'true');
   render(tpl(false), host);
   assert.equal(host.firstElementChild.getAttribute('aria-pressed'), 'false');
-  render(tpl(null), host);
-  assert.equal(host.firstElementChild.hasAttribute('aria-pressed'), false, 'null is still the omit value on aria-*');
+  render(tpl(nothing), host);
+  assert.equal(host.firstElementChild.hasAttribute('aria-pressed'), false, 'nothing omits attribute on aria-*');
 });
 
-// #1579: the RSVP form from a generated app. Plain holes on boolean attributes
-// served `checked="false"` / `selected="false"`, which HTML reads as PRESENT, so
-// the last radio and the last option won. Each must now render like `?attr`.
+// Lit boolean attributes use `?attr`
 const rsvp = () => html`<form>
-  <input type="radio" name="a" value="yes" checked=${true}>
-  <input type="radio" name="a" value="no" checked=${false}>
-  <select name="n">${[1, 2, 3, 4].map((n, i) => html`<option value=${n} selected=${i === 0}>${n}</option>`)}</select>
-  <button disabled=${false} hidden=${null}>Send</button>
+  <input type="radio" name="a" value="yes" ?checked=${true}>
+  <input type="radio" name="a" value="no" ?checked=${false}>
+  <select name="n">${[1, 2, 3, 4].map((n, i) => html`<option value=${n} ?selected=${i === 0}>${n}</option>`)}</select>
+  <button ?disabled=${false} hidden=${nothing}>Send</button>
 </form>`;
 
-test('server: a boolean in a plain hole on a boolean attribute renders like ?attr (#1579)', async () => {
+test('server: boolean attributes render like ?attr', async () => {
   await bothServers(rsvp, (out, who) => {
     assert.match(out, /value="yes"\s+checked=""/, `${who}: checked=\${true} must be checked="", got ${out}`);
-    assert.doesNotMatch(out, /="false"/, `${who}: no boolean attribute may serve "false", got ${out}`);
-    assert.doesNotMatch(out, /="true"/, `${who}: no boolean attribute may serve "true", got ${out}`);
+    assert.doesNotMatch(out, /value="no"\s+checked/, `${who}: false bool attr must be omitted, got ${out}`);
     assert.equal((out.match(/\bselected=""/g) || []).length, 1, `${who}: exactly one option selected, got ${out}`);
-    assert.doesNotMatch(out, /\bdisabled|\bhidden/, `${who}: false / null omit, got ${out}`);
+    assert.doesNotMatch(out, /\bdisabled|\bhidden/, `${who}: false / nothing omit, got ${out}`);
   });
 });
 
-test('client: the same boolean-attribute rule, so hydration agrees (#1579)', () => {
+test('client: boolean attributes agree with ?attr', () => {
   const host = document.createElement('div');
   render(rsvp(), host);
   const radios = host.querySelectorAll('input');

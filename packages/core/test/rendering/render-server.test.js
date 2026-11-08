@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { html, renderToString, WebComponent, css } from '../../index.js';
+import { html, renderToString, WebComponent, css, nothing } from '../../index.js';
 
 test('renders plain text', async () => {
   assert.equal(await renderToString(html`<p>hello</p>`), '<p>hello</p>');
@@ -99,8 +99,9 @@ test('async component render is awaited', async () => {
   assert.match(out, /<span>hi async world<\/span>/);
 });
 
-test('ignores null/false/undefined values', async () => {
-  assert.equal(await renderToString(html`<p>${null}${false}${undefined}x</p>`), '<p>x</p>');
+test('ignores null/undefined/nothing values; booleans render text', async () => {
+  assert.equal(await renderToString(html`<p>${null}${nothing}${undefined}x</p>`), '<p>x</p>');
+  assert.equal(await renderToString(html`<p>${false}${true}x</p>`), '<p>falsetruex</p>');
 });
 
 test('HTML comments are passed through; holes inside comments do not break parsing', async () => {

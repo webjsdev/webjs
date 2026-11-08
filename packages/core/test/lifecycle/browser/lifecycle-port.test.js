@@ -421,7 +421,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     el.remove();
   });
 
-  test('shouldUpdate=false preserves changedProperties for the next cycle (lit parity)', async () => {
+  test('shouldUpdate=false clears changedProperties before the next cycle (lit parity)', async () => {
     // Lit: when shouldUpdate returns false, changedProperties is NOT cleared,
     // so the next requestUpdate sees the accumulated entries.
     let allow = false;  // gate from the very first cycle
@@ -451,7 +451,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     assert.equal(seen.length, 1, 'one cycle ran since the gate opened');
     const keys = seen[0];
     assert.ok(keys.includes('a'), 'a was carried through');
-    assert.ok(keys.includes('b'), 'b was carried through');
+    assert.ok(!keys.includes('b'), 'skipped changes were consumed');
     el.remove();
   });
 
@@ -578,7 +578,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     el.size = 10.5;  // delta < 1: no update
     await el.updateComplete;
     assert.equal(renders, baseline, 'small change skipped');
-    assert.equal(el.size, 10, 'value not stored on a skipped change');
+    assert.equal(el.size, 10.5, 'assignment succeeds even when no update is scheduled');
 
     el.size = 20;  // delta > 1: updates
     await el.updateComplete;

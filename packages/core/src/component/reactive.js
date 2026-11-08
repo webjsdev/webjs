@@ -7,7 +7,7 @@ import { tagOf } from '../registry.js';
  * @returns {boolean}
  */
 export function defaultHasChanged(a, b) {
-  return a !== b;
+  return !Object.is(a, b);
 }
 
 /**

@@ -11,11 +11,11 @@
 // DOM around while you toggle), `templateContent` (stamp an existing template's
 // HTML), and `asyncAppend` / `asyncReplace` (stream values from an async
 // iterable, appending each or replacing with the latest).
-import { WebComponent, signal, html } from '@webjsdev/core';
+import { WebComponent, signal, html, nothing, noChange } from '@webjsdev/core';
 import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { cn } from '#lib/utils/cn.ts';
 import { inputClass } from '#modules/gallery/ui/input.ts';
-import { repeat, watch, live, until, keyed, unsafeHTML, ref, createRef, guard, cache, templateContent, asyncAppend, asyncReplace } from '@webjsdev/core/directives';
+import { classMap, styleMap, ifDefined, repeat, watch, live, until, keyed, unsafeHTML, ref, createRef, guard, cache, templateContent, asyncAppend, asyncReplace } from '@webjsdev/core/directives';
 
 interface Item { id: number; label: string }
 
@@ -107,8 +107,16 @@ export class DirectiveDemo extends WebComponent {
   }
 
   render() {
+
     const variant = this.#variant.get();
     return html`
+      <!-- Dynamic classes/styles and optional attributes use Lit's JS helpers. -->
+      <p class=${classMap({ 'font-bold': this.#tab.get() === 'a' })}
+         style=${styleMap({ opacity: this.#tab.get() === 'a' ? 1 : 0.8 })}
+         title=${ifDefined(this.#text.get() || undefined)}>
+        ${this.#text.get() || nothing}
+        <span>${this.#ticks.get() > 0 ? noChange : 'Waiting for a tick'}</span>
+      </p>
       <div class="grid gap-6 max-w-[420px]">
         <div class="grid gap-4">
           <div class="flex gap-2">

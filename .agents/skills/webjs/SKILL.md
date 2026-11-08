@@ -140,7 +140,7 @@ App-internal imports use the `#` root alias (`import { db } from '#db/connection
 1. Server-only code lives in `.server.ts`, `route.ts`, or `middleware.ts`. Never in a page, layout, or component (it crashes the browser at module load).
 2. `'use server'` exports are `async` functions returning serializer-safe values, callable from browser code as RPC. Files without `'use server'` are server-only utilities: reach them only from `'use server'` actions, `route.ts`, or middleware. Never add `'use server'` to a file only other server code imports (the DB connection, the schema).
 3. Custom element tag names contain a hyphen. Pass the tag to `Class.register('tag-name')`.
-4. Event (`@`), property (`.`), and boolean (`?`) holes in `html` are UNQUOTED: `@click=${fn}`, never `@click="${fn}"`.
+4. Event (`@`), property (`.`), and boolean (`?`) bindings accept one expression, quoted or unquoted; surrounding text is invalid.
 5. State works as in lit: `state: true` props, `attribute: false` props (both declared in the `WebComponent({ ... })` factory, both reassigned like `this.open = true`), and signals (`signal` / `computed` from `@webjsdev/core`, read with `.get()`, written with `.set()`, never assigned).
 6. Page and layout default exports are functions returning a value; they never call `render()` themselves.
 7. Light-DOM components with custom CSS prefix every class selector with their tag name. Prefer Tailwind (unique by construction).

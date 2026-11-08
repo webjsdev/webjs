@@ -1,3 +1,5 @@
+import { isAttributeMap, attributeMapText } from '../attribute-directives.js';
+import { nothing, noChange } from '../sentinels.js';
 import { isTemplate } from '../html.js';
 import { attrHoleValue } from '../binding-prefixes.js';
 import { escapeText, escapeAttr } from '../escape.js';
@@ -163,7 +165,7 @@ export class Walker {
    * @param {unknown} value
    */
   async value(value) {
-    if (value == null || value === false || value === true) return;
+    if (value == null || value === nothing || value === noChange) return;
     if (typeof (/** @type any */ (value).then) === 'function') {
       return this.value(await value);
     }
@@ -300,6 +302,38 @@ export class Walker {
               await this.attr(op, val);
               break;
             case VALUE:
+              if (op.quote) {
+                // Resolve the complete attribute before emitting any of it so a
+                // sentinel in any expression can omit the entire attribute.
+                this.buf = this.buf.slice(0, -op.prefix.length);
+                let attribute = op.prefix;
+                let omitted = false;
+                let piece = val;
+                for (let j = i; j < ops.length; j++) {
+                  const next = ops[j];
+                  if (next.t === HOLE) {
+                    if (j !== i) {
+                      piece = values[vi++];
+                      if (piece && typeof piece.then === 'function') piece = await piece;
+                      if (isLive(piece)) piece = piece.value;
+                    }
+                    if (isAttributeMap(piece)) piece = attributeMapText(piece, op.name);
+                    assertNotFunctionActionAttr(piece, op.name, op.tag);
+                    if (piece === nothing) omitted = true;
+                    attribute += piece === nothing || piece === noChange ? '' : escapeAttr(String(piece ?? ''));
+                  } else if (next.t === TEXT) {
+                    const close = next.s.indexOf(op.quote);
+                    if (close >= 0) {
+                      if (!omitted) this.buf += attribute + next.s.slice(0, close + 1);
+                      this.buf += next.s.slice(close + 1);
+                      i = j;
+                      break;
+                    }
+                    attribute += next.s;
+                  }
+                }
+                break;
+              }
               // A hole inside a quoted/unquoted value, the `action="${fn}"` and
               // mixed `action="/x/${fn}"` shapes (#1154).
               assertNotFunctionActionAttr(val, op.name, op.tag);
@@ -366,6 +400,12 @@ export class Walker {
    * @param {unknown} val
    */
   async attr(op, val) {
+    if (isAttributeMap(val)) {
+      if (op.kind !== 'plain') throw new Error('classMap/styleMap require an attribute binding.');
+      val = attributeMapText(val, op.name);
+    }
+    if (val === noChange) return;
+    if (val === nothing && op.kind === 'prop') val = undefined;
     const ts = this.tagState;
     const name = /** @type string */ (op.name);
     const tag = /** @type string */ (op.tag);
@@ -412,7 +452,7 @@ export class Walker {
       // `?action=${fn}` is meaningless in every case; refusing it keeps the
       // rule true for every sigil rather than only the quoted ones.
       assertNotFunctionActionAttr(val, name, tag);
-      if (val) this.buf += `${name}=""`;
+      if (val && val !== nothing) this.buf += `${name}=""`;
       return;
     }
     // A plain `name=${value}` hole.

@@ -39,7 +39,7 @@
  * </button>
  * ```
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
 /** Spinner classes: `size-4` plus `animate-spin`. Apply to your own `<svg>`. */
@@ -55,7 +55,7 @@ export function spinner(opts: { class?: string; label?: string; decorative?: boo
   const cls = cn(spinnerClass(), opts.class);
   // shadcn's `data-icon`, which a button or badge reads to tighten its padding
   // on the spinner's side. Left out, the attribute is omitted.
-  const icon = opts.icon ?? null;
+  const icon = opts.icon ?? nothing;
   // Branched rather than a nullish `role=${...}` hole: the server renderer
   // stringifies a null attribute value, so a single template would serve
   // `role=""` on the decorative form.

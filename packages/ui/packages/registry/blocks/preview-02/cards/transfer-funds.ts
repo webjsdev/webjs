@@ -37,7 +37,7 @@ function accountSelect(id: string, name: string, value: string, options: { value
   return html`<ui-select class="w-full">
     <select id=${id} name=${name} class=${cn(selectTriggerClass(), 'w-full')}>
       <optgroup>
-        ${options.map((o) => html`<option value=${o.value} selected=${o.value === value}>${o.label}</option>`)}
+        ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === value}>${o.label}</option>`)}
       </optgroup>
     </select>
   </ui-select>`;

@@ -93,7 +93,7 @@
  * </ui-questionnaire>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -543,9 +543,9 @@ export class UiQuestionnaireItem extends WebComponent({
       ?data-active=${flow.active}
       ?hidden=${hide}
       ?inert=${hide}
-      aria-labelledby=${hasTitle && this._id ? this.titleId : null}
-      aria-describedby=${described || null}
-      aria-invalid=${this.invalid.get() ? 'true' : null}
+      aria-labelledby=${hasTitle && this._id ? this.titleId : nothing}
+      aria-describedby=${described || nothing}
+      aria-invalid=${this.invalid.get() ? 'true' : nothing}
       class=${cn(questionnaireItemClass(), takeAuthored(this))}
     ><slot></slot></fieldset>`;
   }
@@ -795,8 +795,8 @@ export class UiQuestionnaireButton extends WebComponent({
       data-variant=${this.variant}
       ?hidden=${!this.visible.get()}
       ?disabled=${this.disabled}
-      aria-hidden=${this.visible.get() ? null : 'true'}
-      aria-keyshortcuts=${this.visible.get() && !this.disabled && (ctor.part === 'next' || ctor.part === 'submit') ? 'Enter' : null}
+      aria-hidden=${this.visible.get() ? nothing : 'true'}
+      aria-keyshortcuts=${this.visible.get() && !this.disabled && (ctor.part === 'next' || ctor.part === 'submit') ? 'Enter' : nothing}
       class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), ctor.place, takeAuthored(this))}
       @click=${this._onClick}
     ><slot>${ctor.label}</slot></button>`;

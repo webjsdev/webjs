@@ -64,7 +64,7 @@
  * </ui-navigation-menu>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { ensureId } from '../lib/utils.ts';
 
 /** The root's classes (the element applies them). */
@@ -525,9 +525,9 @@ export class UiNavigationMenuLink extends WebComponent({
   render() {
     return html`<a
       data-slot="navigation-menu-link"
-      href=${this.href || null}
-      data-active=${this.active ? 'true' : null}
-      aria-current=${this.active ? 'page' : null}
+      href=${this.href || nothing}
+      data-active=${this.active ? 'true' : nothing}
+      aria-current=${this.active ? 'page' : nothing}
       class=${navigationMenuLinkClass()}
     ><slot></slot></a>`;
   }

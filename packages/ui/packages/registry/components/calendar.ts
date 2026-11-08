@@ -44,7 +44,7 @@
  * <ui-calendar mode="range" value="2025-06-12/2025-06-20" number-of-months="2" name="stay"></ui-calendar>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 
@@ -440,12 +440,12 @@ export class UiCalendar extends WebComponent({
         return html`<td
           role="gridcell"
           data-day=${iso}
-          aria-selected=${st.selected ? 'true' : null}
-          data-selected=${st.selected ? 'true' : null}
-          data-today=${isToday ? 'true' : null}
-          data-outside=${isOutside ? 'true' : null}
-          data-disabled=${off ? 'true' : null}
-          data-focused=${this.#focused.get() === iso ? 'true' : null}
+          aria-selected=${st.selected ? 'true' : nothing}
+          data-selected=${st.selected ? 'true' : nothing}
+          data-today=${isToday ? 'true' : nothing}
+          data-outside=${isOutside ? 'true' : nothing}
+          data-disabled=${off ? 'true' : nothing}
+          data-focused=${this.#focused.get() === iso ? 'true' : nothing}
           class=${cn(
             'group/day relative aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-e-(--cell-radius) [&:first-child[data-selected=true]_button]:rounded-s-(--cell-radius)',
             // A week-number column makes the row's first day its second cell,

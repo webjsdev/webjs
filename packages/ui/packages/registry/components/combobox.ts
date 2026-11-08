@@ -60,7 +60,7 @@
  * </ui-combobox>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { positionFloating } from './floating.ts';
 import type { PopoverSide, PopoverAlign } from './popover.ts';
@@ -467,18 +467,18 @@ export class UiComboboxInput extends WebComponent({
     const disabled = !!root?.disabled;
     return html`<div data-slot="input-group" class=${cn(inputGroupClass(), comboboxInputClass())}><input
       data-slot="input-group-control"
-      id=${this.inputId || null}
+      id=${this.inputId || nothing}
       type="text"
       role="combobox"
       autocomplete="off"
       aria-autocomplete="list"
       aria-expanded=${s.open ? 'true' : 'false'}
-      aria-controls=${root?.listId || null}
-      aria-activedescendant=${s.activeId || null}
-      aria-label=${this.getAttribute?.('aria-label') || null}
-      aria-invalid=${this.invalid === 'true' ? 'true' : null}
-      aria-describedby=${this.describedBy || null}
-      placeholder=${this.placeholder || null}
+      aria-controls=${root?.listId || nothing}
+      aria-activedescendant=${s.activeId || nothing}
+      aria-label=${this.getAttribute?.('aria-label') || nothing}
+      aria-invalid=${this.invalid === 'true' ? 'true' : nothing}
+      aria-describedby=${this.describedBy || nothing}
+      placeholder=${this.placeholder || nothing}
       ?disabled=${disabled}
       class=${inputGroupInputClass()}
       @input=${(e: Event) => rootOf(this)?._onInput((e.target as HTMLInputElement).value)}

@@ -1359,13 +1359,12 @@ function init(modules) {
         const hasHole = attr.holeIndex != null;
 
         // Rule: unquoted-binding (invariant 4).
-        if (bound && attr.quoted && (attr.valueKind === 'expression' || attr.valueKind === 'mixed')) {
+        if (bound && attr.valueKind === 'mixed') {
           const prefix = attr.modifier === 'event' ? '@' : attr.modifier === 'property' ? '.' : '?';
           push(
             attr.nameSpan.start,
             attr.nameSpan.length,
-            `The ${prefix}${attr.name} binding on <${el.tag}> must be unquoted ` +
-              `(write ${prefix}${attr.name}=\${…}, not quoted). The expression is dropped at SSR otherwise.`,
+            `The ${prefix}${attr.name} binding requires exactly one expression with no surrounding text.`,
             9002,
           );
           continue;
@@ -1393,7 +1392,7 @@ function init(modules) {
 
         if (attr.modifier === 'event') {
           // Event handlers must be callable.
-          if (exprType.getCallSignatures().length === 0 && !isAnyOrUnknown(exprType)) {
+          if (!isAnyOrUnknown(exprType) && !(exprType.isUnion() ? exprType.types : [exprType]).every((type) => type.getCallSignatures().length > 0 || checker.getPropertyOfType(type, 'handleEvent') || (type.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.UniqueESSymbol)))) {
             push(
               exprStart,
               exprLen,

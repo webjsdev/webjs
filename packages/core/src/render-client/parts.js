@@ -1,3 +1,5 @@
+import { isAttributeMap, applyAttributeMap } from '../attribute-directives.js';
+import { nothing, noChange } from '../sentinels.js';
 import { isTemplate, MARKER } from '../html.js';
 import {
   assertNotFunctionActionAttr, assertNotFunctionReflectedActionProp, isBoundFormAction,
@@ -197,6 +199,9 @@ export function bindPart(p, root) {
  * @param {unknown} _prev
  */
 export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb) {
+  if (value === noChange) return;
+  if (isAttributeMap(value)) { applyAttributeMap(part, value); return; }
+  part.__mapKind = undefined;
   // Unwrap live() to dirty-check against the live DOM value, not the
   // last rendered value. Essential for <input> two-way binding.
   if (isLive(value)) {
@@ -255,14 +260,14 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       // first and is left alone, so it still writes whatever the author
       // returns for a function.
       assertNotFunctionReflectedActionProp(value, part.name, part.el.localName);
-      /** @type any */ (part.el)[part.name] = value;
+      /** @type any */ (part.el)[part.name] = value === nothing ? undefined : value;
       break;
     case 'bool':
       // #1154: never leaked (a boolean binding stringifies nothing), but
       // `?action=${fn}` is meaningless in every case, and refusing it keeps
       // this renderer agreeing with both SSR machines.
       assertNotFunctionActionAttr(value, part.name, part.el.localName);
-      if (value) part.el.setAttribute(part.name, '');
+      if (value && value !== nothing) part.el.setAttribute(part.name, '');
       else part.el.removeAttribute(part.name);
       break;
     case 'event':
@@ -271,7 +276,7 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       // `<my-el @action=${handler}>` has to keep working.
       {
         const old = part.handler;
-        const next = value == null ? null : value;
+        const next = value == null || value === nothing ? null : value;
         const changed = old?.capture !== next?.capture || old?.once !== next?.once || old?.passive !== next?.passive;
         if (old && (!next || changed)) part.el.removeEventListener(part.name, part.dispatcher, old);
         if (next && (!old || changed)) part.el.addEventListener(part.name, part.dispatcher, next);
@@ -297,6 +302,7 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         if (isLive(piece)) piece = /** @type any */ (piece).value;
         // #1154: same function guard for each piece of a mixed attribute.
         assertNotFunctionActionAttr(piece, part.name, part.el.localName);
+        if (piece === nothing) { part.el.removeAttribute(part.name); return; }
         val += String(piece ?? '');
         val += mp.statics[j + 1] || '';
       }
@@ -488,6 +494,7 @@ export function applyChild(part, value, reconcileFormActionsCb) {
   // short-circuit, etc. Done once per outermost applyChild call; the
   // directive handlers recurse via applyChildInner (no re-clear) so
   // their own state survives the recursion.
+  if (value === noChange) return;
   clearStaleDirectiveState(part, value);
   return applyChildInner(part, value, reconcileFormActionsCb);
 }
@@ -724,7 +731,7 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     }
   }
 
-  if (value == null || value === false || value === true) return;
+  if (value == null || value === nothing || value === noChange) return;
 
   if (isTemplate(value)) {
     const tr = /** @type any */ (value);
@@ -759,6 +766,7 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
 }
 
 export function updateInstance(inst, values, reconcileFormActionsCb) {
+  values = values.map((value, i) => value === noChange ? (inst.lastValues[i] ?? nothing) : value);
   for (let i = 0; i < values.length; i++) {
     const next = values[i];
     if (Object.is(next, inst.lastValues[i])) continue;
@@ -1155,7 +1163,7 @@ function buildArrayItem(v, reconcileFormActionsCb) {
     const { inst, frag } = buildDetached(/** @type any */ (v), reconcileFormActionsCb);
     return { item: { type: 'tpl', inst }, frag };
   }
-  if (v != null && v !== false && v !== true) {
+  if (v != null && v !== nothing && v !== noChange) {
     const node = document.createTextNode(String(v));
     return { item: { type: 'text', node }, frag: node };
   }
@@ -1222,7 +1230,7 @@ function reconcileArray(part, value, reconcileFormActionsCb) {
           consumed = i + 1;
           continue;
         }
-      } else if (v != null && v !== false && v !== true) {
+      } else if (v != null && v !== nothing && v !== noChange) {
         if (o && o.type === 'text') {
           const str = String(v);
           if (o.node.data !== str) o.node.data = str;
@@ -2017,7 +2025,7 @@ function renderToNodes(value, reconcileFormActionsCb) {
   // #1443: the streamed / detached counterpart of the per-item unwrap above.
   // Recursion covers a nested array, since each level re-enters here.
   if (isLive(value)) value = /** @type any */ (value).value;
-  if (value == null || value === false || value === true) return [];
+  if (value == null || value === nothing || value === noChange) return [];
   if (isTemplate(value)) {
     const tr = /** @type any */ (value);
     const { templateEl, parts, formActions } = compile(tr);

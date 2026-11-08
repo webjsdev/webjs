@@ -169,10 +169,14 @@ export function compile(tr) {
               const eq = sLast.indexOf(attrQuote);
               statics.push(eq >= 0 ? sLast.slice(0, eq) : sLast);
 
+              const specialized = isBindingPrefix(mixedAttr.name[0]);
+              if (specialized && (group.length !== 1 || statics.some((piece) => piece !== ''))) {
+                throw new Error('Event, property and boolean bindings require exactly one expression with no surrounding text.');
+              }
               parts[idx0] = {
-                kind: 'attr-mixed',
+                kind: specialized ? BINDING_PREFIXES[mixedAttr.name[0]] : 'attr-mixed',
                 path: [],
-                name: mixedAttr.name,
+                name: specialized ? mixedAttr.name.slice(1) : mixedAttr.name,
                 statics,
                 group,
               };

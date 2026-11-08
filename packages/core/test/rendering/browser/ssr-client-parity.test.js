@@ -21,6 +21,7 @@ import { css } from '../../../src/css.js';
 import { WebComponent, prop } from '../../../src/component.js';
 import { signal } from '../../../src/signal.js';
 import { renderToString } from '../../../src/render-server.js';
+import { nothing } from '../../../src/sentinels.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -387,8 +388,8 @@ async function bothWays(tpl) {
 }
 
 suite('SSR/client parity: nullish and false plain attribute holes (#1573)', () => {
-  test('null / undefined omit, false omits off aria-*, aria-* false is "false"', async () => {
-    const tpl = () => html`<a href="/x" aria-current=${null} title=${undefined} data-on=${false} aria-expanded=${false} aria-pressed=${'true'}>x</a>`;
+  test('nothing omits, false is stringified "false", aria-* false is "false"', async () => {
+    const tpl = () => html`<a href="/x" aria-current=${nothing} title=${nothing} data-on=${false} aria-expanded=${false} aria-pressed=${'true'}>x</a>`;
     const attrsOf = (markup) => {
       const t = document.createElement('template');
       t.innerHTML = normalize(markup);
@@ -400,13 +401,13 @@ suite('SSR/client parity: nullish and false plain attribute holes (#1573)', () =
     render(tpl(), host);
     const client = attrsOf(host.innerHTML);
     assert.equal(client, ssr, 'client and SSR serve the same attribute set');
-    assert.equal(ssr, 'aria-expanded="false" aria-pressed="true" href="/x"');
+    assert.equal(ssr, 'aria-expanded="false" aria-pressed="true" data-on="false" href="/x"');
   });
 });
 
 suite('SSR/client parity: booleans in plain holes on boolean attributes (#1579)', () => {
   test('the SSR markup and the client render select the same radio and option', async () => {
-    const tpl = () => html`<form><input type="radio" name="a" value="yes" checked=${true}><input type="radio" name="a" value="no" checked=${false}><select name="n">${[1, 2, 3].map((n, i) => html`<option value=${n} selected=${i === 0}>${n}</option>`)}</select></form>`;
+    const tpl = () => html`<form><input type="radio" name="a" value="yes" ?checked=${true}><input type="radio" name="a" value="no" ?checked=${false}><select name="n">${[1, 2, 3].map((n, i) => html`<option value=${n} ?selected=${i === 0}>${n}</option>`)}</select></form>`;
     const state = (root) => ({
       checked: [...root.querySelectorAll('input')].map((i) => i.checked),
       selected: root.querySelector('select').value,
@@ -441,11 +442,10 @@ suite('SSR/client parity: form actions (#1155)', () => {
     'quoted hole-provided method': () => html`<form action=${boundAction()} method="${'post'}"></form>`,
     'mixed attribute with NON-EMPTY statics': () => html`<form action=${boundAction()} method="pos${'t'}"></form>`,
     'falsy boolean hole leaves it to the framework': () => html`<form action=${boundAction()} ?method=${false}></form>`,
-    // #1573: a nullish plain hole is omitted by BOTH renderers, so it leaves the
-    // method to the framework exactly as the falsy boolean hole above does.
-    'null method hole leaves it to the framework': () => html`<form action=${boundAction()} method=${null}></form>`,
-    'undefined enctype hole leaves it to the framework': () => html`<form action=${boundAction()} enctype=${undefined}></form>`,
-    'null name hole on a bound submitter': () => html`<form action=${boundAction()}><button name=${null} formaction=${boundAction()}>Save</button></form>`,
+    // Lit: `nothing` omits the attribute and leaves it to the framework
+    'nothing method hole leaves it to the framework': () => html`<form action=${boundAction()} method=${nothing}></form>`,
+    'nothing enctype hole leaves it to the framework': () => html`<form action=${boundAction()} enctype=${nothing}></form>`,
+    'nothing name hole on a bound submitter': () => html`<form action=${boundAction()}><button name=${nothing} formaction=${boundAction()}>Save</button></form>`,
     'case-folded ACTION still binds': () => html`<form ACTION=${boundAction()}></form>`,
     'a plain url action is an ordinary form': () => html`<form action=${'/legacy'}></form>`,
     'an unbound form keeps its own method': () => html`<form action=${'/search'} method=${'get'}></form>`,

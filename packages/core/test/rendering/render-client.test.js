@@ -14,10 +14,11 @@ before(() => {
   globalThis.HTMLElement = window.HTMLElement;
 });
 
-let html, render;
+let html, render, nothing;
 before(async () => {
   ({ html } = await import('../../src/html.js'));
   ({ render } = await import('../../src/render-client.js'));
+  ({ nothing } = await import('../../src/sentinels.js'));
 });
 
 test('renders a simple template into a container', () => {
@@ -342,14 +343,16 @@ test('render: non-template primitive renders as text', () => {
   assert.equal(el.textContent, '42');
 });
 
-test('render: null / true / false render nothing', () => {
+test('render: null / nothing render nothing; booleans render text', () => {
   const el = document.createElement('div');
   render(null, el);
   assert.equal(el.childNodes.length, 0);
+  render(nothing, el);
+  assert.equal(el.childNodes.length, 0);
   render(false, el);
-  assert.equal(el.childNodes.length, 0);
+  assert.equal(el.textContent, 'false');
   render(true, el);
-  assert.equal(el.childNodes.length, 0);
+  assert.equal(el.textContent, 'true');
 });
 
 test('render: array of primitives renders as concatenated text nodes', () => {

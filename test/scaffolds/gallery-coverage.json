@@ -325,6 +325,21 @@
     },
     "svg": {
       "exempt": "deferred: agent-facing (the html tag's SVG-fragment sibling, documented in AGENTS.md and the skill's components reference); no single-concept gallery demo yet"
+    },
+    "classMap": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "styleMap": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "ifDefined": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "nothing": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "noChange": {
+      "demo": "modules/directives/components/directive-demo.ts"
     }
   },
   "serverSpecifier": "@webjsdev/server",

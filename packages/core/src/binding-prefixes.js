@@ -1,3 +1,4 @@
+import { nothing, noChange } from './sentinels.js';
 /**
  * The template attribute-binding prefixes the renderers recognise.
  *
@@ -82,8 +83,6 @@ const BOOLEAN_ATTRIBUTES = new Set([
  * @returns {string | null}
  */
 export function attrHoleValue(name, value) {
-  if (value == null) return null;
-  if (value === false) return /^aria-/i.test(name) ? 'false' : null;
-  if (value === true && BOOLEAN_ATTRIBUTES.has(String(name).toLowerCase())) return '';
-  return String(value);
+  if (value === nothing || value === noChange) return null;
+  return String(value ?? '');
 }

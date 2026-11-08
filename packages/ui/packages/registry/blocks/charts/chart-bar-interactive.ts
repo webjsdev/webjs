@@ -170,7 +170,7 @@ export default function ChartBarInteractive() {
         <div class="flex" role="radiogroup" aria-label="Series">
           ${(['desktop', 'mobile'] as const).map((key) => html`
             <label class="relative z-30 flex flex-1 cursor-pointer flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l has-checked:bg-muted/50 has-focus-visible:ring-2 has-focus-visible:ring-ring sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
-              <input type="radio" name="chart-bar-interactive" value=${key} checked=${key === 'desktop'} class="sr-only">
+              <input type="radio" name="chart-bar-interactive" value=${key} ?checked=${key === 'desktop'} class="sr-only">
               <span class="text-xs text-muted-foreground">${chartConfig[key].label}</span>
               <span class="text-lg leading-none font-bold sm:text-3xl">${total[key].toLocaleString('en-US')}</span>
             </label>`)}

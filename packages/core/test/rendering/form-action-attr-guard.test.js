@@ -330,28 +330,21 @@ test('quoted property hole .action="${fn}" throws (sigil is stripped before matc
   const out = await renderToString(html`<form .action="${leaky}"></form>`, { ssr: true })
     .then((html) => html, (e) => e);
   assert.ok(out instanceof Error, 'must throw, not render');
-  assert.match(out.message, /function was interpolated into \.action=/);
+  assert.match(out.message, /function was interpolated into action=/);
   assert.doesNotMatch(out.message, /SECRET/, 'the message must not carry what it withholds');
 });
 
 test('quoted boolean hole ?action="${fn}" throws', async () => {
   await assert.rejects(
     () => renderToString(html`<form ?action="${leaky}"></form>`, { ssr: true }),
-    /function was interpolated into \?action=/,
-  );
-});
-
-test('quoted event hole @action="${fn}" throws', async () => {
-  await assert.rejects(
-    () => renderToString(html`<form @action="${leaky}"></form>`, { ssr: true }),
-    /function was interpolated into @action=/,
+    /function was interpolated into action=/,
   );
 });
 
 test('quoted .formaction="${fn}" on a submit button throws', async () => {
   await assert.rejects(
     () => renderToString(html`<button type="submit" .formaction="${leaky}"></button>`, { ssr: true }),
-    /function was interpolated into \.formaction=/,
+    /function was interpolated into formaction=/,
   );
 });
 
@@ -468,11 +461,16 @@ test('a function action inside a component leaks nothing, even though the throw 
 // stringify their value, so neither can leak, and refusing them would break
 // ordinary code.
 
-test('an unquoted @action=${fn} event binding stays legal on both machines', async () => {
-  const buffered = await renderToString(html`<form @action=${leaky}></form>`, { ssr: true });
-  assert.doesNotMatch(buffered, /SECRET/);
-  const streamed = await drain(renderToStream(html`<form @action=${leaky}></form>`, { ssr: false }));
-  assert.doesNotMatch(streamed, /SECRET/);
+test('an unquoted or quoted @action event binding stays legal on both machines', async () => {
+  for (const tpl of [
+    html`<form @action=${leaky}></form>`,
+    html`<form @action="${leaky}"></form>`,
+  ]) {
+    const buffered = await renderToString(tpl, { ssr: true });
+    assert.doesNotMatch(buffered, /SECRET/);
+    const streamed = await drain(renderToStream(tpl, { ssr: false }));
+    assert.doesNotMatch(streamed, /SECRET/);
+  }
 });
 
 test('a custom element keeps a function on its own .action property', async () => {

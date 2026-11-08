@@ -93,7 +93,7 @@
  * </ui-dialog-content>
  * ```
  */
-import { WebComponent, html, unsafeHTML, prop } from '@webjsdev/core';
+import { WebComponent, html, unsafeHTML, prop, nothing } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
 import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
@@ -624,8 +624,8 @@ export class UiDialogContent extends WebComponent({
     ></div><div
       data-slot=${`${prefix}-content`}
       data-state=${parentOpen ? 'open' : 'closed'}
-      data-side=${this._side()}
-      data-vaul-drawer-direction=${this._drawerDirection()}
+      data-side=${this._side() ?? nothing}
+      data-vaul-drawer-direction=${this._drawerDirection() ?? nothing}
       class=${cn(this._panelClass(), this._hostClass())}
     >
       ${this._panelLead()}

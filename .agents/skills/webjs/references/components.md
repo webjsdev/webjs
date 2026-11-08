@@ -30,7 +30,6 @@ Most of what follows restates widely held component-model advice, ported. Lit's 
 
 **4. ARIA state is a hole in `render()`, derived from the same state that drives behaviour.** `aria-expanded=${this.open ? 'true' : 'false'}` cannot disagree with `this.open`. A second function that re-finds the button and calls `setAttribute` can, and does, the first time someone adds a close path that forgets to call it. The same holds for `class`, `?disabled`, and any `.prop`. Two caveats ride this rule:
 
-- A plain-attribute hole follows one rule on the server and the client (#1573): `null` / `undefined` omit the attribute, `false` omits it except on an `aria-*` name, where it is written as `"false"`, and `true` on an HTML boolean attribute (`checked`, `selected`, `disabled`, ...) writes the empty value like `?attr` (#1579). So `checked=${isDefault}` and `selected=${i === 0}` behave exactly like `?checked` / `?selected`, though `?attr` stays the clearer spelling for a boolean attribute. So `aria-expanded=${this.open}` serves `"true"` / `"false"` and hydrates unchanged, and `aria-current=${active ? 'page' : null}` omits the attribute on an inactive link. `?attr=${bool}` is not a substitute for a tri-state ARIA attribute, since a boolean binding omits the attribute when false.
 - A hole commits on the next render, one microtask later. The one place a direct write is still correct is a synchronous snapshot read such as `webjs:before-cache`, where the router reads `outerHTML` in the same task. That is a documented exception, not the normal path.
 
 **5. Behaviour needs an importable surface, or its test is a copy of it.** An inline `<script>` in a layout has no module identity, so a browser test cannot import it. It can only transcribe the listener into the test file and assert against the transcription, which then needs a SECOND test to grep the original for drift. Two tests, neither running shipping code. A component is importable, so its browser test mounts the real element and drives real events. A page or layout may still carry an inline `<script>`, but only for pre-paint boot work no module can do: reading a stored theme before first paint so the wrong palette never flashes, or measuring the header height into a CSS custom property. It must not be interactivity, and WHERE it sits decides how often it runs. The ROOT layout's markup sits OUTSIDE every swap range, so a soft navigation does not re-run its script, which is what makes it the right home for boot work and the wrong home for anything that has to respond to a later navigation. A page or a NESTED layout sits inside the swap range instead, so its script re-executes on every navigation that swaps that range (#1102), which means it has to be idempotent or guard on a flag it sets the first time. Neither shape gives you a listener that simply works, which is what a custom element is for. Under an opt-in CSP the script also needs the nonce from `cspNonce()`. `client-router-and-streaming.md` carries the full re-execution rule.
@@ -392,7 +391,6 @@ component re-renders in the browser.
 
 ## Directives (lit-html parity)
 
-Import from `@webjsdev/core/directives`. Everything a `class`/`style`/conditional needs is plain JS (`classMap` is `class=${cond ? 'a' : 'b'}`, `when` is a ternary, `map` is `.map`); reach for a directive only for the jobs below.
 
 | Directive | Use it for |
 |---|---|
@@ -493,3 +491,15 @@ A `WebComponent` inherits `HTMLElement` (browser) or an `ElementShim` (SSR) plus
 - WebComponent base: `render`, `update`, `requestUpdate`, `updated` / `firstUpdated`, `willUpdate` / `shouldUpdate`, `connectedCallback`, `renderError` / `renderFallback`, `addController` / `removeController`, `updateComplete` (#1021: there is no WebJs slot API to override; slots are native). Only override one deliberately, with its exact signature; never repurpose the name for app logic.
 
 Framework-private fields are underscore-prefixed (`_renderRoot`, `_connected`, `_changedProperties`, `_updatePromise`, `_isUpdating`); never declare a prop or field that matches one. Safe, non-inherited names: `label`, `open`, `count`, `value`, `name`, `items`, `todos`, `active`, `variant`, `size`, `checked`, `selected`, `heading`, `message`, `status`. When in doubt, grep the base surface in `node_modules/@webjsdev/core/src/component.js` and its sibling `component/` directory, where the class body actually lives.
+
+## Lit JavaScript API compatibility
+
+WebJs keeps `WebComponent({ ... })` for inferred reactive properties, including `state: true` and `attribute: false`. App TypeScript must erase to whitespace; decorators and compiler transforms are unnecessary.
+
+- Function event listeners receive the rendering component as `this`. Arrow and bound functions preserve their JavaScript receiver. Listener objects use `handleEvent()` and support `capture`, `once`, and `passive`.
+- Quoted and unquoted single-expression `@event`, `.property`, and `?boolean` bindings behave identically. Surrounding text or multiple expressions are invalid. Form-action bindings retain their separate contract.
+- Ordinary attribute values stringify booleans; nullish values become empty strings. Use `?disabled=${disabled}` for boolean attributes and `title=${value ?? nothing}` for omission, including inside mixed attributes.
+- Boolean child values render text. Use `${condition ? html`<p>Visible</p>` : nothing}` for conditional content.
+- `nothing` clears children, removes attributes, and assigns `undefined` to properties. `noChange` preserves the previously committed value.
+- `classMap`, `styleMap`, and `ifDefined` are available from `@webjsdev/core/directives`. Map helpers require their matching class/style attribute with one expression; static text around it is supported. They preserve static tokens while removing obsolete dynamic entries.
+- Normal lifecycle timing follows Lit: skipped updates consume their change map; `hasChanged` gates updates without discarding assignments; post-update writes schedule a new cycle; `updateComplete` reports whether another cycle is pending. WebJs retains its component error boundaries and recovery.

@@ -16,7 +16,7 @@
  * Every component here carries a `gold-` tag prefix so it cannot collide with
  * a tag another suite registers in the same process.
  */
-import { html, css, WebComponent, Suspense, signal, renderToString, renderToStream } from '../../../index.js';
+import { html, css, WebComponent, Suspense, signal, renderToString, renderToStream, nothing } from '../../../index.js';
 import { repeat } from '../../../src/repeat.js';
 import { unsafeHTML, live, keyed, guard, cache, until } from '../../../src/directives.js';
 import { setFormActionResolver } from '../../../src/form-action.js';
@@ -295,7 +295,7 @@ export const cases = [
   { name: 'form-bound', run: () => renderToString(html`<form action=${submitFeedback} class="f"><input name="email"><button>Go</button></form>`) },
   { name: 'form-bound-with-method-and-enctype', run: () => renderToString(html`<form action=${submitFeedback} method="post" enctype="application/x-www-form-urlencoded">b</form>`) },
   { name: 'form-bound-hole-after-attrs', run: () => renderToString(html`<form id="x" method=${'POST'} action=${submitFeedback}>b</form>`) },
-  { name: 'form-bound-omitted-method-hole', run: () => renderToString(html`<form action=${submitFeedback} method=${null} ?enctype=${false}>b</form>`) },
+  { name: 'form-bound-omitted-method-hole', run: () => renderToString(html`<form action=${submitFeedback} method=${nothing} ?enctype=${false}>b</form>`) },
   { name: 'form-plain-url', run: () => renderToString(html`<form action=${'/plain'} method="get">b</form>`) },
   { name: 'form-submitter-bound', run: () => renderToString(html`<form><button formaction=${otherAction} id="b">Alt</button><input type="submit" value="Main"></form>`) },
   { name: 'form-submitter-with-formenctype', run: () => renderToString(html`<form method="get"><button formenctype="application/x-www-form-urlencoded" formaction=${otherAction}>A</button></form>`) },

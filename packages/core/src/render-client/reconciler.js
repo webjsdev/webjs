@@ -1,3 +1,4 @@
+import { nothing, noChange } from '../sentinels.js';
 import { isTemplate, MARKER } from '../html.js';
 import {
   reconcileFormAction, isBoundFormAction, ABSENT, assertSubmitterHasNoName, assertSubmitterType,
@@ -23,6 +24,7 @@ import {
  * @param {{host?: object}} [options]
  */
 export function render(value, container, options = {}) {
+  if (value === noChange) return;
   const host = /** @type any */ (container);
   // Open the renderer-write window for the whole commit: every host-receiver
   // write below (and in createInstance / updateInstance / clearInstance / all
@@ -72,7 +74,7 @@ export function render(value, container, options = {}) {
     if (prev) clearInstance(prev, container);
     host[INSTANCE] = null;
     container.replaceChildren();
-    if (value == null || value === false || value === true) return;
+    if (value == null || value === nothing) return;
     if (Array.isArray(value)) {
       for (const v of value) {
         const text = document.createTextNode(String(v ?? ''));

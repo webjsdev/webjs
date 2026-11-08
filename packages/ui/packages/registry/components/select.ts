@@ -94,7 +94,7 @@
  * </ui-select>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { templateContent, unsafeHTML } from '@webjsdev/core/directives';
 import { cn, ensureId } from '../lib/utils.ts';
 import { positionFloating } from './floating.ts';
@@ -390,11 +390,11 @@ export class UiSelect extends WebComponent({
       aria-haspopup="listbox"
       aria-expanded=${this.open ? 'true' : 'false'}
       aria-controls=${listId}
-      aria-labelledby=${labels.length ? labels.join(' ') : null}
-      aria-label=${!labels.length && select?.getAttribute('aria-label') ? select.getAttribute('aria-label') : null}
-      aria-describedby=${select?.getAttribute('aria-describedby') || null}
-      aria-invalid=${invalid ? 'true' : null}
-      aria-required=${select?.required ? 'true' : null}
+      aria-labelledby=${labels.length ? labels.join(' ') : nothing}
+      aria-label=${!labels.length && select?.getAttribute('aria-label') ? select.getAttribute('aria-label') : nothing}
+      aria-describedby=${select?.getAttribute('aria-describedby') || nothing}
+      aria-invalid=${invalid ? 'true' : nothing}
+      aria-required=${select?.required ? 'true' : nothing}
       ?disabled=${!!select?.disabled}
       class=${select?.getAttribute('class') || selectTriggerClass()}
       @click=${this._onTriggerClick}
@@ -407,10 +407,10 @@ export class UiSelect extends WebComponent({
       id=${listId}
       role="listbox"
       popover="manual"
-      aria-labelledby=${labels.length ? labels.join(' ') : null}
+      aria-labelledby=${labels.length ? labels.join(' ') : nothing}
       data-state=${this.open ? 'open' : 'closed'}
       data-position=${this.position || 'item-aligned'}
-      data-align=${this.position === 'popper' ? this.align || 'start' : null}
+      data-align=${this.position === 'popper' ? this.align || 'start' : nothing}
       class=${this.contentClass ? cn(selectContentClass(), this.contentClass) : selectContentClass()}
       @keydown=${this._onListKeyDown}
       @pointerdown=${this._onListPointerDown}
