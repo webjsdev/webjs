@@ -278,13 +278,6 @@ for dir in "$target" "$top"; do
   hit=""
   if [ -L "$dir/node_modules" ]; then
     hit="$dir/node_modules"
-  elif [ -L "$dir/packages/core/dist" ]; then
-    # The link script plants core's built dist too (#1671). Core's `prepare`
-    # builds it during the install, and before the build learned to replace a
-    # symlinked out dir it wrote THROUGH this link into the primary. The build
-    # is the backstop now; the gate keeps one rule to teach, no planted link
-    # stands when you install, and `npm run worktree:unlink` clears them all.
-    hit="$dir/packages/core/dist"
   else
     # Depth 5, NOT 4: the link script walks directories to depth 4 and plants
     # <dir>/node_modules, one level deeper. packages/ui/packages/registry is the
@@ -300,13 +293,12 @@ for dir in "$target" "$top"; do
     echo "  npm ci       DELETES the linked tree outright, before any lifecycle script can run"
     echo "  bun install  writes packages and .bin entries straight through the link"
     echo "  npm install  silently REPLACES a root link with a real tree, detaching this worktree"
-    echo "  core's prepare rebuilds packages/core/dist, so a dist link carries the build there"
     echo "A remove verb (npm rm, bun remove) deletes from that same owning checkout."
     echo "Safe alternatives:"
     echo "  npm run worktree:link          links a fresh worktree; it never installs"
     echo "  a real install with NO symlink in the way. The link script plants NESTED"
-    echo "  node_modules links (packages/server, website, ...) AND packages/core/dist,"
-    echo "  so remove them ALL first, then install:"
+    echo "  node_modules links too (packages/server, website, ...), so remove them ALL"
+    echo "  first, from anywhere in the worktree, then install:"
     echo "    npm run worktree:unlink"
     echo "  (they are only links, nothing else is lost), or install in the PRIMARY checkout."
     echo "A GLOBAL install (-g) is not affected by this and is never blocked."

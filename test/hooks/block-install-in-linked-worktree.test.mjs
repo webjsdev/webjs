@@ -474,11 +474,12 @@ test('a NESTED node_modules symlink blocks, not only the root one', () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('a standing packages/core/dist symlink blocks even with every node_modules real (#1671)', () => {
-  // The old recipe deleted only the node_modules links and then installed. The
-  // dist link the link script also plants stayed, and core's prepare built the
-  // worktree's bundle THROUGH it into the primary. The build now replaces such a
-  // link itself, but the gate keeps one rule: no planted link stands at install.
+test('a packages/core/dist symlink alone does NOT block, since the build never writes through it (#1671)', () => {
+  // worktree:link no longer plants this link, and a worktree linked earlier
+  // still carries one. Core's prepare rebuilds dist during the install, and the
+  // build swaps a symlinked out dir for a real directory once it succeeds,
+  // never writing into the target. So the install is harmless and blocking it
+  // would be a gate crying wolf. Only node_modules links are a hazard.
   const root = mkdtempSync(join(tmpdir(), 'install-gate-dist-'));
   const primary = join(root, 'primary');
   const worktree = join(root, 'worktree');
@@ -489,13 +490,7 @@ test('a standing packages/core/dist symlink blocks even with every node_modules 
   symlinkSync(join(primary, 'packages', 'core', 'dist'), join(worktree, 'packages', 'core', 'dist'));
   try {
     const r = runHook('npm ci', worktree);
-    assert.equal(r.status, 2, `expected block, got ${r.status}: ${r.stderr}`);
-    assert.match(r.stderr, /packages\/core\/dist is a SYMLINK/);
-    assert.match(r.stderr, /npm run worktree:unlink/, 'names the undo that clears the dist link too');
-    // COUNTERFACTUAL: a real dist directory (built in this worktree) passes.
-    rmSync(join(worktree, 'packages', 'core', 'dist'));
-    mkdirSync(join(worktree, 'packages', 'core', 'dist'));
-    assert.equal(runHook('npm ci', worktree).status, 0);
+    assert.equal(r.status, 0, `expected allow, got ${r.status}: ${r.stderr}`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

@@ -88,24 +88,6 @@ test('with a real node_modules and a POPULATED primary, reports the detach', () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('reports a standing packages/core/dist link, which npm leaves visible at preinstall (#1671)', () => {
-  const { root, primary, worktree } = makePair();
-  try {
-    mkdirSync(join(primary, 'packages', 'core', 'dist'), { recursive: true });
-    mkdirSync(join(worktree, 'packages', 'core'), { recursive: true });
-    symlinkSync(join(primary, 'packages', 'core', 'dist'), join(worktree, 'packages', 'core', 'dist'));
-    mkdirSync(join(worktree, 'node_modules'), { recursive: true });
-    const r = run(worktree);
-    assert.equal(r.status, 0, 'the reporter never blocks');
-    assert.match(r.stderr, /packages\/core\/dist is a SYMLINK/);
-    assert.match(r.stderr, /npm run worktree:unlink/);
-    // COUNTERFACTUAL: a real dist directory says nothing about it.
-    rmSync(join(worktree, 'packages', 'core', 'dist'));
-    mkdirSync(join(worktree, 'packages', 'core', 'dist'));
-    assert.doesNotMatch(run(worktree).stderr, /packages\/core\/dist/);
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
 test('with the root link intact, the recipe it prints is the unlink script', () => {
   const { root, primary, worktree } = makePair();
   try {
