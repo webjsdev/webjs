@@ -18,7 +18,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -74,8 +74,13 @@ test('a FAILED build leaves a symlinked out dir exactly as it was', () => {
   // The link is swapped only after esbuild succeeds. Removing it first left a
   // worktree with an empty dist and no link whenever the build failed (a syntax
   // error in packages/core/src is the usual reason to rebuild), and opened the
-  // empty-dist window the staging directory exists to close (#1474). A bogus
-  // ESBUILD_BINARY_PATH makes esbuild fail without touching any source.
+  // empty-dist window the staging directory exists to close (#1474).
+  //
+  // ESBUILD_BINARY_PATH pointed at a binary that exits at once makes esbuild
+  // fail ("The service was stopped") without touching any source. It has to be
+  // a file that EXISTS: esbuild ignores a missing path with a warning and falls
+  // back to its installed binary, so a nonexistent path fails only on a machine
+  // whose install lacks that binary and passes the build everywhere else.
   const tmp = mkdtempSync(join(tmpdir(), 'webjs-dist-fail-'));
   try {
     const foreign = join(tmp, 'primary-dist');
@@ -83,11 +88,14 @@ test('a FAILED build leaves a symlinked out dir exactly as it was', () => {
     writeFileSync(join(foreign, 'MARKER'), 'the primary checkout\'s own build');
     const out = join(tmp, 'worktree-dist');
     symlinkSync(foreign, out, 'junction');
+    const fakeEsbuild = join(tmp, 'fake-esbuild');
+    writeFileSync(fakeEsbuild, '#!/bin/sh\nexit 1\n');
+    chmodSync(fakeEsbuild, 0o755);
 
     const r = spawnSync(process.execPath, [SCRIPT, out], {
       cwd: ROOT,
       encoding: 'utf8',
-      env: { ...process.env, ESBUILD_BINARY_PATH: join(tmp, 'no-such-esbuild') },
+      env: { ...process.env, ESBUILD_BINARY_PATH: fakeEsbuild },
     });
     assert.notEqual(r.status, 0, 'the build must fail for this test to mean anything');
     assert.ok(lstatSync(out).isSymbolicLink(), 'the link is still there after a failed build');
