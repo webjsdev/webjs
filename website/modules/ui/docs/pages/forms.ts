@@ -288,7 +288,7 @@ export default async function body(toc: TocEntry[], ctx: DocPageContext = {}) {
 
   return { success: true };
 }`, { title: 'modules/bugs/actions/submit-bug-report.server.ts', lineNumbers: true })}
-    <p>An action can also declare its validation as a <code>validate</code> export beside it. The framework calls it with the submitted <code>FormData</code> before the action runs, and a <code>{ success: false, fieldErrors }</code> result re-renders the page without running the action. See <a href="/docs/server-actions" data-no-router>Server Actions</a>.</p>
+    <p>An action can also declare its validation as a <code>validate</code> export beside it. The framework calls it with the submitted <code>FormData</code> before the action runs, and a <code>{ success: false, fieldErrors }</code> result re-renders the page without running the action. See <a href="/docs/server-actions">Server Actions</a>.</p>
 
     ${heading(toc, 3, 'Business Logic Validation')}
     <p>You can add additional custom validation logic in your server action, such as a check against the database.</p>

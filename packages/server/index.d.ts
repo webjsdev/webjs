@@ -574,6 +574,47 @@ export interface ElisionReport {
 export declare function analyzeAppElision(appDir: string): Promise<ElisionReport>;
 
 // ---------------------------------------------------------------------------
+// dev-regenerate.js (#967, #1672)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a `webjs.dev.regenerate` output stands against the build record in
+ * `.webjs/regenerate.json`: `fresh` (built by this rule's command from inputs
+ * that have not changed since, and not rewritten since), `stale`, `missing`
+ * (no output on disk), or `unrecorded` (an output no recorded build produced,
+ * such as one compiled by hand).
+ */
+export type RegenerateState = 'fresh' | 'stale' | 'missing' | 'unrecorded';
+
+/** One rule's outcome from `regenerateOutputs`. */
+export type RegenerateResult = { output: string; state: RegenerateState; built: boolean } & (
+  | { ok: true }
+  | { ok: false; reason: 'failed' | 'no-output' }
+);
+
+/**
+ * Build every `webjs.dev.regenerate` output that is not fresh, one at a time,
+ * and record what each was built from (#1672). The engine behind
+ * `webjs regenerate`, which an app runs in `dev.before` / `start.before` so a
+ * build outside the dev server records freshness the way a dev request does.
+ * A rule whose command fails, or exits 0 without writing its `output`, keeps
+ * its previous output and is reported `ok: false`.
+ */
+export declare function regenerateOutputs(
+  appDir: string,
+  opts?: { force?: boolean; warn?: (message: string) => void },
+): Promise<RegenerateResult[]>;
+
+/**
+ * Every `webjs.dev.regenerate` output's state against the build record,
+ * building nothing. What `webjs doctor` reads, so it and the dev server share
+ * one definition of fresh.
+ */
+export declare function regenerateStatus(
+  appDir: string,
+): Promise<Array<{ output: string; command: string; state: RegenerateState }>>;
+
+// ---------------------------------------------------------------------------
 // elision-differential.js (#1308)
 // ---------------------------------------------------------------------------
 

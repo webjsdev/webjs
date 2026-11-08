@@ -224,17 +224,18 @@ Tailwind) lives in the `webjs` block of `package.json` and runs INSIDE
 ```jsonc
 "webjs": {
   "dev": {
-    "before": ["webjs db migrate", "npm run css:build"],
+    "before": ["webjs db migrate", "webjs regenerate"],
     "regenerate": [{ "output": "public/tailwind.css", "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify", "inputs": ["app", "components", "lib", "modules", "public/input.css"] }]
   },
-  "start": { "before": ["webjs db migrate", "npm run css:build"] }
+  "start": { "before": ["webjs db migrate", "webjs regenerate"] }
 }
 ```
 
-A bare `webjs dev` applies migrations and compiles the static Tailwind
-stylesheet, then serves; in dev `dev.regenerate` (#967) recompiles
-`public/tailwind.css` on request when a source changes, so it never goes
-stale without a live `--watch`. `npm run dev` (a thin alias) does the same. In
+A bare `webjs dev` applies migrations and runs `webjs regenerate`, which compiles
+the static Tailwind stylesheet when it is not fresh and records the build in
+`.webjs/regenerate.json` (#1672), then serves; in dev `dev.regenerate` (#967)
+recompiles `public/tailwind.css` on request when a source changes, so it never
+goes stale without a live `--watch`. `npm run dev` (a thin alias) does the same. In
 Docker / Railway, `CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are
 equivalent: `webjs start` runs `webjs db migrate` (start `before`) in-process
 before serving.

@@ -27,7 +27,7 @@
  * where it creates and drops one scratch database per app.
  */
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
-import { lstatSync, realpathSync, symlinkSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, cpSync, appendFileSync, renameSync } from 'node:fs';
+import { realpathSync, symlinkSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, cpSync, appendFileSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,10 +53,10 @@ function run(cmd, argv, opts = {}) {
 
 /** Pack core, server, cli and mcp as npm would publish them (cli depends on mcp). */
 function packCandidate() {
-  // Build core's dist from THIS checkout (a linked worktree has it as a symlink
-  // into another checkout, which `npm pack` would silently leave out).
-  const dist = join(ROOT, 'packages/core/dist');
-  try { if (lstatSync(dist).isSymbolicLink()) rmSync(dist); } catch {}
+  // Build core's dist from THIS checkout. A worktree linked before #1671 may
+  // still carry it as a symlink into another checkout, which `npm pack` would
+  // silently leave out. The build itself replaces such a link with a real
+  // directory once it succeeds, so there is nothing to clear here first.
   execFileSync('node', ['scripts/build-framework-dist.js'], { cwd: ROOT, stdio: 'pipe' });
   const dir = mkdtempSync(join(tmpdir(), 'webjs-gate-pack-'));
   const tarballs = {};

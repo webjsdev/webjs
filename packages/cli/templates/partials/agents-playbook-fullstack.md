@@ -107,7 +107,8 @@ a dependency audit, then the server, browser, and e2e test layers for the
 features you built), and the GitHub workflow runs the
 same list; `.agents/rules/workflow.md` has what each gate checks. While
 iterating, `npm run ci -- --only Tests` runs one layer. Then
-`npm run css:build` (compile Tailwind).
+`npx webjs regenerate` (compile Tailwind when it is stale, and record the build so
+the dev server and `npm run doctor` see it as current).
 
 Then boot `npm run dev`. After each edit, run `npx webjs status /the-route /another`
 instead of sleeping and fetching a page: it waits until the dev server has
@@ -127,7 +128,7 @@ npm run dev                  # dev server at http://localhost:8080
 npm run start                # production server
 npm test                     # unit + browser tests
 npm run typecheck
-npm run css:build            # compile Tailwind
+npx webjs regenerate         # compile Tailwind when stale, recording the build
 npm run ci                   # every gate, one command (the webjs.ci steps in package.json)
 npm run check                # correctness checks
 npm run doctor               # project health (severity per check: webjs.doctor.gate)

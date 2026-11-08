@@ -305,7 +305,7 @@ export function collectHoistedHeadTags(bodyHtml) {
  * (breaks the ES-module waterfall without a bundler) and any user-declared
  * `metadata.preload` entries.
  *
- * @param {{ metadata: Record<string,any>, moduleUrls: string[], dev: boolean, streaming: boolean, preloads?: string[], lazyComponents?: Record<string, string>, nonce?: string }} opts
+ * @param {{ metadata: Record<string,any>, moduleUrls: string[], dev: boolean, streaming: boolean, preloads?: string[], lazyComponents?: Record<string, string>, nonce?: string, pageUrl?: string }} opts
  */
 /**
  * Extract leading `<script>`, `<style>`, and `<link>` tags from the body
@@ -323,12 +323,160 @@ export function hoistHeadTags(headHtml, bodyHtml) {
   // streaming path so both hoist identically. See collectHoistedHeadTags.
   const { tags: hoisted, body: remaining } = collectHoistedHeadTags(bodyHtml);
   if (!hoisted.length) return { head: headHtml, body: bodyHtml };
-  const newHead = headHtml.replace('</head>', hoisted.join('\n') + '\n</head>');
+  const newHead = headHtml.replace('</head>', () => hoisted.join('\n') + '\n</head>');
   return { head: newHead, body: remaining };
 }
 
 /** Internal helper re-exported for unit testing. */
 export const _hoistHeadTags = hoistHeadTags;
+
+/**
+ * The attribute naming the boundary a hoisted stylesheet came from (#1669).
+ * Its value is the SEGMENT of the `wj:children` range the link was rendered
+ * in: a nested layout's own markup sits inside its parent's range, and a
+ * page's inside its own boundary or its innermost layout's. The client router
+ * switches the sheet off when it swaps that range and the incoming page no
+ * longer links the same file, so a section's stylesheet leaves with the
+ * section, and switches it back on when a later page links it again.
+ */
+export const STYLE_OWNER_ATTR = 'data-wj-style-owner';
+
+const BOUNDARY_OPEN = '<!--wj:children:';
+// One token of a leading run after a boundary marker: a comment that is not a
+// client-router marker, or a `<link>` tag (quote-aware, like the root hoist).
+// Sticky, so it matches at `lastIndex` without copying the rest of the body.
+const OWNED_RUN_TOKEN_RE =
+  /\s*(<!--(?!\/?wj:)[\s\S]*?-->|<link\b(?:[^>"']|"[^"]*"|'[^']*')*>)/iy;
+const LINK_TAG_RE = /<link\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
+
+// One attribute after the tag name, read in order so a quoted value is
+// consumed whole and never mistaken for another attribute.
+const ATTR_RE = /\s*([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/y;
+
+/**
+ * A tag's attributes, lowercased names to raw values (the first of a repeated
+ * name wins, as in HTML).
+ * @param {string} tag
+ * @returns {Map<string, string>}
+ */
+function tagAttrs(tag) {
+  /** @type {Map<string, string>} */
+  const out = new Map();
+  const start = /^<[a-zA-Z][^\s/>]*/.exec(tag);
+  let pos = start ? start[0].length : 0;
+  for (;;) {
+    ATTR_RE.lastIndex = pos;
+    const m = ATTR_RE.exec(tag);
+    if (!m || m[0].length === 0) break;
+    pos += m[0].length;
+    const name = m[1].toLowerCase();
+    if (!out.has(name)) out.set(name, m[2] ?? m[3] ?? m[4] ?? '');
+  }
+  return out;
+}
+
+/**
+ * The identity of a stylesheet `<link>`, or null when the tag is not an
+ * active one (`rel` naming `stylesheet` and not `alternate`, with an href).
+ * The URL the href resolves to against the page's own URL (`base`), plus the
+ * `media` it applies under, so `./a.css` and `/a.css` on one page are one
+ * sheet and a print sheet and a screen sheet of one file are two. The router
+ * keys its sheets the same way (owned-styles.js). With no base the href is
+ * used as written.
+ * @param {string} tag
+ * @param {string} [base]
+ * @returns {string | null}
+ */
+function stylesheetTagKey(tag, base) {
+  const attrs = tagAttrs(tag);
+  const rel = (attrs.get('rel') || '').toLowerCase().split(/\s+/);
+  let href = attrs.get('href');
+  if (!rel.includes('stylesheet') || rel.includes('alternate') || !href) return null;
+  if (base) { try { href = new URL(href, base).href; } catch { /* keep as written */ } }
+  const media = (attrs.get('media') || '').trim();
+  return media && media !== 'all' ? `${href} ${media}` : href;
+}
+
+/**
+ * The keys (`stylesheetTagKey`) of every stylesheet `<link>` in an HTML string.
+ * @param {string} html
+ * @param {string} [base]  The page's URL, which hrefs resolve against.
+ * @returns {Set<string>}
+ */
+export function stylesheetKeys(html, base) {
+  const out = new Set();
+  for (const m of html.matchAll(LINK_TAG_RE)) {
+    const key = stylesheetTagKey(m[0], base);
+    if (key) out.add(key);
+  }
+  return out;
+}
+
+/**
+ * Hoist the stylesheet links at the start of each nested layout's and page's
+ * output into `<head>` (#1669). The root hoist (`collectHoistedHeadTags`) only
+ * reads the leading run of the WHOLE body and stops at the first boundary
+ * marker, so a section layout's `<link rel="stylesheet">` stayed in `<body>`,
+ * where it is not reliably render-blocking (#406). This reads the leading run
+ * after EVERY `<!--wj:children:...-->` open marker instead.
+ *
+ * Only `rel="stylesheet"` links move, each tagged with `STYLE_OWNER_ATTR` set
+ * to the marker's segment. Comments and other `<link>` tags in the run stay
+ * where they are and do not end it; anything else does. A stylesheet whose
+ * href and media are already in `seen` (the head so far, or an earlier
+ * hoist) is dropped rather than hoisted twice, since one URL linked twice is
+ * two active sheets the browser matches every rule against. Every framework
+ * the WebJs router takes cues from puts a route's sheet in the head and
+ * dedupes by href. Attributes are read in order (`tagAttrs`), so a name
+ * inside another attribute's quoted value is never mistaken for one.
+ *
+ * @param {string} bodyHtml
+ * @param {Set<string>} [seen]  Keys (`stylesheetKeys`) already linked in the head (mutated).
+ * @param {string} [base]  The page's URL, which hrefs resolve against for the key.
+ * @returns {{ tags: string[], body: string }}
+ */
+export function hoistOwnedStylesheets(bodyHtml, seen = new Set(), base) {
+  if (!bodyHtml.includes(BOUNDARY_OPEN)) return { tags: [], body: bodyHtml };
+  /** @type {string[]} */
+  const tags = [];
+  let out = '';
+  let pos = 0;
+  for (;;) {
+    const open = bodyHtml.indexOf(BOUNDARY_OPEN, pos);
+    if (open < 0) break;
+    const close = bodyHtml.indexOf('-->', open);
+    if (close < 0) break;
+    const markerEnd = close + 3;
+    out += bodyHtml.slice(pos, markerEnd);
+    // The route-key is everything after the LAST ':' (the router's own split,
+    // boundaries.js), so the segment is everything before it.
+    const rest = bodyHtml.slice(open + BOUNDARY_OPEN.length, close);
+    const cut = rest.lastIndexOf(':');
+    const segment = cut > 0 ? rest.slice(0, cut) : null;
+    pos = markerEnd;
+    if (!segment) continue;
+    let m;
+    for (;;) {
+      OWNED_RUN_TOKEN_RE.lastIndex = pos;
+      m = OWNED_RUN_TOKEN_RE.exec(bodyHtml);
+      if (!m) break;
+      const token = m[1];
+      const lead = m[0].slice(0, m[0].length - token.length);
+      pos += m[0].length;
+      const key = token.startsWith('<!--') ? null : stylesheetTagKey(token, base);
+      if (!key) {
+        out += lead + token;
+        continue;
+      }
+      out += lead;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const owner = ` ${STYLE_OWNER_ATTR}="${escapeAttr(segment)}">`;
+      tags.push(token.replace(/\s*\/?>$/, () => owner));
+    }
+  }
+  return { tags, body: out + bodyHtml.slice(pos) };
+}
 
 /**
  * The initial-load Suspense resolver: swaps each streamed

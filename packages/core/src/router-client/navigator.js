@@ -21,6 +21,7 @@ import { clearPrefetchHover, clearPrefetchRefused, clearPrefetchViewTimers, onPr
 import { afterTwoFrames, bumpRestoreGeneration, releaseHeightReservation, releaseScrollAnchor, reserveRestoredHeight, restoreGeneration, suppressScrollAnchoring } from './scroll.js';
 import { snapshotCache, snapshotCurrent, snapshotGet } from './snapshot-cache.js';
 import { _setEnabled, bumpNavToken, clearFragmentNav, consumeFragmentNav, currentNavigationToken, enabled, hardNavigate } from './state.js';
+import { primeLiveStylesheetKeys } from './owned-styles.js';
 import { _swapCommit, applySwap } from './swap.js';
 import { ensureUpgradeObserver } from './upgrade.js';
 import { viewTransitionsEnabled } from './view-transition.js';
@@ -143,6 +144,9 @@ let prevScrollRestoration = null;
 export function enableClientRouter() {
   if (enabled || typeof document === 'undefined') return;
   _setEnabled(true);
+  // Key the page's stylesheets against the URL they were served at, before
+  // any navigation moves it (#1669, owned-styles.js).
+  primeLiveStylesheetKeys();
   // Publish the in-place refresh entry on the global (#1398). The dev
   // live-reload client is a separate served script with no import of this
   // module, so a global is the only seam it has, and its PRESENCE is the

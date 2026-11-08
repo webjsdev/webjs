@@ -466,11 +466,31 @@ test('a NESTED node_modules symlink blocks, not only the root one', () => {
     const r = runHook('npm install', worktree);
     assert.equal(r.status, 2, `expected block, got ${r.status}: ${r.stderr}`);
     assert.match(r.stderr, /packages\/server\/node_modules is a SYMLINK/);
-    assert.match(r.stderr, /find \. -maxdepth 5 -type l -name node_modules -delete/, 'the remedy removes them ALL');
+    assert.match(r.stderr, /npm run worktree:unlink/, 'the remedy removes them ALL');
     // COUNTERFACTUAL: the same layout with a real nested directory passes.
     rmSync(join(worktree, 'packages', 'server', 'node_modules'));
     mkdirSync(join(worktree, 'packages', 'server', 'node_modules'));
     assert.equal(runHook('npm install', worktree).status, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a packages/core/dist symlink alone does NOT block, since the build never writes through it (#1671)', () => {
+  // worktree:link no longer plants this link, and a worktree linked earlier
+  // still carries one. Core's prepare rebuilds dist during the install, and the
+  // build swaps a symlinked out dir for a real directory once it succeeds,
+  // never writing into the target. So the install is harmless and blocking it
+  // would be a gate crying wolf. Only node_modules links are a hazard.
+  const root = mkdtempSync(join(tmpdir(), 'install-gate-dist-'));
+  const primary = join(root, 'primary');
+  const worktree = join(root, 'worktree');
+  mkdirSync(join(primary, 'packages', 'core', 'dist'), { recursive: true });
+  mkdirSync(join(worktree, 'packages', 'core'), { recursive: true });
+  mkdirSync(join(worktree, 'node_modules'), { recursive: true }); // REAL root tree
+  writeFileSync(join(worktree, 'package.json'), '{"name":"w"}\n');
+  symlinkSync(join(primary, 'packages', 'core', 'dist'), join(worktree, 'packages', 'core', 'dist'));
+  try {
+    const r = runHook('npm ci', worktree);
+    assert.equal(r.status, 0, `expected allow, got ${r.status}: ${r.stderr}`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

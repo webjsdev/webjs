@@ -10,9 +10,9 @@
     "dev": "webjs dev --port ${PORT:-5001}",
     "start": "webjs start",
     "typecheck": "node scripts/copy-registry.mjs && webjs typecheck",
-    "pretest": "node scripts/copy-registry.mjs && npm run css:build && npm run css:build:ui && npm run css:build:ui-styles",
+    "pretest": "node scripts/copy-registry.mjs && webjs regenerate",
     "test": "webjs test",
-    "pretest:browser": "node scripts/copy-registry.mjs && npm run css:build && npm run css:build:ui && npm run css:build:ui-styles",
+    "pretest:browser": "node scripts/copy-registry.mjs && webjs regenerate",
     "test:browser": "webjs test --browser",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
     "css:build:ui": "tailwindcss -i ./public/ui-input.css -o ./public/ui.css --minify",
@@ -41,9 +41,7 @@
     "dev": {
       "before": [
         "node scripts/copy-registry.mjs",
-        "npm run css:build",
-        "npm run css:build:ui",
-        "npm run css:build:ui-styles"
+        "webjs regenerate"
       ],
       "regenerate": [
         {
@@ -98,9 +96,7 @@
     "start": {
       "before": [
         "node scripts/copy-registry.mjs",
-        "npm run css:build",
-        "npm run css:build:ui",
-        "npm run css:build:ui-styles"
+        "webjs regenerate"
       ]
     },
     "doctor": {

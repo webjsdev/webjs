@@ -37,6 +37,8 @@ import { checkAppIcon } from './probes/app-icon.js';
  *   - `coherence`: inject `{ liveImports, vendoredImports, getManifest, check }`
  *     so the importmap-coherence check runs against stub importmaps + metadata
  *     instead of a real live resolve / node_modules read.
+ *   - `regenerateStatus`: inject the build-record reader so the build-output
+ *     freshness check reads a specific `@webjsdev/server` copy.
  * @returns {Promise<DoctorResult[]>}
  */
 export async function runDoctorChecks(appDir, opts = {}) {
@@ -64,7 +66,7 @@ export async function runDoctorChecks(appDir, opts = {}) {
     Promise.resolve(checkGitHook(appDir)),
     checkElisionCarriers(elision),
     checkElisionComponents(elision),
-    checkStaticAssetFreshness(appDir),
+    checkStaticAssetFreshness(appDir, opts),
     checkUnmarkedAssetLinks(appDir),
     Promise.resolve(checkWorkspaceOverrides(appDir)),
     Promise.resolve(checkAppIcon(appDir)),

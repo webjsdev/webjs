@@ -19,7 +19,7 @@ export default async function body(toc: TocEntry[]) {
   return html`
     <p>The open source registry index is a list of the open source registries you can install from with the WebJs UI CLI.</p>
     <p>The <a href="/ui/docs/directory">Directory</a> page lists them, and each entry shows the command that installs from that registry. The CLI installs from the registry its <code>--registry</code> flag names, and from the WebJs UI registry when there is no flag.</p>
-    <p>You can see the full list at <a href="/ui/r/registries.json" data-no-router>/ui/r/registries.json</a>.</p>
+    <p>You can see the full list at <a href="/ui/r/registries.json">/ui/r/registries.json</a>.</p>
     <p>You do not need to submit a registry to the directory to use it. Any registry URL works with <code>--registry</code>. The directory is for registries you want other people to find.</p>
 
     ${heading(toc, 2, 'Adding a Registry')}

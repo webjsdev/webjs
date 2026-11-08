@@ -218,6 +218,13 @@ test('webjs.dev.regenerate is declared in both the schema and the WebjsConfig ty
   const src = readFileSync(dtsPath, 'utf8');
   assert.match(src, /interface WebjsRegenerateRule/, 'the type declares WebjsRegenerateRule');
   assert.match(src, /regenerate\?:\s*WebjsRegenerateRule\[\]/, 'WebjsDevTasks carries regenerate');
+
+  // Freshness is the build record (#1672), not an mtime comparison. The editor
+  // tooltip (schema) and the type both say so, and neither may drift back.
+  for (const [label, text] of [['schema inputs', rule.properties.inputs.description], ['WebjsRegenerateRule', src]]) {
+    assert.match(text, /\.webjs\/regenerate\.json/, `${label} names the build record`);
+    assert.doesNotMatch(text, /newest mtime is compared/, `${label} no longer describes an mtime ordering`);
+  }
 });
 
 // The `webjs.ci` step list (#1471) is recursive (a group holds steps that may

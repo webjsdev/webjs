@@ -19,11 +19,9 @@ import '#modules/ui/elements.ts';
  *   nearest `.style-<name>` ancestor (#1666, D8), and two style wrappers on
  *   one path both apply, so each region names its own (the gallery
  *   new-york, the home page luma and rhea).
- * - the /ui stylesheet link. The root layout already emits it in <head> on a
- *   full load of a /ui page. This copy covers a SOFT navigation into /ui from
- *   a marketing page, where the root layout is not re-rendered and the
- *   router's head merge only adds. The bare frames, only ever full loads,
- *   skip it, since every copy of a sheet is matched again.
+ * - the /ui stylesheet link, the one place it is written. It comes first, so
+ *   the framework moves it into <head> on every render and switches it off
+ *   when a soft navigation leaves /ui (#1669).
  *
  * This is a NON-ROOT layout (invariant 8), so it writes no document shell.
  */
@@ -63,14 +61,11 @@ export function generateMetadata(ctx: { url: string }) {
   };
 }
 
-export default function UiLayout({ children, url }: LayoutProps) {
-  // The bare frames are only ever full loads, so the root layout's <head>
-  // copy is enough, and a second copy would make the browser match every
-  // ui.css rule twice (lib/ui/style-links.ts).
-  const { pathname } = new URL(url);
-  const frame = pathname.startsWith('/ui/view/') || pathname.startsWith('/ui/preview/');
+export default function UiLayout({ children }: LayoutProps) {
+  // First in the markup, so the framework moves it into <head> and switches it
+  // off when a soft navigation leaves /ui (#1669).
   return html`
-    ${frame ? '' : html`<link rel="stylesheet" href=${asset('/public/ui.css')}>`}
+    <link rel="stylesheet" href=${asset('/public/ui.css')}>
     <div class="ui-site">
       ${children}
     </div>

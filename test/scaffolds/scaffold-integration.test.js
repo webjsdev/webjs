@@ -370,13 +370,14 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // Both dev and start apply pending migrations before serving (#725), then
     // compile the static Tailwind stylesheet (#947), so a fresh clone boots
     // migrated AND fully styled with no manual step.
-    // The before-step calls the Tailwind CLI DIRECTLY (not `npm run css:build`),
-    // so it works on the node-less / npm-less Bun image too (#947); node_modules/.bin
-    // is on PATH for before/regenerate steps via envWithLocalBin.
-    assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate', 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify'],
-      'webjs.dev.before runs db migrate then the Tailwind compile (#725, #947)');
-    assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate', 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify'],
-      'webjs.start.before runs db migrate then the Tailwind compile');
+    // The compile runs through `webjs regenerate` (#1672), which builds the
+    // regenerate rule's command (the Tailwind CLI called DIRECTLY, so it works on
+    // the npm-less Bun image, #947) and records the build, so the dev server and
+    // the doctor see it as fresh. A raw compile here would record nothing.
+    assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate', 'webjs regenerate'],
+      'webjs.dev.before runs db migrate then builds and records the stylesheet (#725, #1672)');
+    assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate', 'webjs regenerate'],
+      'webjs.start.before runs db migrate then builds and records the stylesheet');
     // Dev keeps the static CSS fresh via on-request regenerate (#967), NOT a
     // background `tailwindcss --watch` (which could die mid-session and serve
     // stale CSS). So there is no dev.parallel watcher, and a regenerate rule
@@ -872,8 +873,8 @@ test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async
     assert.match(fs, /Tier 2, custom elements/, 'full-stack: UI kit tier-2 discovery');
     assert.match(fs, /multi-page app \(MPA\)/, 'full-stack: MPA structure');
     assert.match(fs, /position: fixed/, 'full-stack: fixed navbar');
-    assert.match(fs, /npm run css:build/, 'full-stack: css:build in the pipeline');
-    for (const uiOnly of [/light-dark/, /Tier 2/, /ui add/, /css:build/, /position: fixed/]) {
+    assert.match(fs, /npx webjs regenerate/, 'full-stack: the recorded Tailwind build in the pipeline (#1672)');
+    for (const uiOnly of [/light-dark/, /Tier 2/, /ui add/, /css:build/, /regenerate/, /position: fixed/]) {
       assert.doesNotMatch(api, uiOnly, `api: no UI-only guidance (${uiOnly})`);
     }
 
