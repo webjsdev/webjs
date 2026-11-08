@@ -486,6 +486,20 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     );
     const bumped = await page.evaluate(() => document.querySelector('.greeting-bump').textContent.includes('n=1'));
     assert.ok(bumped, 'the async-render component hydrated and stayed interactive');
+    // Two clicks in one task, before the async re-render lands: each must
+    // count, which it does only if the handler reads the live signal rather
+    // than the value captured at render time.
+    await page.evaluate(() => {
+      const b = document.querySelector('.greeting-bump');
+      b.click();
+      b.click();
+    });
+    await page.waitForFunction(
+      () => document.querySelector('.greeting-bump')?.textContent.includes('n=3'),
+      { timeout: 8000 },
+    ).catch(() => {});
+    const twice = await page.evaluate(() => document.querySelector('.greeting-bump').textContent);
+    assert.ok(twice.includes('n=3'), `both clicks counted (${twice})`);
     // The greeting text is still present (stale-while-revalidate held it across the re-render).
     const greeting = await page.evaluate(() => document.querySelector('.greeting-text')?.textContent || '');
     assert.ok(greeting.includes('Hello, world!'), 'the greeting survived the re-render');

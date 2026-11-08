@@ -215,7 +215,7 @@ TodoList.register('todo-list');</code-block>
     <h3>How signal updates render</h3>
     <ul>
       <li><strong>Dynamic tracking</strong>: every update re-records its dependency set. A signal read anywhere in the synchronous update cycle (<code>willUpdate()</code>, <code>render()</code>, <code>updated()</code>) subscribes the component to that signal, so a host attribute derived from internal state in <code>updated()</code> follows it too; signals that fall out of the current control flow stop driving re-renders. The DOM commit is not tracked, which is what keeps a <code>watch()</code> part fine-grained.</li>
-      <li><strong>Async render</strong>: in an <code>async render()</code>, only the reads made before the first <code>await</code> are tracked. Read the signals into locals at the top, then await.</li>
+      <li><strong>Async render</strong>: in an <code>async render()</code>, only the reads made before the first <code>await</code> are tracked. Read the signals into locals at the top, then await. An event handler still reads the live signal (<code>this.#n.set(this.#n.get() + 1)</code>), not the local, which is a value from that render.</li>
       <li><strong>Batched re-render</strong>: calling <code>signal.set</code> (or assigning a reactive property, or calling <code>requestUpdate</code>) multiple times in the same synchronous block only triggers <strong>one</strong> re-render. Updates are batched via <code>queueMicrotask</code>, so the DOM update happens after the current call stack finishes but before the next frame paints.</li>
     </ul>
 

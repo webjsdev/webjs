@@ -24,7 +24,7 @@ export class AsyncGreeting extends WebComponent({ name: String }) {
     const greeting = await Promise.resolve(`Hello, ${this.name}!`);
     return html`<p class="async-greeting">
       <span class="greeting-text">${greeting}</span>
-      <button class="greeting-bump" @click=${() => this.#n.set(n + 1)}>n=${n}</button>
+      <button class="greeting-bump" @click=${() => this.#n.set(this.#n.get() + 1)}>n=${n}</button>
     </p>`;
   }
 }

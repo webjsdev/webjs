@@ -29,7 +29,7 @@ class UnseededCard extends WebComponent({ tid: prop(Number) }) {
     const t = await getThing(this.tid);
     return html`
       <p class="lbl">${t.label}</p>
-      <button id="bump2" @click=${() => this.#bump.set(bump + 1)}>bumped ${bump}</button>
+      <button id="bump2" @click=${() => this.#bump.set(this.#bump.get() + 1)}>bumped ${bump}</button>
     `;
   }
 }
