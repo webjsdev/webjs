@@ -14,7 +14,7 @@
  * compiler and no `node`/`bun` on PATH.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, statSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -83,6 +83,68 @@ const pkg = { name: 'x', webjs: { dev: { regenerate: [RULE] } } };
   const css = readFileSync(join(dir, 'public', 'tailwind.css'), 'utf8');
   assert.doesNotMatch(css, /SHOULD_NOT_RUN/, `[${runtime}] fresh output was not rebuilt`);
   assert.match(css, /fresh/, `[${runtime}] fresh output preserved`);
+}
+
+// #1672: a command that exits 0 WITHOUT rewriting the output (the Tailwind CLI
+// skips an unchanged write) stamps the output fresh, so the next request does
+// not recompile. Exercises `fs.promises.utimes` with fractional seconds and the
+// read-back `mtimeMs` comparison, the part whose precision could differ between
+// runtimes. The command only appends to a log, so the log counts the runs.
+{
+  _resetInFlight();
+  const dir = app({
+    name: 'x',
+    webjs: { dev: { regenerate: [{
+      output: 'public/tailwind.css',
+      command: `printf x >> ran.log`,
+      inputs: ['app', 'public/input.css'],
+    }] } },
+  });
+  const out = join(dir, 'public', 'tailwind.css');
+  writeFileSync(out, '.same{x:1}');
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(out, past, past);
+  utimesSync(join(dir, 'public', 'input.css'), past, past);
+  writeFileSync(join(dir, 'app', 'page.ts'), 'export default () => 2;'); // edited now, no new class
+  const rules = await readRegenerateRules(dir);
+
+  await maybeRegenerate(dir, 'public/tailwind.css', rules);
+  assert.equal(readFileSync(join(dir, 'ran.log'), 'utf8'), 'x', `[${runtime}] stale output compiled once`);
+  const srcMs = statSync(join(dir, 'app', 'page.ts')).mtimeMs;
+  const outMs = statSync(out).mtimeMs;
+  assert.ok(outMs >= srcMs, `[${runtime}] stamped output (${outMs}) reads at or past the newest input (${srcMs})`);
+  assert.equal(readFileSync(out, 'utf8'), '.same{x:1}', `[${runtime}] the stamp leaves the bytes alone`);
+
+  await maybeRegenerate(dir, 'public/tailwind.css', rules);
+  assert.equal(readFileSync(join(dir, 'ran.log'), 'utf8'), 'x', `[${runtime}] a stamped output is not recompiled`);
+}
+
+// #1672: a FAILING command never stamps, so the output stays stale and retries.
+{
+  _resetInFlight();
+  const dir = app({
+    name: 'x',
+    webjs: { dev: { regenerate: [{
+      output: 'public/tailwind.css',
+      command: `printf x >> ran.log; exit 3`,
+      inputs: ['app', 'public/input.css'],
+    }] } },
+  });
+  const out = join(dir, 'public', 'tailwind.css');
+  writeFileSync(out, '.same{x:1}');
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(out, past, past);
+  utimesSync(join(dir, 'public', 'input.css'), past, past);
+  writeFileSync(join(dir, 'app', 'page.ts'), 'export default () => 2;');
+  const rules = await readRegenerateRules(dir);
+
+  await maybeRegenerate(dir, 'public/tailwind.css', rules);
+  assert.ok(
+    statSync(out).mtimeMs < statSync(join(dir, 'app', 'page.ts')).mtimeMs,
+    `[${runtime}] a failed build leaves the output older than its input`,
+  );
+  await maybeRegenerate(dir, 'public/tailwind.css', rules);
+  assert.equal(readFileSync(join(dir, 'ran.log'), 'utf8'), 'xx', `[${runtime}] a failed build is retried`);
 }
 
 console.log(`[dev-regenerate] #967 on-request regeneration OK on ${runtime}`);

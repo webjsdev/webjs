@@ -191,7 +191,7 @@
                 "type": "string"
               },
               "inputs": {
-                "description": "Source paths (files or directories) whose newest mtime is compared to `output`'s. If any is newer (or the output is missing), the command runs. For Tailwind: the @source dirs plus public/input.css.",
+                "description": "Source paths (files or directories) whose newest mtime is compared to `output`'s. If any is newer (or the output is missing), the command runs, and a clean exit stamps `output` at that newest input mtime so a rebuild that leaves the bytes unchanged still counts as fresh (#1672). For Tailwind: the @source dirs plus public/input.css.",
                 "type": "array",
                 "items": { "type": "string" }
               }

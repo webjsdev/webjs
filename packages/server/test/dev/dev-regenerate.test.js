@@ -171,3 +171,105 @@ test('maybeRegenerate: concurrent requests for the same stale output coalesce to
   ]);
   assert.equal(maxConcurrent, 1); // one shared in-flight compile
 });
+
+// ---------------------------------------------------------------------------
+// #1672: a successful command that leaves the output's bytes (and so its mtime)
+// untouched must still leave the output FRESH, or every later request
+// recompiles it. The Tailwind CLI skips the write when the CSS is unchanged.
+
+/**
+ * A spawn stub whose child runs `effect` (standing in for what the command
+ * does to the filesystem) and then exits with `code`.
+ */
+function effectSpawn(code, effect = async () => {}) {
+  const calls = [];
+  const spawn = (command) => {
+    calls.push(command);
+    const child = new EventEmitter();
+    child.pid = 1;
+    setTimeout(async () => {
+      await effect();
+      child.emit('exit', code);
+    }, 0);
+    return child;
+  };
+  return { spawn, calls };
+}
+
+/** An app whose output is OLDER than a source edited just now (stale). */
+async function staleApp() {
+  const dir = await tmpApp({ name: 'x' });
+  await mkdir(join(dir, 'app'), { recursive: true });
+  await mkdir(join(dir, 'public'), { recursive: true });
+  await writeFile(join(dir, 'public', 'input.css'), '@import "tailwindcss";', 'utf8');
+  await writeFile(join(dir, 'public', 'tailwind.css'), '/* built */', 'utf8');
+  const past = new Date(Date.now() - 60_000);
+  await utimes(join(dir, 'public', 'input.css'), past, past);
+  await utimes(join(dir, 'public', 'tailwind.css'), past, past);
+  // An edit that adds no class: the compiled CSS will not change.
+  await writeFile(join(dir, 'app', 'page.ts'), 'export default () => 2;', 'utf8');
+  return dir;
+}
+
+test('maybeRegenerate: a rebuild that leaves the bytes unchanged stamps the output fresh (#1672)', async () => {
+  const dir = await staleApp();
+  const out = join(dir, 'public', 'tailwind.css');
+  const before = await stat(out);
+  const { spawn, calls } = effectSpawn(0); // writes nothing, exits 0
+
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  assert.equal(calls.length, 1); // stale: compiled once
+
+  const src = await stat(join(dir, 'app', 'page.ts'));
+  const after = await stat(out);
+  assert.ok(after.mtimeMs >= src.mtimeMs, 'the output is stamped at or past the newest input');
+  assert.ok(after.mtimeMs > before.mtimeMs, 'the stamp moved the output forward');
+
+  // Without the stamp the output stays older than the source, and this second
+  // request compiles again (the per-request loop #1672 fixes).
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  assert.equal(calls.length, 1, 'a fresh output is not recompiled on the next request');
+});
+
+test('maybeRegenerate: a FAILED command does not stamp the output (#1672)', async () => {
+  const dir = await staleApp();
+  const out = join(dir, 'public', 'tailwind.css');
+  const before = await stat(out);
+  const { spawn, calls } = effectSpawn(1); // compile error, exits 1
+
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  assert.equal((await stat(out)).mtimeMs, before.mtimeMs, 'a failed build leaves the mtime alone');
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  assert.equal(calls.length, 2, 'the output is still stale, so the next request retries');
+});
+
+test('maybeRegenerate: an input edited DURING the compile still reads stale (#1672)', async () => {
+  const dir = await staleApp();
+  // The author saves another file while the command runs. The stamp is the
+  // input snapshot taken before the command, not the clock after it, so this
+  // later edit stays newer than the output.
+  let compiles = 0;
+  const { spawn, calls } = effectSpawn(0, async () => {
+    if (compiles++ > 0) return;
+    await new Promise((r) => setTimeout(r, 20));
+    await writeFile(join(dir, 'app', 'late.ts'), 'export default () => "grid-cols-3";', 'utf8');
+  });
+
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  assert.equal(calls.length, 2, 'the mid-compile edit triggers a second compile');
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  assert.equal(calls.length, 2, 'and once that compile is stamped the output is fresh');
+});
+
+test('maybeRegenerate: an output the command REWROTE keeps its own mtime (#1672)', async () => {
+  const dir = await staleApp();
+  const out = join(dir, 'public', 'tailwind.css');
+  const future = new Date(Date.now() + 60_000);
+  const { spawn } = effectSpawn(0, async () => {
+    await writeFile(out, '.grid{display:grid}', 'utf8');
+    await utimes(out, future, future);
+  });
+  await maybeRegenerate(dir, 'public/tailwind.css', [TW], { spawn });
+  assert.equal((await stat(out)).mtimeMs, future.getTime(), 'a real write is never moved back');
+});

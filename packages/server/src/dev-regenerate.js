@@ -29,10 +29,18 @@
  * `inputs` is newer than the output (or the output is missing), `command` is run
  * to completion BEFORE the file is served, so the response is always fresh.
  * Concurrent requests coalesce onto one in-flight compile.
+ *
+ * A successful run then STAMPS the output (#1672). A compiler may leave an
+ * output whose bytes did not change untouched (the Tailwind CLI does), so after
+ * an edit that adds no class the output would keep its old mtime and every
+ * later request would recompile it. The stamp records the build the way Ninja's
+ * `restat` does: the output's mtime is raised to the newest input mtime measured
+ * BEFORE the command ran, never to the wall clock after it, so an input edited
+ * during the compile still reads as newer and the next request rebuilds.
  */
 
 import { spawn as nodeSpawn } from 'node:child_process';
-import { readFile, stat, readdir } from 'node:fs/promises';
+import { readFile, stat, readdir, utimes } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 
 /**
@@ -140,21 +148,62 @@ function envWithLocalBin(cwd) {
 }
 
 /**
- * Run a regenerate command to completion. Never rejects (a compile failure is
- * logged by the tool's own inherited stderr; the caller then serves whatever is
- * on disk, degrading to the previous behaviour rather than 500ing the request).
+ * Run a regenerate command to completion and resolve its exit code. Never
+ * rejects: a compile failure is logged by the tool's own inherited stderr and
+ * resolves non-zero (a spawn `error` or a signal resolves `null`), and the
+ * caller then serves whatever is on disk, degrading to the previous behaviour
+ * rather than 500ing the request.
  *
  * @param {string} command
  * @param {string} cwd
  * @param {typeof nodeSpawn} spawn
- * @returns {Promise<void>}
+ * @returns {Promise<number | null>}
  */
 function runCommand(command, cwd, spawn) {
   return new Promise((resolve) => {
+    let settled = false;
+    /** @param {number | null} code */
+    const done = (code) => {
+      if (settled) return;
+      settled = true;
+      resolve(code);
+    };
     const child = spawn(command, { shell: true, stdio: 'inherit', cwd, env: envWithLocalBin(cwd) });
-    child.on('exit', () => resolve());
-    child.on('error', () => resolve());
+    child.on('exit', (code) => done(typeof code === 'number' ? code : null));
+    child.on('error', () => done(null));
   });
+}
+
+// How far past the input snapshot a stamp lands, in ms. `utimes` takes the time
+// as floating-point SECONDS, and at today's epoch a double rounds that to about
+// a tenth of a microsecond, so a stamp of exactly the snapshot (whose `mtimeMs`
+// carries a nanosecond fraction on ext4 / APFS) can read back a hair BELOW it
+// and leave the output stale. Two whole milliseconds clear any fraction plus the
+// rounding. The cost is a 2 ms window: an input edited within 2 ms of the newest
+// pre-compile edit, and during the compile, would not reread as newer.
+const STAMP_MARGIN_MS = 2;
+
+/**
+ * Record that an output was built against inputs whose newest mtime is
+ * `builtAgainstMs` (#1672). A no-op when the command rewrote the output (its
+ * mtime is already past the inputs), when the output is missing, or when the
+ * rule has no inputs. Pure I/O, no throw: a failed stamp only costs one more
+ * rebuild on the next request.
+ *
+ * @param {string} outAbs
+ * @param {number} builtAgainstMs
+ * @returns {Promise<void>}
+ */
+async function stampOutput(outAbs, builtAgainstMs) {
+  if (!(builtAgainstMs > 0)) return;
+  try {
+    const st = await stat(outAbs);
+    if (st.mtimeMs > builtAgainstMs) return;
+    const mtimeMs = Math.floor(builtAgainstMs) + STAMP_MARGIN_MS;
+    await utimes(outAbs, st.atimeMs / 1000, mtimeMs / 1000);
+  } catch {
+    // Missing or read-only output: nothing to record.
+  }
 }
 
 // In-flight compiles, keyed by appDir + output, so concurrent requests for the
@@ -190,15 +239,18 @@ export async function maybeRegenerate(appDir, relPath, rules, opts = {}) {
     } catch {
       outMtime = 0; // missing output: always stale
     }
-    if (outMtime !== 0) {
-      let newestSrc = 0;
-      for (const inp of rule.inputs) {
-        const m = await maxMtimeMs(join(appDir, inp));
-        if (m > newestSrc) newestSrc = m;
-      }
-      if (newestSrc <= outMtime) return; // fresh, nothing to do
+    // Snapshot the newest input BEFORE the command runs: it is both the
+    // staleness test and the value a successful build is stamped with.
+    let newestSrc = 0;
+    for (const inp of rule.inputs) {
+      const m = await maxMtimeMs(join(appDir, inp));
+      if (m > newestSrc) newestSrc = m;
     }
-    await runCommand(rule.command, appDir, spawn);
+    if (outMtime !== 0 && newestSrc <= outMtime) return; // fresh, nothing to do
+    const code = await runCommand(rule.command, appDir, spawn);
+    // Only a clean exit is recorded: stamping after a failure would mark a
+    // broken compile fresh until an input changed again.
+    if (code === 0) await stampOutput(outAbs, newestSrc);
   })();
   inFlight.set(key, run);
   try {

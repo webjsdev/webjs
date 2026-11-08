@@ -230,12 +230,20 @@ An over-limit body responds `413` without buffering the whole payload.
 
 ```jsonc
 { "webjs": {
-  "dev":   { "before": ["webjs db migrate"], "parallel": ["tailwindcss ... --watch"], "watch": ["../blog"] },
-  "start": { "before": ["webjs db migrate"] }
+  "dev":   {
+    "before": ["webjs db migrate", "npm run css:build"],
+    "regenerate": [{ "output": "public/tailwind.css",
+                     "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
+                     "inputs": ["app", "components", "modules", "lib", "public/input.css"] }],
+    "watch": ["../blog"]
+  },
+  "start": { "before": ["webjs db migrate", "npm run css:build"] }
 } }
 ```
 
 `before` runs to completion first (a non-zero exit aborts the boot). `parallel` (dev only) runs long-lived watchers alongside the server and tears them down on exit. `watch` (dev only) adds extra live-reload directories outside the app tree.
+
+`regenerate` (dev only, #967) keeps a served build output fresh without a watcher: when its `output` is requested and is missing or older than the newest file under `inputs`, the server runs `command` to completion before serving it. Prefer it over a `tailwindcss --watch` in `parallel`, which can die mid-session and serve stale CSS with no error. A clean exit stamps the output at that newest input mtime (#1672), so a rebuild whose bytes did not change (the Tailwind CLI skips the write) still counts as fresh and is not recompiled on the next request; a build script needs no `utimes` of its own.
 
 ### Local CI (`webjs.ci`)
 

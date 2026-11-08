@@ -94,7 +94,7 @@ export interface WebjsRegenerateRule {
   output: string;
   /** The shell command that rebuilds `output` (the same command prod uses in `start.before`, so dev and prod cannot diverge). */
   command: string;
-  /** Source files/directories whose newest mtime is compared to `output`'s; a newer one (or a missing output) triggers the rebuild. */
+  /** Source files/directories whose newest mtime is compared to `output`'s; a newer one (or a missing output) triggers the rebuild. A command that exits 0 stamps `output` at that newest input mtime, so a rebuild that leaves the bytes unchanged still counts as fresh (#1672). */
   inputs?: string[];
 }
 
