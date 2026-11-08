@@ -1448,6 +1448,30 @@ test('freshness advisory WARNs (never fails) when a source is newer than the out
   assert.equal(r.status, 'warn');
   assert.match(r.message, /public\/tailwind\.css/);
   assert.equal(results.filter((x) => x.status === 'fail').length, 0, 'advisory only, never a hard fail');
+  assert.match(r.fix, /webjs dev/, 'the fix names the refresh that clears an unchanged-bytes rebuild');
+});
+
+test('freshness advisory AGREES with the dev server after a rebuild that changes no bytes (#1672)', async () => {
+  // The server's regenerate runs a command that exits 0 without writing (the
+  // Tailwind CLI skips an unchanged write). The server stamps the output, and
+  // the doctor, reading the same mtimes, must then report it fresh rather than
+  // the stale warning a bytes-identical rebuild used to leave behind.
+  const { maybeRegenerate } = await import(
+    resolve(__dirname, '../../packages/server/src/dev-regenerate.js')
+  );
+  const dir = tmpDir();
+  write(dir, 'package.json', regenPkg());
+  write(dir, 'public/input.css', '@import "tailwindcss";');
+  write(dir, 'public/tailwind.css', '/* same */');
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(join(dir, 'public/tailwind.css'), past, past);
+  utimesSync(join(dir, 'public/input.css'), past, past);
+  write(dir, 'app/page.ts', 'export default () => 2;'); // edited now, no new class
+
+  const rule = { output: 'public/tailwind.css', command: 'exit 0', inputs: ['app', 'public/input.css'] };
+  assert.equal(byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK).status, 'warn');
+  await maybeRegenerate(dir, 'public/tailwind.css', [rule]);
+  assert.equal(byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK).status, 'pass');
 });
 
 // ---------------------------------------------------------------------------

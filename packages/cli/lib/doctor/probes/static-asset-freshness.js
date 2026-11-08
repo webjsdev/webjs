@@ -15,6 +15,15 @@ import { newestMtimeMs } from '../util.js';
  * committed into the repo. WARN-level: the fix is a one-line rebuild, and a
  * missing output (a fresh clone before the first `css:build`) is not this app's
  * bug to hard-fail on.
+ *
+ * The comparison is the server's own (`maybeRegenerate` in
+ * `@webjsdev/server/src/dev-regenerate.js`), reimplemented rather than imported
+ * so the CLI does not depend on a newer server. Since #1672 a clean dev
+ * regenerate stamps the output at its newest input mtime, so this check agrees
+ * with the dev server after any regenerate. A rebuild by hand (`npm run
+ * css:build`) gets no stamp, and a compiler that skips an unchanged write (the
+ * Tailwind CLI) then leaves the output's mtime old with current bytes, which is
+ * why the message says requesting the output under `webjs dev` clears it.
  * @param {string} appDir
  * @returns {Promise<DoctorResult>}
  */
@@ -52,7 +61,8 @@ export async function checkStaticAssetFreshness(appDir) {
     message:
       `${stale.length} static build output(s) are older than a source file:\n` +
       stale.map((s) => `    ${s.output} (rebuild: ${s.command})`).join('\n') +
-      '\n    In dev the framework recompiles these on request, so this only bites a `webjs start` (prod) or a committed stale file.',
-    fix: 'Rebuild the output(s) with the command shown (e.g. `npm run css:build`) before deploying or committing. `webjs dev` regenerates them on request automatically.',
+      '\n    In dev the framework recompiles these on request, so this only bites a `webjs start` (prod) or a committed stale file.' +
+      '\n    A compiler that skips writing unchanged bytes (the Tailwind CLI does) leaves the mtime old after a rebuild by hand, so this can persist with current CSS.',
+    fix: 'Request the output once under `webjs dev`: it rebuilds a stale output and stamps it fresh, even when the bytes did not change. Rebuilding with the command shown (e.g. `npm run css:build`) refreshes the bytes for a deploy, but clears this warning only when the output actually changed.',
   };
 }
