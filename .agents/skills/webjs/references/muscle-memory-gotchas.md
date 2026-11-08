@@ -324,7 +324,7 @@ lit keeps internal reactive state in a property marked `@state()` or `{ state: t
 #open = signal(false);   // read: this.#open.get(), write: this.#open.set(true)
 ```
 
-When a parent element assigns the value, keep the property API with a getter/setter over the signal (`get open() { return this.#open.get(); } set open(v) { this.#open.set(v); }`). In an `async render()`, read the signal before the first `await`, since reads after it are not tracked, and have an event handler read the live signal (`this.#n.set(this.#n.get() + 1)`) rather than that render-time local, or two clicks before the re-render lands count once.
+Leave it a bare private signal unless something outside the class touches it. Only when a parent element, a test, or a documented API reaches the value does it get a getter/setter over the signal (`get open() { return this.#open.get(); } set open(v) { this.#open.set(v); }`), never a public signal field, which `el.open = true` would silently replace. In an `async render()`, read the signal before the first `await`, since reads after it are not tracked, and have an event handler read the live signal (`this.#n.set(this.#n.get() + 1)`) rather than that render-time local, or two clicks before the re-render lands count once.
 
 ### Passing a method straight to an `@event` binding
 

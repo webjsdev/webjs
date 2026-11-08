@@ -204,7 +204,7 @@ class TodoList extends WebComponent {
 }
 TodoList.register('todo-list');</code-block>
 
-    <p>There is no internal-state property. lit's <code>state: true</code> option does not exist here, and the factory throws when a property declares it (the <code>no-state-property</code> rule in <code>webjs check</code> flags it first). Keep a reactive property for a value that rides an attribute, reflects to one, or arrives through a <code>.prop</code> binding, and hold everything else in a signal. When another element assigns the value (a parent pushing state into its parts), keep the property API with a getter and setter over a private signal:</p>
+    <p>There is no internal-state property. lit's <code>state: true</code> option does not exist here, and the factory throws when a property declares it (the <code>no-state-property</code> rule in <code>webjs check</code> flags it first). Keep a reactive property for a value that rides an attribute, reflects to one, or arrives through a <code>.prop</code> binding, and hold everything else in a private signal (<code>#open = signal(false)</code>) with no accessor, so internal state has no public surface. Only when another element, a test, or a documented API reaches the value (a parent pushing state into its parts) does it get a getter and setter over the signal. Do not expose the signal itself as a public field instead: <code>el.open = true</code> would silently replace it and stop the updates.</p>
 
     <code-block>class MenuItem extends WebComponent {
   #highlighted = signal(false);
