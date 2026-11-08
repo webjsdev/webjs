@@ -61,14 +61,18 @@ export function preloadStyles(root, now, timeoutMs) {
     kept[key] = { el, url };
   }
   let committed = false;
-  /** @type {Array<{ key: string, path: string, old: Element, next: Element, state: string }>} */
+  /** @type {Array<{ key: string, file: string, old: Element, next: Element, state: string }>} */
   const pairs = [];
   // Drop every other copy of this sheet (the old link, a copy the head merge
   // re-appended, the client router's temporary preload copy) so exactly the
   // replacement is left. The router marks its copy `data-webjs-preload-style`
   // and gives it only the fetch attributes, so it never shares the identity
-  // key; matched by path instead. Left in place it waits for a twin link this
-  // function has just removed, and lingers until the router's timeout.
+  // key. Left in place it waits for a twin link this function has just
+  // removed, and lingers until the router's timeout. So a copy goes too when
+  // it is the same file (the same URL once the dev cache-buster is ignored,
+  // so `?theme=dark` stays when `?theme=light` is rebuilt) AND has already
+  // loaded: an unloaded copy is one a navigation is still waiting on, and
+  // removing it would stall that navigation for the whole timeout.
   const settleLoaded = function (pair) {
     const links = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
     for (const el of links) {
@@ -76,7 +80,7 @@ export function preloadStyles(root, now, timeoutMs) {
       let url;
       try { url = new URL(el.getAttribute('href'), location.href); } catch (_) { continue; }
       if (url.origin !== location.origin || !el.parentNode) continue;
-      const routerCopy = el.hasAttribute(ROUTER_PRELOAD_ATTR) && url.pathname === pair.path;
+      const routerCopy = el.hasAttribute(ROUTER_PRELOAD_ATTR) && !!el.sheet && withoutBuster(url) === pair.file;
       if (routerCopy || identityKey(el, url) === pair.key) el.parentNode.removeChild(el);
     }
   };
@@ -85,10 +89,11 @@ export function preloadStyles(root, now, timeoutMs) {
     const old = kept[key].el;
     const url = kept[key].url;
     if (!old.parentNode) continue;
+    const file = withoutBuster(url);
     url.searchParams.set('__webjs_dev', String(stamp()));
     const next = /** @type {Element} */ (old.cloneNode(false));
     next.setAttribute('href', url.pathname + url.search);
-    const pair = { key, path: url.pathname, old, next, state: 'pending' };
+    const pair = { key, file, old, next, state: 'pending' };
     pairs.push(pair);
     waits.push(new Promise(function (resolve) {
       next.addEventListener('load', function () {
@@ -124,6 +129,17 @@ export function preloadStyles(root, now, timeoutMs) {
  * than imported, since this module is inlined into the reload client as source.
  */
 const ROUTER_PRELOAD_ATTR = 'data-webjs-preload-style';
+
+/**
+ * A stylesheet URL with the dev cache-buster removed, which is what names the
+ * file: two links that differ only by `__webjs_dev` load the same rules.
+ * @param {URL} url
+ */
+function withoutBuster(url) {
+  const u = new URL(url.href);
+  u.searchParams.delete('__webjs_dev');
+  return u.pathname + u.search;
+}
 
 /**
  * A link's identity for de-duping: its path plus every attribute except `href`.

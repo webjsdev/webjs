@@ -117,17 +117,19 @@ suite('dev stylesheet re-request (#1398, #1535)', () => {
     }
   });
 
-  test('commit also drops the client router\'s temporary copy of the sheet', async () => {
+  test('commit also drops the client router\'s LOADED temporary copy of the sheet', async () => {
     // The router loads a stylesheet the incoming page links through a copy
     // marked data-webjs-preload-style, and removes it only once the page's own
     // link has loaded. commit() removes that link, so the copy has to go here
-    // too, or it lingers until the router's 2s timeout.
+    // too, or it lingers until the router's 2s timeout. The router has always
+    // awaited the copy before swapping, so by commit it has loaded.
     setup();
     try {
       link(container, SHEET);
       const { links, commit } = await preloadStyles(container);
       link(container, SHEET);
-      link(container, SHEET, { 'data-webjs-preload-style': '' });
+      const copy = link(container, SHEET, { 'data-webjs-preload-style': '' });
+      await settled(copy);
       commit();
       const left = container.querySelectorAll('link');
       assert.equal(left.length, 1, 'exactly one link to the file is left');
@@ -137,14 +139,32 @@ suite('dev stylesheet re-request (#1398, #1535)', () => {
     }
   });
 
-  test('a router copy of a DIFFERENT file is left for the router to release', async () => {
+  test('a router copy still LOADING is left, since a navigation is waiting on it', async () => {
     setup();
     try {
       link(container, SHEET);
       const { commit } = await preloadStyles(container);
-      const other = link(container, MISSING, { 'data-webjs-preload-style': '' });
+      // The same file (only the dev cache-buster differs) at a URL not in the
+      // cache yet, so it is still loading when commit() runs.
+      const copy = link(container, SHEET + '?__webjs_dev=never-fetched', { 'data-webjs-preload-style': '' });
+      assert.equal(copy.sheet, null, 'precondition: the copy has not loaded');
       commit();
-      assert.ok(other.isConnected, 'only copies of the refreshed sheet are dropped');
+      assert.ok(copy.isConnected, 'removing it would stall the navigation for the router timeout');
+      await settled(copy);
+    } finally {
+      teardown();
+    }
+  });
+
+  test('a router copy of the same path with a DIFFERENT query is left', async () => {
+    setup();
+    try {
+      link(container, SHEET);
+      const { commit } = await preloadStyles(container);
+      const other = link(container, SHEET + '?theme=dark', { 'data-webjs-preload-style': '' });
+      await settled(other);
+      commit();
+      assert.ok(other.isConnected, 'only copies of the refreshed file are dropped');
     } finally {
       teardown();
     }
