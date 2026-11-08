@@ -150,8 +150,9 @@ function installAccessors(Ctor, props) {
         const oldVal = this.__propValues[propName];
         if (!changedCheck(newVal, oldVal)) return;
         this.__propValues[propName] = newVal;
-        // Reflect to attribute if requested (and not internal state).
-        if (d.reflect && hasAttribute(d) && this._connected) {
+        // Reflect to attribute if requested (_reflectAttribute skips a prop
+        // with no attribute: `state: true` or `attribute: false`).
+        if (d.reflect && this._connected) {
           this._reflectAttribute(propName, newVal, d);
         }
         // requestUpdate records the (name, oldValue) entry AND schedules a
@@ -196,8 +197,9 @@ class WebComponentBase extends Base {
    * that trigger re-renders on change, coerce attribute values by type,
    * and optionally reflect back to attributes.
    *
-   * Properties with `state: true` are excluded from `observedAttributes`
-   * and never reflect: they behave like private reactive state.
+   * Properties with `state: true` (internal state) or `attribute: false` (a
+   * property-only input) are excluded from `observedAttributes` and never
+   * reflect.
    *
    * @type {Record<string, PropertyDeclaration>}
    */
@@ -228,8 +230,8 @@ class WebComponentBase extends Base {
 
   /**
    * Returns the list of attribute names the browser should observe.
-   * Properties with `state: true` are excluded: they are internal-only
-   * and do not correspond to any HTML attribute.
+   * Properties with `state: true` or `attribute: false` are excluded: they
+   * do not correspond to any HTML attribute.
    *
    * @returns {string[]}
    */
@@ -1189,7 +1191,7 @@ class WebComponentBase extends Base {
     const props = /** @type {any} */ (this.constructor).properties || {};
     for (const name of Object.keys(props)) {
       const decl = props[name];
-      if (!decl || !decl.reflect || !hasAttribute(decl)) continue;
+      if (!decl || !decl.reflect) continue;
       this._reflectAttribute(name, this[name], decl);
     }
   }

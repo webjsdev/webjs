@@ -40,6 +40,20 @@
  */
 
 /**
+ * Whether a declared property has an HTML attribute at all. lit's two ways to
+ * say no, both honoured: `state: true` (internal state, which lit normalizes
+ * to `attribute: false`) and `attribute: false` (a public, property-only
+ * input). A property without one is never observed, never read from a source
+ * attribute at SSR, and never reflected; a `.prop` binding still reaches it.
+ *
+ * @param {{ state?: boolean, attribute?: string | false } | null | undefined} decl
+ * @returns {boolean}
+ */
+export function hasAttribute(decl) {
+  return !!decl && decl.state !== true && decl.attribute !== false;
+}
+
+/**
  * Read one attribute string into its declared property value.
  *
  * The caller owns only the one platform-specific step, lowercasing the source
@@ -61,20 +75,6 @@
  * returned the decoded one.
  * @returns {unknown}
  */
-/**
- * Whether a declared property has an HTML attribute at all. lit's two ways to
- * say no, both honoured: `state: true` (internal state, which lit normalizes
- * to `attribute: false`) and `attribute: false` (a public, property-only
- * input). A property without one is never observed, never read from a source
- * attribute at SSR, and never reflected; a `.prop` binding still reaches it.
- *
- * @param {{ state?: boolean, attribute?: string | false } | null | undefined} decl
- * @returns {boolean}
- */
-export function hasAttribute(decl) {
-  return !!decl && decl.state !== true && decl.attribute !== false;
-}
-
 export function readAttributeValue(def, value) {
   if (def.converter && def.converter.fromAttribute) {
     // Deliberately UNGUARDED, and deliberately first (#1340). An author who
@@ -124,7 +124,7 @@ export function readAttributeValue(def, value) {
     // The two readers now see the SAME attribute set, so this fallback is not
     // the only thing they agree on (#1341). Both resolve a name through
     // `resolveAttributeProperty` below, which matches the same names
-    // `observedAttributes` lists (via `observedAttributeNames`) and nothing else, so it skips a `state: true` prop and ignores a name that
+    // `observedAttributes` lists (via `observedAttributeNames`) and nothing else, so it skips a `state: true` or `attribute: false` prop and ignores a name that
     // maps to no attribute-backed property exactly as the observed list does.
     // The SSR caller lowercases its source name first, because the browser
     // lowercases while parsing. And both are handed a value with every
@@ -144,7 +144,7 @@ function hyphenate(s) {
  * Resolve an attribute NAME to the property it feeds, and to that property's
  * normalised declaration.
  *
- * `state: true` props are skipped, because they are absent from
+ * `state: true` and `attribute: false` props are skipped, because they are absent from
  * `observedAttributes` and so the browser never delivers their attribute to any
  * reader. lit reaches the same outcome the same way, resolving through the very
  * map `observedAttributes` is built from (`reactive-element.ts`

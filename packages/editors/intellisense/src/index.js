@@ -792,8 +792,9 @@ function init(modules) {
    *   One reactive property. `propName` is the reactive property key (factory
    *   shape or `static properties`, the `.prop` binding name, camelCase);
    *   `attrName` is its hyphenated HTML
-   *   attribute name (the plain / `?bool` binding name); `state: true` means
-   *   it has NO attribute (excluded from `observedAttributes`).
+   *   attribute name (the plain / `?bool` binding name); `state` is true when
+   *   it has NO attribute (`state: true` or `attribute: false`, excluded from
+   *   `observedAttributes`).
    *
    * @typedef {{
    *   fileName: string,
@@ -919,9 +920,9 @@ function init(modules) {
    * Read a class's reactive property declarations into per-member records.
    * Covers BOTH the `extends WebComponent({ … })` factory shape (the canonical
    * form) and a legacy `static properties = { … }` initializer. WebJs maps each
-   * key to a reactive property (the `.prop` binding name) plus, unless
-   * `state: true`, a hyphenated HTML attribute (the plain and `?bool` binding
-   * name).
+   * key to a reactive property (the `.prop` binding name) plus, unless it is
+   * `state: true` or `attribute: false`, a hyphenated HTML attribute (the plain
+   * and `?bool` binding name).
    *
    * @param {import('typescript').ClassDeclaration} cls
    * @returns {PropMember[]}
