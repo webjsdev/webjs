@@ -16,12 +16,14 @@
  *   integration, and smoke suites.
  * - **`packages/core/dist`**, which is gitignored and built rather than
  *   committed. Tests that import the built bundle cannot resolve it in a fresh
- *   worktree.
+ *   worktree. It is BUILT here from this worktree's own sources, never linked
+ *   (#1671). A link at the primary's dist served the primary's bundle, built at
+ *   another commit, so e2e and Bun ran the wrong code, and any build in the
+ *   worktree (core's `prepare` during `npm ci` included) wrote through it into
+ *   the primary.
  *
  * The `node_modules` set is discovered from the primary checkout rather than
- * hardcoded, because it changes whenever a package gains a nested tree. The
- * `packages/core/dist` entry is an explicit one-off, since it is the only built
- * output the suite imports.
+ * hardcoded, because it changes whenever a package gains a nested tree.
  *
  * ## What this does NOT give you
  *
@@ -36,14 +38,9 @@
  * `packages/core/src` or `packages/server/src` and need a bare-specifier
  * consumer to exercise YOUR copy, run `npm run worktree:unlink` first and then
  * install, or point the individual `@webjsdev/<pkg>` entries at this worktree
- * instead. `--unlink` removes every link this script plants: the root and nested
- * `node_modules` links AND the `packages/core/dist` link. Removing only the
- * `node_modules` links is NOT enough (#1671): core's `prepare` builds
- * `packages/core/dist` during the install, and through a standing dist link that
- * build used to overwrite the PRIMARY's bundles. The build now replaces such a
- * link with a real directory itself, but the recipe removes it anyway, so no
- * planted link stands when you install. CI always builds from the branch, so it
- * is unaffected either way.
+ * instead. `--unlink` removes every `node_modules` link this script planted,
+ * root and nested, and nothing else. CI always builds from the branch, so it is
+ * unaffected either way.
  *
  * NEVER install while the link is standing (#1442). Measured on npm 11.19.0 and
  * bun 1.3.14: `npm ci` DELETES the primary's whole `node_modules` through the
@@ -62,7 +59,10 @@
  *   touches a link that is already correct, and never removes a staging entry
  *   that still resolves. Outside that pass, a path that already exists is left
  *   alone, so a worktree with a real `npm install` is untouched and re-running
- *   is a no-op.
+ *   links nothing new. Two deliberate writes sit beside this rule: the core
+ *   dist build rewrites `packages/core/dist`, which is that build's own output
+ *   in this worktree, and the explicit `--unlink` mode removes the links this
+ *   script planted.
  * - Never create a dangling link. A source that does not exist is skipped,
  *   because a dangling `node_modules` resolves more confusingly than a missing
  *   one, and the repair pass declines to repoint when the corrected target is
@@ -71,12 +71,16 @@
  *   into it yields thousands of nested `node_modules` belonging to third-party
  *   packages, none of which should be linked.
  *
- * Usage, from inside the worktree:
+ * Usage, from anywhere inside the worktree (the worktree ROOT is resolved with
+ * `git rev-parse --show-toplevel`, so a subdirectory works the same):
  *
  *   node scripts/link-worktree-deps.mjs           # link from the default primary
  *   node scripts/link-worktree-deps.mjs <primary> # or name it explicitly
  *   node scripts/link-worktree-deps.mjs --check   # report repairs, change nothing
  *   node scripts/link-worktree-deps.mjs --unlink  # remove every link it planted
+ *
+ * `--check` and `--unlink` together are refused: `--check` promises to change
+ * nothing, and `--unlink` exists to change something.
  *   npm run worktree:link
  *   npm run worktree:unlink
  *   npm run check:worktree-links
@@ -84,13 +88,6 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-
-/**
- * Built outputs linked from the primary because they are gitignored, so a fresh
- * worktree has none. One list, read by both the link pass and `--unlink`, so the
- * undo can never drift from what the link pass plants (#1671).
- */
-const BUILT_OUTPUTS = ['packages/core/dist'];
 
 /** Directory names never worth descending into when hunting for nested trees. */
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.webjs', 'coverage']);
@@ -142,41 +139,103 @@ function link(src, dst, label) {
 }
 
 /**
- * Undo `npm run worktree:link`: remove every link it plants in `root`, and
- * nothing else (#1671).
+ * Undo `npm run worktree:link`: remove every `node_modules` link it planted in
+ * `root`, and nothing else (#1671).
  *
- * That is every `node_modules` SYMLINK, root and nested, plus each built output
- * in `BUILT_OUTPUTS`. The `node_modules` set is discovered by walking THIS
- * worktree rather than the primary, so a nested link whose primary-side tree
- * has since gone away is still found. The walk is `findNodeModules()`, the same
- * one the link pass uses, and its depth matches the install hook's
- * `find -maxdepth 5`, so the hook never blocks on a link this missed.
+ * The set is discovered by walking THIS worktree rather than the primary, so a
+ * nested link whose primary-side tree has since gone away is still found. The
+ * walk is `findNodeModules()`, the same one the link pass uses, and its depth
+ * matches the install hook's `find -maxdepth 5`, so the hook never blocks on a
+ * link this missed.
  *
- * Only a path whose `lstat` says symlink is removed, with `unlinkSync`, which
- * never follows the link. A real directory (a worktree that already ran a real
- * install, or a dist it built itself) is left alone, so re-running is a no-op.
- *
- * Why the dist link matters as much as the `node_modules` ones: core's
- * `prepare` builds `packages/core/dist` during `npm ci`, and the old recipe
- * (delete the `node_modules` links, then install) left the dist link standing,
- * so the install wrote this worktree's bundle into the PRIMARY checkout.
+ * A path is removed only when it is a SYMLINK whose target lies inside
+ * `primary`, which is what the link pass creates. A real directory (a worktree
+ * that already ran a real install) and a link the user made to some other tree
+ * (a local package checkout, a fixture) are both left alone. The target is
+ * judged by its `readlink` text resolved against the link's directory, not by
+ * `realpath`, so a link left dangling by a since-removed primary tree still
+ * counts as planted. `unlinkSync` never follows the link.
  *
  * @param {string} root the worktree to clean
+ * @param {string} primary the checkout the link pass links from
  * @returns {string[]} the paths removed, relative to `root`
  */
-function unlinkWorktree(root) {
+function unlinkWorktree(root, primary) {
   /** @type {string[]} */
   const removed = [];
-  for (const rel of [...findNodeModules(root), ...BUILT_OUTPUTS]) {
+  const owners = [primary];
+  try { owners.push(realpathSync(primary)); } catch { /* primary gone, judge by text */ }
+  for (const rel of findNodeModules(root)) {
     const abs = join(root, rel);
-    let isLink = false;
-    try { isLink = lstatSync(abs).isSymbolicLink(); } catch { continue; }
-    if (!isLink) continue;
+    let target;
+    try {
+      if (!lstatSync(abs).isSymbolicLink()) continue;
+      target = resolve(dirname(abs), readlinkSync(abs));
+    } catch { continue; }
+    if (!owners.some((o) => target === o || target.startsWith(o + sep))) {
+      console.log(`  kept ${rel} (a link to ${target}, which is not in ${primary})`);
+      continue;
+    }
     unlinkSync(abs);
     removed.push(rel);
     console.log(`  unlinked ${rel}`);
   }
   return removed;
+}
+
+/**
+ * Build `packages/core/dist` in `root` from `root`'s own sources (#1671).
+ *
+ * Runs `root`'s own `scripts/build-framework-dist.js`, so the bundle matches
+ * the branch checked out here. esbuild resolves through the `node_modules`
+ * links planted just before this runs: `<root>/node_modules/esbuild` is the
+ * primary's install, and Node resolves its platform binary from the real path,
+ * so no install is needed in the worktree. A worktree linked before #1671 has
+ * `packages/core/dist` as a symlink at the primary's dist; the build replaces
+ * that link with a real directory once it succeeds and never writes into the
+ * link's target.
+ *
+ * Rebuilt on every run, because a dist built from older sources is the trap
+ * this replaces: tests that import the built bundle would pass against code the
+ * branch no longer has. A build failure WARNS and never fails the link step,
+ * the same contract as the blog seeding below, and the dist is never linked
+ * from the primary as a fallback.
+ *
+ * @param {string} root
+ * @returns {'built' | 'skipped' | 'failed'}
+ */
+function buildCoreDist(root) {
+  const script = join(root, 'scripts', 'build-framework-dist.js');
+  if (!existsSync(script)) {
+    console.log('  skipped packages/core/dist (this checkout has no scripts/build-framework-dist.js)');
+    return 'skipped';
+  }
+  console.log('[link-worktree-deps] building packages/core/dist from this worktree\'s sources...');
+  const r = spawnSync(process.execPath, [script], { cwd: root, stdio: 'inherit' });
+  if (r.status === 0) return 'built';
+  const why = r.error ? r.error.message : (r.status === null ? `signal ${r.signal}` : `exit ${r.status}`);
+  console.error(`[link-worktree-deps] WARNING: building packages/core/dist failed (${why}).`);
+  console.error('[link-worktree-deps] Linking succeeded. Tests that import the built core bundle fail until `node scripts/build-framework-dist.js` succeeds in this worktree.');
+  return 'failed';
+}
+
+/**
+ * The worktree this run acts on: the git toplevel of the current directory, so
+ * running from a subdirectory (an app dir such as `website/`) acts on the whole
+ * worktree rather than on that subtree. Falls back to the current directory
+ * outside git, which is what the synthetic checkouts in the tests are.
+ *
+ * @returns {string}
+ */
+function worktreeRoot() {
+  try {
+    const top = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (top) return resolve(top);
+  } catch { /* not in a git checkout */ }
+  return process.cwd();
 }
 
 /**
@@ -443,9 +502,16 @@ async function seedBlogDatabase(blogDir) {
   console.log('[link-worktree-deps] blog database seeded.');
 }
 
-const here = process.cwd();
+const here = worktreeRoot();
 const CHECK = process.argv.includes('--check');
 const UNLINK = process.argv.includes('--unlink');
+// `--check` is read-only by contract and `--unlink` deletes, so the pair has no
+// honest meaning. Refused BEFORE either branch runs, so neither can fall
+// through into the other.
+if (CHECK && UNLINK) {
+  console.error('[link-worktree-deps] --check and --unlink cannot be combined: --check changes nothing, --unlink removes links.');
+  process.exit(2);
+}
 // Filter the flags out of the positional argument, or `resolve('--check')` is
 // read as the primary path and the script reports on a directory named `--check`.
 const positional = process.argv.slice(2).filter((a) => a !== '--check' && a !== '--unlink');
@@ -456,11 +522,10 @@ if (UNLINK) {
     console.log('[link-worktree-deps] this IS the primary checkout, nothing to unlink.');
     process.exit(0);
   }
-  const removed = unlinkWorktree(here);
+  console.log(`[link-worktree-deps] unlinking ${here} from ${primary}`);
+  const removed = unlinkWorktree(here, primary);
   console.log(`[link-worktree-deps] --unlink: removed ${removed.length} link${removed.length === 1 ? '' : 's'}.`);
-  if (removed.length > 0) {
-    console.log('[link-worktree-deps] Nothing in this worktree points at another checkout now, so a real install here is safe.');
-  }
+  console.log('[link-worktree-deps] No node_modules link into the primary is left in this worktree, so a real install here cannot write into it.');
   process.exit(0);
 }
 
@@ -510,16 +575,18 @@ for (const rel of findNodeModules(primary)) {
   if (r === 'linked') linked += 1; else skipped += 1;
 }
 
-// `packages/core/dist` is built, not committed, so a fresh worktree has none
-// and any test importing the built bundle fails to resolve it.
-for (const rel of BUILT_OUTPUTS) {
-  const r = link(join(primary, rel), join(here, rel), rel);
-  if (r === 'linked') linked += 1;
-  else if (r === 'missing-source') console.log(`  skipped ${rel} (not built in the primary; run npm run build there)`);
-  else skipped += 1;
-}
-
 console.log(`[link-worktree-deps] ${linked} linked, ${skipped} already present.`);
+
+// AFTER the links, because esbuild resolves through them. `packages/core/dist`
+// is built, not committed, so a fresh worktree has none and any test importing
+// the built bundle fails to resolve it. The same `defaultPrimary()` test that
+// needs `WEBJS_NO_WORKTREE_SEED=1` below needs this hatch too: without it,
+// `npm test` would rebuild the worktree's dist while other tests import it.
+if (process.env.WEBJS_NO_WORKTREE_BUILD === '1') {
+  console.log('[link-worktree-deps] core dist build skipped (WEBJS_NO_WORKTREE_BUILD=1).');
+} else {
+  buildCoreDist(here);
+}
 
 // LAST, after the links: `npm run db:migrate` resolves the `webjs` bin through
 // the root `node_modules/.bin` the loops above just linked, so this cannot run
