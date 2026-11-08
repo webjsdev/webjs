@@ -117,6 +117,39 @@ suite('dev stylesheet re-request (#1398, #1535)', () => {
     }
   });
 
+  test('commit also drops the client router\'s temporary copy of the sheet', async () => {
+    // The router loads a stylesheet the incoming page links through a copy
+    // marked data-webjs-preload-style, and removes it only once the page's own
+    // link has loaded. commit() removes that link, so the copy has to go here
+    // too, or it lingers until the router's 2s timeout.
+    setup();
+    try {
+      link(container, SHEET);
+      const { links, commit } = await preloadStyles(container);
+      link(container, SHEET);
+      link(container, SHEET, { 'data-webjs-preload-style': '' });
+      commit();
+      const left = container.querySelectorAll('link');
+      assert.equal(left.length, 1, 'exactly one link to the file is left');
+      assert.equal(left[0], links[0], 'and it is the loaded replacement');
+    } finally {
+      teardown();
+    }
+  });
+
+  test('a router copy of a DIFFERENT file is left for the router to release', async () => {
+    setup();
+    try {
+      link(container, SHEET);
+      const { commit } = await preloadStyles(container);
+      const other = link(container, MISSING, { 'data-webjs-preload-style': '' });
+      commit();
+      assert.ok(other.isConnected, 'only copies of the refreshed sheet are dropped');
+    } finally {
+      teardown();
+    }
+  });
+
   test('duplicates present before the preload are collapsed first', async () => {
     setup();
     try {

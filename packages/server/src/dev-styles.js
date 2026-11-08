@@ -61,17 +61,23 @@ export function preloadStyles(root, now, timeoutMs) {
     kept[key] = { el, url };
   }
   let committed = false;
-  /** @type {Array<{ key: string, old: Element, next: Element, state: string }>} */
+  /** @type {Array<{ key: string, path: string, old: Element, next: Element, state: string }>} */
   const pairs = [];
   // Drop every other copy of this sheet (the old link, a copy the head merge
-  // re-appended) so exactly the replacement is left.
+  // re-appended, the client router's temporary preload copy) so exactly the
+  // replacement is left. The router marks its copy `data-webjs-preload-style`
+  // and gives it only the fetch attributes, so it never shares the identity
+  // key; matched by path instead. Left in place it waits for a twin link this
+  // function has just removed, and lingers until the router's timeout.
   const settleLoaded = function (pair) {
     const links = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
     for (const el of links) {
       if (el === pair.next) continue;
       let url;
       try { url = new URL(el.getAttribute('href'), location.href); } catch (_) { continue; }
-      if (url.origin === location.origin && identityKey(el, url) === pair.key && el.parentNode) el.parentNode.removeChild(el);
+      if (url.origin !== location.origin || !el.parentNode) continue;
+      const routerCopy = el.hasAttribute(ROUTER_PRELOAD_ATTR) && url.pathname === pair.path;
+      if (routerCopy || identityKey(el, url) === pair.key) el.parentNode.removeChild(el);
     }
   };
   const waits = [];
@@ -82,7 +88,7 @@ export function preloadStyles(root, now, timeoutMs) {
     url.searchParams.set('__webjs_dev', String(stamp()));
     const next = /** @type {Element} */ (old.cloneNode(false));
     next.setAttribute('href', url.pathname + url.search);
-    const pair = { key, old, next, state: 'pending' };
+    const pair = { key, path: url.pathname, old, next, state: 'pending' };
     pairs.push(pair);
     waits.push(new Promise(function (resolve) {
       next.addEventListener('load', function () {
@@ -111,6 +117,13 @@ export function preloadStyles(root, now, timeoutMs) {
     setTimeout(finish, limit);
   });
 }
+
+/**
+ * The attribute the client router marks its temporary stylesheet copies with
+ * (`PRELOAD_ATTR` in core's `router-client/stylesheets.js`). Duplicated rather
+ * than imported, since this module is inlined into the reload client as source.
+ */
+const ROUTER_PRELOAD_ATTR = 'data-webjs-preload-style';
 
 /**
  * A link's identity for de-duping: its path plus every attribute except `href`.
