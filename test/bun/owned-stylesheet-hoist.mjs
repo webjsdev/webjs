@@ -32,4 +32,14 @@ assert.equal(head.match(/ui\.css/g).length, 1, `[${runtime}] the second ui.css i
 assert.equal(/rel=["']stylesheet["']/.test(streamBody), false, `[${runtime}] no stylesheet left in the body`);
 assert.ok(streamBody.includes('<!-- kit --><link rel="preload" as="font" href="/f.woff2"><div>'), `[${runtime}] the comment and the preload stay put`);
 
+// A `$` sequence in an href is spliced in literally, and a print copy of a
+// file does not stand in for its screen copy.
+const dollar = _buildDocumentParts(
+  "<!--wj:children:/:/--><link rel=\"stylesheet\" href=\"/x$'y.css\"><link rel=\"stylesheet\" href=\"/p.css\" media=\"print\"><link rel=\"stylesheet\" href=\"/p.css\"><main></main><!--/wj:children:/-->",
+  { metadata: {}, moduleUrls: [], dev: false, streaming: false },
+).prefix;
+assert.ok(dollar.includes("href=\"/x$'y.css\" data-wj-style-owner=\"/\">"), `[${runtime}] a $ sequence is inserted as written`);
+assert.equal(dollar.split('</head>').length, 2, `[${runtime}] and the head is closed once`);
+assert.equal(dollar.match(/href="\/p\.css"/g).length, 2, `[${runtime}] the print and the screen copy are both kept`);
+
 console.log(`[${runtime}] owned stylesheet hoist parity OK`);

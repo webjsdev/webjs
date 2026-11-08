@@ -323,7 +323,7 @@ export function hoistHeadTags(headHtml, bodyHtml) {
   // streaming path so both hoist identically. See collectHoistedHeadTags.
   const { tags: hoisted, body: remaining } = collectHoistedHeadTags(bodyHtml);
   if (!hoisted.length) return { head: headHtml, body: bodyHtml };
-  const newHead = headHtml.replace('</head>', hoisted.join('\n') + '\n</head>');
+  const newHead = headHtml.replace('</head>', () => hoisted.join('\n') + '\n</head>');
   return { head: newHead, body: remaining };
 }
 
@@ -348,37 +348,59 @@ const OWNED_RUN_TOKEN_RE =
   /\s*(<!--(?!\/?wj:)[\s\S]*?-->|<link\b(?:[^>"']|"[^"]*"|'[^']*')*>)/iy;
 const LINK_TAG_RE = /<link\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
 
+// One attribute after the tag name, read in order so a quoted value is
+// consumed whole and never mistaken for another attribute.
+const ATTR_RE = /\s*([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/y;
+
 /**
- * Read one attribute's value from a single tag's source.
+ * A tag's attributes, lowercased names to raw values (the first of a repeated
+ * name wins, as in HTML).
  * @param {string} tag
- * @param {string} name
+ * @returns {Map<string, string>}
+ */
+function tagAttrs(tag) {
+  /** @type {Map<string, string>} */
+  const out = new Map();
+  const start = /^<[a-zA-Z][^\s/>]*/.exec(tag);
+  let pos = start ? start[0].length : 0;
+  for (;;) {
+    ATTR_RE.lastIndex = pos;
+    const m = ATTR_RE.exec(tag);
+    if (!m || m[0].length === 0) break;
+    pos += m[0].length;
+    const name = m[1].toLowerCase();
+    if (!out.has(name)) out.set(name, m[2] ?? m[3] ?? m[4] ?? '');
+  }
+  return out;
+}
+
+/**
+ * The identity of a stylesheet `<link>`, or null when the tag is not an
+ * active one (`rel` naming `stylesheet` and not `alternate`, with an href).
+ * The href plus the `media` it applies under, so a print sheet and a screen
+ * sheet of one file are two sheets. The router keys its sheets the same way.
+ * @param {string} tag
  * @returns {string | null}
  */
-function tagAttr(tag, name) {
-  const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i').exec(tag);
-  return m ? (m[1] ?? m[2] ?? m[3] ?? '') : null;
+function stylesheetTagKey(tag) {
+  const attrs = tagAttrs(tag);
+  const rel = (attrs.get('rel') || '').toLowerCase().split(/\s+/);
+  const href = attrs.get('href');
+  if (!rel.includes('stylesheet') || rel.includes('alternate') || !href) return null;
+  const media = (attrs.get('media') || '').trim();
+  return media && media !== 'all' ? `${href} ${media}` : href;
 }
 
 /**
- * Is a `<link>` tag an active stylesheet: `rel` names `stylesheet` and not
- * `alternate`, and it has an href. The same test the router's stylesheet
- * loader applies, so the two sides agree on what counts.
- * @param {string} tag
- */
-function isStylesheetTag(tag) {
-  const rel = (tagAttr(tag, 'rel') || '').toLowerCase().split(/\s+/);
-  return rel.includes('stylesheet') && !rel.includes('alternate') && !!tagAttr(tag, 'href');
-}
-
-/**
- * The hrefs of every stylesheet `<link>` in an HTML string.
+ * The keys (`stylesheetTagKey`) of every stylesheet `<link>` in an HTML string.
  * @param {string} html
  * @returns {Set<string>}
  */
-export function stylesheetHrefs(html) {
+export function stylesheetKeys(html) {
   const out = new Set();
   for (const m of html.matchAll(LINK_TAG_RE)) {
-    if (isStylesheetTag(m[0])) out.add(/** @type {string} */ (tagAttr(m[0], 'href')));
+    const key = stylesheetTagKey(m[0]);
+    if (key) out.add(key);
   }
   return out;
 }
@@ -394,13 +416,15 @@ export function stylesheetHrefs(html) {
  * Only `rel="stylesheet"` links move, each tagged with `STYLE_OWNER_ATTR` set
  * to the marker's segment. Comments and other `<link>` tags in the run stay
  * where they are and do not end it; anything else does. A stylesheet whose
- * href is already in `seen` (the head so far, or an earlier hoist) is dropped
- * rather than hoisted twice, since one URL linked twice is two active sheets
- * the browser matches every rule against. Every framework the WebJs router
- * takes cues from puts a route's sheet in the head and dedupes by href.
+ * href and media are already in `seen` (the head so far, or an earlier
+ * hoist) is dropped rather than hoisted twice, since one URL linked twice is
+ * two active sheets the browser matches every rule against. Every framework
+ * the WebJs router takes cues from puts a route's sheet in the head and
+ * dedupes by href. Attributes are read in order (`tagAttrs`), so a name
+ * inside another attribute's quoted value is never mistaken for one.
  *
  * @param {string} bodyHtml
- * @param {Set<string>} [seen]  Hrefs already linked in the head (mutated).
+ * @param {Set<string>} [seen]  Keys (`stylesheetKeys`) already linked in the head (mutated).
  * @returns {{ tags: string[], body: string }}
  */
 export function hoistOwnedStylesheets(bodyHtml, seen = new Set()) {
@@ -431,15 +455,16 @@ export function hoistOwnedStylesheets(bodyHtml, seen = new Set()) {
       const token = m[1];
       const lead = m[0].slice(0, m[0].length - token.length);
       pos += m[0].length;
-      if (token.startsWith('<!--') || !isStylesheetTag(token)) {
+      const key = token.startsWith('<!--') ? null : stylesheetTagKey(token);
+      if (!key) {
         out += lead + token;
         continue;
       }
       out += lead;
-      const href = /** @type {string} */ (tagAttr(token, 'href'));
-      if (seen.has(href)) continue;
-      seen.add(href);
-      tags.push(token.replace(/\s*\/?>$/, ` ${STYLE_OWNER_ATTR}="${escapeAttr(segment)}">`));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const owner = ` ${STYLE_OWNER_ATTR}="${escapeAttr(segment)}">`;
+      tags.push(token.replace(/\s*\/?>$/, () => owner));
     }
   }
   return { tags, body: out + bodyHtml.slice(pos) };

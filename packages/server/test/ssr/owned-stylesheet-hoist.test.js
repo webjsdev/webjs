@@ -12,7 +12,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hoistOwnedStylesheets, stylesheetHrefs, STYLE_OWNER_ATTR } from '../../src/ssr/head.js';
+import { hoistOwnedStylesheets, stylesheetKeys, STYLE_OWNER_ATTR } from '../../src/ssr/head.js';
 import { _buildDocumentParts } from '../../src/ssr.js';
 
 const open = (seg, key = seg) => `<!--wj:children:${seg}:${key}-->`;
@@ -88,9 +88,9 @@ test('a self-closing link and a single-quoted href are tagged correctly', () => 
   assert.deepEqual(tags, [`<link rel='stylesheet' href='/a.css' ${STYLE_OWNER_ATTR}="/">`]);
 });
 
-test('stylesheetHrefs reads only active stylesheet links', () => {
+test('stylesheetKeys reads only active stylesheet links', () => {
   const html = '<link rel="icon" href="/i.svg"><link rel="stylesheet" href="/a.css"><link rel="alternate stylesheet" href="/b.css">';
-  assert.deepEqual([...stylesheetHrefs(html)], ['/a.css']);
+  assert.deepEqual([...stylesheetKeys(html)], ['/a.css']);
 });
 
 test('buildDocumentParts puts owned sheets after the root layout\'s head run (framework shell)', () => {
@@ -112,4 +112,28 @@ test('buildDocumentParts hoists owned sheets under a root layout that writes its
   assert.equal(prefix.match(/tailwind\.css/g).length, 1, 'the root\'s own copy is the only one');
   assert.ok(prefix.indexOf(`href="/ui.css" ${STYLE_OWNER_ATTR}="/"`) > prefix.indexOf('tailwind.css'));
   assert.equal(streamBody.includes('.css'), false);
+});
+
+test('a $ sequence in an href or segment is inserted literally, not as a replacement pattern', () => {
+  const body = `${open("/a$'b")}<link rel="stylesheet" href="/x$&y.css"><main></main>${close("/a$'b")}`;
+  const { prefix } = _buildDocumentParts(body, { metadata: {}, moduleUrls: [], dev: false, streaming: false });
+  assert.ok(prefix.includes(`href="/x$&y.css" ${STYLE_OWNER_ATTR}="/a$'b">`), 'the tag is spliced in as written');
+  assert.equal(prefix.split('</head>').length, 2, 'the head is closed once, not duplicated by $\'');
+});
+
+test('an attribute name inside another attribute\'s quoted value is not read as that attribute', () => {
+  const body = `${open('/')}<link title="x rel=stylesheet" rel="preload" as="style" href="/a.css"><div></div>${close('/')}`;
+  const { tags, body: out } = hoistOwnedStylesheets(body);
+  assert.deepEqual(tags, [], 'a preload whose title mentions rel=stylesheet stays put');
+  assert.equal(out, body);
+});
+
+test('a print sheet and a screen sheet of one file are two sheets', () => {
+  const body = `${open('/')}<link rel="stylesheet" href="/a.css"><div></div>${close('/')}`;
+  const { tags } = hoistOwnedStylesheets(body, stylesheetKeys('<link rel="stylesheet" href="/a.css" media="print">'));
+  assert.equal(tags.length, 1, 'the screen link is hoisted although the head has the print one');
+  assert.deepEqual(
+    [...stylesheetKeys('<link rel="stylesheet" href="/a.css" media="print"><link rel="stylesheet" href="/a.css" media="all">')],
+    ['/a.css print', '/a.css'],
+  );
 });
