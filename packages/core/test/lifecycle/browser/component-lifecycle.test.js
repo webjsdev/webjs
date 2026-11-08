@@ -10,7 +10,7 @@
  * paths that linkedom doesn't replicate.
  */
 import { html } from '../../../src/html.js';
-import { WebComponent, prop } from '../../../src/component.js';
+import { WebComponent } from '../../../src/component.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -59,7 +59,7 @@ suite('Lifecycle hooks in a real browser', () => {
     let renders = 0;
     class LcWuEl extends WebComponent({
       a: Number,
-      b: prop(Number, { state: true }),
+      b: Number,
     }) {
       constructor() { super(); this.a = 0; this.b = -1; }
       willUpdate(cp) {

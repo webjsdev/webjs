@@ -84,6 +84,31 @@ export function isArrayTypeText(type) {
   return false;
 }
 
+/**
+ * True when a factory property's descriptor carries a `state` key at its own
+ * level: `{ state: true }`, `prop({ state: true })`,
+ * `prop(Number, { state: true })`. Only depth 1 counts, so a `state` key
+ * inside a converter or a `hasChanged` body is not the option, and strings
+ * are blanked so `attribute: 'data-state: x'` cannot match.
+ *
+ * @param {string} value  the property VALUE text
+ * @returns {boolean}
+ */
+export function declaresStateOption(value) {
+  const code = value
+    .replace(/'[^'\n]*'/g, "''")
+    .replace(/"[^"\n]*"/g, '""')
+    .replace(/`[^`]*`/g, '``');
+  let depth = 0;
+  let shallow = '';
+  for (const c of code) {
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (depth === 1) shallow += c;
+  }
+  return /(?:^|[\s,])state\s*:/.test(shallow);
+}
+
 export function findFieldInitializers(classBody, props) {
   /** @type {string[]} */
   const out = [];

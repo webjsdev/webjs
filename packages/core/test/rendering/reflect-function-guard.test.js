@@ -540,42 +540,11 @@ describe('reflect:true drops an unserializable JSON value (#1253)', () => {
     assert.ok(!out.includes('val=&quot;not-json&quot;') && !out.includes('val="not-json"'), out);
   });
 
-  // The two tests below used to pin SSR-ONLY paths: attributes
+  // The test below used to pin an SSR-ONLY path: an attribute
   // `applyAttrsToInstance` consumed that the client reader never saw at all, so
-  // the #1253 `null` fallback reached them too. They were written against a
-  // divergence, with a note that #1341 would be the change that made them
-  // notice, and it is. There is no SSR-only path here any more: SSR now skips a
-  // `state: true` prop and a camelCase source name exactly as the browser does,
-  // so neither attribute reaches the reader and neither prop reaches the
-  // fallback. What they pin now is that agreement.
-
-  test('a state:true prop is not read from a source attribute at SSR (#1341)', async () => {
-    // `observedAttributes` filters state props out, so the browser never calls
-    // `attributeChangedCallback` for this attribute and the upgraded element
-    // keeps its constructor value. SSR does the same, through the shared
-    // `resolveAttributeProperty`, so the first paint holds the same value.
-    class StateProp extends WebComponent({ cfg: prop(Object, { state: true }) }) {
-      constructor() {
-        super();
-        this.cfg = { fromCtor: true };
-      }
-      render() {
-        return html`<i>val=${JSON.stringify(this.cfg)}</i>`;
-      }
-    }
-    StateProp.register('reflect-unser-state');
-
-    const out = await renderToString(html`<reflect-unser-state cfg="oops"></reflect-unser-state>`);
-
-    assert.ok(out.includes('val={"fromCtor":true}'), `the attribute was read: ${out}`);
-    // Scoped to the RENDERED value, not the whole output: SSR echoes the source
-    // attribute back into the emitted tag, so `oops` legitimately appears there.
-    assert.ok(
-      !out.includes('val=&quot;oops&quot;') && !out.includes('val="oops"'),
-      `a raw string reached an Object-typed prop: ${out}`
-    );
-    assert.ok(!out.includes('val=null'), `the attribute reached the reader: ${out}`);
-  });
+  // the #1253 `null` fallback reached it too. There is no SSR-only path here any
+  // more: SSR resolves a camelCase source name exactly as the browser does.
+  // What it pins now is that agreement.
 
   test('a camelCase source attribute goes through the typed reader at SSR (#1341, #1540)', async () => {
     // The HTML parser lowercases this to `cfgdata`, which `observedAttributes`

@@ -416,11 +416,11 @@ test('legacy static properties: completes static-properties keys after typing `<
   assert.ok(names.includes('then'), `expected "then" in ${JSON.stringify(names)}`);
 });
 
-test('a camelCase prop completes as a hyphenated attribute; state props are excluded', () => {
+test('a camelCase prop completes as a hyphenated attribute', () => {
   const svc = makeService({
     '/box.ts':
-      `import { WebComponent, prop } from '@webjsdev/core';\n` +
-      `export class Box extends WebComponent({ maxLength: Number, internal: prop({ state: true }) }) {\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Box extends WebComponent({ maxLength: Number }) {\n` +
       `}\n` +
       `Box.register('my-box');\n`,
     '/page.ts':
@@ -434,14 +434,13 @@ test('a camelCase prop completes as a hyphenated attribute; state props are excl
   const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
   assert.ok(names.includes('max-length'), `plain attr is hyphenated: ${JSON.stringify(names)}`);
   assert.ok(!names.includes('maxLength'), 'camelCase prop is not offered as a plain attribute');
-  assert.ok(!names.includes('internal'), 'state prop has no attribute');
 });
 
-test('`.` triggers property-name completions (camelCase, includes state props)', () => {
+test('`.` triggers property-name completions (camelCase)', () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent, prop } from '@webjsdev/core';\n` +
-      `export class Box extends WebComponent({ maxLength: Number, internal: prop({ state: true }) }) {\n` +
+      `export class Box extends WebComponent({ maxLength: Number, label: prop(String, { attribute: 'aria-text' }) }) {\n` +
       `}\n` +
       `Box.register('my-box');\n`,
     '/page.ts':
@@ -454,7 +453,7 @@ test('`.` triggers property-name completions (camelCase, includes state props)',
   const pos = offsetOf('/page.ts', '<my-box .') + '<my-box .'.length;
   const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
   assert.ok(names.includes('maxLength'), `property binding uses prop name: ${JSON.stringify(names)}`);
-  assert.ok(names.includes('internal'), 'state props are valid .prop targets');
+  assert.ok(names.includes('label'), 'a renamed attribute keeps its property name');
 });
 
 test('completes reachable custom-element tag names after `<`', () => {

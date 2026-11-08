@@ -217,7 +217,7 @@ edit is invisible and a counterfactual passes vacuously), and run
    bare async leaf (no other client signal, light DOM) is elided like any
    display-only component, since SSR bakes its data into the first paint.
    It ships only on an independent signal (the lists above, an `@event`, a
-   non-`state` prop, a `<slot>`, cross-module observation, an interactive
+   declared reactive prop, a `<slot>`, cross-module observation, an interactive
    child) or one of the two static carve-outs in the
    `INTERACTIVITY_STATIC_FIELDS` registry: `static shadow = true`
    (Declarative Shadow DOM must re-attach on a client-side DOM insertion)

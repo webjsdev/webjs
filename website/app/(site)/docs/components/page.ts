@@ -124,7 +124,6 @@ interface Student { name: string; gpa: number; }
 class UserCard extends WebComponent({
   count:   prop(Number, { reflect: true }),       // reflect to the attribute
   label:   prop(String, { attribute: 'aria-label' }), // renamed attribute
-  open:    prop({ state: true }),                  // internal, no attribute (lit parity; prefer a signal)
   student: prop&lt;Student&gt;(Object),                  // narrowed object type
   tags:    prop&lt;string[]&gt;(Array),                  // array-typed: pass Array, not Object
   size:    prop&lt;'sm' | 'lg'&gt;(String),              // narrowed enum type
@@ -159,8 +158,6 @@ UserCard.register('user-card');</code-block>
     <p>Property names are automatically converted between camelCase (JavaScript) and kebab-case (HTML). A property named <code>userName</code> observes the attribute <code>user-name</code>. HTML attribute names are case-insensitive and the browser lowercases them while parsing, so a camelCase attribute in markup (<code>userName="…"</code>) arrives as <code>username</code>. The property answers to that lowercased name too (lit's default attribute name), so <code>user-name</code>, <code>userName</code> and <code>username</code> all reach <code>userName</code>, in the browser and on the server. Kebab-case is the preferred spelling and the one a reflected property writes. A property with a custom <code>attribute</code> gets no lowercased alias.</p>
 
     <p>A property that renames its attribute answers to the new name and to nothing else. Given <code>open: prop(Boolean, { attribute: 'is-open' })</code>, write <code>&lt;my-el is-open&gt;</code>; <code>&lt;my-el open&gt;</code> reaches no property on either side.</p>
-
-    <p>A <code>state: true</code> property has no attribute at all and is never read from one, on either side. The way to give one a server-rendered value is a <code>.prop=\${value}</code> binding from the parent template.</p>
 
 
     <h3>Reflecting a function is refused</h3>
@@ -207,9 +204,18 @@ class TodoList extends WebComponent {
 }
 TodoList.register('todo-list');</code-block>
 
+    <p>There is no internal-state property. lit's <code>state: true</code> option does not exist here, and the factory throws when a property declares it (the <code>no-state-property</code> rule in <code>webjs check</code> flags it first). Keep a reactive property for a value that rides an attribute, reflects to one, or arrives through a <code>.prop</code> binding, and hold everything else in a signal. When another element assigns the value (a parent pushing state into its parts), keep the property API with a getter and setter over a private signal:</p>
+
+    <code-block>class MenuItem extends WebComponent {
+  #highlighted = signal(false);
+  get highlighted() { return this.#highlighted.get(); }
+  set highlighted(v) { this.#highlighted.set(v); }
+}</code-block>
+
     <h3>How signal updates render</h3>
     <ul>
-      <li><strong>Dynamic tracking</strong>: every render re-records its dependency set. A signal read inside <code>render()</code> subscribes the component to that signal; signals that fall out of the current control flow stop driving re-renders.</li>
+      <li><strong>Dynamic tracking</strong>: every update re-records its dependency set. A signal read anywhere in the synchronous update cycle (<code>willUpdate()</code>, <code>render()</code>, <code>updated()</code>) subscribes the component to that signal, so a host attribute derived from internal state in <code>updated()</code> follows it too; signals that fall out of the current control flow stop driving re-renders. The DOM commit is not tracked, which is what keeps a <code>watch()</code> part fine-grained.</li>
+      <li><strong>Async render</strong>: in an <code>async render()</code>, only the reads made before the first <code>await</code> are tracked. Read the signals into locals at the top, then await.</li>
       <li><strong>Batched re-render</strong>: calling <code>signal.set</code> (or assigning a reactive property, or calling <code>requestUpdate</code>) multiple times in the same synchronous block only triggers <strong>one</strong> re-render. Updates are batched via <code>queueMicrotask</code>, so the DOM update happens after the current call stack finishes but before the next frame paints.</li>
     </ul>
 

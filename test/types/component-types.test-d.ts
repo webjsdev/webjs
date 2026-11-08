@@ -90,7 +90,6 @@ type _Pressed = Assert<Equal<typeof toggle.pressed, boolean>>;
 const decl: PropertyDeclaration = {
   type: Number,
   reflect: true,
-  state: false,
   attribute: 'data-count',
   hasChanged: (a, b) => a !== b,
   converter: {
