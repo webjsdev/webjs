@@ -95,7 +95,7 @@ export function isArrayTypeText(type) {
  * @returns {boolean}
  */
 export function declaresStateOption(value) {
-  const code = value
+  const code = stripTypeArgument(value)
     .replace(/'[^'\n]*'/g, "''")
     .replace(/"[^"\n]*"/g, '""')
     .replace(/`[^`]*`/g, '``');
@@ -107,6 +107,27 @@ export function declaresStateOption(value) {
     else if (depth === 1) shallow += c;
   }
   return /(?:^|[\s,])state\s*:/.test(shallow);
+}
+
+/**
+ * Drop a leading `prop<...>` type argument, which can spell an object type
+ * holding a `state` member (`prop<{ state: 'open' }>(Object)`) that is no
+ * option at all. Angle brackets nest, and the `>` of an arrow type (`=>`)
+ * closes nothing.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function stripTypeArgument(value) {
+  const m = /^\s*prop\s*</.exec(value);
+  if (!m) return value;
+  let depth = 1;
+  for (let i = m[0].length; i < value.length; i++) {
+    const c = value[i];
+    if (c === '<') depth++;
+    else if (c === '>' && value[i - 1] !== '=' && --depth === 0) return 'prop' + value.slice(i + 1);
+  }
+  return value;
 }
 
 export function findFieldInitializers(classBody, props) {

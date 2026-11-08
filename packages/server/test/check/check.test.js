@@ -443,6 +443,7 @@ class Stateful extends WebComponent({
   a: prop({ state: true }),
   b: prop(Number, { reflect: false, state: true }),
   c: { type: String, state: false },
+  d: prop<boolean>({ state: true }),
   label: String,
 }) {}
 Stateful.register('state-ful');
@@ -450,7 +451,7 @@ Stateful.register('state-ful');
     );
     const violations = await checkConventions(appDir);
     const flagged = violations.filter((v) => v.rule === 'no-state-property').map((v) => v.message.match(/`(\w+)`/)[1]);
-    assert.deepEqual(flagged, ['a', 'b', 'c']);
+    assert.deepEqual(flagged, ['a', 'b', 'c', 'd']);
     const v = violations.find((v) => v.rule === 'no-state-property');
     assert.ok(v.fix.includes('signal('), 'the fix names the signal replacement');
   } finally {
@@ -458,7 +459,7 @@ Stateful.register('state-ful');
   }
 });
 
-test('no-state-property: ignores a nested state key and a string that spells one', async () => {
+test('no-state-property: ignores a nested state key, a string that spells one, and a type argument', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -468,6 +469,8 @@ test('no-state-property: ignores a nested state key and a string that spells one
 class Fine extends WebComponent({
   n: prop(Number, { converter: { fromAttribute: () => ({ state: true }) } }),
   v: prop(String, { attribute: 'data-state: true' }),
+  item: prop<{ state: 'open' | 'closed' }>(Object),
+  pick: prop<(next: { state: boolean }) => void>(Function),
 }) {}
 Fine.register('fine-el');
 `,
