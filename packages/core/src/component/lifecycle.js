@@ -150,8 +150,8 @@ function installAccessors(Ctor, props) {
         const oldVal = this.__propValues[propName];
         if (!changedCheck(newVal, oldVal)) return;
         this.__propValues[propName] = newVal;
-        // Reflect to attribute if requested (and not internal state).
-        if (d.reflect && !d.state && this._connected) {
+        // Reflect to attribute if requested.
+        if (d.reflect && this._connected) {
           this._reflectAttribute(propName, newVal, d);
         }
         // requestUpdate records the (name, oldValue) entry AND schedules a
@@ -194,10 +194,9 @@ class WebComponentBase extends Base {
    *
    * Properties declared here get auto-generated accessors (getter/setter)
    * that trigger re-renders on change, coerce attribute values by type,
-   * and optionally reflect back to attributes.
-   *
-   * Properties with `state: true` are excluded from `observedAttributes`
-   * and never reflect: they behave like private reactive state.
+   * and optionally reflect back to attributes. Internal state is not
+   * declared here: it lives in an instance signal (the factory refuses a
+   * `state` option, #1677).
    *
    * @type {Record<string, PropertyDeclaration>}
    */
@@ -228,8 +227,6 @@ class WebComponentBase extends Base {
 
   /**
    * Returns the list of attribute names the browser should observe.
-   * Properties with `state: true` are excluded: they are internal-only
-   * and do not correspond to any HTML attribute.
    *
    * @returns {string[]}
    */
@@ -577,6 +574,17 @@ class WebComponentBase extends Base {
 
   _activate() {
     this._connected = true;
+    // A value written on the element before its class was defined is an own
+    // data property, and it hides any accessor of the same name for good.
+    // `_initializeProperties` lifts the declared properties in the
+    // constructor; an accessor the subclass defines itself (a getter/setter
+    // over a private signal, the shape internal state another element assigns
+    // takes) gets the same lift here, on the first connect, since its private
+    // field does not exist yet while the base constructor runs.
+    if (!this.__accessorsLifted) {
+      this.__accessorsLifted = true;
+      liftShadowedAccessors(this);
+    }
     // Reflect declared reflect:true properties from their current value now
     // that the element is connected. Constructor / willUpdate defaults were
     // set while disconnected (the setter skips reflection then), so this is
@@ -773,9 +781,12 @@ class WebComponentBase extends Base {
     // Dispose the signal watcher so dependency edges drop. Without
     // this the element holds references to module-scope signals
     // (and vice versa) forever.
-    if (this.__signalWatcher) {
-      this.__signalWatcher.dispose();
-      this.__signalWatcher = undefined;
+    for (const slot of ['__signalWatcher', '__postWatcher']) {
+      const self = /** @type {any} */ (this);
+      if (self[slot]) {
+        self[slot].dispose();
+        self[slot] = undefined;
+      }
     }
     for (const c of this.__controllers || NO_CONTROLLERS) {
       if (c.hostDisconnected) c.hostDisconnected();
@@ -874,10 +885,86 @@ class WebComponentBase extends Base {
    *   7. `firstUpdated(changedProperties)` runs once, on the first render only
    *   8. `updated(changedProperties)` runs after every commit
    *   9. Resolve `updateComplete` promise
+   *
+   * Every signal the SYNCHRONOUS part of that cycle reads is tracked, not
+   * only the ones `render()` reads, which is the span lit-labs/signals tracks
+   * by running `performUpdate` inside a computed. So a signal read only in
+   * `willUpdate()` or `updated()` (a host attribute derived from internal
+   * state) re-renders the component when it changes. Two watchers split it
+   * (see {@link _tracked}): one over steps 2-6 (`render()` included), one
+   * over the post-commit hooks, so a write `updated()` makes to something
+   * `render()` read still schedules the next update. The DOM commits are
+   * the parts left untracked (see `update()`).
    * @private
    */
   _performRender() {
     if (!this._renderRoot) return;
+    this.__cycleRendered = false;
+    const postCommit = this._tracked('__signalWatcher', () => this._runUpdateCycle());
+    // A sync commit runs its post-commit hooks OUTSIDE the first watcher's
+    // phase, under their own watcher.
+    if (postCommit) postCommit();
+  }
+
+  /**
+   * Run one phase of the update cycle with the signals it reads recorded on
+   * the watcher in `slot`, creating the watcher on first use. A watcher
+   * re-records its read set on every phase it observes, and a later change
+   * to any of those signals schedules an update.
+   *
+   * Three rules keep that safe:
+   *  - A phase ignores notifications from its OWN writes. A write to a signal
+   *    the phase read earlier is the phase's business, not a reason to run it
+   *    again: before a commit it is already folded into this pass, and after
+   *    one it is often not the component's code at all (an event `updated()`
+   *    dispatches, whose listener does a read-modify-write on a store), which
+   *    would otherwise loop.
+   *  - A pre-commit phase that never reached `render()` (`shouldUpdate()`
+   *    returned false, or a hook threw) keeps the signals the last render
+   *    read on top of the ones it read itself, or a skipped cycle would
+   *    silently unsubscribe the component.
+   *  - A watcher disposed during its own phase (a hook that detached the
+   *    host) is disposed again afterwards, since the phase kept recording.
+   *
+   * @template T
+   * @param {'__signalWatcher' | '__postWatcher'} slot
+   * @param {() => T} fn
+   * @returns {T}
+   * @private
+   */
+  _tracked(slot, fn) {
+    const self = /** @type {any} */ (this);
+    /** @type {any} */
+    let watcher = self[slot];
+    if (!watcher) {
+      watcher = self[slot] = new Signal.subtle.Watcher(() => {
+        if (!watcher.__inPhase && this._connected) this.requestUpdate();
+      });
+    }
+    const before = slot === '__signalWatcher' ? Signal.subtle.introspectSources(watcher) : null;
+    watcher.__inPhase = true;
+    try {
+      return watcher.observe(fn);
+    } finally {
+      watcher.__inPhase = false;
+      if (before && !this.__cycleRendered) {
+        watcher.watch(...new Set([...before, ...Signal.subtle.introspectSources(watcher)]));
+      }
+      if (!this._connected) {
+        watcher.dispose();
+        if (self[slot] === watcher) self[slot] = undefined;
+      }
+    }
+  }
+
+  /**
+   * Steps 1-6 of the update cycle, the phase {@link _performRender} tracks
+   * with the first watcher. Returns the post-commit half to run for a sync
+   * commit, or nothing (an async commit runs it when it lands).
+   * @returns {(() => void) | undefined}
+   * @private
+   */
+  _runUpdateCycle() {
 
     // Hold a stable reference to the current Map so all hooks see the same
     // snapshot. During the update phase (steps 3-6) the Map is mutated in
@@ -923,6 +1010,7 @@ class WebComponentBase extends Base {
         // in _commitAsync.
         if (this.__renderAbort) this.__renderAbort.abort();
         this.__renderAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        this.__cycleRendered = true;
         try {
           const r = this.update(changedProperties);
           if (r && typeof r.then === 'function') pendingCommit = r;
@@ -1008,16 +1096,21 @@ class WebComponentBase extends Base {
       return;
     }
 
-    // --- 7-8. Post-commit hooks (sync path). Errors are caught so the
-    // updateComplete promise always resolves.
+    // --- 7-8. Post-commit hooks (sync path), returned so they run outside
+    // this phase. Errors are caught so the updateComplete promise always
+    // resolves.
     if (didCommit) {
-      this._postCommit(changedProperties);
+      return () => this._postCommit(changedProperties);
     } else if (!this.__pendingAsyncCommits) {
       // A non-committing cycle resolves updateComplete only when no async
       // commit is in flight; otherwise the pending commit resolves it once it
       // lands, so `await el.updateComplete` never returns before that DOM.
       this._resolveUpdate();
     }
+    // No post-commit phase this cycle: re-arm its watcher, so a change it
+    // was notified of meanwhile does not leave it deaf to the next one.
+    if (!didCommit && /** @type {any} */ (this).__postWatcher) /** @type {any} */ (this).__postWatcher.watch();
+    return undefined;
   }
 
   /**
@@ -1090,7 +1183,7 @@ class WebComponentBase extends Base {
     const props = /** @type {any} */ (this.constructor).properties || {};
     for (const name of Object.keys(props)) {
       const decl = props[name];
-      if (!decl || !decl.reflect || decl.state) continue;
+      if (!decl || !decl.reflect) continue;
       this._reflectAttribute(name, this[name], decl);
     }
   }
@@ -1154,16 +1247,8 @@ class WebComponentBase extends Base {
    * @param {Map<string, unknown>} _changedProperties
    */
   update(_changedProperties) {
-    // Track signal reads during render so the component re-renders when
-    // any of them change. The watcher is lazy-allocated on first
-    // render and disposed in disconnectedCallback. observe() clears
-    // prior dep edges before fn(), so each render re-records its own
-    // (possibly different) read set.
-    if (!this.__signalWatcher) {
-      this.__signalWatcher = new Signal.subtle.Watcher(() => {
-        if (this._connected) this.requestUpdate();
-      });
-    }
+    // The signal reads render() makes are tracked by the watcher
+    // _performRender runs the whole cycle under.
     let tpl;
     // Bind this render's abort signal (#492) around the synchronous part of
     // render() ONLY, so the RPC stub ties an action called there to this
@@ -1176,7 +1261,7 @@ class WebComponentBase extends Base {
     const outer = activeActionSignal();
     setActiveActionSignal(this.__renderAbort ? this.__renderAbort.signal : null);
     try {
-      this.__signalWatcher.observe(() => { tpl = this.render(); });
+      tpl = this.render();
     } finally {
       setActiveActionSignal(outer || null);
     }
@@ -1191,7 +1276,10 @@ class WebComponentBase extends Base {
     if (tpl && typeof (/** @type any */ (tpl).then) === 'function') {
       return this._commitAsync(/** @type {Promise<unknown>} */ (tpl));
     }
-    clientRender(tpl, this._renderRoot);
+    // The commit is untracked: a signal read while the DOM is patched (a
+    // `watch()` part, a child's synchronous work) belongs to whatever read
+    // it, not to this component's next render.
+    Signal.subtle.untrack(() => clientRender(tpl, this._renderRoot));
     return undefined;
   }
 
@@ -1220,7 +1308,7 @@ class WebComponentBase extends Base {
     if (this.__firstRendered && this._overridesRenderFallback()) {
       try {
         const fb = this.renderFallback();
-        if (fb !== undefined) clientRender(fb, this._renderRoot);
+        if (fb !== undefined) Signal.subtle.untrack(() => clientRender(fb, this._renderRoot));
       } catch (e) {
         console.error(`[webjs] renderFallback() threw:`, e);
       }
@@ -1276,7 +1364,7 @@ class WebComponentBase extends Base {
     );
     try {
       const fallback = this.renderError(error);
-      if (fallback !== undefined) clientRender(fallback, this._renderRoot);
+      if (fallback !== undefined) Signal.subtle.untrack(() => clientRender(fallback, this._renderRoot));
     } catch (fallbackError) {
       console.error(`[webjs] renderError() also threw:`, fallbackError);
     }
@@ -1290,11 +1378,13 @@ class WebComponentBase extends Base {
    */
   _postCommit(changedProperties) {
     try {
-      if (!this.__firstRendered) {
-        this.__firstRendered = true;
-        this.firstUpdated(changedProperties);
-      }
-      this.updated(changedProperties);
+      this._tracked('__postWatcher', () => {
+        if (!this.__firstRendered) {
+          this.__firstRendered = true;
+          this.firstUpdated(changedProperties);
+        }
+        this.updated(changedProperties);
+      });
     } catch (postCommitError) {
       console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
     } finally {
@@ -1522,10 +1612,56 @@ export function WebComponent(properties) {
   if (new.target) {
     return Reflect.construct(WebComponentBase, arguments, new.target);
   } else {
+    assertNoStateOption(properties);
     return class extends WebComponentBase {
       static properties = properties;
       static [FACTORY_PROPS] = true;
     };
+  }
+}
+
+/**
+ * Re-assign every own data property of `el` that hides a setter defined on
+ * its class chain below the WebJs base, so the value goes through the
+ * accessor instead of shadowing it.
+ *
+ * @param {any} el
+ */
+function liftShadowedAccessors(el) {
+  for (const key of Object.keys(el)) {
+    for (let p = Object.getPrototypeOf(el); p && p !== WebComponentBase.prototype; p = Object.getPrototypeOf(p)) {
+      const d = Object.getOwnPropertyDescriptor(p, key);
+      if (!d) continue;
+      if (d.set) {
+        const value = el[key];
+        delete el[key];
+        el[key] = value;
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Refuse the `state` option at class-definition time (#1677). Internal state
+ * is an instance signal; a declared reactive property is one that rides an
+ * attribute, reflects to one, or arrives through a `.prop` binding. Throwing
+ * here, when the module evaluates, makes the mistake a loud load failure
+ * rather than something SSR's per-component error isolation could swallow.
+ *
+ * @param {Record<string, any> | undefined} properties
+ */
+function assertNoStateOption(properties) {
+  for (const [name, decl] of Object.entries(properties || {})) {
+    if (decl && typeof decl === 'object' && Object.hasOwn(decl, 'state')) {
+      throw new Error(
+        `\`${name}\` declares the \`state\` option, which is no longer supported. ` +
+          `Hold internal state in an instance signal instead: \`#${name} = signal(initial)\`, ` +
+          `read with \`this.#${name}.get()\` (in render() or any update hook) and written ` +
+          `with \`this.#${name}.set(value)\`. A value that rides an attribute or a \`.prop\` ` +
+          `binding stays a reactive property, without \`state\`. See https://webjs.dev/docs/components.`,
+      );
+    }
   }
 }
 

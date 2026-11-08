@@ -10,8 +10,8 @@ import {
   extractWebComponentClassBodies, matchClosingBrace, parsePropEntries,
 } from '../js-scan.js';
 import {
-  isComponentFile, arrayPropUsesObject, findFieldInitializers, methodBodyOf,
-  findBrowserMemberUses,
+  isComponentFile, arrayPropUsesObject, declaresStateOption, findFieldInitializers,
+  methodBodyOf, findBrowserMemberUses,
 } from './helpers.js';
 
 /**
@@ -83,6 +83,41 @@ export function checkNoStaticProperties(files, violations) {
             '`static properties = { … }` is no longer supported; declare reactive properties via the `extends WebComponent({ … })` factory instead.',
           fix: 'Move the properties into the factory call: `class X extends WebComponent({ count: Number })`. Use `prop(Number, { reflect: true })` for options and set defaults in the constructor after super(). Delete the `static properties` block and any `declare` fields for those props.',
         });
+      }
+    }
+  }
+}
+
+/**
+ * Rule: `no-state-property`.
+ *
+ * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
+ * @param {Violation[]} violations  accumulator the rule pushes onto
+ * @returns {void}
+ */
+export function checkNoStateProperty(files, violations) {
+  // --- Rule: no-state-property ---
+  // The factory refuses a `state` option (#1677): internal state is an
+  // instance signal. The runtime throws when the module evaluates; flag it
+  // statically so the editor catches it first. Uses the redacted `scan`, so a
+  // descriptor shown inside an html`` example string never fires.
+  {
+    for (const { rel, scan } of files) {
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const { factoryArg } of extractWebComponentClassBodies(scan)) {
+        const objStart = factoryArg.indexOf('{');
+        if (objStart === -1) continue;
+        const objEnd = matchClosingBrace(factoryArg, objStart + 1);
+        if (objEnd === -1) continue;
+        for (const { key, value } of parsePropEntries(factoryArg.slice(objStart + 1, objEnd))) {
+          if (!declaresStateOption(value)) continue;
+          violations.push({
+            rule: 'no-state-property',
+            file: rel,
+            message: `Reactive property \`${key}\` declares the \`state\` option, which is no longer supported (the factory throws). Internal state is an instance signal.`,
+            fix: `Remove \`${key}\` from the factory and hold it in a signal: \`#${key} = signal(initial)\`, read with \`this.#${key}.get()\`, written with \`this.#${key}.set(value)\`. A parent that assigns it can keep doing so through a getter/setter over the signal.`,
+          });
+        }
       }
     }
   }

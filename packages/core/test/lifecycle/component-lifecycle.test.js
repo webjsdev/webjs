@@ -31,10 +31,9 @@ before(async () => {
 
 /* -------------------- attribute coercion -------------------- */
 
-test('observedAttributes derives from static properties, excluding state', () => {
+test('observedAttributes derives from the factory properties', () => {
   class A extends WebComponent({
     foo: String,
-    bar: prop(Number, { state: true }),       // state → excluded
     fooBar: String,                           // camelCase → kebab-case + lowercased alias
     baz: prop(String, { attribute: 'data-baz' }), // custom attribute → verbatim, no alias
   }) {}
@@ -147,21 +146,14 @@ test('a throwing converter.fromAttribute propagates out of attributeChangedCallb
   assert.throws(() => el.attributeChangedCallback('v', null, 'abc'), /converter blew up/);
 });
 
-test('attributeChangedCallback ignores a state:true prop (#1341)', () => {
-  // The client-visible consequence of routing both readers through the one
-  // `resolveAttributeProperty`: it skips `state: true` props, so a HAND-CALLED
-  // `attributeChangedCallback` for one is now a no-op. The browser would never
-  // make that call, because `observedAttributes` excludes the name (asserted
-  // above), so this only removes a way to reach the reader that the platform
-  // never had. It is what makes the SSR skip a shared rule rather than a second
-  // copy of one.
-  class C extends WebComponent({ cfg: prop(Object, { state: true }) }) {
-    constructor() { super(); this.cfg = { fromCtor: true }; }
+test('the factory refuses the state option, naming the signal replacement (#1677)', () => {
+  // Internal state is an instance signal. The throw happens when the class is
+  // DEFINED, so a stale component fails as its module loads, not inside a
+  // render that SSR's per-component error isolation could swallow.
+  for (const decl of [prop({ state: true }), prop(Number, { state: true }), { type: String, state: false }]) {
+    assert.throws(() => WebComponent({ open: decl }), /`open` declares the `state` option[\s\S]*#open = signal\(/);
   }
-  C.register('state-attr-noop');
-  const el = document.createElement('state-attr-noop');
-  el.attributeChangedCallback('cfg', null, 'oops');
-  assert.deepEqual(el.cfg, { fromCtor: true }, 'a state prop was populated from an attribute');
+  assert.doesNotThrow(() => WebComponent({ open: prop(Boolean, { reflect: true }), label: String }));
 });
 
 test('attributeChangedCallback ignores an attribute matching no property (#1341)', () => {
@@ -603,7 +595,7 @@ test('willUpdate runs pre-render and can set properties without re-triggering', 
   let willRuns = 0, updateRuns = 0;
   class C extends WebComponent({
     a: Number,
-    b: prop(Number, { state: true }),
+    b: Number,
   }) {
     constructor() { super(); this.a = 0; this.b = -1; }
     willUpdate(cp) {

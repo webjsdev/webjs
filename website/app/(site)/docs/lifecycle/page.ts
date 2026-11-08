@@ -8,7 +8,7 @@ export default function Lifecycle() {
     <p>WebJs ships the full lit-aligned component lifecycle. AI coding agents have substantial training data on lit, so adopting lit's hook names and semantics lets agents write idiomatic WebJs code without framework-specific translation.</p>
 
     <h2>The Update Cycle</h2>
-    <p>Every render goes through this pipeline. Each hook receives a <code>changedProperties</code> Map where keys are property names and values are the previous value before the change. Signal reads inside <code>render()</code> are tracked separately by the built-in SignalWatcher; signal changes schedule the next update but don't appear in this Map.</p>
+    <p>Every render goes through this pipeline. Each hook receives a <code>changedProperties</code> Map where keys are property names and values are the previous value before the change. Signal reads anywhere in the synchronous cycle (<code>willUpdate()</code>, <code>render()</code>, <code>updated()</code>) are tracked separately by the built-in SignalWatcher; signal changes schedule the next update but don't appear in this Map.</p>
     <ol>
       <li><code>shouldUpdate(changedProperties)</code> returns <code>false</code> to skip this update entirely.</li>
       <li><code>willUpdate(changedProperties)</code> is the pre-render hook. Safe to set reactive properties; assignments fold into this cycle.</li>
@@ -69,7 +69,7 @@ await el.updateComplete;
 // DOM now reflects count = 5</code-block>
 
     <h2>State mutation</h2>
-    <p>Signals are the default state primitive. Mutating a signal that the render() reads schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared via the <code>WebComponent({ ... })</code> factory) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
+    <p>Signals are the default state primitive. Mutating a signal that the update cycle read (in <code>willUpdate()</code>, <code>render()</code> or <code>updated()</code>) schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared via the <code>WebComponent({ ... })</code> factory) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
     <code-block>this.count.set(this.count.get() + 1);
 this.name = 'updated';                       // reactive property assignment
 // One render. changedProperties.has('name') is true; signal change drove the watcher.</code-block>

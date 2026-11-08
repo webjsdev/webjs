@@ -141,7 +141,7 @@ App-internal imports use the `#` root alias (`import { db } from '#db/connection
 2. `'use server'` exports are `async` functions returning serializer-safe values, callable from browser code as RPC. Files without `'use server'` are server-only utilities: reach them only from `'use server'` actions, `route.ts`, or middleware. Never add `'use server'` to a file only other server code imports (the DB connection, the schema).
 3. Custom element tag names contain a hyphen. Pass the tag to `Class.register('tag-name')`.
 4. Event (`@`), property (`.`), and boolean (`?`) holes in `html` are UNQUOTED: `@click=${fn}`, never `@click="${fn}"`.
-5. Signals are the default state primitive. Import `signal` / `computed` from `@webjsdev/core`, read via `signal.get()` inside `render()`. The base-class factory `WebComponent({ ... })` is only for values riding an HTML attribute or arriving via SSR hydration.
+5. Signals are the default state primitive, and the only one for internal state. Import `signal` / `computed` from `@webjsdev/core`, read via `signal.get()` inside `render()` or any update hook (`willUpdate`, `updated`). The base-class factory `WebComponent({ ... })` is only for values riding an HTML attribute or arriving via SSR hydration, and it THROWS on lit's `state: true` option (`no-state-property`).
 6. Page and layout default exports are functions returning a value; they never call `render()` themselves.
 7. Light-DOM components with custom CSS prefix every class selector with their tag name. Prefer Tailwind (unique by construction).
 8. Only the root layout may write `<!doctype>` / `<html>` / `<head>` / `<body>`.

@@ -60,7 +60,7 @@
  * </ui-combobox>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { positionFloating } from './floating.ts';
 import type { PopoverSide, PopoverAlign } from './popover.ts';
@@ -122,11 +122,17 @@ export class UiCombobox extends WebComponent({
   disabled: Boolean,
   value: String,
   open: prop(Boolean, { reflect: true }),
-  // The chosen values (the form's view of `value`).
-  values: prop<string[]>({ state: true }),
-  query: prop<string>({ state: true }),
-  highlighted: prop<string>({ state: true }),
 }) {
+  // The chosen values (the form's view of `value`).
+  #values = signal<string[]>([]);
+  get values() { return this.#values.get(); }
+  set values(v) { this.#values.set(v); }
+  #query = signal('');
+  get query() { return this.#query.get(); }
+  set query(v) { this.#query.set(v); }
+  #highlighted = signal('');
+  get highlighted() { return this.#highlighted.get(); }
+  set highlighted(v) { this.#highlighted.set(v); }
   _id = '';
   _parsed = false;
 
@@ -137,9 +143,6 @@ export class UiCombobox extends WebComponent({
     this.disabled = false;
     this.value = '';
     this.open = false;
-    this.values = [];
-    this.query = '';
-    this.highlighted = '';
   }
 
   connectedCallback(): void {
@@ -442,8 +445,10 @@ export class UiComboboxInput extends WebComponent({
   // changes them reaches the input.
   invalid: prop(String, { attribute: 'aria-invalid' }),
   describedBy: prop(String, { attribute: 'aria-describedby' }),
-  state: prop<FieldState>({ state: true }),
 }) {
+  #state = signal<FieldState>({ open: false, activeId: '', hasValue: false });
+  get state() { return this.#state.get(); }
+  set state(v) { this.#state.set(v); }
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -457,7 +462,6 @@ export class UiComboboxInput extends WebComponent({
     this.describedBy = '';
     this.showTrigger = 'true';
     this.showClear = false;
-    this.state = { open: false, activeId: '', hasValue: false };
   }
 
   render() {
@@ -518,10 +522,13 @@ UiComboboxInput.register('ui-combobox-input');
 // <ui-combobox-content> and <ui-combobox-list>
 // --------------------------------------------------------------------------
 
-export class UiComboboxContent extends WebComponent({
-  open: prop<boolean>({ state: true }),
-  empty: prop<boolean>({ state: true }),
-}) {
+export class UiComboboxContent extends WebComponent {
+  #open = signal(false);
+  get open() { return this.#open.get(); }
+  set open(v) { this.#open.set(v); }
+  #empty = signal(false);
+  get empty() { return this.#empty.get(); }
+  set empty(v) { this.#empty.set(v); }
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -529,8 +536,6 @@ export class UiComboboxContent extends WebComponent({
 
   constructor() {
     super();
-    this.open = false;
-    this.empty = false;
   }
 
   render() {
@@ -548,9 +553,10 @@ export class UiComboboxContent extends WebComponent({
 }
 UiComboboxContent.register('ui-combobox-content');
 
-export class UiComboboxList extends WebComponent({
-  empty: prop<boolean>({ state: true }),
-}) {
+export class UiComboboxList extends WebComponent {
+  #empty = signal(false);
+  get empty() { return this.#empty.get(); }
+  set empty(v) { this.#empty.set(v); }
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -558,7 +564,6 @@ export class UiComboboxList extends WebComponent({
 
   constructor() {
     super();
-    this.empty = false;
   }
 
   render() {
@@ -584,15 +589,16 @@ type ItemState = { visible: boolean; selected: boolean; highlighted: boolean };
 export class UiComboboxItem extends WebComponent({
   value: String,
   disabled: Boolean,
-  state: prop<ItemState>({ state: true }),
 }) {
+  #state = signal<ItemState>({ visible: true, selected: false, highlighted: false });
+  get state() { return this.#state.get(); }
+  set state(v) { this.#state.set(v); }
   _id = '';
 
   constructor() {
     super();
     this.value = '';
     this.disabled = false;
-    this.state = { visible: true, selected: false, highlighted: false };
   }
 
   connectedCallback(): void {
@@ -661,12 +667,12 @@ UiComboboxItem.register('ui-combobox-item');
 // <ui-combobox-group>, <ui-combobox-label>, <ui-combobox-empty>, <ui-combobox-separator>
 // --------------------------------------------------------------------------
 
-export class UiComboboxGroup extends WebComponent({
-  shown: prop<boolean>({ state: true }),
-}) {
+export class UiComboboxGroup extends WebComponent {
+  #shown = signal(true);
+  get shown() { return this.#shown.get(); }
+  set shown(v) { this.#shown.set(v); }
   constructor() {
     super();
-    this.shown = true;
   }
 
   updated(changedProperties: Map<string, unknown>): void {
@@ -735,9 +741,10 @@ UiComboboxSeparator.register('ui-combobox-separator');
 // <ui-combobox-chips> and <ui-combobox-chips-input>
 // --------------------------------------------------------------------------
 
-export class UiComboboxChips extends WebComponent({
-  chips: prop<{ value: string; label: string }[]>({ state: true }),
-}) {
+export class UiComboboxChips extends WebComponent {
+  #chips = signal<{ value: string; label: string }[]>([]);
+  get chips() { return this.#chips.get(); }
+  set chips(v) { this.#chips.set(v); }
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -745,7 +752,6 @@ export class UiComboboxChips extends WebComponent({
 
   constructor() {
     super();
-    this.chips = [];
   }
 
   render() {
@@ -773,8 +779,10 @@ UiComboboxChips.register('ui-combobox-chips');
 export class UiComboboxChipsInput extends WebComponent({
   placeholder: String,
   inputId: prop(String, { attribute: 'input-id' }),
-  state: prop<FieldState>({ state: true }),
 }) {
+  #state = signal<FieldState>({ open: false, activeId: '', hasValue: false });
+  get state() { return this.#state.get(); }
+  set state(v) { this.#state.set(v); }
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -784,7 +792,6 @@ export class UiComboboxChipsInput extends WebComponent({
     super();
     this.placeholder = '';
     this.inputId = '';
-    this.state = { open: false, activeId: '', hasValue: false };
   }
 
   render() {

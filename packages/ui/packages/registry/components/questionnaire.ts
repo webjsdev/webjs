@@ -93,7 +93,7 @@
  * </ui-questionnaire>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -181,9 +181,13 @@ export class UiQuestionnaire extends WebComponent({
   defaultItem: prop(String, { attribute: 'default-item' }),
   // Drive the author's own <form> instead of rendering one.
   asChild: prop(Boolean, { attribute: 'as-child' }),
-  enhanced: prop<boolean>({ state: true }),
-  active: prop<string>({ state: true }),
 }) {
+  #enhanced = signal(false);
+  get enhanced() { return this.#enhanced.get(); }
+  set enhanced(v) { this.#enhanced.set(v); }
+  #active = signal('');
+  get active() { return this.#active.get(); }
+  set active(v) { this.#active.set(v); }
   _queued = false;
 
   constructor() {
@@ -194,8 +198,6 @@ export class UiQuestionnaire extends WebComponent({
     this.item = '';
     this.defaultItem = '';
     this.asChild = false;
-    this.enhanced = false;
-    this.active = '';
   }
 
   // The listeners sit on the host, which every event from the form reaches,
@@ -445,12 +447,12 @@ UiQuestionnaire.register('ui-questionnaire');
 // <ui-questionnaire-progress>
 // --------------------------------------------------------------------------
 
-export class UiQuestionnaireProgress extends WebComponent({
-  progress: prop<{ current: number; total: number }>({ state: true }),
-}) {
+export class UiQuestionnaireProgress extends WebComponent {
+  #progress = signal<{ current: number; total: number }>({ current: 0, total: 0 });
+  get progress() { return this.#progress.get(); }
+  set progress(v) { this.#progress.set(v); }
   constructor() {
     super();
-    this.progress = { current: 0, total: 0 };
   }
 
   connectedCallback(): void {
@@ -485,9 +487,14 @@ export class UiQuestionnaireItem extends WebComponent({
   required: Boolean,
   multiple: Boolean,
   disabled: Boolean,
-  flow: prop<{ enhanced: boolean; active: boolean }>({ state: true }),
-  invalid: prop<boolean>({ state: true }),
 }) {
+  #flow = signal<{ enhanced: boolean; active: boolean }>({ enhanced: false, active: false });
+  get flow() { return this.#flow.get(); }
+  set flow(v) { this.#flow.set(v); }
+  // The item's error line reads this signal, so it redraws when it changes.
+  #invalid = signal(false);
+  get invalid() { return this.#invalid.get(); }
+  set invalid(v) { this.#invalid.set(v); }
   _id = '';
 
   constructor() {
@@ -496,23 +503,12 @@ export class UiQuestionnaireItem extends WebComponent({
     this.required = false;
     this.multiple = false;
     this.disabled = false;
-    this.flow = { enhanced: false, active: false };
-    this.invalid = false;
   }
 
   connectedCallback(): void {
     super.connectedCallback?.();
     this._id ||= `ui-questionnaire-item-${++uid}`;
     announce(this);
-  }
-
-  // The error line reads `invalid` from here, so it redraws with it.
-  updated(changedProperties: Map<string, unknown>): void {
-    super.updated?.(changedProperties);
-    if (!changedProperties.has('invalid')) return;
-    for (const el of Array.from(this.querySelectorAll<UiQuestionnaireError>('ui-questionnaire-error'))) {
-      if (itemOf(el) === this) el.requestUpdate?.();
-    }
   }
 
   get titleId(): string {
@@ -610,14 +606,15 @@ export class UiQuestionnaireChoice extends WebComponent({
   value: String,
   checked: Boolean,
   disabled: Boolean,
-  live: prop<boolean>({ state: true }),
 }) {
+  #live = signal(false);
+  get live() { return this.#live.get(); }
+  set live(v) { this.#live.set(v); }
   constructor() {
     super();
     this.value = '';
     this.checked = false;
     this.disabled = false;
-    this.live = false;
   }
 
   connectedCallback(): void {
@@ -766,7 +763,6 @@ export class UiQuestionnaireButton extends WebComponent({
   size: String,
   // Written by the author, as shadcn's `disabled` on a navigation button.
   disabled: Boolean,
-  visible: prop<boolean>({ state: true }),
 }) {
   static part = '';
   static label = '';
@@ -774,13 +770,17 @@ export class UiQuestionnaireButton extends WebComponent({
   static submits = false;
   static defaultVariant = 'outline';
 
+  // Submit shows from the first paint; the others wait for the flow.
+  #visible = signal((this.constructor as typeof UiQuestionnaireButton).submits);
+  get visible() { return this.#visible.get(); }
+  set visible(v) { this.#visible.set(v); }
+
   constructor() {
     super();
     const ctor = this.constructor as typeof UiQuestionnaireButton;
     this.variant = ctor.defaultVariant;
     this.size = 'default';
     this.disabled = false;
-    this.visible = ctor.submits;
   }
 
   connectedCallback(): void {

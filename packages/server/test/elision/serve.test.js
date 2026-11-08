@@ -71,12 +71,12 @@ test('display-only import is stripped from the served page, interactive import k
 });
 
 // The same display-only component in the enforced declare-free factory DX
-// (#604): a state-only prop, no attribute / event / lifecycle. It must elide
+// (#604): an empty factory call, no attribute / event / lifecycle. It must elide
 // through the real serve path exactly like the callless BADGE above, proving
 // the factory-form fix end to end (not just at the analyser).
 const FACTORY_BADGE = `
-import { WebComponent, html, prop } from '@webjsdev/core';
-class FactoryBadge extends WebComponent({ tone: prop({ state: true }) }) {
+import { WebComponent, html } from '@webjsdev/core';
+class FactoryBadge extends WebComponent({}) {
   render() { return html\`<span class="badge">verified</span>\`; }
 }
 FactoryBadge.register('x-factory-badge');

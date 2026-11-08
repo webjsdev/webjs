@@ -84,6 +84,52 @@ export function isArrayTypeText(type) {
   return false;
 }
 
+/**
+ * True when a factory property's descriptor carries a `state` key at its own
+ * level: `{ state: true }`, `prop({ state: true })`,
+ * `prop(Number, { state: true })`. Only depth 1 counts, so a `state` key
+ * inside a converter or a `hasChanged` body is not the option, and strings
+ * are blanked so `attribute: 'data-state: x'` cannot match.
+ *
+ * @param {string} value  the property VALUE text
+ * @returns {boolean}
+ */
+export function declaresStateOption(value) {
+  const code = stripTypeArgument(value)
+    .replace(/'[^'\n]*'/g, "''")
+    .replace(/"[^"\n]*"/g, '""')
+    .replace(/`[^`]*`/g, '``');
+  let depth = 0;
+  let shallow = '';
+  for (const c of code) {
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (depth === 1) shallow += c;
+  }
+  return /(?:^|[\s,])state\s*:/.test(shallow);
+}
+
+/**
+ * Drop a leading `prop<...>` type argument, which can spell an object type
+ * holding a `state` member (`prop<{ state: 'open' }>(Object)`) that is no
+ * option at all. Angle brackets nest, and the `>` of an arrow type (`=>`)
+ * closes nothing.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function stripTypeArgument(value) {
+  const m = /^\s*prop\s*</.exec(value);
+  if (!m) return value;
+  let depth = 1;
+  for (let i = m[0].length; i < value.length; i++) {
+    const c = value[i];
+    if (c === '<') depth++;
+    else if (c === '>' && value[i - 1] !== '=' && --depth === 0) return 'prop' + value.slice(i + 1);
+  }
+  return value;
+}
+
 export function findFieldInitializers(classBody, props) {
   /** @type {string[]} */
   const out = [];

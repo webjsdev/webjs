@@ -59,7 +59,7 @@
  * </ui-message-scroller>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -108,8 +108,11 @@ export class UiMessageScroller extends WebComponent({
   defaultScrollPosition: prop<'end' | 'start' | 'last-anchor'>(String, { attribute: 'default-scroll-position' }),
   scrollEdgeThreshold: prop(Number, { attribute: 'scroll-edge-threshold' }),
   scrollPreviousItemPeek: prop(Number, { attribute: 'scroll-previous-item-peek' }),
-  pending: prop<boolean>({ state: true }),
 }) {
+  // Served visible: a transcript must read with JavaScript off.
+  #pending = signal(false);
+  get pending() { return this.#pending.get(); }
+  set pending(v) { this.#pending.set(v); }
   /** The edges the viewport can still scroll toward. */
   scrollable = { start: false, end: false };
   /** The messages on screen, by `message-id`. */
@@ -133,8 +136,6 @@ export class UiMessageScroller extends WebComponent({
     this.defaultScrollPosition = 'end';
     this.scrollEdgeThreshold = EDGE;
     this.scrollPreviousItemPeek = PEEK;
-    // Served visible: a transcript must read with JavaScript off.
-    this.pending = false;
   }
 
   connectedCallback(): void {

@@ -47,6 +47,11 @@ export const RULES = [
       'Reactive properties must be declared via the `extends WebComponent({ … })` factory, never a hand-written `static properties = { … }` field in the class body. The factory types each field for you (no `declare` needed) and the runtime throws on a direct `static properties`. Migrate `class X extends WebComponent { static properties = { count: { type: Number } } }` to `class X extends WebComponent({ count: Number })`; use the `prop()` helper for options (`prop(Number, { reflect: true })`) and set defaults in the constructor after super().',
   },
   {
+    name: 'no-state-property',
+    description:
+      'A reactive property declared via the `extends WebComponent({ … })` factory must not carry the `state` option (`prop({ state: true })`, `prop(Number, { state: true })`): the factory throws on it. Internal state is an instance signal: `#open = signal(false)`, read with `this.#open.get()` in render() or any update hook, written with `this.#open.set(v)`. A value a parent assigns can keep its property API through a getter/setter over the signal. A value that rides an attribute or a `.prop` binding stays a reactive property, without `state`.',
+  },
+  {
     name: 'reactive-props-no-class-field',
     description:
       'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field declaration (`count = 0`, `count: number = 0`, `count!: number`, or `count?: number`) in the class body. Under modern class-field semantics (including `erasableSyntaxOnly: true`) every class-field declaration compiles to Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super().',

@@ -44,7 +44,7 @@
  * </ui-input-otp>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, signal } from '@webjsdev/core';
 import { takeAuthoredClass } from '../lib/utils.ts';
 
 /** The row's classes (the element applies them). */
@@ -70,10 +70,13 @@ const OVERLAY =
 
 const ROOT = 'ui-input-otp';
 
-export class UiInputOtp extends WebComponent({
-  enhanced: prop<boolean>({ state: true }),
-  revision: prop<number>({ state: true }),
-}) {
+export class UiInputOtp extends WebComponent {
+  #enhanced = signal(false);
+  get enhanced() { return this.#enhanced.get(); }
+  set enhanced(v) { this.#enhanced.set(v); }
+  #revision = signal(0);
+  get revision() { return this.#revision.get(); }
+  set revision(v) { this.#revision.set(v); }
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
   _form: HTMLFormElement | null = null;
@@ -84,8 +87,6 @@ export class UiInputOtp extends WebComponent({
 
   constructor() {
     super();
-    this.enhanced = false;
-    this.revision = 0;
   }
 
   /** The real input this element enhances. */
@@ -272,12 +273,12 @@ UiInputOtp.register('ui-input-otp');
 // <ui-input-otp-group>
 // --------------------------------------------------------------------------
 
-export class UiInputOtpGroup extends WebComponent({
-  shown: prop<boolean>({ state: true }),
-}) {
+export class UiInputOtpGroup extends WebComponent {
+  #shown = signal(false);
+  get shown() { return this.#shown.get(); }
+  set shown(v) { this.#shown.set(v); }
   constructor() {
     super();
-    this.shown = false;
   }
 
   connectedCallback(): void {
@@ -299,14 +300,15 @@ type SlotState = { shown: boolean; char: string; active: boolean; caret: boolean
 
 export class UiInputOtpSlot extends WebComponent({
   index: Number,
-  state: prop<SlotState>({ state: true }),
 }) {
+  #state = signal<SlotState>({ shown: false, char: '', active: false, caret: false, invalid: false });
+  get state() { return this.#state.get(); }
+  set state(v) { this.#state.set(v); }
   _authored: string | null = null;
 
   constructor() {
     super();
     this.index = 0;
-    this.state = { shown: false, char: '', active: false, caret: false, invalid: false };
   }
 
   connectedCallback(): void {
@@ -352,12 +354,12 @@ UiInputOtpSlot.register('ui-input-otp-slot');
 // <ui-input-otp-separator>
 // --------------------------------------------------------------------------
 
-export class UiInputOtpSeparator extends WebComponent({
-  shown: prop<boolean>({ state: true }),
-}) {
+export class UiInputOtpSeparator extends WebComponent {
+  #shown = signal(false);
+  get shown() { return this.#shown.get(); }
+  set shown(v) { this.#shown.set(v); }
   constructor() {
     super();
-    this.shown = false;
   }
 
   connectedCallback(): void {

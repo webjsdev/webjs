@@ -16,7 +16,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bakeForStyle } from '../src/registry/style-bake.js';
@@ -456,4 +456,17 @@ test('avatar : a broken image paints no alt text and pushes its glyph out, in ev
       assert.ok(image.split(/\s+/).includes(cls), `${style}: avatarImageClass carries ${cls} (got "${image}")`);
     }
   }
+});
+
+test('internal state is a signal, never a state: true property (#1677)', { skip }, () => {
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.ts') && /\bstate:\s*true\b/.test(readFileSync(p, 'utf8'))) offenders.push(p.slice(REGISTRY_DIR.length + 1));
+    }
+  };
+  walk(REGISTRY_DIR);
+  assert.deepEqual(offenders, [], 'hold internal state in an instance signal, as dropdown-menu does');
 });

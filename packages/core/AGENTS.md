@@ -194,8 +194,12 @@ edit is invisible and a counterfactual passes vacuously), and run
    carries options), with defaults set via the `default` option or the
    constructor, never class-field initializers (those clobber the
    framework's accessor under modern class-field semantics). A direct
-   `static properties` block throws at runtime. See `component.js`, the
-   `no-static-properties` rule, and `reactive-props-no-class-field`.
+   `static properties` block throws at runtime, and so does a `state`
+   option in the factory (#1677): internal state is an instance signal,
+   and the SignalWatcher tracks every signal the synchronous update cycle
+   reads (`willUpdate`, `render()`, `updated()`), leaving only the DOM
+   commit untracked. See `component.js`, the `no-static-properties` and
+   `no-state-property` rules, and `reactive-props-no-class-field`.
 6. **New interactivity surfaces must update the elision analyser.**
    WebJs elides display-only component modules from the browser by
    static analysis (`packages/server/src/component-elision.js`). It is a
@@ -222,7 +226,7 @@ edit is invisible and a counterfactual passes vacuously), and run
    bare async leaf (no other client signal, light DOM) is elided like any
    display-only component, since SSR bakes its data into the first paint.
    It ships only on an independent signal (the lists above, an `@event`, a
-   non-`state` prop, a `<slot>`, cross-module observation, an interactive
+   declared reactive prop, a `<slot>`, cross-module observation, an interactive
    child) or one of the two static carve-outs in the
    `INTERACTIVITY_STATIC_FIELDS` registry: `static shadow = true`
    (Declarative Shadow DOM must re-attach on a client-side DOM insertion)

@@ -44,7 +44,7 @@
  * </div>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, signal } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -140,8 +140,10 @@ export class UiCodeBlockCopyButton extends WebComponent({
   value: String,
   variant: String,
   size: String,
-  copied: prop<boolean>({ state: true }),
 }) {
+  #copied = signal(false);
+  get copied() { return this.#copied.get(); }
+  set copied(v) { this.#copied.set(v); }
   _timer = 0;
 
   constructor() {
@@ -149,7 +151,6 @@ export class UiCodeBlockCopyButton extends WebComponent({
     this.value = '';
     this.variant = 'ghost';
     this.size = 'icon-xs';
-    this.copied = false;
   }
 
   disconnectedCallback(): void {

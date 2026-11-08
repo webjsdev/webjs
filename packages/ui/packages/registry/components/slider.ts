@@ -43,7 +43,7 @@
  * </ui-slider>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { ensureId } from '../lib/utils.ts';
 
 /** One native `<input type="range">`, styled to match the drawn slider. */
@@ -79,9 +79,13 @@ const HIDDEN_CONTROL =
 
 export class UiSlider extends WebComponent({
   orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
-  enhanced: prop<boolean>({ state: true }),
-  revision: prop<number>({ state: true }),
 }) {
+  #enhanced = signal(false);
+  get enhanced() { return this.#enhanced.get(); }
+  set enhanced(v) { this.#enhanced.set(v); }
+  #revision = signal(0);
+  get revision() { return this.#revision.get(); }
+  set revision(v) { this.#revision.set(v); }
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
   _form: HTMLFormElement | null = null;
@@ -92,8 +96,6 @@ export class UiSlider extends WebComponent({
   constructor() {
     super();
     this.orientation = 'horizontal';
-    this.enhanced = false;
-    this.revision = 0;
   }
 
   /** The native range inputs, one per thumb. */

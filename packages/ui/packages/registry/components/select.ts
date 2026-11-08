@@ -94,7 +94,7 @@
  * </ui-select>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { templateContent, unsafeHTML } from '@webjsdev/core/directives';
 import { cn, ensureId } from '../lib/utils.ts';
 import { positionFloating } from './floating.ts';
@@ -154,13 +154,19 @@ export class UiSelect extends WebComponent({
   // Classes for the list panel, shadcn's SelectContent `className`.
   contentClass: String,
   open: prop(Boolean, { reflect: true }),
-  // Set once the element has taken over from the native select.
-  enhanced: prop<boolean>({ state: true }),
-  // Bumped whenever the native select changes under the element.
-  revision: prop<number>({ state: true }),
-  // A failed constraint check, until the value is valid again.
-  invalid: prop<boolean>({ state: true }),
 }) {
+  // Set once the element has taken over from the native select.
+  #enhanced = signal(false);
+  get enhanced() { return this.#enhanced.get(); }
+  set enhanced(v) { this.#enhanced.set(v); }
+  // Bumped whenever the native select changes under the element.
+  #revision = signal(0);
+  get revision() { return this.#revision.get(); }
+  set revision(v) { this.#revision.set(v); }
+  // A failed constraint check, until the value is valid again.
+  #invalid = signal(false);
+  get invalid() { return this.#invalid.get(); }
+  set invalid(v) { this.#invalid.set(v); }
   _id = '';
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
@@ -177,9 +183,6 @@ export class UiSelect extends WebComponent({
     this.size = 'default';
     this.position = 'item-aligned';
     this.open = false;
-    this.enhanced = false;
-    this.revision = 0;
-    this.invalid = false;
   }
 
   /** The native select this element enhances. */

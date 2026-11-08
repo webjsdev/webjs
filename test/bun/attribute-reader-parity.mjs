@@ -19,10 +19,9 @@
  *     `undefined` for the arms that did not match, which is what selects the
  *     decimal / hex / named branch), and astral and replacement-character
  *     handling are all engine surface.
- *   - the `state: true` skip, plus the `.prop=${value}` channel that is the
- *     legitimate way such a prop receives an SSR value. That channel runs
- *     through the rich serializer, which is the single most runtime-sensitive
- *     thing in the framework.
+ *   - the `.prop=${value}` channel, which runs through the rich serializer,
+ *     the single most runtime-sensitive thing in the framework, plus the
+ *     factory refusing a `state` option (#1677) on both runtimes.
  *   - the source-name lowercasing, and that the kebab form still resolves.
  *   - an attribute matching no property leaving no own property behind, read
  *     through `Object.getOwnPropertyNames` rather than through the render
@@ -62,12 +61,6 @@ class ObjProbe extends WebComponent({ cfg: prop(Object) }) {
   render() { return html`<i>val=${JSON.stringify(this.cfg)}</i>`; }
 }
 ObjProbe.register('bun-attr-obj');
-
-class StateProbe extends WebComponent({ cfg: prop(Object, { state: true }) }) {
-  constructor() { super(); this.cfg = { fromCtor: true }; }
-  render() { return html`<i>val=${JSON.stringify(this.cfg)}</i>`; }
-}
-StateProbe.register('bun-attr-state');
 
 class CamelProbe extends WebComponent({ cfgData: prop(String) }) {
   constructor() { super(); this.cfgData = 'CTOR'; }
@@ -149,24 +142,21 @@ for (const [source, expected] of ENTITY_MATRIX) {
   assert.ok(out.includes('n=1'), `[${runtime}] entity decoding did not reach the Number branch: ${out}`);
 }
 
-// --- 2. A state:true prop -------------------------------------------------
+// --- 2. The .prop channel, and the refused state option -------------------
+
+assert.throws(
+  () => WebComponent({ cfg: prop(Object, { state: true }) }),
+  /`cfg` declares the `state` option/,
+  `[${runtime}] the factory accepted a state option`,
+);
 
 {
-  const out = await ssr('<bun-attr-state cfg="oops"></bun-attr-state>');
-  assert.ok(
-    out.includes('val={"fromCtor":true}'),
-    `[${runtime}] a state:true prop was populated from an attribute: ${out}`,
-  );
-  assert.ok(!out.includes('val=null'), `[${runtime}] the attribute reached the reader: ${out}`);
-}
-
-{
-  // The channel that MUST keep working: `data-webjs-prop-*` is consumed before
-  // the attribute reader runs, so the skip above cannot reach it.
-  const out = await renderToString(html`<bun-attr-state .cfg=${{ viaProp: 1 }}></bun-attr-state>`);
+  // `data-webjs-prop-*` is consumed before the attribute reader runs, so a
+  // `.prop` binding reaches the property through the serializer.
+  const out = await renderToString(html`<bun-attr-obj .cfg=${{ viaProp: 1 }}></bun-attr-obj>`);
   assert.ok(
     out.includes('val={"viaProp":1}'),
-    `[${runtime}] the .prop hydration channel stopped reaching a state prop: ${out}`,
+    `[${runtime}] the .prop hydration channel stopped reaching the property: ${out}`,
   );
 }
 

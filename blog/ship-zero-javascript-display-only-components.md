@@ -26,7 +26,7 @@ So the framework does not send it. If a component is display-only, its module is
 The decision is made by a static analyser in `packages/server/src/component-elision.js`. It reads the component source and looks for any signal that the component does client-side work. If it finds one, the module ships. The signals are the obvious ones:
 
 - An `@event` binding in a template (`@click=${...}`).
-- A reactive property that is not `{ state: true }` (it rides an HTML attribute, so the browser can change it).
+- A declared reactive property (it rides an HTML attribute, so the browser can change it).
 - A read of a `signal()` or `computed()`, or an import of one.
 - An overridden lifecycle hook (`connectedCallback`, `firstUpdated`, and the rest).
 - A `<slot>`, or `static shadow = true` (Declarative Shadow DOM has to re-attach on a client-side DOM insertion).

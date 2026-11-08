@@ -168,7 +168,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     let renders = 0;
     class E extends WebComponent({
       foo: Number,
-      bar: prop(Number, { state: true }),
+      bar: Number,
     }) {
       constructor() { super(); this.foo = 0; this.bar = -1; }
       willUpdate(cp) {
@@ -193,7 +193,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     let captured;
     class E extends WebComponent({
       foo: Number,
-      derived: prop(Number, { state: true }),
+      derived: Number,
     }) {
       constructor() { super(); this.foo = 0; this.derived = 0; }
       willUpdate(cp) {
@@ -542,18 +542,6 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
     el.remove();
   });
 
-  test('state: true excludes the property from observedAttributes', () => {
-    class E extends WebComponent({
-      pub: String,
-      priv: prop(String, { state: true }),
-    }) {
-      render() { return html``; }
-    }
-    const observed = E.observedAttributes;
-    assert.ok(observed.includes('pub'));
-    assert.equal(observed.includes('priv'), false);
-  });
-
   test('hasChanged: false skips the update', async () => {
     let renders = 0;
     class E extends WebComponent({
@@ -869,7 +857,7 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
 
   test('requestUpdate during willUpdate folds into current cycle (no extra microtask)', async () => {
     let renders = 0;
-    class E extends WebComponent({ a: Number, b: prop(Number, { state: true }) }) {
+    class E extends WebComponent({ a: Number, b: Number }) {
       constructor() { super(); this.a = 0; this.b = 0; }
       willUpdate(cp) {
         if (cp.has('a')) this.requestUpdate('b', this.b);

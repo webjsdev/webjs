@@ -44,7 +44,7 @@
  * <ui-calendar mode="range" value="2025-06-12/2025-06-20" number-of-months="2" name="stay"></ui-calendar>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 
@@ -206,11 +206,17 @@ export class UiCalendar extends WebComponent({
   max: String,
   disabled: Boolean,
   locale: String,
-  // The live state: what is chosen, which month is shown, which day has focus.
-  selection: prop<{ days: string[]; from: string; to: string }>({ state: true }),
-  shown: prop<string>({ state: true }),
-  focused: prop<string>({ state: true }),
 }) {
+  // The live state: what is chosen, which month is shown, which day has focus.
+  #selection = signal<{ days: string[]; from: string; to: string }>({ days: [], from: '', to: '' });
+  get selection() { return this.#selection.get(); }
+  set selection(v) { this.#selection.set(v); }
+  #shown = signal('');
+  get shown() { return this.#shown.get(); }
+  set shown(v) { this.#shown.set(v); }
+  #focused = signal('');
+  get focused() { return this.#focused.get(); }
+  set focused(v) { this.#focused.set(v); }
   _id = '';
   _parsed = false;
 
@@ -230,9 +236,6 @@ export class UiCalendar extends WebComponent({
     this.max = '';
     this.disabled = false;
     this.locale = '';
-    this.selection = { days: [], from: '', to: '' };
-    this.shown = '';
-    this.focused = '';
   }
 
   connectedCallback(): void {
