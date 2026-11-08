@@ -337,6 +337,8 @@ The first three attempts were a STATIC scan over test sources, and each went bli
 
 It needs a Postgres at `GATE_PG` (default `postgres://crisp:crisp@localhost:5432`) and creates and drops its own databases. Paste its summary into the release PR. **If a release is found broken after publish, deprecate it at once** (`npm deprecate @webjsdev/<pkg>@<version> "<why>; use <good version>"`) and ship the fix through the gate.
 
+The release gate packs all six npm libraries, including UI and IntelliSense, and overrides their dependency ranges with candidate tarballs. This allows coordinated minor releases to be verified before any dependency is published.
+
 ### Changelog: per-package, per-version, auto-generated
 
 WebJs ships per-package per-version changelogs under `changelog/<pkg>/<version>.md`. The model: **a version bump is the trigger**. When any commit on `main` changes the `version` field in `packages/<pkg>/package.json`, the scripts/backfill-changelog.js generator emits a new `changelog/<pkg>/<version>.md` summarising every conventional-commit (`feat:` / `fix:` / `breaking:` / `perf:`) that landed in that package since the prior bump. The website renders the union of all packages' files at `/changelog`.

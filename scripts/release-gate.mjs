@@ -51,7 +51,7 @@ function run(cmd, argv, opts = {}) {
   return { ok: r.status === 0, out: `${r.stdout || ''}${r.stderr || ''}` };
 }
 
-/** Pack core, server, cli and mcp as npm would publish them (cli depends on mcp). */
+/** Pack all six npm libraries so unpublished dependency ranges resolve to candidates. */
 function packCandidate() {
   // Build core's dist from THIS checkout. A worktree linked before #1671 may
   // still carry it as a symlink into another checkout, which `npm pack` would
@@ -60,8 +60,8 @@ function packCandidate() {
   execFileSync('node', ['scripts/build-framework-dist.js'], { cwd: ROOT, stdio: 'pipe' });
   const dir = mkdtempSync(join(tmpdir(), 'webjs-gate-pack-'));
   const tarballs = {};
-  for (const pkg of ['core', 'server', 'cli', 'mcp']) {
-    const out = execFileSync('npm', ['pack', '--silent', '--pack-destination', dir], { cwd: join(ROOT, 'packages', pkg), encoding: 'utf8' }).trim().split('\n').pop();
+  for (const pkg of ['core', 'server', 'cli', 'mcp', 'ui', 'intellisense']) {
+    const out = execFileSync('npm', ['pack', '--silent', '--pack-destination', dir], { cwd: join(ROOT, 'packages', ...(pkg === 'intellisense' ? ['editors', pkg] : [pkg])), encoding: 'utf8' }).trim().split('\n').pop();
     tarballs[`@webjsdev/${pkg}`] = join(dir, out);
   }
   return tarballs;
@@ -252,7 +252,10 @@ async function scaffoldStage(runtime, tarballs, port) {
     const cacheHome = join(parent, 'cache');
     const devEnv = runtime === 'bun' ? { XDG_CACHE_HOME: cacheHome } : {};
     for (const [f, src] of Object.entries(probeFiles)) { mkdirSync(dirname(join(appDir, f)), { recursive: true }); writeFileSync(join(appDir, f), src); }
-    for (const [name, tgz] of Object.entries(tarballs)) pkg.dependencies[name] = `file:${tgz}`;
+    for (const [name, tgz] of Object.entries(tarballs)) {
+      if (pkg.devDependencies) delete pkg.devDependencies[name];
+      pkg.dependencies[name] = `file:${tgz}`;
+    }
     pkg.overrides = { ...(pkg.overrides || {}), ...Object.fromEntries(Object.entries(tarballs).map(([n, t]) => [n, `file:${t}`])) };
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
     const install = () => (runtime === 'bun' ? run('bun', ['install'], { cwd: appDir, quiet: true }) : run('npm', ['install', '--no-audit', '--no-fund'], { cwd: appDir, quiet: true }));
@@ -278,8 +281,21 @@ async function scaffoldStage(runtime, tarballs, port) {
       const from = process.env.GATE_POISON_FROM || '0.8.86';
       const prior = JSON.parse(readFileSync(pkgPath, 'utf8'));
       const old = { ...prior, overrides: {}, dependencies: { ...prior.dependencies, '@webjsdev/server': from, '@webjsdev/cli': process.env.GATE_POISON_CLI || '0.10.68', '@webjsdev/core': process.env.GATE_POISON_CORE || '0.7.64' } };
+      // The old CLI must resolve its own compatible transitive dependencies.
+      // Keeping a new UI tarball here would demand an unpublished core minor
+      // while the root intentionally pins the previous core release.
+      for (const name of Object.keys(tarballs)) {
+        if (!['@webjsdev/core', '@webjsdev/server', '@webjsdev/cli'].includes(name)) delete old.dependencies[name];
+      }
       writeFileSync(pkgPath, JSON.stringify(old, null, 2));
-      if (run('bun', ['install'], { cwd: appDir, quiet: true }).ok) {
+      // Start the previous install without candidate package metadata in Bun's
+      // lockfile or node_modules. Keep the runtime cache itself: the subsequent
+      // old -> candidate reinstall is the cache-upgrade scenario being tested.
+      rmSync(join(appDir, 'node_modules'), { recursive: true, force: true });
+      for (const lock of ['bun.lock', 'bun.lockb', 'package-lock.json']) rmSync(join(appDir, lock), { force: true });
+      const previousInstall = run('bun', ['install'], { cwd: appDir, quiet: true, timeoutMs: 120_000 });
+      record(stage, `install previous release ${from} to warm the cache`, previousInstall.ok, previousInstall.ok ? '' : previousInstall.out.slice(-800));
+      if (previousInstall.ok) {
         const d0 = await startDev(appDir, 'bun', ['run', 'dev'], port, devEnv).catch(() => null);
         if (d0) { const r = await fetch(base + '/zzgate').catch(() => ({ status: 0 })); console.log(`  (${from} served /zzgate ${r.status} while warming the cache)`); await d0.stop(); }
       }
@@ -499,8 +515,10 @@ async function websiteStage(port) {
 }
 
 if (!args.includes('--skip-suites')) {
-  record('suites', 'npm test (Node)', run('npm', ['test'], { cwd: ROOT, quiet: true }).ok);
-  record('suites', 'Bun matrix (scripts/run-bun-tests.js)', run('node', ['scripts/run-bun-tests.js'], { cwd: ROOT, quiet: true }).ok);
+  const nodeSuite = run('npm', ['test'], { cwd: ROOT, quiet: true });
+  record('suites', 'npm test (Node)', nodeSuite.ok, nodeSuite.ok ? '' : nodeSuite.out.slice(-12000));
+  const bunSuite = run('node', ['scripts/run-bun-tests.js'], { cwd: ROOT, quiet: true });
+  record('suites', 'Bun matrix (scripts/run-bun-tests.js)', bunSuite.ok, bunSuite.ok ? '' : bunSuite.out.slice(-12000));
 }
 const tarballs = packCandidate();
 console.log(`candidate: ${Object.values(tarballs).map((t) => t.split(sep).pop()).join(', ')}`);
