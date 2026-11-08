@@ -495,7 +495,7 @@ test('every signal field in the registry is readonly (#1679)', { skip }, () => {
   const bare = [];
   for (const file of registryTsFiles()) {
     const src = readFileSync(file, 'utf8');
-    for (const m of src.matchAll(/^[ \t]+((?:(?:public|private|protected|static|declare)\s+)*)(#?[A-Za-z_$][\w$]*)\s*[!?]?\s*(?::[^=\n]*)?=\s*(?:signal|computed)\s*[<(]/gm)) {
+    for (const m of src.matchAll(/^[ \t]+((?:(?:public|private|protected|static|declare|override|readonly)\s+)*)(#?[A-Za-z_$][\w$]*)\s*[!?]?\s*(?::[^=\n]*)?=\s*(?:signal|computed)\s*[<(]/gm)) {
       if (!/\breadonly\b/.test(m[1])) bare.push(`${file.slice(REGISTRY_DIR.length + 1)} ${m[2]}`);
     }
   }

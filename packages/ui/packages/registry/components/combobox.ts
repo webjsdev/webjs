@@ -255,9 +255,11 @@ export class UiCombobox extends WebComponent({
    * silently do nothing instead.
    */
   removeValue(value: string): void {
-    if (!this.#values.get().includes(value)) return;
-    this.#values.set(this.#values.get().filter((v) => v !== value));
-    this._emit('ui-value-change', { value: this.multiple ? [...this.#values.get()] : '' });
+    const values = this.#values.get();
+    if (!values.includes(value)) return;
+    const next = values.filter((v) => v !== value);
+    this.#values.set(next);
+    this._emit('ui-value-change', { value: this.multiple ? [...next] : '' });
   }
 
   /** Clear every chosen value and the typed text. */
@@ -290,23 +292,23 @@ export class UiCombobox extends WebComponent({
   _syncParts(): void {
     const visible = new Set(this.visibleItems());
     for (const item of this._items()) {
-      item.state.set({
+      item.state?.set({
         visible: visible.has(item),
         selected: this.#values.get().includes(item.itemValue),
         highlighted: this.open && item.itemValue === this.highlighted.get() && visible.has(item),
       });
     }
     for (const g of this._own<UiComboboxGroup>(`${ROOT}-group`)) {
-      g.shown.set(this._items().some((i) => i.closest(`${ROOT}-group`) === g && visible.has(i)));
+      g.shown?.set(this._items().some((i) => i.closest(`${ROOT}-group`) === g && visible.has(i)));
     }
     const empty = visible.size === 0;
-    for (const part of this._own<UiComboboxContent | UiComboboxList>(`${ROOT}-content, ${ROOT}-list`)) part.empty.set(empty);
-    for (const content of this._own<UiComboboxContent>(`${ROOT}-content`)) content.open.set(this.open);
+    for (const part of this._own<UiComboboxContent | UiComboboxList>(`${ROOT}-content, ${ROOT}-list`)) part.empty?.set(empty);
+    for (const content of this._own<UiComboboxContent>(`${ROOT}-content`)) content.open?.set(this.open);
     for (const field of this._own<UiComboboxInput | UiComboboxChipsInput>(`${ROOT}-input, ${ROOT}-chips-input`)) {
       const h = this._items().find((i) => i.itemValue === this.highlighted.get() && visible.has(i));
-      field.state.set({ open: this.open, activeId: this.open && h ? h.optionId : '', hasValue: this.#values.get().length > 0 });
+      field.state?.set({ open: this.open, activeId: this.open && h ? h.optionId : '', hasValue: this.#values.get().length > 0 });
     }
-    for (const chips of this._own<UiComboboxChips>(`${ROOT}-chips`)) chips.chips.set(this.#values.get().map((v) => ({ value: v, label: this.labelOf(v) })));
+    for (const chips of this._own<UiComboboxChips>(`${ROOT}-chips`)) chips.chips?.set(this.#values.get().map((v) => ({ value: v, label: this.labelOf(v) })));
     // A single combobox shows its choice in the input until the user types.
     const input = this._input();
     if (input && !this.multiple && !this.open && !this.#query.get()) {
@@ -641,7 +643,7 @@ export class UiComboboxItem extends WebComponent({
   _onPointerMove = (): void => {
     const root = rootOf(this);
     if (!root || this.disabled || this.state.get().highlighted) return;
-    root.highlighted.set(this.itemValue);
+    root.highlighted?.set(this.itemValue);
   };
 
   _onClick = (): void => {

@@ -246,13 +246,14 @@ export class UiInputOtp extends WebComponent {
       const char = value[i] ?? '';
       const active = this._focused && (end > start ? i >= start && i < end : i === start);
       const next = { shown: true, char, active, caret: active && !char, invalid };
-      const s = slot.state.get();
-      if (s.shown !== next.shown || s.char !== next.char || s.active !== next.active || s.caret !== next.caret || s.invalid !== next.invalid) {
-        slot.state.set(next);
+      // A slot not upgraded yet has no state signal; the next sync reaches it.
+      const s = slot.state?.get();
+      if (s && (s.shown !== next.shown || s.char !== next.char || s.active !== next.active || s.caret !== next.caret || s.invalid !== next.invalid)) {
+        slot.state?.set(next);
       }
     });
     this.querySelectorAll<UiInputOtpGroup | UiInputOtpSeparator>(`${ROOT}-group, ${ROOT}-separator`).forEach((part) => {
-      if (!part.shown.get()) part.shown.set(true);
+      if (!part.shown?.get()) part.shown?.set(true);
     });
     const disabled = !!input.disabled;
     if (disabled !== this._disabled) {

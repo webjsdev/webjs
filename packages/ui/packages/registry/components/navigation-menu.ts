@@ -363,7 +363,7 @@ export class UiNavigationMenuItem extends WebComponent({
     const root = this._root();
     this.querySelectorAll<UiNavigationMenuTrigger | UiNavigationMenuContent>(
       `${ROOT}-trigger, ${ROOT}-content`,
-    ).forEach((part) => { part.open.set(this.isOpen); });
+    ).forEach((part) => { part.open?.set(this.isOpen); });
     const button = this._button();
     const panel = this._panel();
     if (button && panel) {

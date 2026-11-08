@@ -299,14 +299,14 @@ export class UiQuestionnaire extends WebComponent({
     const at = item ? items.indexOf(item) : -1;
     const last = at === items.length - 1;
     for (const i of this._all(ITEM) as UiQuestionnaireItem[]) {
-      i.flow.set({ enhanced: this.#enhanced.get(), active: i === item });
+      i.flow?.set({ enhanced: this.#enhanced.get(), active: i === item });
     }
     for (const c of this._all('ui-questionnaire-choice') as UiQuestionnaireChoice[]) c._syncChecked();
     for (const p of this._all('ui-questionnaire-progress') as UiQuestionnaireProgress[]) {
-      p.progress.set({ current: at + 1, total: items.length });
+      p.progress?.set({ current: at + 1, total: items.length });
     }
     const show = (tag: string, visible: boolean) => {
-      for (const b of this._all(tag) as UiQuestionnaireButton[]) b.visible.set(visible);
+      for (const b of this._all(tag) as UiQuestionnaireButton[]) b.visible?.set(visible);
     };
     if (!this.#enhanced.get()) {
       show('ui-questionnaire-previous', false);
@@ -349,7 +349,7 @@ export class UiQuestionnaire extends WebComponent({
   validate(item = this._activeItem()): boolean {
     if (!item) return true;
     const ok = !item.required || this.answered(item);
-    item.invalid.set(!ok);
+    item.invalid?.set(!ok);
     if (!ok) item.inputs().find((i) => !i.disabled)?.focus();
     return ok;
   }
@@ -378,7 +378,7 @@ export class UiQuestionnaire extends WebComponent({
       if (i.type === 'radio' || i.type === 'checkbox') i.checked = false;
       else i.value = '';
     }
-    item.invalid.set(false);
+    item.invalid?.set(false);
     const items = this.items();
     const after = items[items.indexOf(item) + 1];
     if (after) this._go(after);
@@ -433,7 +433,7 @@ export class UiQuestionnaire extends WebComponent({
         for (const i of item.inputs()) if (i.matches('[data-slot="questionnaire-input"]')) i.value = '';
       }
     }
-    if (item.invalid.get() && this.answered(item)) item.invalid.set(false);
+    if (item.invalid?.get() && this.answered(item)) item.invalid?.set(false);
     this.sync();
   };
 }
@@ -532,14 +532,15 @@ export class UiQuestionnaireItem extends WebComponent({
   }
 
   render() {
-    const hide = this.flow.get().enhanced && !this.flow.get().active;
+    const flow = this.flow.get();
+    const hide = flow.enhanced && !flow.active;
     const hasTitle = this._has('ui-questionnaire-title');
     const hasDescription = this._has('ui-questionnaire-description');
     const described = [hasDescription ? this.descriptionId : '', this.invalid.get() ? this.errorId : ''].filter(Boolean).join(' ');
     return html`<fieldset
       data-slot="questionnaire-item"
       ?disabled=${this.disabled}
-      ?data-active=${this.flow.get().active}
+      ?data-active=${flow.active}
       ?hidden=${hide}
       ?inert=${hide}
       aria-labelledby=${hasTitle && this._id ? this.titleId : null}
@@ -732,7 +733,7 @@ export class UiQuestionnaireError extends WebComponent {
 
   render() {
     const item = itemOf(this);
-    const invalid = !!item?.invalid.get();
+    const invalid = !!item?.invalid?.get();
     const fallback = item?.required ? 'Choose an answer to continue.' : 'Choose an answer or skip this question.';
     return html`<p
       data-slot="questionnaire-error"
