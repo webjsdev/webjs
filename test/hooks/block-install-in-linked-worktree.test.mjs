@@ -466,11 +466,36 @@ test('a NESTED node_modules symlink blocks, not only the root one', () => {
     const r = runHook('npm install', worktree);
     assert.equal(r.status, 2, `expected block, got ${r.status}: ${r.stderr}`);
     assert.match(r.stderr, /packages\/server\/node_modules is a SYMLINK/);
-    assert.match(r.stderr, /find \. -maxdepth 5 -type l -name node_modules -delete/, 'the remedy removes them ALL');
+    assert.match(r.stderr, /npm run worktree:unlink/, 'the remedy removes them ALL');
     // COUNTERFACTUAL: the same layout with a real nested directory passes.
     rmSync(join(worktree, 'packages', 'server', 'node_modules'));
     mkdirSync(join(worktree, 'packages', 'server', 'node_modules'));
     assert.equal(runHook('npm install', worktree).status, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a standing packages/core/dist symlink blocks even with every node_modules real (#1671)', () => {
+  // The old recipe deleted only the node_modules links and then installed. The
+  // dist link the link script also plants stayed, and core's prepare built the
+  // worktree's bundle THROUGH it into the primary. The build now replaces such a
+  // link itself, but the gate keeps one rule: no planted link stands at install.
+  const root = mkdtempSync(join(tmpdir(), 'install-gate-dist-'));
+  const primary = join(root, 'primary');
+  const worktree = join(root, 'worktree');
+  mkdirSync(join(primary, 'packages', 'core', 'dist'), { recursive: true });
+  mkdirSync(join(worktree, 'packages', 'core'), { recursive: true });
+  mkdirSync(join(worktree, 'node_modules'), { recursive: true }); // REAL root tree
+  writeFileSync(join(worktree, 'package.json'), '{"name":"w"}\n');
+  symlinkSync(join(primary, 'packages', 'core', 'dist'), join(worktree, 'packages', 'core', 'dist'));
+  try {
+    const r = runHook('npm ci', worktree);
+    assert.equal(r.status, 2, `expected block, got ${r.status}: ${r.stderr}`);
+    assert.match(r.stderr, /packages\/core\/dist is a SYMLINK/);
+    assert.match(r.stderr, /npm run worktree:unlink/, 'names the undo that clears the dist link too');
+    // COUNTERFACTUAL: a real dist directory (built in this worktree) passes.
+    rmSync(join(worktree, 'packages', 'core', 'dist'));
+    mkdirSync(join(worktree, 'packages', 'core', 'dist'));
+    assert.equal(runHook('npm ci', worktree).status, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

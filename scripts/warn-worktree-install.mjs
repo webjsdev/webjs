@@ -74,8 +74,8 @@ try {
     say(`  ${primaryModules}`);
     say('An install now writes THROUGH that link, into a checkout you are not working in.');
     say('Stop it if you can. Use `npm run worktree:link` to set this worktree up, or');
-    say('remove EVERY node_modules symlink first (the link script plants nested ones too:');
-    say('`find . -maxdepth 5 -type l -name node_modules -delete`) if a real install is what you want.');
+    say('remove EVERY link it planted first with `npm run worktree:unlink` (nested');
+    say('node_modules links and packages/core/dist too) if a real install is what you want.');
   } else if (haveOwnModules && !hasEntries(primaryModules)) {
     // The `npm ci` aftermath: npm deleted the link's target before we ran.
     say('the PRIMARY checkout\'s node_modules is now EMPTY or missing:');
@@ -89,6 +89,21 @@ try {
     say('checkout is gone and the worktree no longer runs the primary\'s framework source.');
     say('That is fine if you meant it. To go back to the shared tree:');
     say('  rm -rf node_modules && npm run worktree:link');
+  }
+
+  // Independent of the node_modules state above: the link script also plants
+  // `packages/core/dist` at the primary's (#1671), and core's `prepare` rebuilds
+  // it during this install. npm never touches that path before `preinstall`, so
+  // unlike the root node_modules link this one is still visible here. The build
+  // replaces a symlinked out dir with a real directory rather than writing into
+  // the primary, so this is a report of what is about to change, not a hazard.
+  let distLinked = false;
+  try { distLinked = lstatSync(join('packages', 'core', 'dist')).isSymbolicLink(); } catch { /* absent */ }
+  if (distLinked) {
+    say('packages/core/dist is a SYMLINK at the primary checkout\'s dist. Core\'s prepare');
+    say('replaces it with a real directory built from THIS worktree\'s sources; the');
+    say('primary\'s bundles are left alone. Next time, run `npm run worktree:unlink`');
+    say('before a real install so no planted link stands at all.');
   }
 } catch {
   // Never let a reporter break an install. Any failure here is silence.
