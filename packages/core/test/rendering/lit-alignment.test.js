@@ -19,3 +19,11 @@ test('quoted specialized bindings are accepted by SSR and invalid mixed values r
   assert.match(await renderToString(html`<input ?disabled="${true}" @click="${() => {}}">`, { ssr: false }), /disabled=""/);
   await assert.rejects(renderToString(html`<input .value="prefix ${'text'}">`, { ssr: false }), /exactly one expression/);
 });
+
+// Lit class-map.ts pads an empty result too, separating adjoining static tokens.
+test('empty classMap preserves Lit padding in buffered and streaming SSR', async () => {
+  const template = html`<p class=${classMap({ inactive: false })}></p><p class="before${classMap({})}after"></p>`;
+  const buffered = await renderToString(template, { ssr: false });
+  assert.equal(buffered, '<p class="  "></p><p class="before  after"></p>');
+  assert.equal((await Array.fromAsync(renderToStream(template, { ssr: false }))).join(''), buffered);
+});

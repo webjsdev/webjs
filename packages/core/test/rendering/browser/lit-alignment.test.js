@@ -99,3 +99,28 @@ suite('Lit expression and helper compatibility', () => {
     assert.equal(p.hasAttribute('title'), false);
   });
 });
+
+suite('Lit map validation and static classes', () => {
+  test('empty classMap separates adjacent static classes on initial render and updates', () => {
+    const container = document.createElement('div');
+    const view = (active) => html`<p class="before${classMap({ active })}after"></p>`;
+    render(view(false), container);
+    const p = container.querySelector('p');
+    assert.equal(p.classList.contains('before'), true);
+    assert.equal(p.classList.contains('after'), true);
+    assert.equal(p.classList.contains('beforeafter'), false);
+    render(view(true), container);
+    assert.equal(p.classList.contains('active'), true);
+    render(view(false), container);
+    assert.equal(p.classList.contains('active'), false);
+    assert.equal(p.classList.contains('before'), true);
+    assert.equal(p.classList.contains('after'), true);
+  });
+  test('map bindings validate without reading map entries on an invalid target', () => {
+    const container = document.createElement('div');
+    const entries = { get active() { throw new Error('entries were formatted'); } };
+    assert.throws(() => render(html`<p title=${classMap(entries)}></p>`, container), /class\/style attribute/);
+    assert.throws(() => render(html`<p .className=${classMap(entries)}></p>`, container), /require an attribute binding/);
+    assert.throws(() => render(html`<p class="${classMap(entries)} ${'other'}"></p>`, container), /single expression/);
+  });
+});

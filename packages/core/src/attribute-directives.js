@@ -14,6 +14,7 @@ export function cssName(name) { return name.startsWith('--') ? name : name.repla
 export function attributeMapText(value, name) {
   const classes = value._$webjs === 'class-map';
   if (name !== (classes ? 'class' : 'style')) throw new Error('classMap/styleMap must be used in a class/style attribute.');
+  // Lit deliberately pads even an empty map to separate adjacent static classes.
   return classes
     ? ' ' + Object.keys(value.value).filter((key) => value.value[key]).join(' ') + ' '
     : Object.entries(value.value).filter(([, v]) => v != null).map(([key, v]) => `${cssName(key)}:${v};`).join('');
@@ -21,12 +22,12 @@ export function attributeMapText(value, name) {
 
 /** Commit only the map-owned tokens, preserving static and externally added values. */
 export function applyAttributeMap(part, value) {
-  attributeMapText(value, part.name);
   if (part.kind !== 'attr' && part.kind !== 'attr-mixed') throw new Error('classMap/styleMap require an attribute binding.');
-  if (part.group && part.group.length !== 1) throw new Error('classMap/styleMap require a single expression.');
   const classes = value._$webjs === 'class-map';
+  if (part.name !== (classes ? 'class' : 'style')) throw new Error('classMap/styleMap must be used in a class/style attribute.');
+  if (part.group && part.group.length !== 1) throw new Error('classMap/styleMap require a single expression.');
   if (part.__mapKind !== value._$webjs) {
-    part.el.setAttribute(part.name, (part.statics || []).join(''));
+    part.el.setAttribute(part.name, (part.statics || []).join(classes ? ' ' : ''));
     part.__mapKind = value._$webjs;
     part.__mapKeys = new Set();
     part.__staticClasses = classes ? new Set(part.el.classList) : new Set();

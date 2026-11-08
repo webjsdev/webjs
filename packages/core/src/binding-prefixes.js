@@ -43,46 +43,16 @@ export function isBindingPrefix(ch) {
 }
 
 /**
- * The HTML boolean attributes: present means on, absent means off, and the
- * value is meant to be empty. A boolean in a PLAIN hole on one of these renders
- * exactly like `?attr` (#1579), so `checked=${isDefault}` cannot serve the
- * `checked="false"` that HTML reads as checked. Lowercase, from the HTML spec's
- * attribute index.
- */
-const BOOLEAN_ATTRIBUTES = new Set([
-  'allowfullscreen', 'async', 'autofocus', 'autoplay', 'checked', 'controls',
-  'default', 'defer', 'disabled', 'formnovalidate', 'hidden', 'inert',
-  'ismap', 'itemscope', 'loop', 'multiple', 'muted', 'nomodule', 'novalidate',
-  'open', 'playsinline', 'readonly', 'required', 'reversed', 'selected',
-  'shadowrootclonable', 'shadowrootdelegatesfocus', 'shadowrootserializable',
-]);
-
-/**
- * What a PLAIN attribute hole (`name=${value}`, unquoted, the whole value)
- * writes, or `null` when the attribute is omitted. The one rule both renderers
- * follow, so the server never serves an attribute the client then removes
- * (#1573, #1579):
+ * Serialize an ordinary whole-value attribute expression for SSR and client
+ * commits. Nullish values become empty strings and booleans stringify.
+ * `nothing` omits the attribute. `noChange` omits it on initial SSR; client
+ * updates handle that sentinel before serialization to retain the prior value.
  *
- *   - `null` / `undefined` omit the attribute. This is the "omit" value, so a
- *     conditional attribute is `aria-current=${active ? 'page' : null}`.
- *   - `false` omits it too, EXCEPT on an `aria-*` attribute, where it writes
- *     `"false"`. For a tri-state ARIA attribute (`aria-expanded`,
- *     `aria-pressed`, `aria-checked`) `"false"` and absent mean different
- *     things, so the value an author passes is the value the user agent gets.
- *   - `true` on an HTML boolean attribute (`checked`, `selected`, `disabled`,
- *     and the rest) writes the empty value, exactly as `?attr=${true}` does. Anywhere
- *     else it is `"true"`.
- *   - anything else is `String(value)`.
- *
- * A quoted or mixed value (`title="${x}"`, `class="a ${x}"`) is not a plain
- * hole: the author wrote the attribute statically, so it stays and a nullish
- * piece reads as empty text.
- *
- * @param {string} name the attribute name as written
- * @param {unknown} value the hole's value (`live()` already unwrapped)
+ * @param {string} _name attribute name (kept for the shared call signature)
+ * @param {unknown} value the expression value (`live()` already unwrapped)
  * @returns {string | null}
  */
-export function attrHoleValue(name, value) {
+export function attrHoleValue(_name, value) {
   if (value === nothing || value === noChange) return null;
   return String(value ?? '');
 }

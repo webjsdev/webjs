@@ -84,7 +84,7 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  * @property {(newValue: unknown, oldValue: unknown) => boolean} [hasChanged]
  *   Custom dirty-check function. Called by the generated setter before
  *   scheduling an update. Return `true` to trigger a re-render, `false`
- *   to skip. Default: strict inequality `(a, b) => a !== b`.
+ *   to skip. Default: `(a, b) => !Object.is(a, b)`.
  *
  *   Note: this fires on the FIRST assignment too, with `oldValue` set
  *   to `undefined`. Numeric comparators that subtract against undefined
@@ -981,10 +981,8 @@ class WebComponentBase extends Base {
     // Hold a stable reference to the current Map so all hooks see the same
     // snapshot. During the update phase (steps 3-6) the Map is mutated in
     // place when property setters fire, folding those changes into THIS
-    // cycle. The Map is replaced with a fresh empty one only after a
-    // successful commit so post-commit assignments queue the NEXT cycle.
-    // On `shouldUpdate=false` or hook errors, the Map is preserved so the
-    // accumulated changes survive into the next render.
+    // cycle. The Map is replaced when this phase finishes, including skipped
+    // updates and hook errors, so post-commit writes belong to the NEXT cycle.
     const changedProperties = this._changedProperties;
 
     // --- 1. Mark we're inside an update cycle ---
@@ -1034,16 +1032,13 @@ class WebComponentBase extends Base {
           didCommit = true;
         }
       }
-      // shouldUpdate=false: preserve _changedProperties so the next
-      // requestUpdate keeps accumulating on top of the entries that
-      // didn't render this cycle.
     } catch (preCommitError) {
       console.error(`[webjs] lifecycle hook threw during update phase:`, preCommitError);
     } finally {
       this._isUpdating = false;
-      // The snapshot is consumed once the commit is DISPATCHED. For an async
-      // render it resets here too, so a property change during the in-flight
-      // fetch starts a fresh cycle (whose render token supersedes this one).
+      // Consume this phase's snapshot even when shouldUpdate skips it. For an
+      // async render, changes during the fetch start a new cycle whose token
+      // supersedes the in-flight commit.
       this._changedProperties = new Map();
     }
 
