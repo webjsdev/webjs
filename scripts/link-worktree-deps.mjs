@@ -191,7 +191,7 @@ function unlinkWorktree(root, primary) {
  * links planted just before this runs: `<root>/node_modules/esbuild` is the
  * primary's install, and Node resolves its platform binary from the real path,
  * so no install is needed in the worktree. A worktree linked before #1671 has
- * `packages/core/dist` as a symlink at the primary's dist; the build replaces
+ * `packages/core/dist` as a symlink at the primary's dist. The build replaces
  * that link with a real directory once it succeeds and never writes into the
  * link's target.
  *
