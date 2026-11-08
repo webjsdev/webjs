@@ -178,7 +178,10 @@ export function stylesheetMerge(opts = {}) {
     if (key && !live.has(key)) live.set(key, /** @type {HTMLLinkElement} */ (el));
   }
   return (incoming, clone) => {
-    if (incoming.hasAttribute(OFF_ATTR)) return true;
+    // A link a snapshot recorded as off, or one of the router's temporary
+    // load-before-swap copies a snapshot captured mid-navigation: neither is
+    // a sheet that page used, so neither is appended or switched on.
+    if (incoming.hasAttribute(OFF_ATTR) || incoming.hasAttribute(PRELOAD_ATTR)) return true;
     const key = keyFor(incoming, base);
     if (!key) return false;
     const owner = incoming.getAttribute(OWNER_ATTR);
@@ -245,7 +248,9 @@ export function switchOffDepartedStylesheets(segment, incomingHead, base) {
   const carried = new Set();
   if (incomingHead) {
     for (const el of incomingHead.querySelectorAll('link[href]')) {
-      if (!isStylesheetLink(el) || el.hasAttribute(OFF_ATTR)) continue;
+      // A snapshot taken mid-navigation can hold the router's temporary copy
+      // of the NEXT page's sheet; it does not mean the page used it.
+      if (!isStylesheetLink(el) || el.hasAttribute(OFF_ATTR) || el.hasAttribute(PRELOAD_ATTR)) continue;
       const key = keyFor(el, from);
       if (key) carried.add(key);
     }

@@ -264,6 +264,19 @@ suite('Client router: owned stylesheets leave with their layout (#1669)', () => 
     assert.deepEqual(order.filter((h) => [root, mid, leaf].includes(h)), [root, mid, leaf]);
   });
 
+  test('a snapshot holding the router\'s temporary copy of a sheet does not keep that sheet on', async () => {
+    // The history entry for the outgoing page is recorded once the incoming
+    // page's sheets are already loading, so its snapshot can hold a
+    // `data-webjs-preload-style` copy of the NEXT section's sheet. Restoring
+    // it (Back) must still switch that section's sheet off.
+    const href = sheet('#wj-owned-probe { width: 125px; display: block; }');
+    const link = await addLiveSheet(href, '/');
+    const copy = `<link rel="stylesheet" href="${href}" ${PRELOAD_ATTR}="">`;
+    _applySwap(incoming('b', 'back', copy), null, true, null);
+    assert.equal(link.hasAttribute(OFF_ATTR), true, 'switched off: the copy is not a sheet that page used');
+    assert.equal(document.head.querySelectorAll(`link[${PRELOAD_ATTR}][href="${href}"]`).length, 0, 'and the copy was not appended');
+  });
+
   test('the router\'s temporary copies are never switched off', async () => {
     const href = sheet('#wj-owned-probe { width: 119px; display: block; }');
     const copy = await addLiveSheet(href, '/', { [PRELOAD_ATTR]: '' });
