@@ -168,7 +168,7 @@ export class UiCombobox extends WebComponent({
   render() {
     const name = this.name;
     return html`<div data-slot="combobox" class="relative" @keydown=${this._onKeyDown} @focusout=${this._onFocusOut}><slot></slot>${name
-      ? (this.#values.get() ?? []).map((v) => html`<input type="hidden" name=${name} value=${v}>`)
+      ? this.#values.get().map((v) => html`<input type="hidden" name=${name} value=${v}>`)
       : ''}</div>`;
   }
 
@@ -210,7 +210,7 @@ export class UiCombobox extends WebComponent({
 
   /** The items that match the typed text, in order. */
   visibleItems(): UiComboboxItem[] {
-    const q = (this.#query.get() ?? '').trim().toLowerCase();
+    const q = this.#query.get().trim().toLowerCase();
     return this._items().filter((i) => !q || i.label.toLowerCase().includes(q));
   }
 
@@ -236,8 +236,8 @@ export class UiCombobox extends WebComponent({
     if (!item || item.disabled) return;
     const input = this._input();
     if (this.multiple) {
-      const has = this.#values.get().includes(value);
-      this.#values.set(has ? this.#values.get().filter((v) => v !== value) : [...this.#values.get(), value]);
+      const values = this.#values.get();
+      this.#values.set(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
       this.#query.set('');
       if (input) input.value = '';
     } else {
@@ -310,7 +310,8 @@ export class UiCombobox extends WebComponent({
     // A single combobox shows its choice in the input until the user types.
     const input = this._input();
     if (input && !this.multiple && !this.open && !this.#query.get()) {
-      const label = this.#values.get()[0] ? this.labelOf(this.#values.get()[0]) : '';
+      const first = this.#values.get()[0];
+      const label = first ? this.labelOf(first) : '';
       if (input.value !== label && document.activeElement !== input) input.value = label;
     }
   }
@@ -383,7 +384,8 @@ export class UiCombobox extends WebComponent({
     } else if (e.key === 'Tab') {
       this.hide();
     } else if (e.key === 'Backspace' && this.multiple && !input.value && this.#values.get().length) {
-      this.removeValue(this.#values.get()[this.#values.get().length - 1]);
+      const values = this.#values.get();
+      this.removeValue(values[values.length - 1]);
     }
   };
 
@@ -399,7 +401,8 @@ export class UiCombobox extends WebComponent({
     if (!this.multiple) {
       this.#query.set('');
       const input = this._input();
-      if (input) input.value = this.#values.get()[0] ? this.labelOf(this.#values.get()[0]) : '';
+      const first = this.#values.get()[0];
+      if (input) input.value = first ? this.labelOf(first) : '';
     }
   };
 
@@ -737,7 +740,7 @@ export class UiComboboxChips extends WebComponent {
   render() {
     const root = rootOf(this);
     const disabled = !!root?.disabled;
-    return html`<div data-slot="combobox-chips" class=${comboboxChipsClass()} @click=${this._focusInput}>${(this.chips.get() ?? []).map((c) => html`<div
+    return html`<div data-slot="combobox-chips" class=${comboboxChipsClass()} @click=${this._focusInput}>${this.chips.get().map((c) => html`<div
       data-slot="combobox-chip" class=${comboboxChipClass()}
     >${c.label}<button
       type="button"

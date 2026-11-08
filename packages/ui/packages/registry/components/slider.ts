@@ -81,7 +81,6 @@ export class UiSlider extends WebComponent({
   orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
 }) {
   readonly #enhanced = signal(false);
-  readonly #revision = signal(0);
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
   _form: HTMLFormElement | null = null;
@@ -145,14 +144,14 @@ export class UiSlider extends WebComponent({
     }
     this._form = inputs[0].form;
     this._form?.addEventListener('reset', this._onReset);
-    this._observer = new MutationObserver(() => { this.#revision.set(this.#revision.get() + 1); });
+    this._observer = new MutationObserver(() => { this.requestUpdate(); });
     for (const input of inputs) this._observer.observe(input, { attributes: true });
     this.#enhanced.set(true);
     return true;
   }
 
   _onReset = (): void => {
-    queueMicrotask(() => { this.#revision.set(this.#revision.get() + 1); });
+    queueMicrotask(() => { this.requestUpdate(); });
   };
 
   // A label click focuses the hidden input; the user means its thumb.
@@ -181,7 +180,6 @@ export class UiSlider extends WebComponent({
     if (!this.#enhanced.get()) {
       return html`<div data-slot="slider" data-orientation=${this.orientation || 'horizontal'} class="grid gap-2"><slot></slot></div>`;
     }
-    void this.#revision.get();
     const vertical = this.orientation === 'vertical';
     const orientation = vertical ? 'vertical' : 'horizontal';
     const inputs = this.inputs();
@@ -249,7 +247,7 @@ export class UiSlider extends WebComponent({
     input.value = String(v);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     this._moved.add(i);
-    this.#revision.set(this.#revision.get() + 1);
+    this.requestUpdate();
     this.dispatchEvent(new CustomEvent('ui-value-change', { bubbles: true, detail: { value: this.value } }));
     return true;
   }

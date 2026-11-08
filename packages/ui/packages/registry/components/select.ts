@@ -157,8 +157,6 @@ export class UiSelect extends WebComponent({
 }) {
   // Set once the element has taken over from the native select.
   readonly #enhanced = signal(false);
-  // Bumped whenever the native select changes under the element.
-  readonly #revision = signal(0);
   // A failed constraint check, until the value is valid again.
   readonly #invalid = signal(false);
   _id = '';
@@ -193,7 +191,7 @@ export class UiSelect extends WebComponent({
     const select = this.select;
     if (!select) return;
     select.value = v;
-    this.#revision.set(this.#revision.get() + 1);
+    this.requestUpdate();
   }
 
   connectedCallback(): void {
@@ -245,7 +243,7 @@ export class UiSelect extends WebComponent({
     select.addEventListener('invalid', this._onInvalid);
     this._form = select.form;
     this._form?.addEventListener('reset', this._onReset);
-    this._observer = new MutationObserver(() => { this.#revision.set(this.#revision.get() + 1); });
+    this._observer = new MutationObserver(() => { this.requestUpdate(); });
     this._observer.observe(select, { childList: true, subtree: true, attributes: true, characterData: true });
     this.#enhanced.set(true);
     return true;
@@ -255,12 +253,12 @@ export class UiSelect extends WebComponent({
   // script setting its value.
   _onNativeChange = (): void => {
     if (this.#invalid.get() && this.select?.checkValidity()) this.#invalid.set(false);
-    this.#revision.set(this.#revision.get() + 1);
+    this.requestUpdate();
   };
 
   // A reset restores the value AFTER its event, so read it a tick later.
   _onReset = (): void => {
-    queueMicrotask(() => { this.#invalid.set(false); this.#revision.set(this.#revision.get() + 1); });
+    queueMicrotask(() => { this.#invalid.set(false); this.requestUpdate(); });
   };
 
   // The hidden select takes focus from its label and from a failed submit;
@@ -345,7 +343,6 @@ export class UiSelect extends WebComponent({
     if (!this.#enhanced.get()) {
       return html`<div data-slot="select" class="contents"><slot></slot></div>`;
     }
-    void this.#revision.get();
     const select = this.select;
     const current = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
     const shown = current && !UiSelect._isPlaceholder(current) ? current : null;
@@ -544,7 +541,7 @@ export class UiSelect extends WebComponent({
       select.dispatchEvent(new Event('change', { bubbles: true }));
       this.dispatchEvent(new CustomEvent('ui-value-change', { bubbles: true, detail: { value: select.value } }));
     }
-    this.#revision.set(this.#revision.get() + 1);
+    this.requestUpdate();
     if (this.open) this.hide();
   }
 

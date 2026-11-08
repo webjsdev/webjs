@@ -341,6 +341,18 @@ test('ui-calendar: the server renders the month grid, the chosen day and its hid
   assert.match(out, /<button[^>]*tabindex="0"[^>]*data-day="2025-06-12"|<button[^>]*data-day="2025-06-12"[^>]*tabindex="0"/, 'the chosen day holds the tab stop');
 });
 
+test('ui-questionnaire-choice: a pre-checked choice is drawn checked in the served markup', { skip }, async () => {
+  const out = await ssr(
+    ['questionnaire.ts'],
+    (html) => html`<ui-questionnaire><ui-questionnaire-item name="a"><ui-questionnaire-choices><ui-questionnaire-choice value="x" checked>X</ui-questionnaire-choice><ui-questionnaire-choice value="y">Y</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item></ui-questionnaire>`,
+  );
+  const labels = [...out.matchAll(/<label[^>]*data-slot="questionnaire-choice"[^>]*>/g)].map((m) => m[0]);
+  assert.equal(labels.length, 2);
+  assert.match(labels[0], /data-checked/, 'the checked choice is drawn checked');
+  assert.doesNotMatch(labels[0], /data-unchecked/);
+  assert.match(labels[1], /data-unchecked/, 'the other is drawn unchecked');
+});
+
 test('ui-questionnaire: without JavaScript it is one plain form, every question shown and only Submit offered', { skip }, async () => {
   const out = await ssr(
     ['questionnaire.ts'],

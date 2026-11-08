@@ -252,7 +252,8 @@ export class UiCalendar extends WebComponent({
       const days = (this.mode === 'multiple' ? v.split(',') : [v]).map(parseDate).filter((d): d is CalendarDate => !!d).map(formatDate);
       this.#selection.set({ days, from: '', to: '' });
     }
-    const anchor = parseDate(this.month) ?? parseDate(this.#selection.get().from || this.#selection.get().days[0]) ?? this._today();
+    const picked = this.#selection.get();
+    const anchor = parseDate(this.month) ?? parseDate(picked.from || picked.days[0]) ?? this._today();
     this.#shown.set(formatDate({ y: anchor.y, m: anchor.m, d: 1 }));
   }
 
@@ -368,8 +369,10 @@ export class UiCalendar extends WebComponent({
       const d = parseDate(iso);
       return !!d && months.some((m) => m.y === d.y && m.m === d.m);
     };
-    if (this.#focused.get() && inShown(this.#focused.get())) return this.#focused.get();
-    const chosen = [this.#selection.get().from, ...this.#selection.get().days].find((d) => d && inShown(d));
+    const focused = this.#focused.get();
+    if (focused && inShown(focused)) return focused;
+    const s = this.#selection.get();
+    const chosen = [s.from, ...s.days].find((d) => d && inShown(d));
     if (chosen) return chosen;
     const today = formatDate(this._today());
     if (inShown(today)) return today;

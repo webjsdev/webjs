@@ -207,7 +207,7 @@ export class UiCommand extends WebComponent({
    */
   refresh(reselect = false): void {
     const filter = this.shouldFilter !== 'false';
-    const search = this.#search.get() ?? '';
+    const search = this.#search.get();
     const items = this._own<UiCommandItem>(`${ROOT}-item`);
     const scored = items.map((item, dom) => ({
       item,

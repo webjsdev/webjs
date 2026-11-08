@@ -225,7 +225,7 @@ export class UiQuestionnaire extends WebComponent({
       data-slot="questionnaire"
       action=${this.action || null}
       method=${this.method || null}
-      ?novalidate=${!!this.#enhanced.get()}
+      ?novalidate=${this.#enhanced.get()}
       data-shortcuts=${this.shortcuts || null}
       class=${cn(questionnaireClass(), takeAuthored(this))}
     ><slot></slot></form>`;
@@ -299,7 +299,7 @@ export class UiQuestionnaire extends WebComponent({
     const at = item ? items.indexOf(item) : -1;
     const last = at === items.length - 1;
     for (const i of this._all(ITEM) as UiQuestionnaireItem[]) {
-      i.flow.set({ enhanced: !!this.#enhanced.get(), active: i === item });
+      i.flow.set({ enhanced: this.#enhanced.get(), active: i === item });
     }
     for (const c of this._all('ui-questionnaire-choice') as UiQuestionnaireChoice[]) c._syncChecked();
     for (const p of this._all('ui-questionnaire-progress') as UiQuestionnaireProgress[]) {
@@ -598,6 +598,7 @@ export class UiQuestionnaireChoice extends WebComponent({
   disabled: Boolean,
 }) {
   readonly #live = signal(false);
+  #seeded = false;
   constructor() {
     super();
     this.value = '';
@@ -605,9 +606,19 @@ export class UiQuestionnaireChoice extends WebComponent({
     this.disabled = false;
   }
 
+  // Seed the drawn state from `checked` here, not in connectedCallback: SSR
+  // runs willUpdate but never connects, and a pre-checked choice has to be
+  // drawn checked in the first paint and with JavaScript off.
+  willUpdate(changedProperties: Map<string, unknown>): void {
+    super.willUpdate?.(changedProperties);
+    if (!this.#seeded || changedProperties.has('checked')) {
+      this.#seeded = true;
+      this.#live.set(this.checked);
+    }
+  }
+
   connectedCallback(): void {
     super.connectedCallback?.();
-    this.#live.set(this.checked);
     announce(this);
   }
 

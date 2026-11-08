@@ -166,7 +166,7 @@ export class UiMessageScroller extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot="message-scroller" ?data-pending-scroll=${!!this.pending.get()} class=${cn(messageScrollerClass(), takeAuthored(this))}><slot></slot></div>`;
+    return html`<div data-slot="message-scroller" ?data-pending-scroll=${this.pending.get()} class=${cn(messageScrollerClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 
   viewport(): HTMLElement | null {

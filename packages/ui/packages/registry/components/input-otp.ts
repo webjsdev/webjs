@@ -72,7 +72,6 @@ const ROOT = 'ui-input-otp';
 
 export class UiInputOtp extends WebComponent {
   readonly #enhanced = signal(false);
-  readonly #revision = signal(0);
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
   _form: HTMLFormElement | null = null;
@@ -162,7 +161,6 @@ export class UiInputOtp extends WebComponent {
   }
 
   render() {
-    void this.#revision.get();
     const disabled = !!this.input?.disabled;
     return html`<div data-slot="input-otp" ?data-disabled=${disabled} class=${inputOtpClass()}><slot></slot></div>`;
   }
@@ -259,7 +257,7 @@ export class UiInputOtp extends WebComponent {
     const disabled = !!input.disabled;
     if (disabled !== this._disabled) {
       this._disabled = disabled;
-      this.#revision.set(this.#revision.get() + 1);
+      this.requestUpdate();
     }
   };
 }

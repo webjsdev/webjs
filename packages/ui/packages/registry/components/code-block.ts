@@ -168,7 +168,7 @@ export class UiCodeBlockCopyButton extends WebComponent({
     return html`<button
       type="button"
       data-slot="code-block-copy-button"
-      ?data-copied=${!!this.#copied.get()}
+      ?data-copied=${this.#copied.get()}
       aria-label=${this.#copied.get() ? 'Copied' : 'Copy'}
       class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), 'cn-code-block-copy-button')}
       @click=${this._onClick}
