@@ -770,9 +770,12 @@ class WebComponentBase extends Base {
     // Dispose the signal watcher so dependency edges drop. Without
     // this the element holds references to module-scope signals
     // (and vice versa) forever.
-    if (this.__signalWatcher) {
-      this.__signalWatcher.dispose();
-      this.__signalWatcher = undefined;
+    for (const slot of ['__signalWatcher', '__postWatcher']) {
+      const self = /** @type {any} */ (this);
+      if (self[slot]) {
+        self[slot].dispose();
+        self[slot] = undefined;
+      }
     }
     for (const c of this.__controllers || NO_CONTROLLERS) {
       if (c.hostDisconnected) c.hostDisconnected();
@@ -873,29 +876,81 @@ class WebComponentBase extends Base {
    *   9. Resolve `updateComplete` promise
    *
    * Every signal the SYNCHRONOUS part of that cycle reads is tracked, not
-   * only the ones `render()` reads: `shouldUpdate`, `willUpdate`, the
-   * controllers' hooks, `render()` and the post-commit hooks of a sync
-   * commit. So a signal read only in `updated()` (a host attribute derived
-   * from internal state) still re-renders the component when it changes.
-   * lit-labs/signals tracks the same span, by running `performUpdate` inside
-   * a computed. The DOM commit is the one part left untracked (see
-   * `update()`). The watcher is lazy-allocated on the first cycle and
-   * disposed in `disconnectedCallback`; `observe()` re-records the read set
-   * on every cycle.
+   * only the ones `render()` reads, which is the span lit-labs/signals tracks
+   * by running `performUpdate` inside a computed. So a signal read only in
+   * `willUpdate()` or `updated()` (a host attribute derived from internal
+   * state) re-renders the component when it changes. Two watchers split it
+   * (see {@link _tracked}): one over steps 2-6 (`render()` included), one
+   * over the post-commit hooks, so a write `updated()` makes to something
+   * `render()` read still schedules the next update. The DOM commits are
+   * the parts left untracked (see `update()`).
    * @private
    */
   _performRender() {
     if (!this._renderRoot) return;
-    if (!this.__signalWatcher) {
-      this.__signalWatcher = new Signal.subtle.Watcher(() => {
-        if (this._connected) this.requestUpdate();
-      });
-    }
-    this.__signalWatcher.observe(() => this._runUpdateCycle());
+    this.__cycleRendered = false;
+    const postCommit = this._tracked('__signalWatcher', () => this._runUpdateCycle());
+    // A sync commit runs its post-commit hooks OUTSIDE the first watcher's
+    // phase, under their own watcher.
+    if (postCommit) postCommit();
   }
 
   /**
-   * The update cycle {@link _performRender} tracks.
+   * Run one phase of the update cycle with the signals it reads recorded on
+   * the watcher in `slot`, creating the watcher on first use. A watcher
+   * re-records its read set on every phase it observes, and a later change
+   * to any of those signals schedules an update.
+   *
+   * Three rules keep that safe:
+   *  - A phase ignores notifications from its OWN writes. A write to a signal
+   *    the phase read earlier is the phase's business, not a reason to run it
+   *    again: before a commit it is already folded into this pass, and after
+   *    one it is often not the component's code at all (an event `updated()`
+   *    dispatches, whose listener does a read-modify-write on a store), which
+   *    would otherwise loop.
+   *  - A pre-commit phase that never reached `render()` (`shouldUpdate()`
+   *    returned false, or a hook threw) keeps the signals the last render
+   *    read on top of the ones it read itself, or a skipped cycle would
+   *    silently unsubscribe the component.
+   *  - A watcher disposed during its own phase (a hook that detached the
+   *    host) is disposed again afterwards, since the phase kept recording.
+   *
+   * @template T
+   * @param {'__signalWatcher' | '__postWatcher'} slot
+   * @param {() => T} fn
+   * @returns {T}
+   * @private
+   */
+  _tracked(slot, fn) {
+    const self = /** @type {any} */ (this);
+    /** @type {any} */
+    let watcher = self[slot];
+    if (!watcher) {
+      watcher = self[slot] = new Signal.subtle.Watcher(() => {
+        if (!watcher.__inPhase && this._connected) this.requestUpdate();
+      });
+    }
+    const before = slot === '__signalWatcher' ? Signal.subtle.introspectSources(watcher) : null;
+    watcher.__inPhase = true;
+    try {
+      return watcher.observe(fn);
+    } finally {
+      watcher.__inPhase = false;
+      if (before && !this.__cycleRendered) {
+        watcher.watch(...new Set([...before, ...Signal.subtle.introspectSources(watcher)]));
+      }
+      if (!this._connected) {
+        watcher.dispose();
+        if (self[slot] === watcher) self[slot] = undefined;
+      }
+    }
+  }
+
+  /**
+   * Steps 1-6 of the update cycle, the phase {@link _performRender} tracks
+   * with the first watcher. Returns the post-commit half to run for a sync
+   * commit, or nothing (an async commit runs it when it lands).
+   * @returns {(() => void) | undefined}
    * @private
    */
   _runUpdateCycle() {
@@ -944,6 +999,7 @@ class WebComponentBase extends Base {
         // in _commitAsync.
         if (this.__renderAbort) this.__renderAbort.abort();
         this.__renderAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        this.__cycleRendered = true;
         try {
           const r = this.update(changedProperties);
           if (r && typeof r.then === 'function') pendingCommit = r;
@@ -1029,16 +1085,21 @@ class WebComponentBase extends Base {
       return;
     }
 
-    // --- 7-8. Post-commit hooks (sync path). Errors are caught so the
-    // updateComplete promise always resolves.
+    // --- 7-8. Post-commit hooks (sync path), returned so they run outside
+    // this phase. Errors are caught so the updateComplete promise always
+    // resolves.
     if (didCommit) {
-      this._postCommit(changedProperties);
+      return () => this._postCommit(changedProperties);
     } else if (!this.__pendingAsyncCommits) {
       // A non-committing cycle resolves updateComplete only when no async
       // commit is in flight; otherwise the pending commit resolves it once it
       // lands, so `await el.updateComplete` never returns before that DOM.
       this._resolveUpdate();
     }
+    // No post-commit phase this cycle: re-arm its watcher, so a change it
+    // was notified of meanwhile does not leave it deaf to the next one.
+    if (!didCommit && /** @type {any} */ (this).__postWatcher) /** @type {any} */ (this).__postWatcher.watch();
+    return undefined;
   }
 
   /**
@@ -1236,7 +1297,7 @@ class WebComponentBase extends Base {
     if (this.__firstRendered && this._overridesRenderFallback()) {
       try {
         const fb = this.renderFallback();
-        if (fb !== undefined) clientRender(fb, this._renderRoot);
+        if (fb !== undefined) Signal.subtle.untrack(() => clientRender(fb, this._renderRoot));
       } catch (e) {
         console.error(`[webjs] renderFallback() threw:`, e);
       }
@@ -1292,7 +1353,7 @@ class WebComponentBase extends Base {
     );
     try {
       const fallback = this.renderError(error);
-      if (fallback !== undefined) clientRender(fallback, this._renderRoot);
+      if (fallback !== undefined) Signal.subtle.untrack(() => clientRender(fallback, this._renderRoot));
     } catch (fallbackError) {
       console.error(`[webjs] renderError() also threw:`, fallbackError);
     }
@@ -1306,11 +1367,13 @@ class WebComponentBase extends Base {
    */
   _postCommit(changedProperties) {
     try {
-      if (!this.__firstRendered) {
-        this.__firstRendered = true;
-        this.firstUpdated(changedProperties);
-      }
-      this.updated(changedProperties);
+      this._tracked('__postWatcher', () => {
+        if (!this.__firstRendered) {
+          this.__firstRendered = true;
+          this.firstUpdated(changedProperties);
+        }
+        this.updated(changedProperties);
+      });
     } catch (postCommitError) {
       console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
     } finally {
