@@ -25,12 +25,8 @@ import type { TemplateResult } from '@webjsdev/core';
  * the #docs-sidebar id stays safe.
  */
 
-/**
- * One sidebar link. `fullLoad` marks a link into the OTHER section of the
- * site (the docs linking to /ui), which carries `data-no-router` so it takes
- * a full page load and the /ui stylesheet arrives in <head> (#1666).
- */
-export type ShellNavItem = { href: string; label: string; fullLoad?: boolean };
+/** One sidebar link. */
+export type ShellNavItem = { href: string; label: string };
 export type ShellNavSection = {
   title: string;
   /**
@@ -309,7 +305,7 @@ export function docsShell({ nav, label, menuLabel, asideTop, contentClass, child
               </div>`
             : html`<div class="font-mono text-xs font-semibold tracking-widest uppercase text-fg-subtle px-2 mt-6 mb-2 first:mt-0">${s.title}</div>`}
           ${s.items.map((it) => html`
-            <a class="block py-1.5 px-2 my-px rounded-md text-fg-muted no-underline text-sm transition-colors duration-150 hover:text-fg hover:bg-bg-subtle" href=${it.href} ?data-no-router=${it.fullLoad === true}>${it.label}</a>
+            <a class="block py-1.5 px-2 my-px rounded-md text-fg-muted no-underline text-sm transition-colors duration-150 hover:text-fg hover:bg-bg-subtle" href=${it.href}>${it.label}</a>
           `)}
         `)}
       </div>

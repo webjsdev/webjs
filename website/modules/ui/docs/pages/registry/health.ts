@@ -50,7 +50,7 @@ done`, { lang: 'bash', title: 'check-registry.sh', lineNumbers: true })}
     <p>The directory lists registries in the order of <code>website/modules/ui/directory/registries.ts</code>, with the WebJs UI registry first. Its search filters by name and description, and entries change only when the file does.</p>
 
     ${heading(toc, 2, 'Directory data in the API')}
-    <p><a href="/ui/r/registries.json" data-no-router>/ui/r/registries.json</a> serves each entry's <code>name</code>, <code>homepage</code>, <code>url</code>, <code>description</code> and <code>logo</code>.</p>
+    <p><a href="/ui/r/registries.json">/ui/r/registries.json</a> serves each entry's <code>name</code>, <code>homepage</code>, <code>url</code>, <code>description</code> and <code>logo</code>.</p>
 
     ${heading(toc, 2, 'What happens next')}
     <p>If a listed registry stops working, open an issue or a pull request on <a href="https://github.com/webjsdev/webjs">webjsdev/webjs</a> to fix or remove its entry. See <a href="/ui/docs/registry/registry-index">Registry Directory</a> for how entries are added.</p>

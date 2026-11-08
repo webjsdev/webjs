@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, asset } from '@webjsdev/core';
 
 /**
  * Root 404 boundary. Renders when a page or server action throws
@@ -12,7 +12,11 @@ import { html } from '@webjsdev/core';
  * html template body below. See [[feedback-html-template-no-backticks]].)
  */
 export default function NotFound() {
+  // The root layout links no stylesheet: a section layout links its own, and
+  // this boundary renders outside both, so it links the marketing sheet
+  // itself, first, which moves it into <head> (#1669).
   return html`
+    <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
     <main id="main" tabindex="-1" class="min-h-[60vh] flex flex-col items-start justify-center max-w-2xl mx-auto px-6 py-20 focus:outline-none">
       <div class="text-xs font-mono uppercase tracking-widest text-accent mb-4">404 &middot; not found</div>
       <h1 class="font-serif text-5xl md:text-6xl font-bold tracking-tight text-fg mb-4" style="letter-spacing: -0.03em">Page not found.</h1>

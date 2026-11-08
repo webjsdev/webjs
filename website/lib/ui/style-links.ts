@@ -13,21 +13,16 @@ import { FULL_SCREEN_DEMOS } from '#lib/ui/full-screen-demos.ts';
  * when a wrapper's sheet is not linked, so a page added here, or a preview
  * moved into a page, cannot paint in a style it did not load.
  *
- * The answer lives here, once, because three places emit the links. The root
- * layout emits them in its leading <head> run on a full load (only the root
- * layout's leading links are hoisted, and a body stylesheet is not reliably
- * render-blocking, #406). A chrome page emits them again in its own markup for
- * a SOFT navigation, where the root layout is not re-rendered and the router's
- * head merge only adds; the router loads such a link before it swaps the page
- * in, so the page paints in its style from the first frame. And the /ui
- * chrome layout links new-york, which its header itself renders, for a soft
- * navigation in from the marketing site.
- *
- * The bare frames under /ui/view and /ui/preview are only ever full loads (an
- * iframe, or "Open in New Tab"), so their styles come from <head> alone and
- * they carry no body copy. A copy is not free: each <link> is its own
- * stylesheet, so the browser matches every rule once per copy, :has() rules
- * included, and an extra copy of a style slows every style recalculation.
+ * Each /ui page (and frame) emits its links as the FIRST thing in its own
+ * markup, and the /ui chrome layout links new-york, which its header itself
+ * renders. The framework moves a stylesheet link that leads a layout's or a
+ * page's output into <head>, so it blocks first paint, drops a second link to
+ * a file the head already has (each <link> is its own stylesheet, matched
+ * again rule by rule, :has() included), and switches a sheet off when a soft
+ * navigation replaces the page or layout that linked it and the next page
+ * does not link it too (#1669). So a link here must lead its template: one
+ * after other markup stays in <body>, where it is not reliably
+ * render-blocking (#406).
  */
 
 /** Pages outside the component docs whose content renders a nova preview. */
