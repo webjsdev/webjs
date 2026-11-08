@@ -1635,6 +1635,11 @@ async function main() {
       // dev.before / start.before / CI counts as fresh for the dev server and
       // for the doctor. Outputs build one at a time.
       const { regenerateOutputs } = await import('@webjsdev/server');
+      if (typeof regenerateOutputs !== 'function') {
+        // A @webjsdev/server older than this CLI: name the cause, not a TypeError.
+        console.error('The installed @webjsdev/server predates the regenerate build record (#1672). Install the @webjsdev/server release that matches this CLI.');
+        process.exit(1);
+      }
       const force = rest.includes('--force');
       const json = rest.includes('--json');
       const results = await regenerateOutputs(process.cwd(), { force });

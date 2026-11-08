@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = resolve(__dirname, '..', '..', 'packages', 'cli', 'bin', 'webjs.js');
@@ -74,6 +74,22 @@ test('exits 1 when a rule fails, and when a rule exits 0 without writing its out
   assert.equal(m.status, 1, 'a rule whose output is not what its command writes is a failure');
   assert.match(m.stdout, /exited 0 without writing it/);
   assert.match(m.stderr, /did not write public\/a\.css/);
+});
+
+test('against a @webjsdev/server that predates the command it names the cause and exits 1', () => {
+  // Resolve @webjsdev/server to a build that has everything the CLI needs to
+  // start but no regenerateOutputs, the shape of a server older than the CLI.
+  const nodeVersion = pathToFileURL(resolve(__dirname, '..', '..', 'packages', 'server', 'src', 'node-version.js')).href;
+  const oldServer = 'data:text/javascript,' + encodeURIComponent(`export { assertNodeVersion } from ${JSON.stringify(nodeVersion)};`);
+  const hook = 'data:text/javascript,' + encodeURIComponent(
+    `import { registerHooks } from 'node:module';
+     registerHooks({ resolve(s, c, n) { return s === '@webjsdev/server' ? { url: ${JSON.stringify(oldServer)}, shortCircuit: true } : n(s, c); } });`,
+  );
+  const dir = app([rule('public/a.css')]);
+  const r = spawnSync(process.execPath, ['--import', hook, CLI, 'regenerate'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /predates the regenerate build record/);
+  assert.doesNotMatch(r.stderr, /TypeError/);
 });
 
 test('an app with no rules says so and exits 0', () => {
