@@ -139,16 +139,26 @@ async function collectFiles(appDir, abs, lines) {
  * change it. Compared for EQUALITY, never ordering, so a file dated in the
  * future is just another value and later edits still change the result.
  *
+ * The rule's own `output` is left out even when an input directory contains it
+ * (`inputs: ["public"]` around `public/tailwind.css`): every build rewrites the
+ * output, so counting it would make each build invalidate itself.
+ *
+ * A command must not rewrite files under its own `inputs` with unchanged
+ * bytes, for the same reason: a prepare step inside the command (a copy into
+ * an input directory) has to compare before writing. One that writes a file
+ * whose content did change costs a single extra rebuild, which then settles.
+ *
  * @param {string} appDir
- * @param {string[]} inputs
+ * @param {RegenerateRule} rule
  * @returns {Promise<string>}
  */
-export async function inputFingerprint(appDir, inputs) {
+export async function inputFingerprint(appDir, rule) {
   /** @type {string[]} */
   const lines = [];
-  for (const inp of inputs) await collectFiles(appDir, join(appDir, inp), lines);
-  lines.sort();
-  return createHash('sha256').update(lines.join('\n')).digest('hex');
+  for (const inp of rule.inputs) await collectFiles(appDir, join(appDir, inp), lines);
+  const self = rule.output + '\0';
+  const own = lines.filter((l) => !l.startsWith(self)).sort();
+  return createHash('sha256').update(own.join('\n')).digest('hex');
 }
 
 /**
@@ -246,7 +256,7 @@ export async function regenerateState(appDir, rule, manifest) {
   const record = (manifest || await readRegenerateManifest(appDir)).outputs[rule.output];
   if (!record) return { state: 'unrecorded' };
   if (record.command !== rule.command || record.output !== out) return { state: 'stale' };
-  const inputs = await inputFingerprint(appDir, rule.inputs);
+  const inputs = await inputFingerprint(appDir, rule);
   return { state: record.inputs === inputs ? 'fresh' : 'stale', inputs };
 }
 
@@ -334,7 +344,7 @@ export async function buildRegenerateOutput(appDir, rule, opts = {}) {
   const warn = opts.warn || ((m) => console.warn(m));
   // The snapshot is taken BEFORE the command runs, so a file saved during the
   // compile no longer matches the record and the next check rebuilds.
-  const inputs = opts.inputs ?? await inputFingerprint(appDir, rule.inputs);
+  const inputs = opts.inputs ?? await inputFingerprint(appDir, rule);
   const outAbs = join(appDir, rule.output);
   const backupDir = join(appDir, '.webjs', 'regenerate');
   const backup = join(backupDir, encodeURIComponent(rule.output));

@@ -119,6 +119,17 @@ for (const tail of ['exit 3', 'kill -TERM $$']) {
   assert.equal(runs(dir), 3, `[${runtime}] a deleted input is seen`);
 }
 
+// An output inside its own input directory is not counted as an input, so
+// rewriting it does not invalidate the build that wrote it.
+{
+  _resetInFlight();
+  const dir = app(`printf x >> ran.log; printf '.w{}' > ${OUT}`);
+  const rules = (await readRegenerateRules(dir)).map((r) => ({ ...r, inputs: ['app', 'public'] }));
+  await maybeRegenerate(dir, OUT, rules, quiet);
+  await maybeRegenerate(dir, OUT, rules, quiet);
+  assert.equal(runs(dir), 1, `[${runtime}] the output is not its own input`);
+}
+
 // regenerateOutputs (the `webjs regenerate` engine) and regenerateStatus (what
 // the doctor reads) agree with the dev path.
 {

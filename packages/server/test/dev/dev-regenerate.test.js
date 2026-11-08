@@ -267,6 +267,38 @@ test('maybeRegenerate: an output rewritten by something else is stale', async ()
   assert.equal(calls.length, 2);
 });
 
+test('maybeRegenerate: an output inside its own input directory does not invalidate itself', async () => {
+  const dir = await app();
+  const rule = { ...TW, inputs: ['app', 'public'] };
+  const { spawn, calls } = stubSpawn(dir);
+  await maybeRegenerate(dir, rule.output, [rule], { spawn });
+  await maybeRegenerate(dir, rule.output, [rule], { spawn });
+  assert.equal(calls.length, 1, 'the rewritten output is not counted as an input edit');
+  await writeFile(join(dir, 'public', 'input.css'), '@import "tailwindcss"; @source "../lib";', 'utf8');
+  await maybeRegenerate(dir, rule.output, [rule], { spawn });
+  assert.equal(calls.length, 2, 'a real file beside it still is');
+});
+
+test('maybeRegenerate: a prepare step that updates an input settles after one extra build', async () => {
+  // The website's rules copy the ui registry into an input directory before
+  // compiling, writing a file only when its content changed.
+  const dir = await app();
+  const upstream = 'v1';
+  const { spawn, calls } = stubSpawn(dir, {
+    during: async () => {
+      const copy = join(dir, 'app', 'mirror.ts');
+      let current = null;
+      try { current = await readFile(copy, 'utf8'); } catch { /* first copy */ }
+      if (current !== upstream) await writeFile(copy, upstream, 'utf8');
+    },
+  });
+  await maybeRegenerate(dir, TW.output, [TW], { spawn });
+  await maybeRegenerate(dir, TW.output, [TW], { spawn });
+  assert.equal(calls.length, 2, 'the copy made during the first build is seen once');
+  await maybeRegenerate(dir, TW.output, [TW], { spawn });
+  assert.equal(calls.length, 2, 'then it settles');
+});
+
 test('maybeRegenerate: no-op when no rule matches the requested path', async () => {
   const dir = await app();
   const { spawn, calls } = stubSpawn(dir);
