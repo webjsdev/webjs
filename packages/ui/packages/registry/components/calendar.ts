@@ -498,7 +498,7 @@ export class UiCalendar extends WebComponent({
   }
 
   // Month and year selects over the caption, as react-day-picker draws them.
-  _dropdowns(mo: CalendarDate, captionId: string | null): unknown {
+  _dropdowns(mo: CalendarDate, captionId: string | typeof nothing): unknown {
     const monthName = this._fmt({ month: 'short' });
     const lo = this._min() ?? { y: mo.y - 100, m: 0, d: 1 };
     const hi = this._max() ?? { y: mo.y + 10, m: 11, d: 31 };
