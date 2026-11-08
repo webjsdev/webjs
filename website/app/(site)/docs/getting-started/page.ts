@@ -111,14 +111,14 @@ export class Counter extends WebComponent {
   // Instance signal carries component-local state. WebComponent's
   // built-in SignalWatcher auto-tracks .get() reads in render()
   // and re-renders on .set().
-  count = signal(0);
+  readonly #count = signal(0);
 
   render() {
     return html\`
       &lt;div class="inline-flex items-center gap-2 font-mono"&gt;
-        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; this.count.set(this.count.get() - 1)}&gt;−&lt;/button&gt;
-        &lt;output class="min-w-[2ch] text-center"&gt;\${this.count.get()}&lt;/output&gt;
-        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; this.count.set(this.count.get() + 1)}&gt;+&lt;/button&gt;
+        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; this.#count.set(this.#count.get() - 1)}&gt;−&lt;/button&gt;
+        &lt;output class="min-w-[2ch] text-center"&gt;\${this.#count.get()}&lt;/output&gt;
+        &lt;button class="px-3 py-1 rounded border border-border hover:bg-bg-elev" @click=\${() =&gt; this.#count.set(this.#count.get() + 1)}&gt;+&lt;/button&gt;
       &lt;/div&gt;
     \`;
   }

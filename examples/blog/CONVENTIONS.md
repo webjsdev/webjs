@@ -455,8 +455,8 @@ elements).
 - Component state lives in signals. Import `signal` from
   `@webjsdev/core`, read via `signal.get()` inside `render()`, write
   via `signal.set(value)`. Module-scope signals share state across
-  components; instance signals (created in the constructor) carry
-  component-local state. Reactive properties (declared via the
+  components; instance signal fields (`readonly #name = signal(...)`,
+  written through `.set()`, never assigned) carry component-local state. Reactive properties (declared via the
   `WebComponent({ ... })` factory) wrap HTML attributes, attribute
   reflection, and `.prop=${value}` SSR hydration.
 - Use lifecycle hooks (`firstUpdated`, `updated`) only when needed
@@ -742,18 +742,18 @@ factory-declared reactive props + attributes on the rendered tag.
 import { WebComponent, html, signal } from '@webjsdev/core';
 
 class Cart extends WebComponent {
-  items = signal<Item[]>([]);          // instance signal, SSR uses this for first paint
+  readonly #items = signal<Item[]>([]);          // instance signal, SSR uses this for first paint
 
   connectedCallback() {
     super.connectedCallback();
     // Browser-only refinement, read localStorage and write the signal.
     // The component re-renders automatically.
     const stored = readFromLocalStorage();
-    if (stored) this.items.set(stored);
+    if (stored) this.#items.set(stored);
   }
 
   render() {
-    return html`<ul>${this.items.get().map(/* … */)}</ul>`;
+    return html`<ul>${this.#items.get().map(/* … */)}</ul>`;
   }
 }
 ```

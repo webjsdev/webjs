@@ -1,10 +1,10 @@
 export const COMPONENT_SAMPLE = `import { WebComponent, html, signal } from '@webjsdev/core';
 
 class LikeButton extends WebComponent {
-  likes = signal(0);
+  readonly #likes = signal(0);
   render() {
-    return html\`<button @click=\${() => this.likes.set(this.likes.get() + 1)}>
-      ♥ \${this.likes.get()}
+    return html\`<button @click=\${() => this.#likes.set(this.#likes.get() + 1)}>
+      ♥ \${this.#likes.get()}
     </button>\`;
   }
 }

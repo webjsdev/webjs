@@ -316,7 +316,7 @@ class MyThing extends WebComponent({
 MyThing.register('my-thing');
 ```
 
-**Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core`, read with `signal.get()` inside `render()` (or any synchronous update hook: `willUpdate`, `updated`, `firstUpdated`), and the built-in `SignalWatcher` re-renders on change. Module-scope signals share state across components and survive navigations; instance signals (constructor) are component-local.
+**Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core`, read with `signal.get()` inside `render()` (or any synchronous update hook: `willUpdate`, `updated`, `firstUpdated`), and the built-in `SignalWatcher` re-renders on change. Module-scope signals share state across components and survive navigations; instance signals are component-local, declared `readonly #name = signal(...)` (a `readonly` public field when another element reaches the value) and written only through `.set()`, never assigned, since assignment replaces the signal object (`no-signal-field-assignment` flags it).
 
 **Reactive properties ride HTML attributes, reflect to them, or arrive via SSR hydration.** They are declared ONLY by passing the property shape into the base-class factory `WebComponent({ ... })`. There is no `static properties` block and no `declare` line. The bare form takes a type constructor (`count: Number`, `label: String`, `open: Boolean`); the `prop()` helper carries options (`count: prop(Number, { reflect: true })`, `name: prop(String, { attribute: 'show-close-button' })`), and narrows the TS type (`student: prop<Student>(Object)`, `mode: prop<'a' | 'b'>(String, { reflect: true })`). The types flow automatically to `this.<prop>`. Set defaults in the constructor after `super()` (a declarative `default` option also exists for lit-parity, a function default running per instance for a fresh object / array, but the constructor is the recommended way). NEVER use a class-field declaration OR initializer (e.g., `count = 0` or `todos!: Todo[]`), which compiles to define an own property on the instance and clobbers the reactive accessor (caught by `reactive-props-no-class-field`). Declaring your own `static properties` THROWS at runtime and is flagged by `no-static-properties`. Declare an array-typed prop with the `Array` constructor, not `Object` (`items: prop<Tag[]>(Array)`): the two share one JSON converter so neither crashes, but `Array` states the prop's shape and `array-prop-uses-array-type` flags the `Object` form. Property options: `type` (default `String`), `reflect`, `hasChanged`, `converter`, `default`, `attribute`. There is no `state` option: internal state is an instance signal (`#open = signal(false)`, read with `.get()`, written with `.set()`), and the factory THROWS on a `state` key when the class is defined, flagged ahead of time by `no-state-property` (#1677). A part whose parent element assigns its state keeps the property API through a getter/setter over the signal. A `converter.fromAttribute` runs on BOTH attribute readers (the SSR one and the client one) through one shared implementation, ahead of type coercion, so it executes server-side and must not touch browser globals, and a throw from it is not caught on either side. A source attribute is read identically by the SSR reader and the browser, because both resolve it against the same name list `observedAttributes` is built from: it is matched by its LOWERCASED name, a camelCase prop answers to its kebab name AND its lowercased name (lit's default), so `quizId=`, `quizid=` and `quiz-id=` all reach `quizId` (prefer kebab-case), a prop that renames its attribute answers to the new name ONLY, a name matching no declared property is ignored, and HTML character references are decoded before the value is coerced (including the legacy semicolon-less forms, wherever a browser decodes them). A `reflect: true` property whose value has no attribute representation REMOVES its attribute and warns rather than writing one, which covers a function (or an array carrying one, whose source would otherwise ship to every visitor) and a JSON-typed value `JSON.stringify` cannot serialize (a cycle, a `BigInt`, a throwing `toJSON`); a value merely CARRYING a function still reflects whole, since `JSON.stringify` drops it to `null` without losing the rest.
 
@@ -503,21 +503,21 @@ import { likePost } from '#actions/like-post.server.ts';
 class LikeButton extends WebComponent({ postId: prop(String) }) {
   // INSTANCE scope, one signal per element. A module-scope `signal()` is SHARED
   // by every instance (invariant 5), so a list of these would all flip together.
-  private liked = signal(false);
+  readonly #liked = signal(false);
 
   private async toggle() {
-    const next = !this.liked.get();
-    return optimistic(this.liked, next, () => likePost(this.postId));
+    const next = !this.#liked.get();
+    return optimistic(this.#liked, next, () => likePost(this.postId));
   }
 
   render() {
-    return html`<button @click=${() => this.toggle()}>${this.liked.get() ? 'Liked' : 'Like'}</button>`;
+    return html`<button @click=${() => this.toggle()}>${this.#liked.get() ? 'Liked' : 'Like'}</button>`;
   }
 }
 LikeButton.register('like-button');
 ```
 
-The call RETURNS the action's `ActionResult`, so a `{ success: false }` both rolls back the signal and comes back to you for its `error` / `fieldErrors`. Module scope is the right choice when the state genuinely IS app-wide (a theme, a cart count, a sidebar-open flag). Per-item state belongs on the instance. `liked` is a plain instance field rather than a reactive property, so the class-field ban does not apply to it.
+The call RETURNS the action's `ActionResult`, so a `{ success: false }` both rolls back the signal and comes back to you for its `error` / `fieldErrors`. Module scope is the right choice when the state genuinely IS app-wide (a theme, a cart count, a sidebar-open flag). Per-item state belongs on the instance. `#liked` is a private field holding a signal rather than a reactive property, so the class-field ban does not apply to it. It is `readonly` because a signal field is written through `.set()`, never assigned (`no-signal-field-assignment`).
 
 ### When to skip optimistic UI
 
@@ -544,7 +544,7 @@ The call RETURNS the action's `ActionResult`, so a `{ success: false }` both rol
 2. **Every `*.server.{js,ts}` file with `'use server'` exports must be `async` functions returning serializer-safe values.** Args and results round-trip via webjs's wire. Files without `'use server'` (server-only utilities) can export anything, including singletons.
 3. **Custom element tag names must contain a hyphen** (HTML spec). Pass the tag to `Class.register('tag-name')`, not a static field. Any short-string quote works: `'tag-name'`, `"tag-name"`, or `` `tag-name` `` (single-line, no interpolation).
 4. **Event (`@`), property (`.`), boolean (`?`) holes in `html` must be unquoted**, e.g. `@click=${fn}`, never `@click="${fn}"`.
-5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core` and read via `signal.get()` inside `render()` or a synchronous update hook; the built-in SignalWatcher tracks the reads and re-renders. Module-scope signals share state across components; instance-scope signals (constructor) are component-local. The factory `WebComponent({ ... })` is reserved for values riding an HTML attribute, reflected to one, or arriving via `.prop=${value}` SSR hydration. For fine-grained DOM swap use `${watch(signal)}` from `@webjsdev/core/directives`.
+5. **Signals are the default state primitive.** Import `signal` / `computed` from `@webjsdev/core` and read via `signal.get()` inside `render()` or a synchronous update hook; the built-in SignalWatcher tracks the reads and re-renders. Module-scope signals share state across components; instance signal fields (`readonly #name = signal(...)`) are component-local, and a signal field is written through `.set()`, never assigned. The factory `WebComponent({ ... })` is reserved for values riding an HTML attribute, reflected to one, or arriving via `.prop=${value}` SSR hydration. For fine-grained DOM swap use `${watch(signal)}` from `@webjsdev/core/directives`.
 6. **Page and layout default exports must be functions.** They return a value (usually `TemplateResult`). They do not call `render()` themselves.
 7. **Light-DOM components with custom CSS MUST prefix every class selector with their tag name.** Tailwind utilities are unique by construction, so prefer them.
 8. **Non-root layouts and pages MUST NOT** write `<!doctype>` / `<html>` / `<head>` / `<body>`. Only the root layout may.

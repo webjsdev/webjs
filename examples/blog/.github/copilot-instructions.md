@@ -102,5 +102,5 @@ each change must include.
 - Context: import { createContext, ContextProvider, ContextConsumer } from '@webjsdev/core/context'
 - Task: import { Task, TaskStatus } from '@webjsdev/core/task'
 - Routing: file-based under app/ (page.ts, layout.ts, route.ts, middleware.ts).
-- Component state lives in signals from @webjsdev/core. Module-scope signals share state across components; instance signals (created in the constructor) carry component-local state. Reactive properties (declared via the `WebComponent({ ... })` factory) are for HTML attributes and .prop=${...} hydration.
+- Component state lives in signals from @webjsdev/core. Module-scope signals share state across components; instance signal fields (`readonly #name = signal(...)`, written through `.set()`, never assigned) carry component-local state. Reactive properties (declared via the `WebComponent({ ... })` factory) are for HTML attributes and .prop=${...} hydration.
 - Don't skip tests or documentation updates.

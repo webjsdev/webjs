@@ -56,7 +56,7 @@ import { html, WebComponent, signal } from '@webjsdev/core';
 import { streamAnswer } from '../actions/stream-answer.server.ts';
 
 class AnswerBox extends WebComponent({ prompt: String }) {
-  #text = signal('');
+  readonly #text = signal('');
 
   async ask() {
     this.#text.set('');

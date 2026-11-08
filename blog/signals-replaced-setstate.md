@@ -112,9 +112,9 @@ For component-local state that does not need to ride an HTML attribute, the answ
 
 ```ts
 class Counter extends WebComponent {
-  count = signal(0);
+  readonly #count = signal(0);
   render() {
-    return html`<button @click=${() => this.count.set(this.count.get() + 1)}>${this.count.get()}</button>`;
+    return html`<button @click=${() => this.#count.set(this.#count.get() + 1)}>${this.#count.get()}</button>`;
   }
 }
 ```

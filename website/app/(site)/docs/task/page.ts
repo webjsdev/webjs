@@ -198,8 +198,8 @@ class LiveSearch extends WebComponent {
     .empty { color: var(--fg-muted, #888); }
   \`;
 
-  query = signal('');
-  debounced = signal('');
+  readonly #query = signal('');
+  readonly #debounced = signal('');
   _timer = null;
 
   #results = new Task(this, {
@@ -209,15 +209,15 @@ class LiveSearch extends WebComponent {
       if (!res.ok) throw new Error('Search failed');
       return res.json();
     },
-    args: () =&gt; [this.debounced.get()],
+    args: () =&gt; [this.#debounced.get()],
   });
 
   onInput(e) {
     const q = e.target.value;
-    this.query.set(q);
+    this.#query.set(q);
     clearTimeout(this._timer);
     this._timer = setTimeout(() =&gt; {
-      this.debounced.set(q);
+      this.#debounced.set(q);
     }, 300);
   }
 
@@ -228,7 +228,7 @@ class LiveSearch extends WebComponent {
   render() {
     return html\`
       &lt;input placeholder="Search..."
-             .value=\${this.query.get()}
+             .value=\${this.#query.get()}
              @input=\${(e) =&gt; this.onInput(e)} /&gt;
       &lt;div class="results"&gt;
         \${this.#results.render({

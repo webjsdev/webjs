@@ -43,7 +43,7 @@ class MyCounter extends WebComponent {
 
   // Instance signal carries component-local state. SignalWatcher
   // (built into WebComponent) auto-tracks .get() reads and re-renders.
-  count = signal(0);
+  readonly #count = signal(0);
 
   static styles = css\`
     :host { display: inline-flex; gap: 8px; align-items: center; }
@@ -53,9 +53,9 @@ class MyCounter extends WebComponent {
 
   render() {
     return html\`
-      &lt;button @click=\${() =&gt; this.count.set(this.count.get() - 1)}&gt;-&lt;/button&gt;
-      &lt;output&gt;\${this.count.get()}&lt;/output&gt;
-      &lt;button @click=\${() =&gt; this.count.set(this.count.get() + 1)}&gt;+&lt;/button&gt;
+      &lt;button @click=\${() =&gt; this.#count.set(this.#count.get() - 1)}&gt;-&lt;/button&gt;
+      &lt;output&gt;\${this.#count.get()}&lt;/output&gt;
+      &lt;button @click=\${() =&gt; this.#count.set(this.#count.get() + 1)}&gt;+&lt;/button&gt;
     \`;
   }
 }
@@ -167,28 +167,28 @@ UserCard.register('user-card');</code-block>
     <blockquote>If you are coming from React: properties in WebJs serve a similar role to props, but they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
 
     <h2>State</h2>
-    <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (class-field initializers) carry component-local state; module-scope signals share state across components.</p>
+    <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (<code>readonly #items = signal(...)</code> class fields) carry component-local state; module-scope signals share state across components.</p>
 
     <code-block>import { WebComponent, html, signal } from '@webjsdev/core';
 
 class TodoList extends WebComponent {
-  items  = signal&lt;{ id: number; text: string; done: boolean }[]&gt;([]);
-  filter = signal&lt;'all' | 'active'&gt;('all');
+  readonly #items  = signal&lt;{ id: number; text: string; done: boolean }[]&gt;([]);
+  readonly #filter = signal&lt;'all' | 'active'&gt;('all');
 
   addItem(text) {
-    this.items.set([...this.items.get(), { id: Date.now(), text, done: false }]);
+    this.#items.set([...this.#items.get(), { id: Date.now(), text, done: false }]);
   }
 
   toggleItem(id) {
-    this.items.set(this.items.get().map(it =&gt;
+    this.#items.set(this.#items.get().map(it =&gt;
       it.id === id ? { ...it, done: !it.done } : it
     ));
   }
 
   render() {
-    const visible = this.filter.get() === 'all'
-      ? this.items.get()
-      : this.items.get().filter(it =&gt; !it.done);
+    const visible = this.#filter.get() === 'all'
+      ? this.#items.get()
+      : this.#items.get().filter(it =&gt; !it.done);
 
     return html\`
       &lt;ul&gt;
@@ -204,13 +204,14 @@ class TodoList extends WebComponent {
 }
 TodoList.register('todo-list');</code-block>
 
-    <p>There is no internal-state property. lit's <code>state: true</code> option does not exist here, and the factory throws when a property declares it (the <code>no-state-property</code> rule in <code>webjs check</code> flags it first). Keep a reactive property for a value that rides an attribute, reflects to one, or arrives through a <code>.prop</code> binding, and hold everything else in a private signal (<code>#open = signal(false)</code>) with no accessor, so internal state has no public surface. Only when another element, a test, or a documented API reaches the value (a parent pushing state into its parts) does it get a getter and setter over the signal. Do not expose the signal itself as a public field instead: <code>el.open = true</code> would silently replace it and stop the updates.</p>
+    <p>There is no internal-state property. lit's <code>state: true</code> option does not exist here, and the factory throws when a property declares it (the <code>no-state-property</code> rule in <code>webjs check</code> flags it first). Keep a reactive property for a value that rides an attribute, reflects to one, or arrives through a <code>.prop</code> binding, and hold everything else in a signal field declared <code>readonly</code>. Keep it <code>#private</code> unless another element needs it, and make it a <code>readonly</code> public field when one does (a parent pushing state into its parts), which also lets the other side build a <code>computed()</code> from it:</p>
 
     <code-block>class MenuItem extends WebComponent {
-  #highlighted = signal(false);
-  get highlighted() { return this.#highlighted.get(); }
-  set highlighted(v) { this.#highlighted.set(v); }
+  readonly #pressed = signal(false);     // internal: nothing outside reads it
+  readonly highlighted = signal(false);  // shared: the menu calls item.highlighted.set(true)
 }</code-block>
+
+    <p>A signal field is never assigned. <code>this.highlighted = true</code> (or <code>item.highlighted = true</code> from outside) replaces the signal object: the component stays subscribed to the old one, so nothing re-renders, and the next <code>.get()</code> throws a <code>TypeError</code>. <code>readonly</code> turns that into a compile error wherever <code>tsc</code> runs, and the <code>no-signal-field-assignment</code> check rule flags it inside the declaring class, plain <code>.js</code> included. A getter and setter over a private signal is only for a documented plain-value API that users assign like a property.</p>
 
     <h3>How signal updates render</h3>
     <ul>
@@ -432,15 +433,15 @@ class Cart extends WebComponent({ items: prop&lt;Item[]&gt;(Array) }) {
     <code-block>// ✅ SSR-safe: instance signal carries the default,
 //    browser hook refines after hydration
 class Cart extends WebComponent {
-  items = signal&lt;Item[]&gt;([]);                  // ← SSR uses this
+  readonly #items = signal&lt;Item[]&gt;([]);                  // ← SSR uses this
 
   connectedCallback() {
     super.connectedCallback();
     const stored = readFromLocalStorage();
-    if (stored) this.items.set(stored);         // browser-only refinement
+    if (stored) this.#items.set(stored);         // browser-only refinement
   }
 
-  render() { return html\`&lt;ul&gt;\${this.items.get().map(/* … */)}&lt;/ul&gt;\`; }
+  render() { return html\`&lt;ul&gt;\${this.#items.get().map(/* … */)}&lt;/ul&gt;\`; }
 }</code-block>
 
     <h3>Where each kind of data belongs</h3>
@@ -818,14 +819,14 @@ UserProfile.register('user-profile');</code-block>
     <code-block>import { WebComponent, html, css, repeat } from '@webjsdev/core';
 
 class TaskList extends WebComponent {
-  tasks = signal([
+  readonly #tasks = signal([
     { id: 1, text: 'Buy groceries', done: false },
     { id: 2, text: 'Write docs', done: true },
     { id: 3, text: 'Ship feature', done: false },
   ]);
 
   toggle(id) {
-    this.tasks.set(this.tasks.get().map(t =&gt;
+    this.#tasks.set(this.#tasks.get().map(t =&gt;
       t.id === id ? { ...t, done: !t.done } : t
     ));
   }
@@ -834,7 +835,7 @@ class TaskList extends WebComponent {
     return html\`
       &lt;ul&gt;
         \${repeat(
-          this.tasks.get(),
+          this.#tasks.get(),
           (task) =&gt; task.id,           // key function: must be stable + unique
           (task) =&gt; html\`
             &lt;li @click=\${() =&gt; this.toggle(task.id)}
@@ -879,16 +880,16 @@ class ChatBox extends WebComponent {
   \`;
 
   _conn = null;
-  lines = signal([]);
-  connected = signal(false);
+  readonly #lines = signal([]);
+  readonly #connected = signal(false);
 
   connectedCallback() {
     super.connectedCallback();   // always call super!
     this._conn = connectWS('/api/chat', {
-      onOpen:    () =&gt; this.connected.set(true),
-      onClose:   () =&gt; this.connected.set(false),
+      onOpen:    () =&gt; this.#connected.set(true),
+      onClose:   () =&gt; this.#connected.set(false),
       onMessage: (msg) =&gt; {
-        this.lines.set([...this.lines.get(), msg].slice(-50));
+        this.#lines.set([...this.#lines.get(), msg].slice(-50));
       },
     });
   }
@@ -907,8 +908,8 @@ class ChatBox extends WebComponent {
   }
 
   render() {
-    const lines = this.lines.get();
-    const connected = this.connected.get();
+    const lines = this.#lines.get();
+    const connected = this.#connected.get();
     return html\`
       &lt;div class="log"&gt;
         \${lines.length === 0
@@ -930,7 +931,7 @@ ChatBox.register('chat-box');</code-block>
       <li><strong>Extend</strong> the <code>WebComponent({ ... })</code> factory with your property shape (and optionally <code>static styles</code> for shadow-DOM components).</li>
       <li><strong>Implement</strong> <code>render()</code> returning <code>html\`...\`</code>.</li>
       <li><strong>Register</strong> with <code>ClassName.register('tag-name')</code> at the bottom of the file. Tag must contain a hyphen.</li>
-      <li><strong>State</strong>: instance signals (<code>foo = signal(...)</code>) or reactive properties (the <code>WebComponent({ ... })</code> factory, with <code>prop()</code> for options). Both feed the same batched re-render scheduler.</li>
+      <li><strong>State</strong>: instance signals (<code>readonly #foo = signal(...)</code>) or reactive properties (the <code>WebComponent({ ... })</code> factory, with <code>prop()</code> for options). Both feed the same batched re-render scheduler.</li>
       <li><strong>Events</strong>: <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
       <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
       <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots, fallback content, <code>assignedNodes()</code>, <code>slotchange</code>. Works identically in light DOM and shadow DOM.</li>
