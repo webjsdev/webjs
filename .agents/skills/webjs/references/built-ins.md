@@ -231,19 +231,21 @@ An over-limit body responds `413` without buffering the whole payload.
 ```jsonc
 { "webjs": {
   "dev":   {
-    "before": ["webjs db migrate", "npm run css:build"],
+    "before": ["webjs db migrate", "webjs regenerate"],
     "regenerate": [{ "output": "public/tailwind.css",
                      "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
                      "inputs": ["app", "components", "modules", "lib", "public/input.css"] }],
     "watch": ["../blog"]
   },
-  "start": { "before": ["webjs db migrate", "npm run css:build"] }
+  "start": { "before": ["webjs db migrate", "webjs regenerate"] }
 } }
 ```
 
 `before` runs to completion first (a non-zero exit aborts the boot). `parallel` (dev only) runs long-lived watchers alongside the server and tears them down on exit. `watch` (dev only) adds extra live-reload directories outside the app tree.
 
-`regenerate` (dev only, #967) keeps a served build output fresh without a watcher: when its `output` is requested and is missing or older than the newest file under `inputs`, the server runs `command` to completion before serving it. Prefer it over a `tailwindcss --watch` in `parallel`, which can die mid-session and serve stale CSS with no error. A clean exit stamps the output at that newest input mtime (#1672), so a rebuild whose bytes did not change (the Tailwind CLI skips the write) still counts as fresh and is not recompiled on the next request; a build script needs no `utimes` of its own.
+`regenerate` (#967) keeps a served build output fresh without a watcher: when its `output` is requested in dev and is not fresh, the server runs `command` to completion before serving it. Prefer it over a `tailwindcss --watch` in `parallel`, which can die mid-session and serve stale CSS with no error. Fresh is decided by a RECORD (#1672): every build writes, in `.webjs/regenerate.json`, the command, a fingerprint of the files under `inputs` taken before it ran, and the output it produced, and an output is fresh while all three still match. So a rebuild whose bytes did not change (the Tailwind CLI skips the write) is fresh, a file saved during the compile is not, and an input dated in the future hides nothing. The command must WRITE `output`: the output is moved aside first, so a rule whose `output` is not the path its command writes is reported on every request instead of silently serving stale CSS.
+
+Build the outputs with `webjs regenerate` in `dev.before` and `start.before` (and in a CI step before `webjs doctor`), never with the raw compile command: it runs every rule that is not fresh and records each build, so a boot compiles only what changed and the first request after it compiles nothing. `webjs regenerate --force` rebuilds every rule. A compile run by hand (`npm run css:build`) writes no record, so that output is rebuilt once on its next dev request and `webjs doctor` reports it unrecorded until then.
 
 ### Local CI (`webjs.ci`)
 
