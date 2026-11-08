@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 
 /**
@@ -94,43 +94,75 @@ function modulesAreLinked(dir) {
 }
 
 /**
- * The `npm run worktree:link` sentence, but ONLY where that script exists.
+ * The package.json scripts a remedy may name, read ONCE per remedy.
  *
  * This module ships in the PUBLISHED CLI, and `bin/webjs.js` prints these
  * remedies verbatim as the `webjs dev` / `webjs start` preflight failure. A
- * scaffolded app has no `worktree:link` script, so naming it unconditionally
- * sends the exact audience this check exists for (#954, a fresh app worktree)
- * to run something that does not exist. Walk up for a package.json that really
- * declares it, and stay silent otherwise.
+ * scaffolded app has none of the monorepo's worktree scripts, so naming one
+ * unconditionally sends the exact audience this check exists for (#954, a
+ * fresh app worktree) to run something that does not exist.
+ *
+ * Only two package.json files count: the app's own, and the one at the root of
+ * the checkout the app sits in (the nearest ancestor holding `.git`, a file in
+ * a linked worktree). An arbitrary ancestor in between is never consulted, so
+ * a parent directory that happens to declare the same name is not mistaken for
+ * this repo.
  *
  * @param {string} appDir
- * @returns {string} a leading-space sentence, or the empty string
+ * @returns {{ appDir: string, own: Record<string, string>, root: { dir: string, scripts: Record<string, string> } | null }}
  */
-function linkScriptHint(appDir) {
-  return declaresScript(appDir, 'worktree:link')
-    ? ' In this repo, `npm run worktree:link` does the whole setup and also repairs the shared tree.'
-    : '';
+function readScripts(appDir) {
+  const dir = resolve(appDir);
+  /** @param {string} d @returns {Record<string, string>} */
+  const scriptsAt = (d) => {
+    try { return JSON.parse(readFileSync(join(d, 'package.json'), 'utf8'))?.scripts || {}; } catch { return {}; }
+  };
+  let top = null;
+  let cur = dir;
+  for (let i = 0; i < 16; i += 1) {
+    if (existsSync(join(cur, '.git'))) { top = cur; break; }
+    const up = dirname(cur);
+    if (up === cur) break;
+    cur = up;
+  }
+  return {
+    appDir: dir,
+    own: scriptsAt(dir),
+    root: top && top !== dir ? { dir: top, scripts: scriptsAt(top) } : null,
+  };
 }
 
 /**
- * Whether `appDir` or an ancestor has a package.json declaring `script`.
+ * A command that runs `script` when typed in the app directory, or null.
+ *
+ * `npm run <script>` resolves the NEAREST package.json, so from `website/` it
+ * finds the app's own and fails with `Missing script` for a script only the
+ * repo root declares. A root script is therefore named with `--prefix`, which
+ * points npm at the root's package.json from wherever doctor ran.
+ *
+ * @param {ReturnType<typeof readScripts>} found
+ * @param {string} script
+ * @returns {string | null}
+ */
+function scriptCommand(found, script) {
+  if (found.own[script]) return `npm run ${script}`;
+  if (found.root?.scripts[script]) {
+    const rel = relative(found.appDir, found.root.dir) || '.';
+    return `npm --prefix ${rel} run ${script}`;
+  }
+  return null;
+}
+
+/**
+ * The `worktree:link` sentence, but ONLY where that script exists.
  *
  * @param {string} appDir
- * @param {string} script
- * @returns {boolean}
+ * @param {ReturnType<typeof readScripts>} [found]
+ * @returns {string} a leading-space sentence, or the empty string
  */
-function declaresScript(appDir, script) {
-  let dir = resolve(appDir);
-  for (let i = 0; i < 8; i += 1) {
-    try {
-      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-      if (pkg?.scripts?.[script]) return true;
-    } catch { /* no package.json here, keep walking */ }
-    const up = dirname(dir);
-    if (up === dir) break;
-    dir = up;
-  }
-  return false;
+function linkScriptHint(appDir, found = readScripts(appDir)) {
+  const cmd = scriptCommand(found, 'worktree:link');
+  return cmd ? ` In this repo, \`${cmd}\` does the whole setup and also repairs the shared tree.` : '';
 }
 
 /**
@@ -158,20 +190,20 @@ function freshWorktreeFix(appDir) {
  */
 function linkAwareReinstallFix(appDir) {
   if (modulesAreLinked(appDir)) {
-    // A repo that ships `worktree:unlink` (the WebJs monorepo) also links a
-    // built `packages/core/dist`, which the `find` below misses and an
-    // install's build used to write through (#1671). Name the script that
-    // removes every planted link there; the app-generic `find` stays for
-    // everyone else, whose worktree has only node_modules links.
-    const removeLinks = declaresScript(appDir, 'worktree:unlink')
-      ? 'remove every link the link script planted first (`npm run worktree:unlink`, which also ' +
-        'removes the packages/core/dist link)'
+    // A repo that ships `worktree:unlink` (the WebJs monorepo) gets the script,
+    // which removes every node_modules link the link script planted across the
+    // whole worktree wherever it runs from (#1671). The `find` stays for
+    // everyone else, and it only reaches the subtree it is run in.
+    const found = readScripts(appDir);
+    const unlink = scriptCommand(found, 'worktree:unlink');
+    const removeLinks = unlink
+      ? `remove every node_modules link the link script planted first (\`${unlink}\`)`
       : 'remove every node_modules symlink first, nested ones included ' +
         '(`find . -maxdepth 5 -type l -name node_modules -delete`)';
     return (
       'node_modules here is a SYMLINK at another checkout, so do NOT run `npm install`: it would act ' +
       'on that checkout, not this one (#1442). Either reinstall in the checkout that owns the tree, ' +
-      `or ${removeLinks}, and install here.` + linkScriptHint(appDir)
+      `or ${removeLinks}, and install here.` + linkScriptHint(appDir, found)
     );
   }
   return 'Reinstall dependencies (`npm install`, or remove node_modules and reinstall).';

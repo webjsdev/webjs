@@ -1914,15 +1914,48 @@ test('a linked node_modules remedy names worktree:unlink only where the repo dec
   assert.match(generic, /find \. -maxdepth 5 -type l -name node_modules -delete/);
   assert.doesNotMatch(generic, /worktree:unlink/);
 
-  // The monorepo shape: the unlink script, which also clears the dist link the
-  // find misses and an install's build used to write through.
+  // The script in the app's OWN package.json: a plain npm run works there.
   const mono = tmpDir();
   write(mono, 'package.json', JSON.stringify({ name: 'repo', scripts: { 'worktree:link': 'a', 'worktree:unlink': 'b' } }));
+  write(mono, '.git', 'gitdir: /somewhere/.git/worktrees/z');
   symlinkSync(join(target, 'node_modules'), join(mono, 'node_modules'));
   const fix = checkFrameworkResolves(mono).fix;
-  assert.match(fix, /npm run worktree:unlink/);
-  assert.match(fix, /packages\/core\/dist/);
+  assert.match(fix, /`npm run worktree:unlink`/);
+  assert.match(fix, /`npm run worktree:link`/);
   assert.doesNotMatch(fix, /maxdepth/);
+});
+
+test('a root-only script is named with --prefix so it runs from the app dir (#1671)', () => {
+  // AGENTS.md says to run doctor inside website/ or gallery/. There a plain
+  // `npm run worktree:unlink` resolves the APP's package.json and fails with
+  // Missing script, so the remedy must point npm at the repo root.
+  const target = tmpDir();
+  mkdirSync(join(target, 'node_modules'), { recursive: true });
+  const repo = tmpDir();
+  write(repo, 'package.json', JSON.stringify({ name: 'repo', scripts: { 'worktree:link': 'a', 'worktree:unlink': 'b' } }));
+  write(repo, '.git', 'gitdir: /somewhere/.git/worktrees/w');
+  const site = join(repo, 'website');
+  write(site, 'package.json', JSON.stringify({ name: 'site', scripts: { dev: 'webjs dev' } }));
+  symlinkSync(join(target, 'node_modules'), join(site, 'node_modules'));
+  const fix = checkFrameworkResolves(site).fix;
+  assert.match(fix, /`npm --prefix \.\. run worktree:unlink`/);
+  assert.match(fix, /`npm --prefix \.\. run worktree:link`/);
+  assert.doesNotMatch(fix, /`npm run worktree:/, 'never the bare form that fails from the app dir');
+});
+
+test('a script declared by an ancestor ABOVE the checkout root is never named', () => {
+  // Only the app and its checkout root count. A parent directory that happens
+  // to declare the same script is not this repo.
+  const target = tmpDir();
+  mkdirSync(join(target, 'node_modules'), { recursive: true });
+  const outer = tmpDir();
+  write(outer, 'package.json', JSON.stringify({ name: 'outer', scripts: { 'worktree:unlink': 'x', 'worktree:link': 'y' } }));
+  const repo = join(outer, 'repo');
+  write(repo, 'package.json', JSON.stringify({ name: 'repo' }));
+  write(repo, '.git', 'gitdir: /somewhere/.git/worktrees/v');
+  symlinkSync(join(target, 'node_modules'), join(repo, 'node_modules'));
+  const fix = checkFrameworkResolves(repo).fix;
+  assert.doesNotMatch(fix, /worktree:/);
 });
 
 test('the published-CLI remedies never name a script a scaffolded app does not have', () => {
