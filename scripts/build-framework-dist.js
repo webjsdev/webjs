@@ -18,7 +18,7 @@
  * Run from the repo root: `node scripts/build-framework-dist.js`.
  */
 
-import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readlink, rename, rm, stat, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -57,6 +57,38 @@ const ENTRIES = [
   { in: 'src/testing.js',            out: 'webjs-core-testing' },
 ];
 
+/**
+ * Make sure the build writes INTO the directory it names, never through a
+ * symlink standing at that path (#1671).
+ *
+ * `npm run worktree:link` plants `packages/core/dist` in a linked worktree as a
+ * symlink at the PRIMARY checkout's dist. `mkdir(dist, { recursive: true })`
+ * succeeds silently on such a link, and then both the `rename` into place and
+ * the stale-file cleanup below act on the link's TARGET: the worktree's bundle
+ * replaces the primary's, and every file the primary had that this build did
+ * not produce is deleted. Core's `prepare` runs this script during `npm ci`, and
+ * `release-gate.mjs` / `npm run build:dist` run it too, so any of them in a
+ * linked worktree silently put another branch's code under every consumer of
+ * the primary.
+ *
+ * The link is replaced with a real directory rather than refused, because every
+ * caller wants a dist for THIS checkout, and a refusal from inside `prepare`
+ * would leave `npm ci` half done. Only the link itself is removed (`unlink`
+ * never follows it), so the target is left exactly as it was.
+ *
+ * @param {string} dist the out dir the build is about to write
+ * @returns {Promise<void>}
+ */
+async function replaceSymlinkedOutDir(dist) {
+  let isLink = false;
+  try { isLink = (await lstat(dist)).isSymbolicLink(); } catch { return; }
+  if (!isLink) return;
+  let target = '(unreadable)';
+  try { target = await readlink(dist); } catch { /* reported as unreadable */ }
+  await unlink(dist);
+  console.log(`[build-framework-dist] ${dist} was a symlink at ${target}; replaced it with a real directory so the build cannot write into the link's target.`);
+}
+
 async function main() {
   // Output dir defaults to the package's own `dist/` (what `prepare` /
   // `build:dist` produce for publish). An optional first CLI arg overrides it,
@@ -74,6 +106,7 @@ async function main() {
   const staging = `${dist}.building-${process.pid}`;
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
+  await replaceSymlinkedOutDir(dist);
   await mkdir(dist, { recursive: true });
 
   const produced = new Set();
