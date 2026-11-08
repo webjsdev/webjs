@@ -1287,7 +1287,7 @@ class WebComponentBase extends Base {
     // The commit is untracked: a signal read while the DOM is patched (a
     // `watch()` part, a child's synchronous work) belongs to whatever read
     // it, not to this component's next render.
-    Signal.subtle.untrack(() => clientRender(tpl, this._renderRoot));
+    Signal.subtle.untrack(() => clientRender(tpl, this._renderRoot, { host: this }));
     return undefined;
   }
 
@@ -1316,7 +1316,7 @@ class WebComponentBase extends Base {
     if (this.__firstRendered && this._overridesRenderFallback()) {
       try {
         const fb = this.renderFallback();
-        if (fb !== undefined) Signal.subtle.untrack(() => clientRender(fb, this._renderRoot));
+        if (fb !== undefined) Signal.subtle.untrack(() => clientRender(fb, this._renderRoot, { host: this }));
       } catch (e) {
         console.error(`[webjs] renderFallback() threw:`, e);
       }
@@ -1335,7 +1335,7 @@ class WebComponentBase extends Base {
         // The sync path routes an identical throw to the same boundary, so
         // this is what makes the two paths agree.
         try {
-          clientRender(tpl, this._renderRoot);
+          clientRender(tpl, this._renderRoot, { host: this });
         } catch (commitError) {
           this._handleRenderError(
             commitError instanceof Error ? commitError : new Error(String(commitError)),
@@ -1372,7 +1372,7 @@ class WebComponentBase extends Base {
     );
     try {
       const fallback = this.renderError(error);
-      if (fallback !== undefined) Signal.subtle.untrack(() => clientRender(fallback, this._renderRoot));
+      if (fallback !== undefined) Signal.subtle.untrack(() => clientRender(fallback, this._renderRoot, { host: this }));
     } catch (fallbackError) {
       console.error(`[webjs] renderError() also threw:`, fallbackError);
     }

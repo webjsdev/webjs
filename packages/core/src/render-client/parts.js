@@ -24,6 +24,8 @@ import { attrHoleValue } from '../binding-prefixes.js';
  * first. Same reason `SLOT_OWNER` exists.
  * @type {any}
  */
+export let currentRenderHost;
+export function setCurrentRenderHost(host) { currentRenderHost = host; }
 export let currentRenderRoot = null;
 
 export function setCurrentRenderRoot(root) {
@@ -133,6 +135,8 @@ export function boundaryOwnerOf(root) {
 export function commitOutOfBand(part, fn) {
   const owner = /** @type any */ (part).__commitOwner;
   const prev = currentRenderRoot;
+  const prevHost = currentRenderHost;
+  currentRenderHost = part.__eventHost;
   if (owner) currentRenderRoot = owner;
   try {
     fn();
@@ -151,7 +155,7 @@ export function bindPart(p, root) {
   let node = /** @type Node */ (root);
   for (const i of p.path) node = node.childNodes[i];
   if (p.kind === 'child') {
-    return { kind: 'child', marker: /** @type Comment */ (node) };
+    return { kind: 'child', marker: /** @type Comment */ (node), __eventHost: currentRenderHost };
   }
   const el = /** @type Element */ (node);
   if (p.kind === 'event') {
@@ -161,10 +165,13 @@ export function bindPart(p, root) {
       el,
       name: p.name || '',
       handler: null,
+      eventHost: currentRenderHost,
       // The dispatcher is the registered listener; handler swaps behind it.
-      dispatcher(ev) { part.handler?.(ev); },
+      dispatcher(ev) {
+        if (typeof part.handler === 'function') part.handler.call(part.eventHost ?? part.el, ev);
+        else part.handler?.handleEvent(ev);
+      },
     };
-    el.addEventListener(part.name, part.dispatcher);
     return part;
   }
   if (p.kind === 'attr') return { kind: 'attr', el, name: p.name || '' };
@@ -262,7 +269,14 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       // NOT guarded, deliberately. An event binding never stringifies its
       // value, and a function is the legitimate thing to pass one, so
       // `<my-el @action=${handler}>` has to keep working.
-      part.handler = typeof value === 'function' ? /** @type any */ (value) : null;
+      {
+        const old = part.handler;
+        const next = value == null ? null : value;
+        const changed = old?.capture !== next?.capture || old?.once !== next?.once || old?.passive !== next?.passive;
+        if (old && (!next || changed)) part.el.removeEventListener(part.name, part.dispatcher, old);
+        if (next && (!old || changed)) part.el.addEventListener(part.name, part.dispatcher, next);
+        part.handler = next;
+      }
       break;
     case 'element':
       applyElement(part, value);
@@ -495,9 +509,13 @@ export function applyChildInner(part, value, reconcileFormActionsCb) {
   // asyncReplace, streaming) re-enter here from a promise / microtask OUTSIDE
   // any render() window, so this is where those commits into a light host are
   // marked as renderer writes rather than authored content.
-  return commitInto(part.marker && part.marker.parentNode, () =>
-    applyChildInnerRaw(part, value, reconcileFormActionsCb),
-  );
+  const previousHost = currentRenderHost;
+  currentRenderHost = part.__eventHost;
+  try {
+    return commitInto(part.marker && part.marker.parentNode, () =>
+      applyChildInnerRaw(part, value, reconcileFormActionsCb),
+    );
+  } finally { currentRenderHost = previousHost; }
 }
 
 /**
@@ -883,7 +901,7 @@ export function buildDetached(tr, reconcileFormActionsCb) {
 /** @param {TemplateInstance} inst */
 export function disposeInstance(inst) {
   for (const p of inst.bound) {
-    if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher);
+    if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher, p.handler);
     if (p.kind === 'element') {
       // Unbind any active ref so the user observes the element being
       // removed (callback receives undefined / Ref.value cleared).

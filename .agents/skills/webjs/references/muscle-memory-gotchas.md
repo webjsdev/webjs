@@ -329,25 +329,9 @@ class Menu extends WebComponent({ open: prop(Boolean, { state: true }) }) {
 
 Signals work too, as lit supports them through `@lit-labs/signals`. Write a signal with `.set()`, never by assignment: `this.count = 5` on a signal field replaces the signal and the next `.get()` throws (`no-signal-field-assignment` flags it). In an `async render()`, read signals before the first `await`, since reads after it are not tracked.
 
-### Passing a method straight to an `@event` binding
+### Event handlers follow Lit's JavaScript API
 
-Lit invokes an `@event` listener with `this` set to the host element, so `@click=${this.handleClick}` is correct there. WebJs stores the handler verbatim and dispatches it through an internal part object (`part.handler?.(ev)` in `core/src/render-client/parts.js`), so `this` is THAT object, not your component. It does not fail loudly. A read such as `this.todos` returns `undefined`, and a write such as `this.count = 1` silently lands on the framework's internal object. The `TypeError` arrives later, when you dereference the `undefined` you read back, so the stack points away from the real cause. Nothing catches it statically either: `webjs check` and `tsc` both pass and the component SSRs correctly.
-
-Wrap the call at the binding site, which is the conventional spelling, or declare the handler as an arrow class field, which carries its own `this`.
-
-```ts
-// BROKEN: `this` is undefined when the event fires.
-html`<form @submit=${this.handleSubmit}>`
-
-// Wrap it at the binding site:
-html`<form @submit=${(e: SubmitEvent) => this.handleSubmit(e)}>`
-
-// Or pre-bind by declaring the handler as an arrow field:
-_onSubmit = (e: SubmitEvent) => { /* ... */ };
-html`<form @submit=${this._onSubmit}>`
-```
-
-An arrow class field is a class-field initializer, but it is NOT a reactive property, so the reactive-property class-field ban does not apply to it and `reactive-props-no-class-field` does not flag it.
+`@click=${this.handleClick}` invokes a function with the rendering component as `this`. Arrow functions and explicitly bound functions retain their JavaScript receiver. Objects with `handleEvent()` receive their own object as `this`; `capture`, `once`, and `passive` are supported on listeners. Standalone `render(value, container, { host })` sets an explicit function receiver; without a host it is the bound element.
 
 ### Expecting shadow DOM and reaching for scoped CSS
 

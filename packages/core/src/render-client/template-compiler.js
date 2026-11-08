@@ -31,10 +31,10 @@ export const INSTANCE = Symbol.for('webjs.instance');
  * }} TemplateInstance
  *
  * @typedef {
- *   | { kind: 'child', marker: Comment, child?: TemplateInstance | ChildNode[] }
+ *   | { kind: 'child', marker: Comment, __eventHost?: object, child?: TemplateInstance | ChildNode[] }
  *   | { kind: 'attr', el: Element, name: string }
  *   | { kind: 'attr-mixed', el: Element, name: string, statics: string[], group: number[] }
- *   | { kind: 'event', el: Element, name: string, handler: ((e: Event) => void) | null, dispatcher: (e: Event) => void }
+ *   | { kind: 'event', el: Element, name: string, handler: (EventListenerOrEventListenerObject & AddEventListenerOptions) | null, eventHost?: object, dispatcher: (e: Event) => void }
  *   | { kind: 'prop', el: Element, name: string }
  *   | { kind: 'bool', el: Element, name: string }
  *   | { kind: 'element', el: Element, lastTarget?: any }
