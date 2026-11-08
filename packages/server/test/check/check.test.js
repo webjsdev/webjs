@@ -467,6 +467,33 @@ Writes.register('signal-writes');
   }
 });
 
+test('no-signal-field-assignment: names the right field when members share a line or a type spans lines', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'packed.ts'),
+      `import { WebComponent, html, signal, type Signal } from '@webjsdev/core';
+class Packed extends WebComponent {
+  plain = 1; readonly #open = signal(false);
+  static shared = 1; flag = signal(false);
+  wide: Signal<
+    number
+  > = signal(0);
+  bump() { this.plain = 2; this.flag = true; this.wide = 1; }
+  render() { return html\`<p>\${this.#open.get()}</p>\`; }
+}
+Packed.register('signal-packed');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const names = violations.filter((v) => v.rule === 'no-signal-field-assignment').map((v) => v.message.match(/\`this\.([#\w]+)\`/)[1]).sort();
+    assert.deepEqual(names, ['flag', 'wide']);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no-signal-field-assignment: passes reads, .set() writes, the constructor creation and plain fields', async () => {
   const appDir = await makeTempApp();
   try {

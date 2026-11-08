@@ -205,15 +205,15 @@ export function findSignalFieldWrites(body) {
   }
   const fields = new Set();
   // Find each class-level `= signal(` / `= computed(`, then read the field
-  // name from the start of its line, so a type annotation of any shape
-  // (`Signal<{ open: boolean }>`, `Signal<() => void>`) sits in between.
+  // name from the start of its member, so a type annotation of any shape
+  // (`Signal<{ open: boolean }>`, `Signal<() => void>`, one spanning lines)
+  // sits in between.
   const make = new RegExp(String.raw`(?<![=!<>])=(?!=)\s*` + MAKE, 'g');
   const head = /^\s*((?:(?:public|private|protected|readonly|static|declare|override)\s+)*)(#?[A-Za-z_$][\w$]*)/;
   let m;
   while ((m = make.exec(body))) {
     if (depth[m.index] !== 0) continue;
-    const lineStart = body.lastIndexOf('\n', m.index) + 1;
-    const h = head.exec(body.slice(lineStart, m.index));
+    const h = head.exec(body.slice(memberStart(body, m.index), m.index));
     if (h && !/\bstatic\s/.test(h[1])) fields.add(h[2]);
   }
   const ctor = methodBodyOf(body, 'constructor');
@@ -232,6 +232,36 @@ export function findSignalFieldWrites(body) {
     bad.add(name);
   }
   return [...bad];
+}
+
+/**
+ * Index where the class member holding `end` starts: just past the previous
+ * `;`, line break, or method body, skipping any of those nested inside
+ * brackets (a type annotation can hold all three).
+ * @param {string} body
+ * @param {number} end
+ * @returns {number}
+ */
+function memberStart(body, end) {
+  let nest = 0;
+  for (let i = end - 1; i >= 0; i--) {
+    const c = body[i];
+    if (c === '>' && body[i - 1] === '=') { i--; continue; }
+    if (c === ')' || c === ']' || c === '}' || c === '>') {
+      // A method body ends the previous member: `m() { ... } x = signal(0)`.
+      if (c === '}' && nest === 0) {
+        let j = i - 1;
+        for (let d = 1; j >= 0 && d; j--) d += body[j] === '}' ? 1 : body[j] === '{' ? -1 : 0;
+        if (/\)\s*$/.test(body.slice(0, j + 1))) return i + 1;
+      }
+      nest++;
+    } else if (c === '(' || c === '[' || c === '{' || c === '<') {
+      nest--;
+    } else if (nest === 0 && (c === ';' || c === '\n')) {
+      return i + 1;
+    }
+  }
+  return 0;
 }
 
 /**
