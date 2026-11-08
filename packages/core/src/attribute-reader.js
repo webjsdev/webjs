@@ -49,7 +49,7 @@
  * @param {{ state?: boolean, attribute?: string | false } | null | undefined} decl
  * @returns {boolean}
  */
-export function hasAttribute(decl) {
+export function isAttributeBacked(decl) {
   return !!decl && decl.state !== true && decl.attribute !== false;
 }
 
@@ -250,7 +250,7 @@ function buildAttributeBackedProps(Cls) {
   const out = [];
   for (const [k, decl] of Object.entries(props)) {
     const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
-    if (!hasAttribute(d)) continue;
+    if (!isAttributeBacked(d)) continue;
     const primary = d.attribute || hyphenate(k);
     const lower = k.toLowerCase();
     const alias = !d.attribute && lower !== primary ? lower : undefined;

@@ -1,5 +1,5 @@
 import { render as clientRender } from '../render-client.js';
-import { readAttributeValue, resolveAttributeProperty, observedAttributeNames, hasAttribute } from '../attribute-reader.js';
+import { readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
 import { isCSS, adoptStyles } from '../css.js';
@@ -404,7 +404,7 @@ class WebComponentBase extends Base {
   _reflectAttribute(propName, value, decl) {
     // A property with no attribute (`state: true` / `attribute: false`) has
     // nothing to reflect to.
-    if (!hasAttribute(decl)) return;
+    if (!isAttributeBacked(decl)) return;
     // A custom `attribute` option wins over the kebab-cased property name.
     const attrName = decl.attribute || hyphenate(propName);
     // Guard against re-entrant loops: attributeChangedCallback fires when
