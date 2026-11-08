@@ -602,3 +602,83 @@ describe('framework-link repair (#1442)', () => {
     } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
   });
 });
+
+/**
+ * `--unlink` (`npm run worktree:unlink`) is the undo the self-testing recipe
+ * runs before a real install (#1671). The recipe used to delete only the
+ * `node_modules` links, leaving `packages/core/dist` linked at the primary, and
+ * the install's core `prepare` then built THROUGH that link into the primary.
+ * So the load-bearing assertion is that the dist link goes too.
+ */
+describe('link-worktree-deps --unlink (#1671)', () => {
+  /** @returns {{ status: number|null, stdout: string }} */
+  function unlink(cwd, primary) {
+    const r = spawnSync(process.execPath, [SCRIPT, primary, '--unlink'], { cwd, encoding: 'utf8', env: cleanEnv() });
+    return { status: r.status, stdout: r.stdout || '' };
+  }
+
+  test('removes every planted link, the core dist link included', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    try {
+      run(wt, primary);
+      assert.ok(lstatSync(join(wt, 'packages/core/dist')).isSymbolicLink(), 'precondition: dist is linked');
+      const r = unlink(wt, primary);
+      assert.equal(r.status, 0);
+      for (const rel of ['node_modules', 'packages/server/node_modules', 'packages/ui/node_modules', 'website/node_modules', 'packages/core/dist']) {
+        assert.equal(lstatOrNull(join(wt, rel)), null, `${rel} link removed`);
+      }
+      assert.match(r.stdout, /unlinked packages\/core\/dist/, 'the dist link is named in the report');
+      // Only the links went: the primary's trees are untouched.
+      assert.ok(existsSync(join(primary, 'node_modules/ws')), 'primary root tree intact');
+      assert.ok(existsSync(join(primary, 'packages/server/node_modules/ws')), 'primary nested tree intact');
+      assert.ok(existsSync(join(primary, 'packages/core/dist')), 'primary dist intact');
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('finds a nested link the primary no longer has, and leaves real directories alone', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    try {
+      // A link planted when the primary still had this nested tree.
+      mkdirSync(join(wt, 'packages/gone'), { recursive: true });
+      symlinkSync(join(primary, 'node_modules'), join(wt, 'packages/gone/node_modules'), 'junction');
+      // Real directories, as after a real install or a build in this worktree.
+      mkdirSync(join(wt, 'node_modules/real-dep'), { recursive: true });
+      mkdirSync(join(wt, 'packages/core/dist'), { recursive: true });
+      writeFileSync(join(wt, 'packages/core/dist/webjs-core.js'), '// built here');
+      const r = unlink(wt, primary);
+      assert.equal(r.status, 0);
+      assert.equal(lstatOrNull(join(wt, 'packages/gone/node_modules')), null, 'stale nested link removed');
+      assert.ok(existsSync(join(wt, 'node_modules/real-dep')), 'a real node_modules is never removed');
+      assert.ok(existsSync(join(wt, 'packages/core/dist/webjs-core.js')), 'a real dist is never removed');
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('is idempotent: a second run removes nothing', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    try {
+      run(wt, primary);
+      unlink(wt, primary);
+      const r = unlink(wt, primary);
+      assert.equal(r.status, 0);
+      assert.match(r.stdout, /removed 0 links/);
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('does nothing in the primary checkout itself', () => {
+    const primary = makePrimary();
+    try {
+      const r = unlink(primary, primary);
+      assert.equal(r.status, 0);
+      assert.match(r.stdout, /this IS the primary checkout, nothing to unlink/);
+      assert.ok(existsSync(join(primary, 'node_modules/ws')));
+    } finally { rmSync(primary, { recursive: true, force: true }); }
+  });
+});
+
+/** @returns {import('node:fs').Stats | null} */
+function lstatOrNull(p) {
+  try { return lstatSync(p); } catch { return null; }
+}
