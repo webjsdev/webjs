@@ -72,11 +72,7 @@ const ROOT = 'ui-input-otp';
 
 export class UiInputOtp extends WebComponent {
   #enhanced = signal(false);
-  get enhanced() { return this.#enhanced.get(); }
-  set enhanced(v) { this.#enhanced.set(v); }
   #revision = signal(0);
-  get revision() { return this.#revision.get(); }
-  set revision(v) { this.#revision.set(v); }
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
   _form: HTMLFormElement | null = null;
@@ -138,7 +134,7 @@ export class UiInputOtp extends WebComponent {
 
   /** Take over from the plain input. True once it has (or already had). */
   _enhance(): boolean {
-    if (this.enhanced) return true;
+    if (this.#enhanced.get()) return true;
     const input = this.input;
     if (!input) return false;
     this._savedStyle = input.getAttribute('style');
@@ -154,7 +150,7 @@ export class UiInputOtp extends WebComponent {
     this._observer = new MutationObserver(() => this._sync());
     this._observer.observe(input, { attributes: true });
     this._last = input.value;
-    this.enhanced = true;
+    this.#enhanced.set(true);
     this._sync();
     return true;
   }
@@ -162,11 +158,11 @@ export class UiInputOtp extends WebComponent {
   // A part connected after the input (a client render appends children in
   // order) asks to be drawn.
   _partConnected(): void {
-    if (this.enhanced) queueMicrotask(() => this._sync());
+    if (this.#enhanced.get()) queueMicrotask(() => this._sync());
   }
 
   render() {
-    void this.revision;
+    void this.#revision.get();
     const disabled = !!this.input?.disabled;
     return html`<div data-slot="input-otp" ?data-disabled=${disabled} class=${inputOtpClass()}><slot></slot></div>`;
   }
@@ -241,7 +237,7 @@ export class UiInputOtp extends WebComponent {
   // style recalculation.
   _sync = (): void => {
     const input = this.input;
-    if (!input || !this.enhanced) return;
+    if (!input || !this.#enhanced.get()) return;
     const value = input.value;
     const max = this.maxLength;
     const start = Math.min(input.selectionStart ?? value.length, max - 1);
@@ -263,7 +259,7 @@ export class UiInputOtp extends WebComponent {
     const disabled = !!input.disabled;
     if (disabled !== this._disabled) {
       this._disabled = disabled;
-      this.revision++;
+      this.#revision.set(this.#revision.get() + 1);
     }
   };
 }

@@ -125,11 +125,7 @@ export class UiCombobox extends WebComponent({
 }) {
   // The chosen values (the form's view of `value`).
   #values = signal<string[]>([]);
-  get values() { return this.#values.get(); }
-  set values(v) { this.#values.set(v); }
   #query = signal('');
-  get query() { return this.#query.get(); }
-  set query(v) { this.#query.set(v); }
   #highlighted = signal('');
   get highlighted() { return this.#highlighted.get(); }
   set highlighted(v) { this.#highlighted.set(v); }
@@ -167,14 +163,14 @@ export class UiCombobox extends WebComponent({
     super.willUpdate?.(changedProperties);
     if (!this._parsed) {
       this._parsed = true;
-      this.values = this._initial();
+      this.#values.set(this._initial());
     }
   }
 
   render() {
     const name = this.name;
     return html`<div data-slot="combobox" class="relative" @keydown=${this._onKeyDown} @focusout=${this._onFocusOut}><slot></slot>${name
-      ? (this.values ?? []).map((v) => html`<input type="hidden" name=${name} value=${v}>`)
+      ? (this.#values.get() ?? []).map((v) => html`<input type="hidden" name=${name} value=${v}>`)
       : ''}</div>`;
   }
 
@@ -216,7 +212,7 @@ export class UiCombobox extends WebComponent({
 
   /** The items that match the typed text, in order. */
   visibleItems(): UiComboboxItem[] {
-    const q = (this.query ?? '').trim().toLowerCase();
+    const q = (this.#query.get() ?? '').trim().toLowerCase();
     return this._items().filter((i) => !q || i.label.toLowerCase().includes(q));
   }
 
@@ -242,17 +238,17 @@ export class UiCombobox extends WebComponent({
     if (!item || item.disabled) return;
     const input = this._input();
     if (this.multiple) {
-      const has = this.values.includes(value);
-      this.values = has ? this.values.filter((v) => v !== value) : [...this.values, value];
-      this.query = '';
+      const has = this.#values.get().includes(value);
+      this.#values.set(has ? this.#values.get().filter((v) => v !== value) : [...this.#values.get(), value]);
+      this.#query.set('');
       if (input) input.value = '';
     } else {
-      this.values = [value];
-      this.query = '';
+      this.#values.set([value]);
+      this.#query.set('');
       if (input) input.value = item.label;
       this.hide();
     }
-    this._emit('ui-value-change', { value: this.multiple ? [...this.values] : value });
+    this._emit('ui-value-change', { value: this.multiple ? [...this.#values.get()] : value });
   }
 
   /**
@@ -261,23 +257,23 @@ export class UiCombobox extends WebComponent({
    * silently do nothing instead.
    */
   removeValue(value: string): void {
-    if (!this.values.includes(value)) return;
-    this.values = this.values.filter((v) => v !== value);
-    this._emit('ui-value-change', { value: this.multiple ? [...this.values] : '' });
+    if (!this.#values.get().includes(value)) return;
+    this.#values.set(this.#values.get().filter((v) => v !== value));
+    this._emit('ui-value-change', { value: this.multiple ? [...this.#values.get()] : '' });
   }
 
   /** Clear every chosen value and the typed text. */
   clear(): void {
     const input = this._input();
     if (input) input.value = '';
-    this.query = '';
-    this.values = [];
+    this.#query.set('');
+    this.#values.set([]);
     this._emit('ui-value-change', { value: this.multiple ? [] : '' });
     input?.focus();
   }
 
   _setQuery(text: string): void {
-    this.query = text;
+    this.#query.set(text);
     this.show();
     // A new filter highlights its first match.
     const first = this.visibleItems().find((i) => !i.disabled);
@@ -298,7 +294,7 @@ export class UiCombobox extends WebComponent({
     for (const item of this._items()) {
       item.state = {
         visible: visible.has(item),
-        selected: this.values.includes(item.itemValue),
+        selected: this.#values.get().includes(item.itemValue),
         highlighted: this.open && item.itemValue === this.highlighted && visible.has(item),
       };
     }
@@ -310,13 +306,13 @@ export class UiCombobox extends WebComponent({
     for (const content of this._own<UiComboboxContent>(`${ROOT}-content`)) content.open = this.open;
     for (const field of this._own<UiComboboxInput | UiComboboxChipsInput>(`${ROOT}-input, ${ROOT}-chips-input`)) {
       const h = this._items().find((i) => i.itemValue === this.highlighted && visible.has(i));
-      field.state = { open: this.open, activeId: this.open && h ? h.optionId : '', hasValue: this.values.length > 0 };
+      field.state = { open: this.open, activeId: this.open && h ? h.optionId : '', hasValue: this.#values.get().length > 0 };
     }
-    for (const chips of this._own<UiComboboxChips>(`${ROOT}-chips`)) chips.chips = this.values.map((v) => ({ value: v, label: this.labelOf(v) }));
+    for (const chips of this._own<UiComboboxChips>(`${ROOT}-chips`)) chips.chips = this.#values.get().map((v) => ({ value: v, label: this.labelOf(v) }));
     // A single combobox shows its choice in the input until the user types.
     const input = this._input();
-    if (input && !this.multiple && !this.open && !this.query) {
-      const label = this.values[0] ? this.labelOf(this.values[0]) : '';
+    if (input && !this.multiple && !this.open && !this.#query.get()) {
+      const label = this.#values.get()[0] ? this.labelOf(this.#values.get()[0]) : '';
       if (input.value !== label && document.activeElement !== input) input.value = label;
     }
   }
@@ -330,7 +326,7 @@ export class UiCombobox extends WebComponent({
     document.addEventListener('pointerdown', this._onDocPointerDown, true);
     window.addEventListener('resize', this._reposition);
     if (!this.highlighted) {
-      const start = this._items().find((i) => this.values.includes(i.itemValue) && !i.disabled)
+      const start = this._items().find((i) => this.#values.get().includes(i.itemValue) && !i.disabled)
         ?? this.visibleItems().find((i) => !i.disabled);
       this.highlighted = start?.itemValue ?? '';
     }
@@ -342,7 +338,7 @@ export class UiCombobox extends WebComponent({
     document.removeEventListener('pointerdown', this._onDocPointerDown, true);
     window.removeEventListener('resize', this._reposition);
     this.highlighted = '';
-    if (!this.multiple) this.query = '';
+    if (!this.multiple) this.#query.set('');
   }
 
   _reposition = (): void => {
@@ -388,8 +384,8 @@ export class UiCombobox extends WebComponent({
       this.hide();
     } else if (e.key === 'Tab') {
       this.hide();
-    } else if (e.key === 'Backspace' && this.multiple && !input.value && this.values.length) {
-      this.removeValue(this.values[this.values.length - 1]);
+    } else if (e.key === 'Backspace' && this.multiple && !input.value && this.#values.get().length) {
+      this.removeValue(this.#values.get()[this.#values.get().length - 1]);
     }
   };
 
@@ -403,9 +399,9 @@ export class UiCombobox extends WebComponent({
     this.hide();
     // Leaving a single combobox puts its choice back in the input.
     if (!this.multiple) {
-      this.query = '';
+      this.#query.set('');
       const input = this._input();
-      if (input) input.value = this.values[0] ? this.labelOf(this.values[0]) : '';
+      if (input) input.value = this.#values.get()[0] ? this.labelOf(this.#values.get()[0]) : '';
     }
   };
 

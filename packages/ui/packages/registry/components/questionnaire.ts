@@ -183,11 +183,7 @@ export class UiQuestionnaire extends WebComponent({
   asChild: prop(Boolean, { attribute: 'as-child' }),
 }) {
   #enhanced = signal(false);
-  get enhanced() { return this.#enhanced.get(); }
-  set enhanced(v) { this.#enhanced.set(v); }
   #active = signal('');
-  get active() { return this.#active.get(); }
-  set active(v) { this.#active.set(v); }
   _queued = false;
 
   constructor() {
@@ -229,7 +225,7 @@ export class UiQuestionnaire extends WebComponent({
       data-slot="questionnaire"
       action=${this.action || null}
       method=${this.method || null}
-      ?novalidate=${!!this.enhanced}
+      ?novalidate=${!!this.#enhanced.get()}
       data-shortcuts=${this.shortcuts || null}
       class=${cn(questionnaireClass(), takeAuthored(this))}
     ><slot></slot></form>`;
@@ -245,7 +241,7 @@ export class UiQuestionnaire extends WebComponent({
     super.willUpdate?.(changedProperties);
     // The active question set from outside: go there, with no validation, as
     // a controlled shadcn Questionnaire does.
-    if (changedProperties.has('item') && this.enhanced && this.item && this.item !== this.active) {
+    if (changedProperties.has('item') && this.#enhanced.get() && this.item && this.item !== this.#active.get()) {
       const target = this.items().find((i) => i.name === this.item);
       if (target) queueMicrotask(() => this._go(target, { focus: false }));
     }
@@ -262,14 +258,14 @@ export class UiQuestionnaire extends WebComponent({
   }
 
   _enhance(): void {
-    if (this.enhanced) return;
+    if (this.#enhanced.get()) return;
     const items = this.items();
     const wanted = this.item || this.defaultItem;
     const first = items.find((i) => i.name === wanted) ?? items[0];
     if (!first) return;
-    this.active = first.name;
+    this.#active.set(first.name);
     this.item = first.name;
-    this.enhanced = true;
+    this.#enhanced.set(true);
     // An author's form validates per question from here, as the element's own does.
     if (this.asChild) {
       const form = this.form();
@@ -288,7 +284,7 @@ export class UiQuestionnaire extends WebComponent({
 
   _activeItem(): UiQuestionnaireItem | null {
     const items = this.items();
-    return items.find((i) => i.name === this.active) ?? items[0] ?? null;
+    return items.find((i) => i.name === this.#active.get()) ?? items[0] ?? null;
   }
 
   /** Whether a question has an answer: a checked choice or a filled text field. */
@@ -303,7 +299,7 @@ export class UiQuestionnaire extends WebComponent({
     const at = item ? items.indexOf(item) : -1;
     const last = at === items.length - 1;
     for (const i of this._all(ITEM) as UiQuestionnaireItem[]) {
-      i.flow = { enhanced: !!this.enhanced, active: i === item };
+      i.flow = { enhanced: !!this.#enhanced.get(), active: i === item };
     }
     for (const c of this._all('ui-questionnaire-choice') as UiQuestionnaireChoice[]) c._syncChecked();
     for (const p of this._all('ui-questionnaire-progress') as UiQuestionnaireProgress[]) {
@@ -312,7 +308,7 @@ export class UiQuestionnaire extends WebComponent({
     const show = (tag: string, visible: boolean) => {
       for (const b of this._all(tag) as UiQuestionnaireButton[]) b.visible = visible;
     };
-    if (!this.enhanced) {
+    if (!this.#enhanced.get()) {
       show('ui-questionnaire-previous', false);
       show('ui-questionnaire-skip', false);
       show('ui-questionnaire-next', false);
@@ -332,8 +328,8 @@ export class UiQuestionnaire extends WebComponent({
 
   _go(item: UiQuestionnaireItem | undefined, opts: { focus?: boolean } = {}): void {
     if (!item) return;
-    if (item.name !== this.active) {
-      this.active = item.name;
+    if (item.name !== this.#active.get()) {
+      this.#active.set(item.name);
       this.item = item.name;
       this.dispatchEvent(new CustomEvent('ui-active-change', { bubbles: true, detail: { name: item.name } }));
     }
@@ -391,7 +387,7 @@ export class UiQuestionnaire extends WebComponent({
 
   // Enter in the form, and the Submit button, both arrive here.
   _onSubmit = (e: Event): void => {
-    if (!this.enhanced || (e.target as Element | null)?.closest?.(ROOT) !== this) return;
+    if (!this.#enhanced.get() || (e.target as Element | null)?.closest?.(ROOT) !== this) return;
     const items = this.items();
     const item = this._activeItem();
     if (item && items.indexOf(item) < items.length - 1) {
@@ -410,7 +406,7 @@ export class UiQuestionnaire extends WebComponent({
   };
 
   _onKeyDown = (e: KeyboardEvent): void => {
-    if (!this.enhanced || !this.shortcuts || rootOf(e.target as Element) !== this || e.metaKey || e.ctrlKey || e.altKey || isTextEntry(e.target)) return;
+    if (!this.#enhanced.get() || !this.shortcuts || rootOf(e.target as Element) !== this || e.metaKey || e.ctrlKey || e.altKey || isTextEntry(e.target)) return;
     const item = this._activeItem();
     if (!item) return;
     const choices = item.choices();
@@ -608,8 +604,6 @@ export class UiQuestionnaireChoice extends WebComponent({
   disabled: Boolean,
 }) {
   #live = signal(false);
-  get live() { return this.#live.get(); }
-  set live(v) { this.#live.set(v); }
   constructor() {
     super();
     this.value = '';
@@ -619,7 +613,7 @@ export class UiQuestionnaireChoice extends WebComponent({
 
   connectedCallback(): void {
     super.connectedCallback?.();
-    this.live = this.checked;
+    this.#live.set(this.checked);
     announce(this);
   }
 
@@ -629,7 +623,7 @@ export class UiQuestionnaireChoice extends WebComponent({
 
   _syncChecked(): void {
     const on = !!this.input()?.checked;
-    if (on !== this.live) this.live = on;
+    if (on !== this.#live.get()) this.#live.set(on);
     this.requestUpdate?.();
   }
 
@@ -652,8 +646,8 @@ export class UiQuestionnaireChoice extends WebComponent({
     return html`<label
       data-slot="questionnaire-choice"
       data-type=${type}
-      ?data-checked=${this.live}
-      ?data-unchecked=${!this.live}
+      ?data-checked=${this.#live.get()}
+      ?data-unchecked=${!this.#live.get()}
       ?data-disabled=${disabled}
       data-shortcut=${shortcut || null}
       class=${cn(questionnaireChoiceClass(), takeAuthored(this))}

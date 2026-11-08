@@ -142,8 +142,6 @@ export class UiCommand extends WebComponent({
   value: prop(String, { reflect: true }),
 }) {
   #search = signal('');
-  get search() { return this.#search.get(); }
-  set search(v) { this.#search.set(v); }
   _id = '';
 
   constructor() {
@@ -197,8 +195,8 @@ export class UiCommand extends WebComponent({
 
   /** Set the search text, as typing does. */
   setSearch(search: string): void {
-    if (search === this.search) return;
-    this.search = search;
+    if (search === this.#search.get()) return;
+    this.#search.set(search);
     this.dispatchEvent(new CustomEvent('ui-search-change', { bubbles: true, detail: { search } }));
     this.refresh(true);
   }
@@ -209,7 +207,7 @@ export class UiCommand extends WebComponent({
    */
   refresh(reselect = false): void {
     const filter = this.shouldFilter !== 'false';
-    const search = this.search ?? '';
+    const search = this.#search.get() ?? '';
     const items = this._own<UiCommandItem>(`${ROOT}-item`);
     const scored = items.map((item, dom) => ({
       item,

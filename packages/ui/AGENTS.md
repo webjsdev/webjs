@@ -57,10 +57,22 @@ returning an `` html`...` `` template, declarative bindings (`@click`,
 `?attr`, `attr=`, `.prop`), and `<slot></slot>` for projecting authored
 children. Light DOM throughout, full shadow-DOM slot parity.
 
-Internal state is an instance signal, never a reactive property (#1677). A
-part whose state its parent element pushes in (a command item's `state`, a
-group's `shown`) keeps a same-named getter/setter over a private signal, so
-the parent assigns it like a property:
+Internal state is an instance signal, never a reactive property (#1677), and
+it stays a bare private signal unless something outside the class touches it
+(#1679): read it with `this.#copied.get()`, write it with
+`this.#copied.set(true)`, and give it no public surface.
+
+```ts
+#copied = signal(false);
+```
+
+Only state another element, a test, or a documented API reaches gets a
+same-named getter/setter over the signal: a part whose parent pushes its state
+in (a command item's `state`, a group's `shown`), a root a part writes back to
+(the combobox's `highlighted`), or the sidebar provider's `isMobile` /
+`openMobile` (shadcn's `useSidebar()`). Never expose the signal itself as a
+public field, since `el.shown = false` would then silently replace it and
+reactivity would die with no error.
 
 ```ts
 #shown = signal(true);
@@ -70,7 +82,8 @@ set shown(v) { this.#shown.set(v); }
 
 A part reading that state in `updated()` (to set its host's `hidden`, say)
 re-renders when it changes, since the component tracks the signals its whole
-update cycle reads. `test/registry-contents.test.js` fails on a `state: true`.
+update cycle reads. `test/registry-contents.test.js` fails on a `state: true`,
+and on an accessor added to a prop it lists as internal.
 
 popover, accordion, and collapsible used to live here but migrated to
 Tier 1 once their behaviour could be expressed by native primitives

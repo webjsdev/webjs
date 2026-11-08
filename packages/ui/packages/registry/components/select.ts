@@ -157,16 +157,10 @@ export class UiSelect extends WebComponent({
 }) {
   // Set once the element has taken over from the native select.
   #enhanced = signal(false);
-  get enhanced() { return this.#enhanced.get(); }
-  set enhanced(v) { this.#enhanced.set(v); }
   // Bumped whenever the native select changes under the element.
   #revision = signal(0);
-  get revision() { return this.#revision.get(); }
-  set revision(v) { this.#revision.set(v); }
   // A failed constraint check, until the value is valid again.
   #invalid = signal(false);
-  get invalid() { return this.#invalid.get(); }
-  set invalid(v) { this.#invalid.set(v); }
   _id = '';
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
@@ -199,7 +193,7 @@ export class UiSelect extends WebComponent({
     const select = this.select;
     if (!select) return;
     select.value = v;
-    this.revision++;
+    this.#revision.set(this.#revision.get() + 1);
   }
 
   connectedCallback(): void {
@@ -239,7 +233,7 @@ export class UiSelect extends WebComponent({
 
   /** Take over from the native select. True once it has (or already had). */
   _enhance(): boolean {
-    if (this.enhanced) return true;
+    if (this.#enhanced.get()) return true;
     const select = this.select;
     if (!select) return false;
     this._savedStyle = select.getAttribute('style');
@@ -251,22 +245,22 @@ export class UiSelect extends WebComponent({
     select.addEventListener('invalid', this._onInvalid);
     this._form = select.form;
     this._form?.addEventListener('reset', this._onReset);
-    this._observer = new MutationObserver(() => { this.revision++; });
+    this._observer = new MutationObserver(() => { this.#revision.set(this.#revision.get() + 1); });
     this._observer.observe(select, { childList: true, subtree: true, attributes: true, characterData: true });
-    this.enhanced = true;
+    this.#enhanced.set(true);
     return true;
   }
 
   // The select changed under the element: an option edit, a form reset, or a
   // script setting its value.
   _onNativeChange = (): void => {
-    if (this.invalid && this.select?.checkValidity()) this.invalid = false;
-    this.revision++;
+    if (this.#invalid.get() && this.select?.checkValidity()) this.#invalid.set(false);
+    this.#revision.set(this.#revision.get() + 1);
   };
 
   // A reset restores the value AFTER its event, so read it a tick later.
   _onReset = (): void => {
-    queueMicrotask(() => { this.invalid = false; this.revision++; });
+    queueMicrotask(() => { this.#invalid.set(false); this.#revision.set(this.#revision.get() + 1); });
   };
 
   // The hidden select takes focus from its label and from a failed submit;
@@ -276,7 +270,7 @@ export class UiSelect extends WebComponent({
   };
 
   _onInvalid = (): void => {
-    this.invalid = true;
+    this.#invalid.set(true);
     this._trigger()?.focus();
   };
 
@@ -348,15 +342,15 @@ export class UiSelect extends WebComponent({
   // a class the element changes.
   render() {
     if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
-    if (!this.enhanced) {
+    if (!this.#enhanced.get()) {
       return html`<div data-slot="select" class="contents"><slot></slot></div>`;
     }
-    void this.revision;
+    void this.#revision.get();
     const select = this.select;
     const current = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
     const shown = current && !UiSelect._isPlaceholder(current) ? current : null;
     const labels = select?.labels ? Array.from(select.labels).map((l) => ensureId(l, 'ui-select-label')) : [];
-    const invalid = this.invalid || select?.getAttribute('aria-invalid') === 'true';
+    const invalid = this.#invalid.get() || select?.getAttribute('aria-invalid') === 'true';
     const listId = `${this._id}-listbox`;
     const renderEntry = (e: Entry): unknown => {
       if (e.kind === 'separator') {
@@ -550,7 +544,7 @@ export class UiSelect extends WebComponent({
       select.dispatchEvent(new Event('change', { bubbles: true }));
       this.dispatchEvent(new CustomEvent('ui-value-change', { bubbles: true, detail: { value: select.value } }));
     }
-    this.revision++;
+    this.#revision.set(this.#revision.get() + 1);
     if (this.open) this.hide();
   }
 

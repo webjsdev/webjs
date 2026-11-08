@@ -142,8 +142,6 @@ export class UiCodeBlockCopyButton extends WebComponent({
   size: String,
 }) {
   #copied = signal(false);
-  get copied() { return this.#copied.get(); }
-  set copied(v) { this.#copied.set(v); }
   _timer = 0;
 
   constructor() {
@@ -170,22 +168,22 @@ export class UiCodeBlockCopyButton extends WebComponent({
     return html`<button
       type="button"
       data-slot="code-block-copy-button"
-      ?data-copied=${!!this.copied}
-      aria-label=${this.copied ? 'Copied' : 'Copy'}
+      ?data-copied=${!!this.#copied.get()}
+      aria-label=${this.#copied.get() ? 'Copied' : 'Copy'}
       class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), 'cn-code-block-copy-button')}
       @click=${this._onClick}
-    >${this.copied
+    >${this.#copied.get()
       ? html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`
-      : html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`}</button><span aria-live="polite" class="sr-only">${this.copied ? 'Copied' : ''}</span>`;
+      : html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`}</button><span aria-live="polite" class="sr-only">${this.#copied.get() ? 'Copied' : ''}</span>`;
   }
 
   _onClick = (): void => {
     const write = navigator.clipboard?.writeText?.(this.text());
     if (!write) return;
     write.then(() => {
-      this.copied = true;
+      this.#copied.set(true);
       clearTimeout(this._timer);
-      this._timer = window.setTimeout(() => { this.copied = false; }, 2000);
+      this._timer = window.setTimeout(() => { this.#copied.set(false); }, 2000);
       this.dispatchEvent(new CustomEvent('ui-copy', { bubbles: true, detail: { text: this.text() } }));
     }).catch(() => {});
   };

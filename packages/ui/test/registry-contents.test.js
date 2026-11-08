@@ -470,3 +470,30 @@ test('internal state is a signal, never a state: true property (#1677)', { skip 
   walk(REGISTRY_DIR);
   assert.deepEqual(offenders, [], 'hold internal state in an instance signal, as dropdown-menu does');
 });
+
+// Internal state stays a bare private signal: an accessor is only for state
+// another element, a test, or a public API touches (#1679). These are the
+// props nothing outside their class reads or writes.
+const INTERNAL_SIGNALS = {
+  'calendar.ts': ['selection', 'shown', 'focused'],
+  'carousel.ts': ['edges'],
+  'code-block.ts': ['copied'],
+  'combobox.ts': ['values', 'query'],
+  'command.ts': ['search'],
+  'input-otp.ts': ['enhanced', 'revision'],
+  'questionnaire.ts': ['enhanced', 'active', 'live'],
+  'select.ts': ['enhanced', 'revision', 'invalid'],
+  'slider.ts': ['enhanced', 'revision'],
+};
+
+test('internal-only state is a bare signal with no public accessor (#1679)', { skip }, () => {
+  const exposed = [];
+  for (const [file, names] of Object.entries(INTERNAL_SIGNALS)) {
+    const src = readFileSync(join(COMPONENTS_DIR, file), 'utf8');
+    for (const name of names) {
+      if (!src.includes(`#${name} = signal`)) exposed.push(`${file} #${name} is not a signal`);
+      if (new RegExp(`\\bget ${name}\\(\\) \\{ return this\\.#${name}\\.get\\(\\)`).test(src)) exposed.push(`${file} ${name} has a getter`);
+    }
+  }
+  assert.deepEqual(exposed, []);
+});
