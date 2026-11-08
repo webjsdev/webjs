@@ -502,8 +502,10 @@ async function websiteStage(port) {
 }
 
 if (!args.includes('--skip-suites')) {
-  record('suites', 'npm test (Node)', run('npm', ['test'], { cwd: ROOT, quiet: true }).ok);
-  record('suites', 'Bun matrix (scripts/run-bun-tests.js)', run('node', ['scripts/run-bun-tests.js'], { cwd: ROOT, quiet: true }).ok);
+  const nodeSuite = run('npm', ['test'], { cwd: ROOT, quiet: true });
+  record('suites', 'npm test (Node)', nodeSuite.ok, nodeSuite.ok ? '' : nodeSuite.out.slice(-12000));
+  const bunSuite = run('node', ['scripts/run-bun-tests.js'], { cwd: ROOT, quiet: true });
+  record('suites', 'Bun matrix (scripts/run-bun-tests.js)', bunSuite.ok, bunSuite.ok ? '' : bunSuite.out.slice(-12000));
 }
 const tarballs = packCandidate();
 console.log(`candidate: ${Object.values(tarballs).map((t) => t.split(sep).pop()).join(', ')}`);
