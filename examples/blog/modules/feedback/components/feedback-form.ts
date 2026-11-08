@@ -1,4 +1,4 @@
-import { WebComponent, prop, html } from '@webjsdev/core';
+import { WebComponent, prop, html, signal } from '@webjsdev/core';
 import { submitFeedback } from '#modules/feedback/actions/submit-feedback.server.ts';
 
 /**
@@ -27,22 +27,21 @@ import { submitFeedback } from '#modules/feedback/actions/submit-feedback.server
  * which is the progressive-enhancement claim.
  */
 class FeedbackForm extends WebComponent({
-  rows: prop(Number, { state: true }),
-  attempts: prop(Number, { state: true }),
   error: prop(String),
   value: prop(String),
 }) {
+  #rows = signal(1);
+  #attempts = signal(0);
+
   constructor() {
     super();
-    this.rows = 1;
-    this.attempts = 0;
     this.error = '';
     this.value = '';
   }
 
   formRow(i: number) {
     return html`
-      <form action=${submitFeedback} class="flex flex-col gap-3" @submit=${() => { this.attempts += 1; }}>
+      <form action=${submitFeedback} class="flex flex-col gap-3" @submit=${() => this.#attempts.set(this.#attempts.get() + 1)}>
         <label class="flex flex-col gap-1">
           <span>Email</span>
           <input
@@ -61,9 +60,9 @@ class FeedbackForm extends WebComponent({
 
   render() {
     return html`
-      ${Array.from({ length: this.rows }, (_, i) => this.formRow(i))}
-      <button id="live-add" type="button" @click=${() => { this.rows += 1; }}>Add another</button>
-      <span id="live-attempts">${this.attempts}</span>
+      ${Array.from({ length: this.#rows.get() }, (_, i) => this.formRow(i))}
+      <button id="live-add" type="button" @click=${() => this.#rows.set(this.#rows.get() + 1)}>Add another</button>
+      <span id="live-attempts">${this.#attempts.get()}</span>
     `;
   }
 }

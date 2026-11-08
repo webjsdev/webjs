@@ -1,4 +1,4 @@
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { repeat } from '@webjsdev/core/directives';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -69,9 +69,13 @@ const deltas = (text: string): string[] => text.match(/\S+\s*/g) ?? [text];
 export class MessageScrollerDemo extends WebComponent({
   thinkMs: prop(Number, { attribute: 'think-ms' }),
   tokenMs: prop(Number, { attribute: 'token-ms' }),
-  messages: prop<ChatMessage[]>({ state: true }),
-  status: prop<Status>({ state: true }),
 }) {
+  #messages = signal<ChatMessage[]>([]);
+  get messages() { return this.#messages.get(); }
+  set messages(v) { this.#messages.set(v); }
+  #status = signal<Status>('ready');
+  get status() { return this.#status.get(); }
+  set status(v) { this.#status.set(v); }
   // Bumped by a reset, so a reply still streaming stops writing.
   _run = 0;
   // The user turns that have already played their entrance.
@@ -81,8 +85,6 @@ export class MessageScrollerDemo extends WebComponent({
     super();
     this.thinkMs = 1000;
     this.tokenMs = 20;
-    this.messages = [];
-    this.status = 'ready';
   }
 
   /** The next question in the script, or null once all have been asked. */

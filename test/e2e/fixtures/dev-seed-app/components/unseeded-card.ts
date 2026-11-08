@@ -1,4 +1,4 @@
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { getThing } from '#actions/things.server.ts';
 
 /**
@@ -9,11 +9,12 @@ import { getThing } from '#actions/things.server.ts';
  * #1309 the page was indistinguishable from a healthy one without opening the
  * network tab.
  */
-class UnseededCard extends WebComponent({ tid: prop(Number), bump: prop({ state: true }) }) {
+class UnseededCard extends WebComponent({ tid: prop(Number) }) {
+  #bump = signal(0);
+
   constructor() {
     super();
     this.tid = 1;
-    this.bump = 0;
   }
 
   connectedCallback() {
@@ -23,10 +24,12 @@ class UnseededCard extends WebComponent({ tid: prop(Number), bump: prop({ state:
   }
 
   async render() {
+    // Read before the await: only reads ahead of it are tracked.
+    const bump = this.#bump.get();
     const t = await getThing(this.tid);
     return html`
       <p class="lbl">${t.label}</p>
-      <button id="bump2" @click=${() => { this.bump = this.bump + 1; }}>bumped ${this.bump}</button>
+      <button id="bump2" @click=${() => this.#bump.set(bump + 1)}>bumped ${bump}</button>
     `;
   }
 }
