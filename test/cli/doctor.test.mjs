@@ -1387,91 +1387,118 @@ test('the check carries the stable code ELISION_COMPONENTS and is gateable', asy
 });
 
 // ---------------------------------------------------------------------------
-// Static build-output freshness (dev.regenerate, #967): the parity backstop.
-// Dev recompiles on request; this WARNs when a committed / built output is
-// older than a source (the case that bites `webjs start` or a committed file).
+// Static build-output freshness (dev.regenerate, #967, #1672): the parity
+// backstop. Freshness is the server's build record (.webjs/regenerate.json),
+// read through regenerateStatus, so the doctor and the dev server agree. The
+// tests inject THIS checkout's reader, because a linked worktree resolves a bare
+// @webjsdev/server into the primary checkout; one test runs the bare default.
 // ---------------------------------------------------------------------------
 const FRESHNESS_CHECK = 'Static build outputs (dev.regenerate freshness)';
+const regen = await import(resolve(__dirname, '../../packages/server/src/dev-regenerate.js'));
+const freshOpts = () => baseOpts({ regenerateStatus: regen.regenerateStatus });
 
+// A rule whose command writes the output and counts its runs in ran.log.
+const REGEN_RULE = {
+  output: 'public/tailwind.css',
+  command: "printf x >> ran.log; printf '.a{}' > public/tailwind.css",
+  inputs: ['app', 'public/input.css'],
+};
 const regenPkg = () => JSON.stringify({
   name: 'ui-app',
   dependencies: { '@webjsdev/core': 'latest', '@webjsdev/server': 'latest' },
-  webjs: { dev: { regenerate: [{
-    output: 'public/tailwind.css',
-    command: 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify',
-    inputs: ['app', 'public/input.css'],
-  }] } },
+  webjs: { dev: { regenerate: [REGEN_RULE] } },
 });
+function regenApp() {
+  const dir = tmpDir();
+  write(dir, 'package.json', regenPkg());
+  write(dir, 'app/page.ts', 'export default () => 1;');
+  write(dir, 'public/input.css', '@import "tailwindcss";');
+  return dir;
+}
+const quiet = { warn: () => {} };
 
 test('freshness advisory PASSES when no regenerate rules are declared', async () => {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'plain' }));
-  const r = byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK);
+  const r = byName(await runDoctorChecks(dir, freshOpts()), FRESHNESS_CHECK);
   assert.equal(r.status, 'pass');
   assert.match(r.message, /no webjs\.dev\.regenerate/);
 });
 
 test('freshness advisory PASSES when the output is missing (built on first boot)', async () => {
-  const dir = tmpDir();
-  write(dir, 'package.json', regenPkg());
-  write(dir, 'app/page.ts', 'export default () => 1;');
-  write(dir, 'public/input.css', '@import "tailwindcss";');
-  // No public/tailwind.css on disk: a fresh clone, not a staleness fail.
-  const r = byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK);
+  const dir = regenApp();
+  const r = byName(await runDoctorChecks(dir, freshOpts()), FRESHNESS_CHECK);
   assert.equal(r.status, 'pass');
 });
 
-test('freshness advisory PASSES when the output is newer than every source', async () => {
-  const dir = tmpDir();
-  write(dir, 'package.json', regenPkg());
-  write(dir, 'app/page.ts', 'export default () => 1;');
-  write(dir, 'public/input.css', '@import "tailwindcss";');
-  write(dir, 'public/tailwind.css', '/* built */');
-  const past = new Date(Date.now() - 60_000);
-  utimesSync(join(dir, 'app/page.ts'), past, past);
-  utimesSync(join(dir, 'public/input.css'), past, past);
-  const r = byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK);
+test('freshness advisory PASSES after the outputs are built and recorded', async () => {
+  const dir = regenApp();
+  await regen.regenerateOutputs(dir, quiet);
+  const r = byName(await runDoctorChecks(dir, freshOpts()), FRESHNESS_CHECK);
   assert.equal(r.status, 'pass');
+  assert.match(r.message, /matches its build record/);
 });
 
-test('freshness advisory WARNs (never fails) when a source is newer than the output', async () => {
-  const dir = tmpDir();
-  write(dir, 'package.json', regenPkg());
-  write(dir, 'public/input.css', '@import "tailwindcss";');
-  write(dir, 'public/tailwind.css', '/* stale */');
-  const past = new Date(Date.now() - 60_000);
-  utimesSync(join(dir, 'public/tailwind.css'), past, past);
-  utimesSync(join(dir, 'public/input.css'), past, past);
-  write(dir, 'app/page.ts', 'export default () => "grid-cols-4";'); // edited now
-  const results = await runDoctorChecks(dir, baseOpts());
+test('freshness advisory WARNs (never fails) on an output built outside the record', async () => {
+  // A raw `npm run css:build` writes the output and no record.
+  const dir = regenApp();
+  write(dir, 'public/tailwind.css', '/* built by hand */');
+  const results = await runDoctorChecks(dir, freshOpts());
   const r = byName(results, FRESHNESS_CHECK);
   assert.equal(r.status, 'warn');
-  assert.match(r.message, /public\/tailwind\.css/);
+  assert.match(r.message, /public\/tailwind\.css \(unrecorded/);
   assert.equal(results.filter((x) => x.status === 'fail').length, 0, 'advisory only, never a hard fail');
-  assert.match(r.fix, /webjs dev/, 'the fix names the refresh that clears an unchanged-bytes rebuild');
 });
 
-test('freshness advisory AGREES with the dev server after a rebuild that changes no bytes (#1672)', async () => {
-  // The server's regenerate runs a command that exits 0 without writing (the
-  // Tailwind CLI skips an unchanged write). The server stamps the output, and
-  // the doctor, reading the same mtimes, must then report it fresh rather than
-  // the stale warning a bytes-identical rebuild used to leave behind.
-  const { maybeRegenerate } = await import(
-    resolve(__dirname, '../../packages/server/src/dev-regenerate.js')
-  );
-  const dir = tmpDir();
-  write(dir, 'package.json', regenPkg());
-  write(dir, 'public/input.css', '@import "tailwindcss";');
-  write(dir, 'public/tailwind.css', '/* same */');
-  const past = new Date(Date.now() - 60_000);
-  utimesSync(join(dir, 'public/tailwind.css'), past, past);
-  utimesSync(join(dir, 'public/input.css'), past, past);
-  write(dir, 'app/page.ts', 'export default () => 2;'); // edited now, no new class
+test('freshness advisory WARNs when a source changed after the recorded build', async () => {
+  const dir = regenApp();
+  await regen.regenerateOutputs(dir, quiet);
+  write(dir, 'app/page.ts', 'export default () => "grid-cols-4";');
+  const r = byName(await runDoctorChecks(dir, freshOpts()), FRESHNESS_CHECK);
+  assert.equal(r.status, 'warn');
+  assert.match(r.message, /public\/tailwind\.css \(stale/);
+});
 
-  const rule = { output: 'public/tailwind.css', command: 'exit 0', inputs: ['app', 'public/input.css'] };
-  assert.equal(byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK).status, 'warn');
-  await maybeRegenerate(dir, 'public/tailwind.css', [rule]);
-  assert.equal(byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK).status, 'pass');
+test('freshness advisory: its fix is a pipeline command, and running it clears the warning (#1672)', async () => {
+  // The remedy has to work in CI, where there is no dev server to request the
+  // output from. Follow the fix text literally: run `webjs regenerate`.
+  const dir = regenApp();
+  write(dir, 'public/tailwind.css', '/* built by hand */');
+  const r = byName(await runDoctorChecks(dir, freshOpts()), FRESHNESS_CHECK);
+  assert.match(r.fix, /Run `webjs regenerate`/);
+  assert.doesNotMatch(r.fix, /webjs dev/, 'no remedy that needs a dev server');
+  const cli = spawnSync(process.execPath, [CLI, 'regenerate'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.equal(byName(await runDoctorChecks(dir, freshOpts()), FRESHNESS_CHECK).status, 'pass');
+});
+
+test('freshness advisory AGREES with the dev server after a rebuild with unchanged bytes (#1672)', async () => {
+  const dir = regenApp();
+  write(dir, 'public/tailwind.css', '.a{}');
+  await regen.maybeRegenerate(dir, REGEN_RULE.output, [REGEN_RULE], quiet);
+  write(dir, 'app/page.ts', 'export default () => 2;'); // no new class
+  await regen.maybeRegenerate(dir, REGEN_RULE.output, [REGEN_RULE], quiet);
+  assert.equal(byName(await runDoctorChecks(dir, freshOpts()), FRESHNESS_CHECK).status, 'pass');
+});
+
+test('freshness advisory reads the record through the installed @webjsdev/server by default', async () => {
+  const dir = regenApp();
+  write(dir, 'public/tailwind.css', '/* built by hand */');
+  const r = byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK);
+  assert.equal(r.status, 'warn');
+  assert.ok(!r.bestEffort, `the reader loaded (${r.message})`);
+  assert.match(r.message, /unrecorded/);
+});
+
+test('freshness advisory degrades to a capped warning when the reader is unavailable', async () => {
+  // An unresolvable server, and a server older than this CLI (no export).
+  const dir = regenApp();
+  const { checkStaticAssetFreshness } = await import(resolve(CLI_LIB_DIR, 'doctor/probes/static-asset-freshness.js'));
+  for (const importServer of [async () => { throw new Error('not installed'); }, async () => ({})]) {
+    const r = await checkStaticAssetFreshness(dir, { importServer });
+    assert.equal(r.status, 'warn');
+    assert.equal(r.bestEffort, true, 'capped: a could-not-check result can never be gated to error');
+  }
 });
 
 // ---------------------------------------------------------------------------
