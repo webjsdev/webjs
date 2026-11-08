@@ -59,7 +59,7 @@
  * </ui-command>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { inputGroupClass, inputGroupAddonClass } from './input-group.ts';
 import { UiDialog, UiDialogContent } from './dialog.ts';
@@ -140,8 +140,10 @@ export class UiCommand extends WebComponent({
   loop: Boolean,
   // The selected item's value.
   value: prop(String, { reflect: true }),
-  search: prop<string>({ state: true }),
 }) {
+  #search = signal('');
+  get search() { return this.#search.get(); }
+  set search(v) { this.#search.set(v); }
   _id = '';
 
   constructor() {
@@ -150,7 +152,6 @@ export class UiCommand extends WebComponent({
     this.shouldFilter = 'true';
     this.loop = false;
     this.value = '';
-    this.search = '';
   }
 
   connectedCallback(): void {
@@ -323,12 +324,13 @@ UiCommand.register('ui-command');
 
 export class UiCommandInput extends WebComponent({
   placeholder: String,
-  activeId: prop<string>({ state: true }),
 }) {
+  #activeId = signal('');
+  get activeId() { return this.#activeId.get(); }
+  set activeId(v) { this.#activeId.set(v); }
   constructor() {
     super();
     this.placeholder = '';
-    this.activeId = '';
   }
 
   connectedCallback(): void {
@@ -397,12 +399,12 @@ UiCommandList.register('ui-command-list');
 // <ui-command-empty>
 // --------------------------------------------------------------------------
 
-export class UiCommandEmpty extends WebComponent({
-  shown: prop<boolean>({ state: true }),
-}) {
+export class UiCommandEmpty extends WebComponent {
+  #shown = signal(false);
+  get shown() { return this.#shown.get(); }
+  set shown(v) { this.#shown.set(v); }
   constructor() {
     super();
-    this.shown = false;
   }
 
   connectedCallback(): void {
@@ -422,16 +424,18 @@ UiCommandEmpty.register('ui-command-empty');
 
 export class UiCommandGroup extends WebComponent({
   heading: String,
-  shown: prop<boolean>({ state: true }),
-  order: prop<number>({ state: true }),
 }) {
+  #shown = signal(true);
+  get shown() { return this.#shown.get(); }
+  set shown(v) { this.#shown.set(v); }
+  #order = signal(0);
+  get order() { return this.#order.get(); }
+  set order(v) { this.#order.set(v); }
   _id = '';
 
   constructor() {
     super();
     this.heading = '';
-    this.shown = true;
-    this.order = 0;
   }
 
   connectedCallback(): void {
@@ -461,12 +465,12 @@ UiCommandGroup.register('ui-command-group');
 // <ui-command-separator>
 // --------------------------------------------------------------------------
 
-export class UiCommandSeparator extends WebComponent({
-  shown: prop<boolean>({ state: true }),
-}) {
+export class UiCommandSeparator extends WebComponent {
+  #shown = signal(true);
+  get shown() { return this.#shown.get(); }
+  set shown(v) { this.#shown.set(v); }
   constructor() {
     super();
-    this.shown = true;
   }
 
   connectedCallback(): void {
@@ -489,8 +493,10 @@ export class UiCommandItem extends WebComponent({
   keywords: String,
   disabled: Boolean,
   checked: Boolean,
-  state: prop<ItemState>({ state: true }),
 }) {
+  #state = signal<ItemState>({ visible: true, selected: false, order: 0 });
+  get state() { return this.#state.get(); }
+  set state(v) { this.#state.set(v); }
   _id = '';
 
   constructor() {
@@ -499,7 +505,6 @@ export class UiCommandItem extends WebComponent({
     this.keywords = '';
     this.disabled = false;
     this.checked = false;
-    this.state = { visible: true, selected: false, order: 0 };
   }
 
   connectedCallback(): void {

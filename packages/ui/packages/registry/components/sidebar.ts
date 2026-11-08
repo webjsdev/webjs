@@ -72,7 +72,7 @@
  * </ui-sidebar-provider>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 import { inputClass } from './input.ts';
@@ -226,9 +226,13 @@ function providerOf(el: Element): UiSidebarProvider | null {
 export class UiSidebarProvider extends WebComponent({
   defaultOpen: prop(String, { attribute: 'default-open' }),
   open: prop(Boolean, { reflect: true }),
-  openMobile: prop<boolean>({ state: true }),
-  isMobile: prop<boolean>({ state: true }),
 }) {
+  #openMobile = signal(false);
+  get openMobile() { return this.#openMobile.get(); }
+  set openMobile(v) { this.#openMobile.set(v); }
+  #isMobile = signal(false);
+  get isMobile() { return this.#isMobile.get(); }
+  set isMobile(v) { this.#isMobile.set(v); }
   _query: MediaQueryList | null = null;
   _parsed = false;
 
@@ -236,8 +240,6 @@ export class UiSidebarProvider extends WebComponent({
     super();
     this.defaultOpen = 'true';
     this.open = false;
-    this.openMobile = false;
-    this.isMobile = false;
   }
 
   /** "expanded" or "collapsed", as shadcn's `state`. */
@@ -279,7 +281,9 @@ export class UiSidebarProvider extends WebComponent({
 
   updated(changedProperties: Map<string, unknown>): void {
     super.updated?.(changedProperties);
-    if (changedProperties.has('open') || changedProperties.has('openMobile') || changedProperties.has('isMobile')) {
+    // `isMobile` and `openMobile` are signals, so a part that reads them
+    // re-renders on its own; only the `open` property needs the nudge.
+    if (changedProperties.has('open')) {
       for (const part of Array.from(this.querySelectorAll<WebComponent>('ui-sidebar, ui-sidebar-trigger, ui-sidebar-rail'))) {
         if (providerOf(part) === this) part.requestUpdate?.();
       }

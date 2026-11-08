@@ -64,7 +64,7 @@
  * </ui-navigation-menu>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { ensureId } from '../lib/utils.ts';
 
 /** The root's classes (the element applies them). */
@@ -385,16 +385,16 @@ UiNavigationMenuItem.register('ui-navigation-menu-item');
 // <ui-navigation-menu-trigger>
 // --------------------------------------------------------------------------
 
-export class UiNavigationMenuTrigger extends WebComponent({
-  open: prop<boolean>({ state: true }),
-}) {
+export class UiNavigationMenuTrigger extends WebComponent {
+  #open = signal(false);
+  get open() { return this.#open.get(); }
+  set open(v) { this.#open.set(v); }
   // After a click closes the panel, the pointer still on the trigger must not
   // reopen it until it leaves.
   _clickClosed = false;
 
   constructor() {
     super();
-    this.open = false;
   }
 
   render() {
@@ -454,12 +454,12 @@ UiNavigationMenuTrigger.register('ui-navigation-menu-trigger');
 // <ui-navigation-menu-content>
 // --------------------------------------------------------------------------
 
-export class UiNavigationMenuContent extends WebComponent({
-  open: prop<boolean>({ state: true }),
-}) {
+export class UiNavigationMenuContent extends WebComponent {
+  #open = signal(false);
+  get open() { return this.#open.get(); }
+  set open(v) { this.#open.set(v); }
   constructor() {
     super();
-    this.open = false;
   }
 
   render() {

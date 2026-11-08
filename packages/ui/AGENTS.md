@@ -57,6 +57,21 @@ returning an `` html`...` `` template, declarative bindings (`@click`,
 `?attr`, `attr=`, `.prop`), and `<slot></slot>` for projecting authored
 children. Light DOM throughout, full shadow-DOM slot parity.
 
+Internal state is an instance signal, never a reactive property (#1677). A
+part whose state its parent element pushes in (a command item's `state`, a
+group's `shown`) keeps a same-named getter/setter over a private signal, so
+the parent assigns it like a property:
+
+```ts
+#shown = signal(true);
+get shown() { return this.#shown.get(); }
+set shown(v) { this.#shown.set(v); }
+```
+
+A part reading that state in `updated()` (to set its host's `hidden`, say)
+re-renders when it changes, since the component tracks the signals its whole
+update cycle reads. `test/registry-contents.test.js` fails on a `state: true`.
+
 popover, accordion, and collapsible used to live here but migrated to
 Tier 1 once their behaviour could be expressed by native primitives
 (the HTML Popover API + `<details>` / `<summary>` + CSS Anchor

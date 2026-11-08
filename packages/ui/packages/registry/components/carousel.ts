@@ -40,7 +40,7 @@
  * </ui-carousel>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, signal } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -73,8 +73,10 @@ function orientationOf(el: Element): 'horizontal' | 'vertical' {
 export class UiCarousel extends WebComponent({
   orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
   loop: Boolean,
-  edges: prop<{ prev: boolean; next: boolean }>({ state: true }),
 }) {
+  #edges = signal<{ prev: boolean; next: boolean }>({ prev: false, next: false });
+  get edges() { return this.#edges.get(); }
+  set edges(v) { this.#edges.set(v); }
   /** The slide nearest the start of the scroller. */
   selectedIndex = 0;
   _frame = 0;
@@ -83,7 +85,6 @@ export class UiCarousel extends WebComponent({
     super();
     this.orientation = 'horizontal';
     this.loop = false;
-    this.edges = { prev: false, next: false };
   }
 
   get canScrollPrev(): boolean {
