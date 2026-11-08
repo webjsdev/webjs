@@ -124,15 +124,9 @@ export class UiCombobox extends WebComponent({
   open: prop(Boolean, { reflect: true }),
 }) {
   // The chosen values (the form's view of `value`).
-  #values = signal<string[]>([]);
-  get values() { return this.#values.get(); }
-  set values(v) { this.#values.set(v); }
-  #query = signal('');
-  get query() { return this.#query.get(); }
-  set query(v) { this.#query.set(v); }
-  #highlighted = signal('');
-  get highlighted() { return this.#highlighted.get(); }
-  set highlighted(v) { this.#highlighted.set(v); }
+  readonly #values = signal<string[]>([]);
+  readonly #query = signal('');
+  readonly highlighted = signal('');
   _id = '';
   _parsed = false;
 
@@ -167,14 +161,14 @@ export class UiCombobox extends WebComponent({
     super.willUpdate?.(changedProperties);
     if (!this._parsed) {
       this._parsed = true;
-      this.values = this._initial();
+      this.#values.set(this._initial());
     }
   }
 
   render() {
     const name = this.name;
     return html`<div data-slot="combobox" class="relative" @keydown=${this._onKeyDown} @focusout=${this._onFocusOut}><slot></slot>${name
-      ? (this.values ?? []).map((v) => html`<input type="hidden" name=${name} value=${v}>`)
+      ? this.#values.get().map((v) => html`<input type="hidden" name=${name} value=${v}>`)
       : ''}</div>`;
   }
 
@@ -216,7 +210,7 @@ export class UiCombobox extends WebComponent({
 
   /** The items that match the typed text, in order. */
   visibleItems(): UiComboboxItem[] {
-    const q = (this.query ?? '').trim().toLowerCase();
+    const q = this.#query.get().trim().toLowerCase();
     return this._items().filter((i) => !q || i.label.toLowerCase().includes(q));
   }
 
@@ -242,17 +236,17 @@ export class UiCombobox extends WebComponent({
     if (!item || item.disabled) return;
     const input = this._input();
     if (this.multiple) {
-      const has = this.values.includes(value);
-      this.values = has ? this.values.filter((v) => v !== value) : [...this.values, value];
-      this.query = '';
+      const values = this.#values.get();
+      this.#values.set(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
+      this.#query.set('');
       if (input) input.value = '';
     } else {
-      this.values = [value];
-      this.query = '';
+      this.#values.set([value]);
+      this.#query.set('');
       if (input) input.value = item.label;
       this.hide();
     }
-    this._emit('ui-value-change', { value: this.multiple ? [...this.values] : value });
+    this._emit('ui-value-change', { value: this.multiple ? [...this.#values.get()] : value });
   }
 
   /**
@@ -261,27 +255,29 @@ export class UiCombobox extends WebComponent({
    * silently do nothing instead.
    */
   removeValue(value: string): void {
-    if (!this.values.includes(value)) return;
-    this.values = this.values.filter((v) => v !== value);
-    this._emit('ui-value-change', { value: this.multiple ? [...this.values] : '' });
+    const values = this.#values.get();
+    if (!values.includes(value)) return;
+    const next = values.filter((v) => v !== value);
+    this.#values.set(next);
+    this._emit('ui-value-change', { value: this.multiple ? [...next] : '' });
   }
 
   /** Clear every chosen value and the typed text. */
   clear(): void {
     const input = this._input();
     if (input) input.value = '';
-    this.query = '';
-    this.values = [];
+    this.#query.set('');
+    this.#values.set([]);
     this._emit('ui-value-change', { value: this.multiple ? [] : '' });
     input?.focus();
   }
 
   _setQuery(text: string): void {
-    this.query = text;
+    this.#query.set(text);
     this.show();
     // A new filter highlights its first match.
     const first = this.visibleItems().find((i) => !i.disabled);
-    this.highlighted = first?.itemValue ?? '';
+    this.highlighted.set(first?.itemValue ?? '');
   }
 
   updated(changedProperties: Map<string, unknown>): void {
@@ -296,27 +292,28 @@ export class UiCombobox extends WebComponent({
   _syncParts(): void {
     const visible = new Set(this.visibleItems());
     for (const item of this._items()) {
-      item.state = {
+      item.state?.set({
         visible: visible.has(item),
-        selected: this.values.includes(item.itemValue),
-        highlighted: this.open && item.itemValue === this.highlighted && visible.has(item),
-      };
+        selected: this.#values.get().includes(item.itemValue),
+        highlighted: this.open && item.itemValue === this.highlighted.get() && visible.has(item),
+      });
     }
     for (const g of this._own<UiComboboxGroup>(`${ROOT}-group`)) {
-      g.shown = this._items().some((i) => i.closest(`${ROOT}-group`) === g && visible.has(i));
+      g.shown?.set(this._items().some((i) => i.closest(`${ROOT}-group`) === g && visible.has(i)));
     }
     const empty = visible.size === 0;
-    for (const part of this._own<UiComboboxContent | UiComboboxList>(`${ROOT}-content, ${ROOT}-list`)) part.empty = empty;
-    for (const content of this._own<UiComboboxContent>(`${ROOT}-content`)) content.open = this.open;
+    for (const part of this._own<UiComboboxContent | UiComboboxList>(`${ROOT}-content, ${ROOT}-list`)) part.empty?.set(empty);
+    for (const content of this._own<UiComboboxContent>(`${ROOT}-content`)) content.open?.set(this.open);
     for (const field of this._own<UiComboboxInput | UiComboboxChipsInput>(`${ROOT}-input, ${ROOT}-chips-input`)) {
-      const h = this._items().find((i) => i.itemValue === this.highlighted && visible.has(i));
-      field.state = { open: this.open, activeId: this.open && h ? h.optionId : '', hasValue: this.values.length > 0 };
+      const h = this._items().find((i) => i.itemValue === this.highlighted.get() && visible.has(i));
+      field.state?.set({ open: this.open, activeId: this.open && h ? h.optionId : '', hasValue: this.#values.get().length > 0 });
     }
-    for (const chips of this._own<UiComboboxChips>(`${ROOT}-chips`)) chips.chips = this.values.map((v) => ({ value: v, label: this.labelOf(v) }));
+    for (const chips of this._own<UiComboboxChips>(`${ROOT}-chips`)) chips.chips?.set(this.#values.get().map((v) => ({ value: v, label: this.labelOf(v) })));
     // A single combobox shows its choice in the input until the user types.
     const input = this._input();
-    if (input && !this.multiple && !this.open && !this.query) {
-      const label = this.values[0] ? this.labelOf(this.values[0]) : '';
+    if (input && !this.multiple && !this.open && !this.#query.get()) {
+      const first = this.#values.get()[0];
+      const label = first ? this.labelOf(first) : '';
       if (input.value !== label && document.activeElement !== input) input.value = label;
     }
   }
@@ -329,10 +326,10 @@ export class UiCombobox extends WebComponent({
     this._reposition();
     document.addEventListener('pointerdown', this._onDocPointerDown, true);
     window.addEventListener('resize', this._reposition);
-    if (!this.highlighted) {
-      const start = this._items().find((i) => this.values.includes(i.itemValue) && !i.disabled)
+    if (!this.highlighted.get()) {
+      const start = this._items().find((i) => this.#values.get().includes(i.itemValue) && !i.disabled)
         ?? this.visibleItems().find((i) => !i.disabled);
-      this.highlighted = start?.itemValue ?? '';
+      this.highlighted.set(start?.itemValue ?? '');
     }
   }
 
@@ -341,8 +338,8 @@ export class UiCombobox extends WebComponent({
     if (panel && typeof panel.hidePopover === 'function' && panel.matches(':popover-open')) panel.hidePopover();
     document.removeEventListener('pointerdown', this._onDocPointerDown, true);
     window.removeEventListener('resize', this._reposition);
-    this.highlighted = '';
-    if (!this.multiple) this.query = '';
+    this.highlighted.set('');
+    if (!this.multiple) this.#query.set('');
   }
 
   _reposition = (): void => {
@@ -365,9 +362,9 @@ export class UiCombobox extends WebComponent({
   _move(by: number): void {
     const enabled = this.visibleItems().filter((i) => !i.disabled);
     if (!enabled.length) return;
-    const at = enabled.findIndex((i) => i.itemValue === this.highlighted);
+    const at = enabled.findIndex((i) => i.itemValue === this.highlighted.get());
     const next = at < 0 ? (by > 0 ? 0 : enabled.length - 1) : Math.max(0, Math.min(enabled.length - 1, at + by));
-    this.highlighted = enabled[next].itemValue;
+    this.highlighted.set(enabled[next].itemValue);
     enabled[next].scrollIntoViewIfShown();
   }
 
@@ -379,17 +376,18 @@ export class UiCombobox extends WebComponent({
       if (!this.open) { this.show(); return; }
       this._move(e.key === 'ArrowDown' ? 1 : -1);
     } else if (e.key === 'Enter') {
-      if (!this.open || !this.highlighted) return;
+      if (!this.open || !this.highlighted.get()) return;
       e.preventDefault();
-      this.choose(this.highlighted);
+      this.choose(this.highlighted.get());
     } else if (e.key === 'Escape') {
       if (!this.open) return;
       e.preventDefault();
       this.hide();
     } else if (e.key === 'Tab') {
       this.hide();
-    } else if (e.key === 'Backspace' && this.multiple && !input.value && this.values.length) {
-      this.removeValue(this.values[this.values.length - 1]);
+    } else if (e.key === 'Backspace' && this.multiple && !input.value && this.#values.get().length) {
+      const values = this.#values.get();
+      this.removeValue(values[values.length - 1]);
     }
   };
 
@@ -403,9 +401,10 @@ export class UiCombobox extends WebComponent({
     this.hide();
     // Leaving a single combobox puts its choice back in the input.
     if (!this.multiple) {
-      this.query = '';
+      this.#query.set('');
       const input = this._input();
-      if (input) input.value = this.values[0] ? this.labelOf(this.values[0]) : '';
+      const first = this.#values.get()[0];
+      if (input) input.value = first ? this.labelOf(first) : '';
     }
   };
 
@@ -446,9 +445,7 @@ export class UiComboboxInput extends WebComponent({
   invalid: prop(String, { attribute: 'aria-invalid' }),
   describedBy: prop(String, { attribute: 'aria-describedby' }),
 }) {
-  #state = signal<FieldState>({ open: false, activeId: '', hasValue: false });
-  get state() { return this.#state.get(); }
-  set state(v) { this.#state.set(v); }
+  readonly state = signal<FieldState>({ open: false, activeId: '', hasValue: false });
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -466,7 +463,7 @@ export class UiComboboxInput extends WebComponent({
 
   render() {
     const root = rootOf(this);
-    const s = this.state;
+    const s = this.state.get();
     const disabled = !!root?.disabled;
     return html`<div data-slot="input-group" class=${cn(inputGroupClass(), comboboxInputClass())}><input
       data-slot="input-group-control"
@@ -523,12 +520,8 @@ UiComboboxInput.register('ui-combobox-input');
 // --------------------------------------------------------------------------
 
 export class UiComboboxContent extends WebComponent {
-  #open = signal(false);
-  get open() { return this.#open.get(); }
-  set open(v) { this.#open.set(v); }
-  #empty = signal(false);
-  get empty() { return this.#empty.get(); }
-  set empty(v) { this.#empty.set(v); }
+  readonly open = signal(false);
+  readonly empty = signal(false);
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -543,8 +536,8 @@ export class UiComboboxContent extends WebComponent {
     return html`<div
       data-slot="combobox-content"
       popover="manual"
-      data-state=${this.open ? 'open' : 'closed'}
-      ?data-empty=${this.empty}
+      data-state=${this.open.get() ? 'open' : 'closed'}
+      ?data-empty=${this.empty.get()}
       data-chips=${chips ? 'true' : 'false'}
       class=${comboboxContentClass()}
       @pointerdown=${(e: PointerEvent) => { if (!(e.target as Element).closest('input')) e.preventDefault(); }}
@@ -554,9 +547,7 @@ export class UiComboboxContent extends WebComponent {
 UiComboboxContent.register('ui-combobox-content');
 
 export class UiComboboxList extends WebComponent {
-  #empty = signal(false);
-  get empty() { return this.#empty.get(); }
-  set empty(v) { this.#empty.set(v); }
+  readonly empty = signal(false);
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -573,7 +564,7 @@ export class UiComboboxList extends WebComponent {
       role="listbox"
       id=${root?.listId || null}
       aria-multiselectable=${root?.multiple ? 'true' : null}
-      ?data-empty=${this.empty}
+      ?data-empty=${this.empty.get()}
       class=${comboboxListClass()}
     ><slot></slot></div>`;
   }
@@ -590,9 +581,7 @@ export class UiComboboxItem extends WebComponent({
   value: String,
   disabled: Boolean,
 }) {
-  #state = signal<ItemState>({ visible: true, selected: false, highlighted: false });
-  get state() { return this.#state.get(); }
-  set state(v) { this.#state.set(v); }
+  readonly state = signal<ItemState>({ visible: true, selected: false, highlighted: false });
   _id = '';
 
   constructor() {
@@ -629,11 +618,11 @@ export class UiComboboxItem extends WebComponent({
 
   updated(changedProperties: Map<string, unknown>): void {
     super.updated?.(changedProperties);
-    this.hidden = !this.state.visible;
+    this.hidden = !this.state.get().visible;
   }
 
   render() {
-    const s = this.state;
+    const s = this.state.get();
     return html`<div
       data-slot="combobox-item"
       role="option"
@@ -653,8 +642,8 @@ export class UiComboboxItem extends WebComponent({
 
   _onPointerMove = (): void => {
     const root = rootOf(this);
-    if (!root || this.disabled || this.state.highlighted) return;
-    root.highlighted = this.itemValue;
+    if (!root || this.disabled || this.state.get().highlighted) return;
+    root.highlighted?.set(this.itemValue);
   };
 
   _onClick = (): void => {
@@ -668,16 +657,14 @@ UiComboboxItem.register('ui-combobox-item');
 // --------------------------------------------------------------------------
 
 export class UiComboboxGroup extends WebComponent {
-  #shown = signal(true);
-  get shown() { return this.#shown.get(); }
-  set shown(v) { this.#shown.set(v); }
+  readonly shown = signal(true);
   constructor() {
     super();
   }
 
   updated(changedProperties: Map<string, unknown>): void {
     super.updated?.(changedProperties);
-    this.hidden = !this.shown;
+    this.hidden = !this.shown.get();
   }
 
   /** The group's label, or null on the server, where there is no DOM to query. */
@@ -742,9 +729,7 @@ UiComboboxSeparator.register('ui-combobox-separator');
 // --------------------------------------------------------------------------
 
 export class UiComboboxChips extends WebComponent {
-  #chips = signal<{ value: string; label: string }[]>([]);
-  get chips() { return this.#chips.get(); }
-  set chips(v) { this.#chips.set(v); }
+  readonly chips = signal<{ value: string; label: string }[]>([]);
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -757,7 +742,7 @@ export class UiComboboxChips extends WebComponent {
   render() {
     const root = rootOf(this);
     const disabled = !!root?.disabled;
-    return html`<div data-slot="combobox-chips" class=${comboboxChipsClass()} @click=${this._focusInput}>${(this.chips ?? []).map((c) => html`<div
+    return html`<div data-slot="combobox-chips" class=${comboboxChipsClass()} @click=${this._focusInput}>${this.chips.get().map((c) => html`<div
       data-slot="combobox-chip" class=${comboboxChipClass()}
     >${c.label}<button
       type="button"
@@ -780,9 +765,7 @@ export class UiComboboxChipsInput extends WebComponent({
   placeholder: String,
   inputId: prop(String, { attribute: 'input-id' }),
 }) {
-  #state = signal<FieldState>({ open: false, activeId: '', hasValue: false });
-  get state() { return this.#state.get(); }
-  set state(v) { this.#state.set(v); }
+  readonly state = signal<FieldState>({ open: false, activeId: '', hasValue: false });
   connectedCallback(): void {
     super.connectedCallback?.();
     announce(this);
@@ -796,7 +779,7 @@ export class UiComboboxChipsInput extends WebComponent({
 
   render() {
     const root = rootOf(this);
-    const s = this.state;
+    const s = this.state.get();
     return html`<input
       data-slot="combobox-chip-input"
       id=${this.inputId || null}

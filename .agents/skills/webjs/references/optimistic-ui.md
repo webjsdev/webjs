@@ -137,23 +137,23 @@ class LikeButton extends WebComponent({ postId: prop(String) }) {
   // INSTANCE scope: one signal per element. A module-scope `signal()` is SHARED
   // across every instance (invariant 5), so a feed of these would all flip
   // together on one click. Scope per-item state to the instance.
-  private liked = signal(false);
+  readonly #liked = signal(false);
 
   private async toggle() {
-    const next = !this.liked.get();
+    const next = !this.#liked.get();
     // Returns the action's ActionResult, so a { success: false } is readable
     // by the caller. The rollback has already happened by then.
-    return optimistic(this.liked, next, () => likePost(this.postId));
+    return optimistic(this.#liked, next, () => likePost(this.postId));
   }
 
   render() {
-    return html`<button @click=${() => this.toggle()}>${this.liked.get() ? 'Liked' : 'Like'}</button>`;
+    return html`<button @click=${() => this.toggle()}>${this.#liked.get() ? 'Liked' : 'Like'}</button>`;
   }
 }
 LikeButton.register('like-button');
 ```
 
-Reserve MODULE scope for state that genuinely is app-wide (a theme, a cart count, a sidebar-open flag), which is the case invariant 5's "module-scope signals share state across components" exists to serve. Per-item state goes on the instance, as above. `liked` is a plain instance field, not a reactive property declared in the factory, so the class-field ban does not reach it and `reactive-props-no-class-field` does not flag it. `gallery/modules/optimistic-ui/components/like-button.ts` is the same shape in shipped code.
+Reserve MODULE scope for state that genuinely is app-wide (a theme, a cart count, a sidebar-open flag), which is the case invariant 5's "module-scope signals share state across components" exists to serve. Per-item state goes on the instance, as above. `#liked` is a private field holding a signal, not a reactive property declared in the factory, so the class-field ban does not reach it and `reactive-props-no-class-field` does not flag it. It is `readonly`: a signal field is written through `.set()`, never assigned. `gallery/modules/optimistic-ui/components/like-button.ts` is the same shape in shipped code.
 
 It rolls back on a thrown error OR an `ActionResult` `{ success: false }` envelope, and never on success. It is client-only (it mutates a signal), so a component importing it is never elided as a display-only component.
 

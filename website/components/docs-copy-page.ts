@@ -22,7 +22,7 @@ export class DocsCopyPage extends WebComponent({
   href: prop(String),
   url: prop(String),
 }) {
-  private copied = signal(false);
+  readonly #copied = signal(false);
   private resetTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
@@ -57,9 +57,9 @@ export class DocsCopyPage extends WebComponent({
       // still opens the same text.
       return;
     }
-    this.copied.set(true);
+    this.#copied.set(true);
     if (this.resetTimer) clearTimeout(this.resetTimer);
-    this.resetTimer = setTimeout(() => this.copied.set(false), 2000);
+    this.resetTimer = setTimeout(() => this.#copied.set(false), 2000);
   };
 
   // A menu item is a div, so the kit synthesizes Enter and Space to select
@@ -72,7 +72,7 @@ export class DocsCopyPage extends WebComponent({
   };
 
   render() {
-    const copied = this.copied.get();
+    const copied = this.#copied.get();
     const button = cn(buttonClass({ variant: 'secondary', size: 'sm' }));
     const prompt = (base: string) => `${base}?q=${encodeURIComponent(`I'm looking at this WebJs UI documentation: ${this.url}.\nHelp me understand how to use it. Be ready to explain concepts, give examples, or help debug based on it.\n`)}`;
     const item = 'flex w-full items-center gap-2 no-underline text-inherit';

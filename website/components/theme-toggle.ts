@@ -11,21 +11,21 @@ import { THEME_STORAGE_KEY, readTheme, type Theme } from '#lib/theme.ts';
  */
 
 export class ThemeToggle extends WebComponent {
-  theme = signal<Theme>('system');
+  readonly #theme = signal<Theme>('system');
 
   connectedCallback() {
     super.connectedCallback();
     let saved: string | null = null;
     try { saved = localStorage.getItem(THEME_STORAGE_KEY); } catch {}
-    this.theme.set(readTheme(saved));
+    this.#theme.set(readTheme(saved));
   }
 
   cycle() {
-    const t = this.theme.get();
+    const t = this.#theme.get();
     const next: Theme =
       t === 'system' ? 'light'
       : t === 'light' ? 'dark' : 'system';
-    this.theme.set(next);
+    this.#theme.set(next);
     try {
       if (next === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
       else localStorage.setItem(THEME_STORAGE_KEY, next);
@@ -35,7 +35,7 @@ export class ThemeToggle extends WebComponent {
   }
 
   render() {
-    const t = this.theme.get();
+    const t = this.#theme.get();
     const label = t === 'system' ? 'AUTO' : t === 'light' ? 'LIGHT' : 'DARK';
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html`

@@ -274,7 +274,7 @@ function init(modules) {
       return ref.properties.map((p) => mk(p, 'memberVariableElement'));
     }
     if (ctx.prefix === 'event') return undefined;
-    // plain or `?bool`: attribute names.
+    // plain or `?bool`: attribute names (non-state props).
     return ref.attributes.map((a) => mk(a, 'memberVariableElement'));
   }
 
@@ -353,7 +353,7 @@ function init(modules) {
     const member =
       hit.attr.modifier === 'property'
         ? ref.members.find((mm) => mm.propName === hit.attr.name)
-        : ref.members.find((mm) => mm.attrName === hit.attr.name);
+        : ref.members.find((mm) => !mm.state && mm.attrName === hit.attr.name);
     return { tag: hit.node.tag, attr: hit.attr, ref, member, program };
   }
 
@@ -787,11 +787,14 @@ function init(modules) {
    * @typedef {{
    *   propName: string,
    *   attrName: string,
+   *   state: boolean,
    * }} PropMember
    *   One reactive property. `propName` is the reactive property key (factory
    *   shape or `static properties`, the `.prop` binding name, camelCase);
    *   `attrName` is its hyphenated HTML
-   *   attribute name (the plain / `?bool` binding name).
+   *   attribute name (the plain / `?bool` binding name); `state` is true when
+   *   it has NO attribute (`state: true` or `attribute: false`, excluded from
+   *   `observedAttributes`).
    *
    * @typedef {{
    *   fileName: string,
@@ -801,8 +804,8 @@ function init(modules) {
    *   properties: string[],
    *   members: PropMember[],
    * }} ComponentRef
-   *   `attributes` = hyphenated attribute names of the props (plain /
-   *   `?bool` binding targets). `properties` = property names of the props
+   *   `attributes` = hyphenated attribute names of non-state props (plain /
+   *   `?bool` binding targets). `properties` = property names of ALL props
    *   (`.prop` binding targets). `members` = the full records.
    *
    * @typedef {{
@@ -900,7 +903,7 @@ function init(modules) {
               fileName: sf.fileName,
               className: match.className,
               classNameSpan: local.span,
-              attributes: local.members.map((m) => m.attrName),
+              attributes: local.members.filter((m) => !m.state).map((m) => m.attrName),
               properties: local.members.map((m) => m.propName),
               members: local.members,
             });
@@ -917,9 +920,9 @@ function init(modules) {
    * Read a class's reactive property declarations into per-member records.
    * Covers BOTH the `extends WebComponent({ … })` factory shape (the canonical
    * form) and a legacy `static properties = { … }` initializer. WebJs maps each
-   * key to a reactive property (the `.prop` binding name) plus a hyphenated
-   * HTML attribute (the plain and `?bool` binding name). Internal state is a
-   * signal, never a declared property (the factory refuses `state`, #1677).
+   * key to a reactive property (the `.prop` binding name) plus, unless it is
+   * `state: true` or `attribute: false`, a hyphenated HTML attribute (the plain
+   * and `?bool` binding name).
    *
    * @param {import('typescript').ClassDeclaration} cls
    * @returns {PropMember[]}
@@ -942,7 +945,7 @@ function init(modules) {
         if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
         else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
         if (!key) continue;
-        out.push({ propName: key, attrName: propAttrName(prop, key) });
+        out.push({ propName: key, attrName: propAttrName(prop, key), state: propIsState(prop) });
       }
     }
     if (cls.heritageClauses) {
@@ -961,7 +964,7 @@ function init(modules) {
                   if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
                   else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
                   if (!key) continue;
-                  out.push({ propName: key, attrName: propAttrName(prop, key) });
+                  out.push({ propName: key, attrName: propAttrName(prop, key), state: propIsState(prop) });
                 }
               }
             }
@@ -970,6 +973,43 @@ function init(modules) {
       }
     }
     return out;
+  }
+
+  /**
+   * Does a reactive property declaration have no HTML attribute? lit's two
+   * spellings: internal state (`{ state: true }`) and a public property-only
+   * input (`{ attribute: false }`).
+   *
+   * @param {import('typescript').ObjectLiteralElementLike} prop
+   * @returns {boolean}
+   */
+  function propIsState(prop) {
+    if (!ts.isPropertyAssignment(prop)) return false;
+    let v = prop.initializer;
+    if (!v) return false;
+    if (ts.isCallExpression(v)) {
+      const caller = v.expression;
+      if (ts.isIdentifier(caller) && caller.text === 'prop') {
+        const args = v.arguments;
+        if (args.length === 1 && ts.isObjectLiteralExpression(args[0])) {
+          v = args[0];
+        } else if (args.length === 2 && ts.isObjectLiteralExpression(args[1])) {
+          v = args[1];
+        } else {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+    if (!ts.isObjectLiteralExpression(v)) return false;
+    for (const o of v.properties) {
+      if (!ts.isPropertyAssignment(o) || !o.name) continue;
+      const n = ts.isIdentifier(o.name) || ts.isStringLiteralLike(o.name) ? o.name.text : '';
+      if (n === 'state' && o.initializer.kind === ts.SyntaxKind.TrueKeyword) return true;
+      if (n === 'attribute' && o.initializer.kind === ts.SyntaxKind.FalseKeyword) return true;
+    }
+    return false;
   }
 
   // The HTML attribute name for a prop: a custom `attribute` option wins,
@@ -1369,7 +1409,7 @@ function init(modules) {
         const member =
           attr.modifier === 'property'
             ? ref.members.find((m) => m.propName === attr.name)
-            : ref.members.find((m) => m.attrName === attr.name);
+            : ref.members.find((m) => !m.state && m.attrName === attr.name);
         if (!member) continue;
         const propType = resolvePropType(program, ref, member.propName, checker);
         if (!propType) continue; // no `declare` annotation → can't check

@@ -18,9 +18,9 @@ type ChatStatus = 'initial' | 'live' | 'reconnecting';
  * `<chat-box>`: terminal-leaning live chat panel against /api/chat.
  */
 export class ChatBox extends WebComponent {
-  lines = signal<Line[]>([]);
-  status = signal<ChatStatus>('initial');
-  count = signal(0);
+  readonly #lines = signal<Line[]>([]);
+  readonly #status = signal<ChatStatus>('initial');
+  readonly #count = signal(0);
 
   _conn: ReturnType<typeof connectWS> | null = null;
   _nextId = 0;
@@ -28,24 +28,24 @@ export class ChatBox extends WebComponent {
   connectedCallback() {
     super.connectedCallback();
     this._conn = connectWS('/api/chat', {
-      onOpen:  () => { this.status.set('live'); },
-      onClose: () => { this.status.set('reconnecting'); },
+      onOpen:  () => { this.#status.set('live'); },
+      onClose: () => { this.#status.set('reconnecting'); },
       onMessage: (msg: ChatMessage) => {
-        const lines = this.lines.get().slice();
+        const lines = this.#lines.get().slice();
         if (msg.kind === 'say') {
           lines.push({ id: ++this._nextId, text: msg.text, kind: 'say' });
         } else if (msg.kind === 'join') {
           lines.push({ id: ++this._nextId, text: 'someone joined', kind: 'meta' });
-          this.count.set(msg.count);
-          this.lines.set(lines.slice(-50));
+          this.#count.set(msg.count);
+          this.#lines.set(lines.slice(-50));
           return;
         } else if (msg.kind === 'leave') {
           lines.push({ id: ++this._nextId, text: 'someone left', kind: 'meta' });
-          this.count.set(msg.count);
-          this.lines.set(lines.slice(-50));
+          this.#count.set(msg.count);
+          this.#lines.set(lines.slice(-50));
           return;
         }
-        this.lines.set(lines.slice(-50));
+        this.#lines.set(lines.slice(-50));
       },
     });
   }
@@ -61,10 +61,10 @@ export class ChatBox extends WebComponent {
   }
 
   render() {
-    const lines = this.lines.get();
-    const status = this.status.get();
+    const lines = this.#lines.get();
+    const status = this.#status.get();
     const live = status === 'live';
-    const count = this.count.get();
+    const count = this.#count.get();
     // SSR-emitted initial state shows a neutral "Connecting…" instead
     // of the alarming "Reconnecting…" copy. The warning state only
     // appears after a real close event, which is the only time the

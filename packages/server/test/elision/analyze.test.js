@@ -57,10 +57,15 @@ test('factory WebComponent({}) display-only is ELIDABLE (#604)', () => {
   assert.equal(analyzeComponentSource(factory('WebComponent({})')).interactive, false);
 });
 
-test('a stray state option still ships: every declared property counts (#1677)', () => {
-  // The factory throws on `state` at runtime; the analyser must not read it as
-  // a reason to elide.
-  for (const header of ['WebComponent({ n: prop({ state: true }) })', 'WebComponent({ n: prop(Number, { state: true }) })']) {
+test('a state or attribute: false prop still ships: every declared property counts (#1680)', () => {
+  // Its value can change after load in ways the analyser cannot see (a timer,
+  // an imperative write, a `.prop` binding), so the component is never dropped.
+  for (const header of [
+    'WebComponent({ n: prop({ state: true }) })',
+    'WebComponent({ n: prop(Number, { state: true }) })',
+    'WebComponent({ n: prop(Array, { attribute: false }) })',
+    'WebComponent({ n: prop<{ state: true; id: string }>(Object) })',
+  ]) {
     const r = analyzeComponentSource(factory(header));
     assert.equal(r.interactive, true, header);
     assert.match(r.reason, /reactive property/);

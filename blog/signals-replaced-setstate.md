@@ -106,15 +106,15 @@ The breaking-change marker (`!` in the conventional-commit prefix) made the vers
 
 # What replaced reactive properties
 
-Reactive properties are still in the API, declared via the `extends WebComponent({ … })` factory. They are now reserved for declared HTML attributes that should round-trip from the DOM. If a component is `<my-counter count="5">` and declares `class Counter extends WebComponent({ count: Number })`, the browser-set attribute initializes the property. Useful, and signals do not replace it.
+Reactive properties are still in the API, declared via the `extends WebComponent({ … })` factory. By default they round-trip from HTML attributes. For state without an attribute, declare a property with `state: true` or `attribute: false`, or use a signal. If a component is `<my-counter count="5">` and declares `class Counter extends WebComponent({ count: Number })`, the browser-set attribute initializes the property. Useful, and signals do not replace it.
 
-For component-local state that does not need to ride an HTML attribute, the answer is an instance signal:
+For component-local state that does not need to ride an HTML attribute, an instance signal is one option:
 
 ```ts
 class Counter extends WebComponent {
-  count = signal(0);
+  readonly #count = signal(0);
   render() {
-    return html`<button @click=${() => this.count.set(this.count.get() + 1)}>${this.count.get()}</button>`;
+    return html`<button @click=${() => this.#count.set(this.#count.get() + 1)}>${this.#count.get()}</button>`;
   }
 }
 ```

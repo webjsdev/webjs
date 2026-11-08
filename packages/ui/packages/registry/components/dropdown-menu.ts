@@ -768,7 +768,7 @@ export class UiDropdownMenuItem extends WebComponent({
   // local signal bound with ?data-highlighted keeps the highlight in the
   // declarative template instead of an imperative setAttribute on
   // e.currentTarget (the lit-idiomatic form).
-  #highlighted = signal(false);
+  readonly #highlighted = signal(false);
 
   constructor() {
     super();

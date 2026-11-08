@@ -236,7 +236,7 @@ const TYPE_ICON_COLOR: Record<ToastType, string> = {
 export class UiSonner extends WebComponent({
   position: prop<SonnerPosition>(String, { reflect: true }),
 }) {
-  items = signal<ToastItem[]>([]);
+  readonly items = signal<ToastItem[]>([]);
 
   _disposeBeforeCache?: () => void;
   _releaseClicks?: () => void;

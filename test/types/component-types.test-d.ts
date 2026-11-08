@@ -85,11 +85,30 @@ Toggle.register('my-toggle');
 const toggle = new Toggle();
 type _Pressed = Assert<Equal<typeof toggle.pressed, boolean>>;
 
+/* ------------- state / attribute: false props with no type constructor ------------- */
+
+// Nothing says what an untyped state prop holds, so it is `unknown` (never the
+// attribute default `string`) until narrowed with a type argument.
+class Panel extends WebComponent({
+  open: prop<boolean>({ state: true }),
+  rows: prop<string[]>({ attribute: false }),
+  loose: prop({ state: true }),
+  label: prop({ reflect: true }),
+}) {}
+Panel.register('my-panel');
+const panel = new Panel();
+type _PanelOpen = Assert<Equal<typeof panel.open, boolean>>;
+type _PanelRows = Assert<Equal<typeof panel.rows, string[]>>;
+type _PanelLoose = Assert<Equal<typeof panel.loose, unknown>>;
+type _PanelLabel = Assert<Equal<typeof panel.label, string>>;
+panel.open = true;
+
 /* ------------- PropertyDeclaration shape accepts the expected fields ------------- */
 
 const decl: PropertyDeclaration = {
   type: Number,
   reflect: true,
+  state: false,
   attribute: 'data-count',
   hasChanged: (a, b) => a !== b,
   converter: {

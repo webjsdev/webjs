@@ -9,7 +9,7 @@ import { WebComponent, html, signal } from '@webjsdev/core';
  * stale-while-revalidate (the prior content stays until the new render lands).
  */
 export class AsyncGreeting extends WebComponent({ name: String }) {
-  #n = signal(0);
+  readonly #n = signal(0);
 
   constructor() {
     super();

@@ -6,10 +6,10 @@ type Result = { path: string; title: string; score: number; snippet: string };
  * `<doc-search>`: search input + dropdown results. Light DOM + Tailwind.
  */
 export class DocSearch extends WebComponent {
-  query = signal('');
-  results = signal<Result[]>([]);
-  loading = signal(false);
-  open = signal(false);
+  readonly #query = signal('');
+  readonly #results = signal<Result[]>([]);
+  readonly #loading = signal(false);
+  readonly #open = signal(false);
   // undefined rather than null for the unset state: clearTimeout accepts
   // undefined (a no-op) but not null, so this is the one that needs no cast
   // at the call site.
@@ -17,15 +17,15 @@ export class DocSearch extends WebComponent {
 
   onInput(e: InputEvent) {
     const val = (e.target as HTMLInputElement).value;
-    this.query.set(val);
-    this.open.set(true);
+    this.#query.set(val);
+    this.#open.set(true);
     clearTimeout(this._timer);
     if (val.trim().length < 2) {
-      this.results.set([]);
-      this.loading.set(false);
+      this.#results.set([]);
+      this.#loading.set(false);
       return;
     }
-    this.loading.set(true);
+    this.#loading.set(true);
     this._timer = setTimeout(() => this.search(val), 200);
   }
 
@@ -33,21 +33,21 @@ export class DocSearch extends WebComponent {
     try {
       const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       const results: Result[] = await r.json();
-      if (this.query.get() === q) {
-        this.results.set(results);
-        this.loading.set(false);
+      if (this.#query.get() === q) {
+        this.#results.set(results);
+        this.#loading.set(false);
       }
     } catch {
-      this.loading.set(false);
+      this.#loading.set(false);
     }
   }
 
   onBlur() {
-    setTimeout(() => { this.open.set(false); }, 150);
+    setTimeout(() => { this.#open.set(false); }, 150);
   }
 
   onFocus() {
-    if (this.query.get().length >= 2) this.open.set(true);
+    if (this.#query.get().length >= 2) this.#open.set(true);
   }
 
   /**
@@ -58,8 +58,8 @@ export class DocSearch extends WebComponent {
    * fallback for the case where the router is disabled app-wide.
    */
   goTo(path: string) {
-    this.open.set(false);
-    this.query.set('');
+    this.#open.set(false);
+    this.#query.set('');
     try {
       navigate(path);
     } catch {
@@ -68,10 +68,10 @@ export class DocSearch extends WebComponent {
   }
 
   render() {
-    const query = this.query.get();
-    const results = this.results.get();
-    const loading = this.loading.get();
-    const open = this.open.get();
+    const query = this.#query.get();
+    const results = this.#results.get();
+    const loading = this.#loading.get();
+    const open = this.#open.get();
     return html`
       <div class="block relative mb-4">
         <svg class="absolute left-[10px] top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-fg-subtle pointer-events-none"

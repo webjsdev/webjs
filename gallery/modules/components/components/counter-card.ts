@@ -13,7 +13,7 @@ export class CounterCard extends WebComponent({
   // accessor). Set defaults in the constructor.
   label: prop(String),
 }) {
-  private count = signal(0); // instance signal: component-local state
+  readonly #count = signal(0); // instance signal: component-local state
 
   constructor() {
     super();
@@ -25,10 +25,10 @@ export class CounterCard extends WebComponent({
       <div class="${cardClass()} grid gap-4 p-5 max-w-[320px]">
         <slot></slot>
         <div class="flex items-baseline gap-2">
-          <span class="text-[2.5rem] font-bold tabular-nums leading-none text-foreground">${this.count.get()}</span>
+          <span class="text-[2.5rem] font-bold tabular-nums leading-none text-foreground">${this.#count.get()}</span>
           <span class="text-sm text-muted-foreground">${this.label}</span>
         </div>
-        <button @click=${() => this.count.set(this.count.get() + 1)}
+        <button @click=${() => this.#count.set(this.#count.get() + 1)}
           class="${buttonClass()} w-fit">Increment</button>
       </div>
     `;

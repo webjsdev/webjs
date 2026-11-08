@@ -7,13 +7,13 @@ import { getSlow } from '#modules/verbdemo/queries/get-slow.server.ts';
  * aborts the previous render's fetch (the e2e probes for net::ERR_ABORTED).
  */
 export class AbortDemo extends WebComponent {
-  private n = signal(0);
+  readonly #n = signal(0);
 
   async render() {
-    const r = await getSlow(this.n.get());
+    const r = await getSlow(this.#n.get());
     return html`<div class="abort-demo">
       <span class="ad-n">n=${r.n}</span>
-      <button class="ad-bump" @click=${() => this.n.set(this.n.get() + 1)}>bump</button>
+      <button class="ad-bump" @click=${() => this.#n.set(this.#n.get() + 1)}>bump</button>
     </div>`;
   }
 }

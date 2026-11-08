@@ -8,16 +8,16 @@ import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { inputClass } from '#modules/gallery/ui/input.ts';
 
 export class BroadcastFeed extends WebComponent {
-  private connected = signal(false);
-  private lines = signal<string[]>([]);
+  readonly #connected = signal(false);
+  readonly #lines = signal<string[]>([]);
   #conn: ReturnType<typeof connectWS> | null = null;
 
   connectedCallback() {
     super.connectedCallback();
     this.#conn = connectWS('/features/broadcast/feed', {
-      onOpen: () => this.connected.set(true),
-      onClose: () => this.connected.set(false),
-      onMessage: (msg: unknown) => this.lines.set([...this.lines.get(), String(msg)]),
+      onOpen: () => this.#connected.set(true),
+      onClose: () => this.#connected.set(false),
+      onMessage: (msg: unknown) => this.#lines.set([...this.#lines.get(), String(msg)]),
     });
   }
 
@@ -38,7 +38,7 @@ export class BroadcastFeed extends WebComponent {
   }
 
   render() {
-    const on = this.connected.get();
+    const on = this.#connected.get();
     return html`
       <div class="grid gap-4 max-w-[420px]">
         <div class="flex items-center gap-2 text-sm">
@@ -52,7 +52,7 @@ export class BroadcastFeed extends WebComponent {
             class=${buttonClass({ size: 'sm' })}>Send</button>
         </form>
         <ul class="grid gap-1.5 list-none m-0 p-0">
-          ${this.lines.get().map((line) => html`
+          ${this.#lines.get().map((line) => html`
             <li class="px-3 py-2 rounded-xl bg-card border border-border text-[15px] text-foreground">${line}</li>
           `)}
         </ul>

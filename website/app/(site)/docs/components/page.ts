@@ -43,7 +43,7 @@ class MyCounter extends WebComponent {
 
   // Instance signal carries component-local state. SignalWatcher
   // (built into WebComponent) auto-tracks .get() reads and re-renders.
-  count = signal(0);
+  readonly #count = signal(0);
 
   static styles = css\`
     :host { display: inline-flex; gap: 8px; align-items: center; }
@@ -53,9 +53,9 @@ class MyCounter extends WebComponent {
 
   render() {
     return html\`
-      &lt;button @click=\${() =&gt; this.count.set(this.count.get() - 1)}&gt;-&lt;/button&gt;
-      &lt;output&gt;\${this.count.get()}&lt;/output&gt;
-      &lt;button @click=\${() =&gt; this.count.set(this.count.get() + 1)}&gt;+&lt;/button&gt;
+      &lt;button @click=\${() =&gt; this.#count.set(this.#count.get() - 1)}&gt;-&lt;/button&gt;
+      &lt;output&gt;\${this.#count.get()}&lt;/output&gt;
+      &lt;button @click=\${() =&gt; this.#count.set(this.#count.get() + 1)}&gt;+&lt;/button&gt;
     \`;
   }
 }
@@ -124,6 +124,8 @@ interface Student { name: string; gpa: number; }
 class UserCard extends WebComponent({
   count:   prop(Number, { reflect: true }),       // reflect to the attribute
   label:   prop(String, { attribute: 'aria-label' }), // renamed attribute
+  open:    prop<boolean>({ state: true }),         // internal state, no attribute (lit's @state())
+  items:   prop&lt;string[]&gt;(Array, { attribute: false }), // property-only, set with .items=\${…}
   student: prop&lt;Student&gt;(Object),                  // narrowed object type
   tags:    prop&lt;string[]&gt;(Array),                  // array-typed: pass Array, not Object
   size:    prop&lt;'sm' | 'lg'&gt;(String),              // narrowed enum type
@@ -159,36 +161,38 @@ UserCard.register('user-card');</code-block>
 
     <p>A property that renames its attribute answers to the new name and to nothing else. Given <code>open: prop(Boolean, { attribute: 'is-open' })</code>, write <code>&lt;my-el is-open&gt;</code>; <code>&lt;my-el open&gt;</code> reaches no property on either side.</p>
 
+    <p>A <code>state: true</code> or <code>attribute: false</code> property has no attribute at all and is never read from one, on either side. The way to give one a server-rendered value is a <code>.prop=\${value}</code> binding from the parent template.</p>
+
 
     <h3>Reflecting a function is refused</h3>
     <p>A <code>reflect: true</code> property holding a <strong>function</strong> (or an array that carries one) removes its attribute instead of writing one, and warns naming the property, the tag, and the attribute. A function has no HTML attribute representation, and the serializations it would otherwise get are both useless and dangerous. <code>String(fn)</code> is the function's source, so a reflected <code>'use server'</code> action would ship its whole body, closure secrets included, to every visitor, and <code>JSON.stringify(fn)</code> is <code>undefined</code>, which lands in an <code>Object</code>-typed or <code>Array</code>-typed attribute as that literal four-character string. Both sides behave the same, since SSR and the client-side setter run one reflection path, and it applies to every property name rather than only one called <code>action</code>.</p>
     <p>An <code>Object</code>-typed or <code>Array</code>-typed property CARRYING a function is the other exception, and it keeps its data: <code>JSON.stringify</code> drops the function to <code>null</code> and omits the key, so <code>[1, 2, fn]</code> reflects as <code>[1,2,null]</code> with no source and nothing else lost. A value <code>JSON.stringify</code> cannot serialize AT ALL is the opposite case and drops like a function does: a cycle, a <code>BigInt</code>, or a <code>toJSON()</code> that throws leaves nothing to put in the attribute, so the attribute is removed and a warning names the property, the tag, and the attribute. The distinction is between a value that serializes with a gap in it, which keeps its data, and one that does not serialize at all. A custom <code>converter.toAttribute</code> runs first and is left alone: an author who writes one has taken responsibility for serializing whatever they are handed. To keep a function on a component, use a plain property or a signal and do not mark it <code>reflect</code>. To bind a server action to a form, use <code>&lt;form action=\${importedAction}&gt;</code> (see <a href="/docs/server-actions">Server Actions</a>), which resolves the action's identity rather than stringifying it.</p>
 
-    <blockquote>If you are coming from React: properties in WebJs serve a similar role to props, but they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
+    <blockquote>If you are coming from React: properties in WebJs serve a similar role to props, and by default they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
 
     <h2>State</h2>
-    <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (class-field initializers) carry component-local state; module-scope signals share state across components.</p>
+    <p>Signals are one of the state options, next to <code>state: true</code> and <code>attribute: false</code> properties. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (<code>readonly #items = signal(...)</code> class fields) carry component-local state; module-scope signals share state across components.</p>
 
     <code-block>import { WebComponent, html, signal } from '@webjsdev/core';
 
 class TodoList extends WebComponent {
-  items  = signal&lt;{ id: number; text: string; done: boolean }[]&gt;([]);
-  filter = signal&lt;'all' | 'active'&gt;('all');
+  readonly #items  = signal&lt;{ id: number; text: string; done: boolean }[]&gt;([]);
+  readonly #filter = signal&lt;'all' | 'active'&gt;('all');
 
   addItem(text) {
-    this.items.set([...this.items.get(), { id: Date.now(), text, done: false }]);
+    this.#items.set([...this.#items.get(), { id: Date.now(), text, done: false }]);
   }
 
   toggleItem(id) {
-    this.items.set(this.items.get().map(it =&gt;
+    this.#items.set(this.#items.get().map(it =&gt;
       it.id === id ? { ...it, done: !it.done } : it
     ));
   }
 
   render() {
-    const visible = this.filter.get() === 'all'
-      ? this.items.get()
-      : this.items.get().filter(it =&gt; !it.done);
+    const visible = this.#filter.get() === 'all'
+      ? this.#items.get()
+      : this.#items.get().filter(it =&gt; !it.done);
 
     return html\`
       &lt;ul&gt;
@@ -204,13 +208,7 @@ class TodoList extends WebComponent {
 }
 TodoList.register('todo-list');</code-block>
 
-    <p>There is no internal-state property. lit's <code>state: true</code> option does not exist here, and the factory throws when a property declares it (the <code>no-state-property</code> rule in <code>webjs check</code> flags it first). Keep a reactive property for a value that rides an attribute, reflects to one, or arrives through a <code>.prop</code> binding, and hold everything else in a signal. When another element assigns the value (a parent pushing state into its parts), keep the property API with a getter and setter over a private signal:</p>
-
-    <code-block>class MenuItem extends WebComponent {
-  #highlighted = signal(false);
-  get highlighted() { return this.#highlighted.get(); }
-  set highlighted(v) { this.#highlighted.set(v); }
-}</code-block>
+    <p>Everything lit offers for state works: a <code>state: true</code> property (internal, no attribute, reassign it to re-render), an <code>attribute: false</code> property (public, no attribute, set with <code>.prop=\${…}</code>), and signals. A signal is written with <code>.set()</code>, never assigned: <code>this.count = 5</code> on a signal field replaces the signal, so nothing re-renders and the next <code>.get()</code> throws. The <code>no-signal-field-assignment</code> rule in <code>webjs check</code> flags it.</p>
 
     <h3>How signal updates render</h3>
     <ul>
@@ -432,15 +430,15 @@ class Cart extends WebComponent({ items: prop&lt;Item[]&gt;(Array) }) {
     <code-block>// ✅ SSR-safe: instance signal carries the default,
 //    browser hook refines after hydration
 class Cart extends WebComponent {
-  items = signal&lt;Item[]&gt;([]);                  // ← SSR uses this
+  readonly #items = signal&lt;Item[]&gt;([]);                  // ← SSR uses this
 
   connectedCallback() {
     super.connectedCallback();
     const stored = readFromLocalStorage();
-    if (stored) this.items.set(stored);         // browser-only refinement
+    if (stored) this.#items.set(stored);         // browser-only refinement
   }
 
-  render() { return html\`&lt;ul&gt;\${this.items.get().map(/* … */)}&lt;/ul&gt;\`; }
+  render() { return html\`&lt;ul&gt;\${this.#items.get().map(/* … */)}&lt;/ul&gt;\`; }
 }</code-block>
 
     <h3>Where each kind of data belongs</h3>
@@ -818,14 +816,14 @@ UserProfile.register('user-profile');</code-block>
     <code-block>import { WebComponent, html, css, repeat } from '@webjsdev/core';
 
 class TaskList extends WebComponent {
-  tasks = signal([
+  readonly #tasks = signal([
     { id: 1, text: 'Buy groceries', done: false },
     { id: 2, text: 'Write docs', done: true },
     { id: 3, text: 'Ship feature', done: false },
   ]);
 
   toggle(id) {
-    this.tasks.set(this.tasks.get().map(t =&gt;
+    this.#tasks.set(this.#tasks.get().map(t =&gt;
       t.id === id ? { ...t, done: !t.done } : t
     ));
   }
@@ -834,7 +832,7 @@ class TaskList extends WebComponent {
     return html\`
       &lt;ul&gt;
         \${repeat(
-          this.tasks.get(),
+          this.#tasks.get(),
           (task) =&gt; task.id,           // key function: must be stable + unique
           (task) =&gt; html\`
             &lt;li @click=\${() =&gt; this.toggle(task.id)}
@@ -879,16 +877,16 @@ class ChatBox extends WebComponent {
   \`;
 
   _conn = null;
-  lines = signal([]);
-  connected = signal(false);
+  readonly #lines = signal([]);
+  readonly #connected = signal(false);
 
   connectedCallback() {
     super.connectedCallback();   // always call super!
     this._conn = connectWS('/api/chat', {
-      onOpen:    () =&gt; this.connected.set(true),
-      onClose:   () =&gt; this.connected.set(false),
+      onOpen:    () =&gt; this.#connected.set(true),
+      onClose:   () =&gt; this.#connected.set(false),
       onMessage: (msg) =&gt; {
-        this.lines.set([...this.lines.get(), msg].slice(-50));
+        this.#lines.set([...this.#lines.get(), msg].slice(-50));
       },
     });
   }
@@ -907,8 +905,8 @@ class ChatBox extends WebComponent {
   }
 
   render() {
-    const lines = this.lines.get();
-    const connected = this.connected.get();
+    const lines = this.#lines.get();
+    const connected = this.#connected.get();
     return html\`
       &lt;div class="log"&gt;
         \${lines.length === 0
@@ -930,7 +928,7 @@ ChatBox.register('chat-box');</code-block>
       <li><strong>Extend</strong> the <code>WebComponent({ ... })</code> factory with your property shape (and optionally <code>static styles</code> for shadow-DOM components).</li>
       <li><strong>Implement</strong> <code>render()</code> returning <code>html\`...\`</code>.</li>
       <li><strong>Register</strong> with <code>ClassName.register('tag-name')</code> at the bottom of the file. Tag must contain a hyphen.</li>
-      <li><strong>State</strong>: instance signals (<code>foo = signal(...)</code>) or reactive properties (the <code>WebComponent({ ... })</code> factory, with <code>prop()</code> for options). Both feed the same batched re-render scheduler.</li>
+      <li><strong>State</strong>: instance signals (<code>readonly #foo = signal(...)</code>) or reactive properties (the <code>WebComponent({ ... })</code> factory, with <code>prop()</code> for options). Both feed the same batched re-render scheduler.</li>
       <li><strong>Events</strong>: <code>@click</code>, <code>@submit</code>, <code>@input</code> in templates. Stable dispatchers, no listener churn.</li>
       <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
       <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots, fallback content, <code>assignedNodes()</code>, <code>slotchange</code>. Works identically in light DOM and shadow DOM.</li>

@@ -432,51 +432,91 @@ OldStyle.register('old-style');
   }
 });
 
-test('no-state-property: flags every spelling of the state option (#1677)', async () => {
+test('no-signal-field-assignment: flags every write that replaces a signal field', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
-      join(appDir, 'components', 'stateful.ts'),
-      `import { WebComponent, prop } from '@webjsdev/core';
-class Stateful extends WebComponent({
-  a: prop({ state: true }),
-  b: prop(Number, { reflect: false, state: true }),
-  c: { type: String, state: false },
-  d: prop<boolean>({ state: true }),
-  label: String,
-}) {}
-Stateful.register('state-ful');
+      join(appDir, 'components', 'writes.ts'),
+      `import { WebComponent, html, signal, type Signal } from '@webjsdev/core';
+class Writes extends WebComponent {
+  readonly #open = signal(false);
+  count = signal<number>(0);
+  readonly box: Signal<{ open: boolean }> = signal({ open: false });
+  cb: Signal<() => void> = signal(() => {});
+  constructor() {
+    super();
+    this.made = signal('');
+  }
+  toggle() { this.#open = true; }
+  bump() { this.count++; }
+  rename() { this.made = 'x'; }
+  reset() { this.box = { open: true }; this.cb = () => {}; }
+  render() { return html\`<button @click=\${() => { this.count += 1; }}>x</button>\`; }
+}
+Writes.register('signal-writes');
 `,
     );
     const violations = await checkConventions(appDir);
-    const flagged = violations.filter((v) => v.rule === 'no-state-property').map((v) => v.message.match(/`(\w+)`/)[1]);
-    assert.deepEqual(flagged, ['a', 'b', 'c', 'd']);
-    const v = violations.find((v) => v.rule === 'no-state-property');
-    assert.ok(v.fix.includes('signal('), 'the fix names the signal replacement');
+    const names = violations.filter((v) => v.rule === 'no-signal-field-assignment').map((v) => v.message.match(/\`this\.([#\w]+)\`/)[1]).sort();
+    assert.deepEqual(names, ['#open', 'box', 'cb', 'count', 'made']);
+    const v = violations.find((v) => v.rule === 'no-signal-field-assignment');
+    assert.ok(v.fix.includes('.set('), 'the fix names .set()');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('no-state-property: ignores a nested state key, a string that spells one, and a type argument', async () => {
+test('no-signal-field-assignment: names the right field when members share a line or a type spans lines', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
-      join(appDir, 'components', 'fine.ts'),
-      `import { WebComponent, prop } from '@webjsdev/core';
-class Fine extends WebComponent({
-  n: prop(Number, { converter: { fromAttribute: () => ({ state: true }) } }),
-  v: prop(String, { attribute: 'data-state: true' }),
-  item: prop<{ state: 'open' | 'closed' }>(Object),
-  pick: prop<(next: { state: boolean }) => void>(Function),
-}) {}
-Fine.register('fine-el');
+      join(appDir, 'components', 'packed.ts'),
+      `import { WebComponent, html, signal, type Signal } from '@webjsdev/core';
+class Packed extends WebComponent {
+  plain = 1; readonly #open = signal(false);
+  static shared = 1; flag = signal(false);
+  wide: Signal<
+    number
+  > = signal(0);
+  bump() { this.plain = 2; this.flag = true; this.wide = 1; }
+  render() { return html\`<p>\${this.#open.get()}</p>\`; }
+}
+Packed.register('signal-packed');
 `,
     );
     const violations = await checkConventions(appDir);
-    assert.equal(violations.filter((v) => v.rule === 'no-state-property').length, 0);
+    const names = violations.filter((v) => v.rule === 'no-signal-field-assignment').map((v) => v.message.match(/\`this\.([#\w]+)\`/)[1]).sort();
+    assert.deepEqual(names, ['flag', 'wide']);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-signal-field-assignment: passes reads, .set() writes, the constructor creation and plain fields', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'reads.ts'),
+      `import { WebComponent, html, signal } from '@webjsdev/core';
+class Reads extends WebComponent {
+  readonly #open = signal(false);
+  readonly shown = signal(true);
+  label = '';
+  constructor() {
+    super();
+    this.made = signal(0);
+  }
+  toggle() { this.#open.set(!this.#open.get()); this.label = 'x'; }
+  render() { return html\`<p>\${this.shown.get() === true ? this.made.get() : ''}</p>\`; }
+}
+Reads.register('signal-reads');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    assert.equal(violations.filter((v) => v.rule === 'no-signal-field-assignment').length, 0);
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }

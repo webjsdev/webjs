@@ -110,9 +110,7 @@ export class UiMessageScroller extends WebComponent({
   scrollPreviousItemPeek: prop(Number, { attribute: 'scroll-previous-item-peek' }),
 }) {
   // Served visible: a transcript must read with JavaScript off.
-  #pending = signal(false);
-  get pending() { return this.#pending.get(); }
-  set pending(v) { this.#pending.set(v); }
+  readonly pending = signal(false);
   /** The edges the viewport can still scroll toward. */
   scrollable = { start: false, end: false };
   /** The messages on screen, by `message-id`. */
@@ -143,7 +141,7 @@ export class UiMessageScroller extends WebComponent({
     // invisible until its opening position applies. One the server rendered
     // has painted already (its frame is in the markup), and hiding it now
     // would blank text the reader can see, so it moves in place instead.
-    if (!this._opened && typeof this.querySelector === 'function' && !this.querySelector('[data-slot="message-scroller"]')) this.pending = true;
+    if (!this._opened && typeof this.querySelector === 'function' && !this.querySelector('[data-slot="message-scroller"]')) this.pending.set(true);
     super.connectedCallback?.();
     queueMicrotask(() => this._setup());
   }
@@ -168,7 +166,7 @@ export class UiMessageScroller extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot="message-scroller" ?data-pending-scroll=${!!this.pending} class=${cn(messageScrollerClass(), takeAuthored(this))}><slot></slot></div>`;
+    return html`<div data-slot="message-scroller" ?data-pending-scroll=${this.pending.get()} class=${cn(messageScrollerClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 
   viewport(): HTMLElement | null {
@@ -228,7 +226,7 @@ export class UiMessageScroller extends WebComponent({
     // The turns present at open are placed by the opening position.
     for (const item of this._items()) if (item.hasAttribute('scroll-anchor')) this._anchored.add(item);
     this._following = this._atEnd();
-    this.pending = false;
+    this.pending.set(false);
     // The viewport draws its own pending flag, so it redraws with it.
     this.querySelector<UiMessageScrollerViewport>('ui-message-scroller-viewport')?.requestUpdate?.();
     this._measure();
@@ -389,7 +387,7 @@ UiMessageScroller.register('ui-message-scroller');
 
 export class UiMessageScrollerViewport extends WebComponent {
   render() {
-    const pending = rootOf(this)?.pending ?? false;
+    const pending = rootOf(this)?.pending?.get() ?? false;
     return html`<div data-slot="message-scroller-viewport" ?data-pending-scroll=${!!pending} class=${cn(messageScrollerViewportClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }

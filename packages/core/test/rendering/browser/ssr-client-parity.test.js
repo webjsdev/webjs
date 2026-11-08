@@ -664,6 +664,12 @@ suite('the SSR and client attribute readers see the same attribute set (#1341)',
   }
   EntEl.register('parity-ent-el');
 
+  class StateObj extends WebComponent({ cfg: prop(Object, { state: true }) }) {
+    constructor() { super(); this.cfg = { fromCtor: true }; }
+    render() { return html`<i>val=${JSON.stringify(this.cfg)}</i>`; }
+  }
+  StateObj.register('parity-state-obj');
+
   class CamelEl extends WebComponent({ cfgData: prop(String) }) {
     constructor() { super(); this.cfgData = 'CTOR'; }
     render() { return html`<i>val=${String(this.cfgData)}</i>`; }
@@ -685,6 +691,21 @@ suite('the SSR and client attribute readers see the same attribute set (#1341)',
     assert.deepEqual(el.cfg, { a: 1 }, 'the platform decodes this before any reader runs');
     const ssr = await renderToString(html([markup]));
     assert.ok(ssr.includes('val={"a":1}'), `the SSR reader disagreed with the client: ${ssr}`);
+  });
+
+  test('a state:true attribute leaves the constructor value on both sides', async () => {
+    // `observedAttributes` excludes state props, so the browser never calls the
+    // reader for this name at all. SSR had no such filter and read it.
+    const markup = '<parity-state-obj cfg="oops"></parity-state-obj>';
+    const el = await upgrade('parity-state-obj', markup, mounted);
+
+    assert.ok(
+      !StateObj.observedAttributes.includes('cfg'),
+      'the platform fact this rests on: a state prop is not observed',
+    );
+    assert.deepEqual(el.cfg, { fromCtor: true }, 'the browser never delivered the attribute');
+    const ssr = await renderToString(html([markup]));
+    assert.ok(ssr.includes('val={"fromCtor":true}'), `the SSR reader disagreed with the client: ${ssr}`);
   });
 
   test('a camelCase attribute name resolves to the same prop on both sides (#1540)', async () => {

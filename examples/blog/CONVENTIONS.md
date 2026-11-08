@@ -430,9 +430,8 @@ The properties shape passed to `WebComponent({ ... })` is the runtime
 declaration (reactive accessor, attribute coercion, reflection), and the
 property types flow to `this.<prop>` with no `declare` lines needed. For
 per-property options use the `prop()` helper inside the shape
-(`count: prop(Number, { reflect: true })`); narrow a type with
-`prop<Student>(Object)`. Internal state is an instance signal, not a
-property: the factory throws on a `state` option. Set defaults in the constructor
+(`count: prop(Number, { reflect: true })`, `mode: prop<'a' | 'b'>({ state: true })`);
+narrow a type with `prop<Student>(Object)`. Set defaults in the constructor
 after `super()`. A hand-written `static properties = { ... }` throws at
 construction. The factory gives you full intelligence in any tsserver-backed
 editor. See the Editor Setup docs for the standalone `@webjsdev/intellisense`
@@ -455,8 +454,8 @@ elements).
 - Component state lives in signals. Import `signal` from
   `@webjsdev/core`, read via `signal.get()` inside `render()`, write
   via `signal.set(value)`. Module-scope signals share state across
-  components; instance signals (created in the constructor) carry
-  component-local state. Reactive properties (declared via the
+  components; instance signal fields (`readonly #name = signal(...)`,
+  written through `.set()`, never assigned) carry component-local state. Reactive properties (declared via the
   `WebComponent({ ... })` factory) wrap HTML attributes, attribute
   reflection, and `.prop=${value}` SSR hydration.
 - Use lifecycle hooks (`firstUpdated`, `updated`) only when needed
@@ -742,18 +741,18 @@ factory-declared reactive props + attributes on the rendered tag.
 import { WebComponent, html, signal } from '@webjsdev/core';
 
 class Cart extends WebComponent {
-  items = signal<Item[]>([]);          // instance signal, SSR uses this for first paint
+  readonly #items = signal<Item[]>([]);          // instance signal, SSR uses this for first paint
 
   connectedCallback() {
     super.connectedCallback();
     // Browser-only refinement, read localStorage and write the signal.
     // The component re-renders automatically.
     const stored = readFromLocalStorage();
-    if (stored) this.items.set(stored);
+    if (stored) this.#items.set(stored);
   }
 
   render() {
-    return html`<ul>${this.items.get().map(/* … */)}</ul>`;
+    return html`<ul>${this.#items.get().map(/* … */)}</ul>`;
   }
 }
 ```

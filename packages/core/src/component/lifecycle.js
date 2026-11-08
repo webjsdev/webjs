@@ -1,5 +1,5 @@
 import { render as clientRender } from '../render-client.js';
-import { readAttributeValue, resolveAttributeProperty, observedAttributeNames } from '../attribute-reader.js';
+import { readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
 import { isCSS, adoptStyles } from '../css.js';
@@ -150,7 +150,8 @@ function installAccessors(Ctor, props) {
         const oldVal = this.__propValues[propName];
         if (!changedCheck(newVal, oldVal)) return;
         this.__propValues[propName] = newVal;
-        // Reflect to attribute if requested.
+        // Reflect to attribute if requested (_reflectAttribute skips a prop
+        // with no attribute: `state: true` or `attribute: false`).
         if (d.reflect && this._connected) {
           this._reflectAttribute(propName, newVal, d);
         }
@@ -194,9 +195,11 @@ class WebComponentBase extends Base {
    *
    * Properties declared here get auto-generated accessors (getter/setter)
    * that trigger re-renders on change, coerce attribute values by type,
-   * and optionally reflect back to attributes. Internal state is not
-   * declared here: it lives in an instance signal (the factory refuses a
-   * `state` option, #1677).
+   * and optionally reflect back to attributes.
+   *
+   * Properties with `state: true` (internal state) or `attribute: false` (a
+   * property-only input) are excluded from `observedAttributes` and never
+   * reflect.
    *
    * @type {Record<string, PropertyDeclaration>}
    */
@@ -227,6 +230,8 @@ class WebComponentBase extends Base {
 
   /**
    * Returns the list of attribute names the browser should observe.
+   * Properties with `state: true` or `attribute: false` are excluded: they
+   * do not correspond to any HTML attribute.
    *
    * @returns {string[]}
    */
@@ -397,6 +402,9 @@ class WebComponentBase extends Base {
    * @private
    */
   _reflectAttribute(propName, value, decl) {
+    // A property with no attribute (`state: true` / `attribute: false`) has
+    // nothing to reflect to.
+    if (!isAttributeBacked(decl)) return;
     // A custom `attribute` option wins over the kebab-cased property name.
     const attrName = decl.attribute || hyphenate(propName);
     // Guard against re-entrant loops: attributeChangedCallback fires when
@@ -1612,7 +1620,6 @@ export function WebComponent(properties) {
   if (new.target) {
     return Reflect.construct(WebComponentBase, arguments, new.target);
   } else {
-    assertNoStateOption(properties);
     return class extends WebComponentBase {
       static properties = properties;
       static [FACTORY_PROPS] = true;
@@ -1638,29 +1645,6 @@ function liftShadowedAccessors(el) {
         el[key] = value;
       }
       break;
-    }
-  }
-}
-
-/**
- * Refuse the `state` option at class-definition time (#1677). Internal state
- * is an instance signal; a declared reactive property is one that rides an
- * attribute, reflects to one, or arrives through a `.prop` binding. Throwing
- * here, when the module evaluates, makes the mistake a loud load failure
- * rather than something SSR's per-component error isolation could swallow.
- *
- * @param {Record<string, any> | undefined} properties
- */
-function assertNoStateOption(properties) {
-  for (const [name, decl] of Object.entries(properties || {})) {
-    if (decl && typeof decl === 'object' && Object.hasOwn(decl, 'state')) {
-      throw new Error(
-        `\`${name}\` declares the \`state\` option, which is no longer supported. ` +
-          `Hold internal state in an instance signal instead: \`#${name} = signal(initial)\`, ` +
-          `read with \`this.#${name}.get()\` (in render() or any update hook) and written ` +
-          `with \`this.#${name}.set(value)\`. A value that rides an attribute or a \`.prop\` ` +
-          `binding stays a reactive property, without \`state\`. See https://webjs.dev/docs/components.`,
-      );
     }
   }
 }

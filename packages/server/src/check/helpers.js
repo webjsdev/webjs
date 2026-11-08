@@ -84,52 +84,6 @@ export function isArrayTypeText(type) {
   return false;
 }
 
-/**
- * True when a factory property's descriptor carries a `state` key at its own
- * level: `{ state: true }`, `prop({ state: true })`,
- * `prop(Number, { state: true })`. Only depth 1 counts, so a `state` key
- * inside a converter or a `hasChanged` body is not the option, and strings
- * are blanked so `attribute: 'data-state: x'` cannot match.
- *
- * @param {string} value  the property VALUE text
- * @returns {boolean}
- */
-export function declaresStateOption(value) {
-  const code = stripTypeArgument(value)
-    .replace(/'[^'\n]*'/g, "''")
-    .replace(/"[^"\n]*"/g, '""')
-    .replace(/`[^`]*`/g, '``');
-  let depth = 0;
-  let shallow = '';
-  for (const c of code) {
-    if (c === '{') depth++;
-    else if (c === '}') depth--;
-    else if (depth === 1) shallow += c;
-  }
-  return /(?:^|[\s,])state\s*:/.test(shallow);
-}
-
-/**
- * Drop a leading `prop<...>` type argument, which can spell an object type
- * holding a `state` member (`prop<{ state: 'open' }>(Object)`) that is no
- * option at all. Angle brackets nest, and the `>` of an arrow type (`=>`)
- * closes nothing.
- *
- * @param {string} value
- * @returns {string}
- */
-function stripTypeArgument(value) {
-  const m = /^\s*prop\s*</.exec(value);
-  if (!m) return value;
-  let depth = 1;
-  for (let i = m[0].length; i < value.length; i++) {
-    const c = value[i];
-    if (c === '<') depth++;
-    else if (c === '>' && value[i - 1] !== '=' && --depth === 0) return 'prop' + value.slice(i + 1);
-  }
-  return value;
-}
-
 export function findFieldInitializers(classBody, props) {
   /** @type {string[]} */
   const out = [];
@@ -224,6 +178,91 @@ const HTMLELEMENT_MEMBERS = [
   'querySelector', 'querySelectorAll', 'getBoundingClientRect',
   'focus', 'blur', 'scrollIntoView',
 ];
+
+/**
+ * Writes to a signal field of a WebComponent class body: any `this.<name>`
+ * assignment (plain, compound, `++` / `--`) where `<name>` is a field the same
+ * class creates with `signal(` / `computed(`, either as a class-field
+ * initializer (`readonly #open = signal(false)`) or in the constructor
+ * (`this.open = signal(false)`). That creation is the one write allowed.
+ * Assigning to the field replaces the signal object: the component stays
+ * subscribed to the old one, so nothing re-renders, and the next `.get()`
+ * throws. Expects the redacted body (strings and template text blanked,
+ * holes kept).
+ *
+ * @param {string} body
+ * @returns {string[]} the offending field names, each once, `#` kept
+ */
+export function findSignalFieldWrites(body) {
+  const MAKE = String.raw`(?:signal|computed)\s*(?:<[^()]*>)?\s*\(`;
+  // Brace depth at each index, so a field initializer counts only at the
+  // class body's own level.
+  const depth = new Int32Array(body.length + 1);
+  for (let i = 0, d = 0; i < body.length; i++) {
+    if (body[i] === '{') d++;
+    else if (body[i] === '}') d--;
+    depth[i + 1] = d;
+  }
+  const fields = new Set();
+  // Find each class-level `= signal(` / `= computed(`, then read the field
+  // name from the start of its member, so a type annotation of any shape
+  // (`Signal<{ open: boolean }>`, `Signal<() => void>`, one spanning lines)
+  // sits in between.
+  const make = new RegExp(String.raw`(?<![=!<>])=(?!=)\s*` + MAKE, 'g');
+  const head = /^\s*((?:(?:public|private|protected|readonly|static|declare|override)\s+)*)(#?[A-Za-z_$][\w$]*)/;
+  let m;
+  while ((m = make.exec(body))) {
+    if (depth[m.index] !== 0) continue;
+    const h = head.exec(body.slice(memberStart(body, m.index), m.index));
+    if (h && !/\bstatic\s/.test(h[1])) fields.add(h[2]);
+  }
+  const ctor = methodBodyOf(body, 'constructor');
+  const made = new RegExp(String.raw`this\.(#?[A-Za-z_$][\w$]*)\s*=\s*` + MAKE, 'g');
+  const created = new Set();
+  while ((m = made.exec(ctor))) { fields.add(m[1]); created.add(m.index); }
+  if (!fields.size) return [];
+  const bad = new Set();
+  const write = /this\.(#?[A-Za-z_$][\w$]*)\s*(?:(\+\+|--)|(?:[-+*\/%]|\*\*|\|\||&&|\?\?|<<|>>>?|[&|^])?=(?![=>]))|(?:\+\+|--)\s*this\.(#?[A-Za-z_$][\w$]*)/g;
+  const ctorStart = ctor ? body.indexOf(ctor) : -1;
+  while ((m = write.exec(body))) {
+    const name = m[1] || m[3];
+    if (!fields.has(name)) continue;
+    // The creation in the constructor is the one allowed write.
+    if (ctorStart !== -1 && m.index >= ctorStart && m.index < ctorStart + ctor.length && created.has(m.index - ctorStart)) continue;
+    bad.add(name);
+  }
+  return [...bad];
+}
+
+/**
+ * Index where the class member holding `end` starts: just past the previous
+ * `;`, line break, or method body, skipping any of those nested inside
+ * brackets (a type annotation can hold all three).
+ * @param {string} body
+ * @param {number} end
+ * @returns {number}
+ */
+function memberStart(body, end) {
+  let nest = 0;
+  for (let i = end - 1; i >= 0; i--) {
+    const c = body[i];
+    if (c === '>' && body[i - 1] === '=') { i--; continue; }
+    if (c === ')' || c === ']' || c === '}' || c === '>') {
+      // A method body ends the previous member: `m() { ... } x = signal(0)`.
+      if (c === '}' && nest === 0) {
+        let j = i - 1;
+        for (let d = 1; j >= 0 && d; j--) d += body[j] === '}' ? 1 : body[j] === '{' ? -1 : 0;
+        if (/\)\s*$/.test(body.slice(0, j + 1))) return i + 1;
+      }
+      nest++;
+    } else if (c === '(' || c === '[' || c === '{' || c === '<') {
+      nest--;
+    } else if (nest === 0 && (c === ';' || c === '\n')) {
+      return i + 1;
+    }
+  }
+  return 0;
+}
 
 /**
  * Extract the body text of a named method from a (redacted) class body, or

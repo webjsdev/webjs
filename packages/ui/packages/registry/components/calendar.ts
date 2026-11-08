@@ -208,15 +208,9 @@ export class UiCalendar extends WebComponent({
   locale: String,
 }) {
   // The live state: what is chosen, which month is shown, which day has focus.
-  #selection = signal<{ days: string[]; from: string; to: string }>({ days: [], from: '', to: '' });
-  get selection() { return this.#selection.get(); }
-  set selection(v) { this.#selection.set(v); }
-  #shown = signal('');
-  get shown() { return this.#shown.get(); }
-  set shown(v) { this.#shown.set(v); }
-  #focused = signal('');
-  get focused() { return this.#focused.get(); }
-  set focused(v) { this.#focused.set(v); }
+  readonly #selection = signal<{ days: string[]; from: string; to: string }>({ days: [], from: '', to: '' });
+  readonly #shown = signal('');
+  readonly #focused = signal('');
   _id = '';
   _parsed = false;
 
@@ -253,13 +247,14 @@ export class UiCalendar extends WebComponent({
       const [a, b] = v.split('/');
       const from = parseDate(a);
       const to = parseDate(b);
-      this.selection = { days: [], from: from ? formatDate(from) : '', to: to ? formatDate(to) : '' };
+      this.#selection.set({ days: [], from: from ? formatDate(from) : '', to: to ? formatDate(to) : '' });
     } else {
       const days = (this.mode === 'multiple' ? v.split(',') : [v]).map(parseDate).filter((d): d is CalendarDate => !!d).map(formatDate);
-      this.selection = { days, from: '', to: '' };
+      this.#selection.set({ days, from: '', to: '' });
     }
-    const anchor = parseDate(this.month) ?? parseDate(this.selection.from || this.selection.days[0]) ?? this._today();
-    this.shown = formatDate({ y: anchor.y, m: anchor.m, d: 1 });
+    const picked = this.#selection.get();
+    const anchor = parseDate(this.month) ?? parseDate(picked.from || picked.days[0]) ?? this._today();
+    this.#shown.set(formatDate({ y: anchor.y, m: anchor.m, d: 1 }));
   }
 
   _today(): CalendarDate {
@@ -293,12 +288,12 @@ export class UiCalendar extends WebComponent({
   }
 
   _first(): CalendarDate {
-    return parseDate(this.shown) ?? this._today();
+    return parseDate(this.#shown.get()) ?? this._today();
   }
 
   /** The value in the shape `ui-value-change` reports. */
   get selected(): string | string[] | { from: string; to: string } {
-    const s = this.selection;
+    const s = this.#selection.get();
     if (this.mode === 'range') return { from: s.from, to: s.to };
     if (this.mode === 'multiple') return [...s.days];
     return s.days[0] ?? '';
@@ -308,17 +303,17 @@ export class UiCalendar extends WebComponent({
   pick(iso: string): void {
     const day = parseDate(iso);
     if (!day || this._isDisabled(day)) return;
-    const s = this.selection;
+    const s = this.#selection.get();
     if (this.mode === 'range') {
       const next = addToRange({ from: parseDate(s.from), to: parseDate(s.to) }, day);
-      this.selection = { days: [], from: next.from ? formatDate(next.from) : '', to: next.to ? formatDate(next.to) : '' };
+      this.#selection.set({ days: [], from: next.from ? formatDate(next.from) : '', to: next.to ? formatDate(next.to) : '' });
     } else if (this.mode === 'multiple') {
       const days = s.days.includes(iso) ? s.days.filter((d) => d !== iso) : [...s.days, iso].sort();
-      this.selection = { days, from: '', to: '' };
+      this.#selection.set({ days, from: '', to: '' });
     } else {
-      this.selection = { days: s.days[0] === iso ? [] : [iso], from: '', to: '' };
+      this.#selection.set({ days: s.days[0] === iso ? [] : [iso], from: '', to: '' });
     }
-    this.focused = iso;
+    this.#focused.set(iso);
     this.dispatchEvent(new CustomEvent('ui-value-change', { bubbles: true, detail: { value: this.selected } }));
   }
 
@@ -327,8 +322,8 @@ export class UiCalendar extends WebComponent({
     const day = parseDate(iso);
     if (!day) return;
     const next = formatDate({ y: day.y, m: day.m, d: 1 });
-    if (next === this.shown) return;
-    this.shown = next;
+    if (next === this.#shown.get()) return;
+    this.#shown.set(next);
     this.dispatchEvent(new CustomEvent('ui-month-change', { bubbles: true, detail: { month: next.slice(0, 7) } }));
   }
 
@@ -351,7 +346,7 @@ export class UiCalendar extends WebComponent({
 
   // The state a day is drawn in.
   _dayState(day: CalendarDate): { selected: boolean; single: boolean; start: boolean; end: boolean; middle: boolean } {
-    const s = this.selection;
+    const s = this.#selection.get();
     const iso = formatDate(day);
     if (this.mode === 'range') {
       const from = parseDate(s.from);
@@ -374,8 +369,10 @@ export class UiCalendar extends WebComponent({
       const d = parseDate(iso);
       return !!d && months.some((m) => m.y === d.y && m.m === d.m);
     };
-    if (this.focused && inShown(this.focused)) return this.focused;
-    const chosen = [this.selection.from, ...this.selection.days].find((d) => d && inShown(d));
+    const focused = this.#focused.get();
+    if (focused && inShown(focused)) return focused;
+    const s = this.#selection.get();
+    const chosen = [s.from, ...s.days].find((d) => d && inShown(d));
     if (chosen) return chosen;
     const today = formatDate(this._today());
     if (inShown(today)) return today;
@@ -448,7 +445,7 @@ export class UiCalendar extends WebComponent({
           data-today=${isToday ? 'true' : null}
           data-outside=${isOutside ? 'true' : null}
           data-disabled=${off ? 'true' : null}
-          data-focused=${this.focused === iso ? 'true' : null}
+          data-focused=${this.#focused.get() === iso ? 'true' : null}
           class=${cn(
             'group/day relative aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-e-(--cell-radius) [&:first-child[data-selected=true]_button]:rounded-s-(--cell-radius)',
             // A week-number column makes the row's first day its second cell,
@@ -473,7 +470,7 @@ export class UiCalendar extends WebComponent({
           data-range-middle=${st.middle ? 'true' : 'false'}
           class=${cn(buttonClass({ variant: 'ghost', size: 'icon' }), calendarDayButtonClass())}
           @click=${() => this.pick(iso)}
-          @focus=${() => { this.focused = iso; }}
+          @focus=${() => { this.#focused.set(iso); }}
         >${day.d}</button></td>`;
       })}</tr>`)}</tbody></table></div>`;
     })}</div>${hidden}</div>`;
@@ -493,7 +490,7 @@ export class UiCalendar extends WebComponent({
   }
 
   _hiddenInputs(): unknown {
-    const s = this.selection;
+    const s = this.#selection.get();
     if (this.mode === 'range') {
       return html`<input type="hidden" name=${`${this.name}[from]`} value=${s.from}><input type="hidden" name=${`${this.name}[to]`} value=${s.to}>`;
     }
@@ -560,7 +557,7 @@ export class UiCalendar extends WebComponent({
     const last = addMonths(first, (this.numberOfMonths || 1) - 1);
     if (compareDates({ ...day, d: 1 }, { ...first, d: 1 }) < 0) this.goToMonth(iso);
     else if (compareDates({ ...day, d: 1 }, { ...last, d: 1 }) > 0) this.goToMonth(formatDate(addMonths(day, -((this.numberOfMonths || 1) - 1))));
-    this.focused = iso;
+    this.#focused.set(iso);
     this.updateComplete.then(() => {
       this.querySelector<HTMLButtonElement>(`button[data-day="${iso}"]`)?.focus();
     });

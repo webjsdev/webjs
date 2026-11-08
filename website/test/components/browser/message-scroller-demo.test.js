@@ -31,6 +31,8 @@ const mount = async () => {
 
 const send = (el) => el.querySelector('button[type="submit"]').click();
 const items = (el) => [...el.querySelectorAll('ui-message-scroller-item')];
+// The demo's status is internal state; the queued line draws it as data-status.
+const status = (el) => el.querySelector('[data-status]')?.dataset.status;
 
 suite('message-scroller-demo', () => {
   test('opens on the empty state with the first question queued', async () => {
@@ -48,7 +50,7 @@ suite('message-scroller-demo', () => {
     const el = await mount();
     try {
       send(el);
-      assert.ok(await until(() => el.status === 'ready' && items(el).length === 2), 'a question and its answer');
+      assert.ok(await until(() => status(el) === 'ready' && items(el).length === 2), 'a question and its answer');
       const [question, answer] = items(el);
       assert.equal(question.getAttribute('message-id'), 'u0');
       assert.ok(question.hasAttribute('scroll-anchor'), 'the question is the turn to anchor');
@@ -70,11 +72,11 @@ suite('message-scroller-demo', () => {
     try {
       send(el);
       await el.updateComplete;
-      assert.equal(el.status, 'submitted');
+      assert.equal(status(el), 'submitted');
       assert.equal(el.querySelector('button[type="submit"]').disabled, true, 'send waits');
       assert.equal(el.querySelector('button[aria-label="Reset conversation"]').disabled, true, 'reset waits');
       assert.equal(el.querySelector('[data-status]').dataset.status, 'submitted', 'the queued text dims');
-      await until(() => el.status === 'ready');
+      await until(() => status(el) === 'ready');
     } finally {
       el.remove();
     }
@@ -85,7 +87,7 @@ suite('message-scroller-demo', () => {
     try {
       for (let i = 0; i < 4; i++) {
         send(el);
-        assert.ok(await until(() => el.status === 'ready' && items(el).length === (i + 1) * 2), `turn ${i + 1}`);
+        assert.ok(await until(() => status(el) === 'ready' && items(el).length === (i + 1) * 2), `turn ${i + 1}`);
       }
       assert.match(el.querySelector('[data-status]').textContent, /No messages queued\. Reset the conversation\./);
       assert.equal(el.querySelector('button[type="submit"]').disabled, true, 'nothing left to send');

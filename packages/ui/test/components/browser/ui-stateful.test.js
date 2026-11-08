@@ -1848,7 +1848,8 @@ suite('ui-message-scroller: a new anchored turn settles near the top', () => {
       </div>`);
     try {
       const el = root.querySelector('ui-message-scroller');
-      await until(() => !el.pending);
+      // `pending` is internal; the frame says the placement is done.
+      await until(() => !el.querySelector('[data-slot="message-scroller"]')?.hasAttribute('data-pending-scroll'));
       const viewport = el.querySelector('[data-slot="message-scroller-viewport"]');
       const list = el.querySelector('ui-message-scroller-content');
       assert.equal(viewport.scrollTop, 0, 'two turns fit, nothing to scroll yet');

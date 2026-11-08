@@ -18,7 +18,7 @@ import { buttonClass } from '#modules/ui/components/button.ts';
 export class DocsCopyCode extends WebComponent({
   variant: prop<'code' | 'command'>(String),
 }) {
-  private copied = signal(false);
+  readonly #copied = signal(false);
   private resetTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
@@ -48,13 +48,13 @@ export class DocsCopyCode extends WebComponent({
     } catch {
       return;
     }
-    this.copied.set(true);
+    this.#copied.set(true);
     if (this.resetTimer) clearTimeout(this.resetTimer);
-    this.resetTimer = setTimeout(() => this.copied.set(false), 2000);
+    this.resetTimer = setTimeout(() => this.#copied.set(false), 2000);
   };
 
   render() {
-    const copied = this.copied.get();
+    const copied = this.#copied.get();
     const command = this.variant === 'command';
     return html`<button type="button" data-copied=${copied ? 'true' : 'false'} class=${cn(buttonClass({ variant: 'ghost', size: 'icon' }), 'size-7', command ? 'opacity-70 hover:opacity-100 focus-visible:opacity-100' : 'bg-code hover:opacity-100 focus-visible:opacity-100')} @click=${this.copy}>
       <span class="sr-only">Copy</span>${copied ? CHECK : COPY}

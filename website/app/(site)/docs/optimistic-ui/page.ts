@@ -167,24 +167,24 @@ import { likePost } from '#modules/posts/actions/like-post.server.ts';
 class LikeButton extends WebComponent({ postId: prop(String) }) {
   // INSTANCE scope: one signal per element. A module-scope signal() is SHARED
   // across every instance, so a feed of these would all flip on one click.
-  private liked = signal(false);
+  readonly #liked = signal(false);
 
   private async toggle() {
-    const next = !this.liked.get();
+    const next = !this.#liked.get();
     // Returns the action's ActionResult; the rollback already happened by then.
-    return optimistic(this.liked, next, () =&gt; likePost(this.postId));
+    return optimistic(this.#liked, next, () =&gt; likePost(this.postId));
   }
 
   render() {
     return html\`&lt;button @click=\${() =&gt; this.toggle()}&gt;
-      \${this.liked.get() ? 'Liked' : 'Like'}
+      \${this.#liked.get() ? 'Liked' : 'Like'}
     &lt;/button&gt;\`;
   }
 }
 LikeButton.register('like-button');</code-block>
 
     <p>
-      Note the scope. A module-scope <code>signal()</code> is shared by every component instance, which is exactly right for state that genuinely is app-wide (a theme, a cart count, a sidebar-open flag) and exactly wrong for a per-item flip, where a list of buttons would all light up on one click. Per-item state goes on the instance, as above. <code>liked</code> is a plain instance field rather than a reactive property declared in the factory, so the class-field rule that protects reactive props does not apply to it.
+      Note the scope. A module-scope <code>signal()</code> is shared by every component instance, which is exactly right for state that genuinely is app-wide (a theme, a cart count, a sidebar-open flag) and exactly wrong for a per-item flip, where a list of buttons would all light up on one click. Per-item state goes on the instance, as above. <code>#liked</code> is a private, <code>readonly</code> field holding a signal rather than a reactive property declared in the factory, so the class-field rule that protects reactive props does not apply to it. A signal field is written through <code>.set()</code>, never assigned.
     </p>
 
     <p>

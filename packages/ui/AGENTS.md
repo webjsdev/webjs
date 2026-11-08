@@ -57,20 +57,39 @@ returning an `` html`...` `` template, declarative bindings (`@click`,
 `?attr`, `attr=`, `.prop`), and `<slot></slot>` for projecting authored
 children. Light DOM throughout, full shadow-DOM slot parity.
 
-Internal state is an instance signal, never a reactive property (#1677). A
-part whose state its parent element pushes in (a command item's `state`, a
-group's `shown`) keeps a same-named getter/setter over a private signal, so
-the parent assigns it like a property:
+The kit holds its internal state in signals. That is the kit's choice, not a
+framework rule: `state: true` props work just as well in an app. Every signal
+field here is `readonly` (#1679). State that stays inside its class is
+a bare `#private` signal: `readonly #copied = signal(false)`, read with
+`this.#copied.get()`, written with `this.#copied.set(true)`. State another kit
+element reaches is a `readonly` PUBLIC signal field instead: a part whose
+parent pushes its state in (a command item's `state`, a group's `shown`), a
+root a part writes back to (the combobox's `highlighted`), or one a part reads
+(the message scroller's `pending`). The other side calls `.get()` / `.set()`.
 
 ```ts
-#shown = signal(true);
-get shown() { return this.#shown.get(); }
-set shown(v) { this.#shown.set(v); }
+readonly #copied = signal(false);   // internal
+readonly shown = signal(true);      // the parent calls group.shown.set(false)
 ```
+
+Cross-element signal reads and writes guard the signal too (`part.open?.set(value)`),
+since a matching element may not have upgraded yet. A part receiving state from
+its parent asks for a fresh sync in `connectedCallback`, so a write skipped
+before upgrade is recovered without waiting for another interaction. Navigation
+menu parts sync after their own render so their ARIA links are wired too.
+
+A signal field is never assigned: `group.shown = false` replaces the signal
+object, the part stays subscribed to the old one, and its next render throws
+on `.get()`. `readonly` makes that a type error and `no-signal-field-assignment`
+in `webjs check` flags it inside the class. Only a documented plain-value API
+keeps a getter/setter over a private signal, which today is the sidebar
+provider's `isMobile` / `openMobile` (shadcn's `useSidebar()` booleans).
 
 A part reading that state in `updated()` (to set its host's `hidden`, say)
 re-renders when it changes, since the component tracks the signals its whole
-update cycle reads. `test/registry-contents.test.js` fails on a `state: true`.
+update cycle reads. `test/registry-contents.test.js` fails on a `state: true`,
+on a signal field without `readonly`, and on any accessor over a private
+signal other than the sidebar pair.
 
 popover, accordion, and collapsible used to live here but migrated to
 Tier 1 once their behaviour could be expressed by native primitives

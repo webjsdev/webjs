@@ -272,16 +272,16 @@ export class LiveChat extends WebComponent {
   \`;
 
   conn = null;
-  messages = signal([]);
-  connected = signal(false);
+  readonly #messages = signal([]);
+  readonly #connected = signal(false);
 
   connectedCallback() {
     super.connectedCallback();
     this.conn = connectWS('/api/chat', {
-      onOpen:  () =&gt; this.connected.set(true),
-      onClose: () =&gt; this.connected.set(false),
+      onOpen:  () =&gt; this.#connected.set(true),
+      onClose: () =&gt; this.#connected.set(false),
       onMessage: (msg) =&gt; {
-        this.messages.set([...this.messages.get().slice(-99), msg]);
+        this.#messages.set([...this.#messages.get().slice(-99), msg]);
       },
     });
   }
@@ -299,8 +299,8 @@ export class LiveChat extends WebComponent {
   }
 
   render() {
-    const messages = this.messages.get();
-    const connected = this.connected.get();
+    const messages = this.#messages.get();
+    const connected = this.#connected.get();
     return html\`
       &lt;div class="messages"&gt;
         \${messages.map(m =&gt; {
@@ -402,7 +402,7 @@ export class LiveComments extends WebComponent({ postId: Number }) {
   \`;
 
   conn = null;
-  comments = signal&lt;any[]&gt;([]);
+  readonly #comments = signal&lt;any[]&gt;([]);
 
   constructor() {
     super();
@@ -415,7 +415,7 @@ export class LiveComments extends WebComponent({ postId: Number }) {
       this.conn = connectWS('/api/comments/' + this.postId + '/ws', {
         onMessage: (msg) =&gt; {
           if (msg.kind === 'new-comment') {
-            this.comments.set([...this.comments.get(), msg.comment]);
+            this.#comments.set([...this.#comments.get(), msg.comment]);
           }
         },
       });
@@ -436,7 +436,7 @@ export class LiveComments extends WebComponent({ postId: Number }) {
   render() {
     return html\`
       &lt;div&gt;
-        \${this.comments.get().map(c =&gt; html\`
+        \${this.#comments.get().map(c =&gt; html\`
           &lt;div class="comment"&gt;
             &lt;span class="author"&gt;\${c.author}&lt;/span&gt;: \${c.text}
           &lt;/div&gt;

@@ -12,26 +12,26 @@ import { streamTokens } from '../actions/stream-tokens.server.ts';
 
 export class TokenStream extends WebComponent {
   // Plain instance signals (not reactive props), so a class field is fine here.
-  private output = signal('');
-  private busy = signal(false);
+  readonly #output = signal('');
+  readonly #busy = signal(false);
 
   private async run() {
-    this.output.set('');
-    this.busy.set(true);
+    this.#output.set('');
+    this.#busy.set(true);
     try {
       // `await streamTokens(...)` gives the async iterable; `for await` pulls
       // each token as it arrives instead of waiting for the whole response.
       for await (const chunk of await streamTokens('webjs')) {
-        this.output.set(this.output.get() + chunk);
+        this.#output.set(this.#output.get() + chunk);
       }
     } finally {
-      this.busy.set(false);
+      this.#busy.set(false);
     }
   }
 
   render() {
-    const busy = this.busy.get();
-    const output = this.output.get();
+    const busy = this.#busy.get();
+    const output = this.#output.get();
     // Only reserve the output area once streaming starts (or has produced text),
     // so an idle demo has no empty box below the button.
     return html`

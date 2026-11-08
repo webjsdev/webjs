@@ -82,10 +82,10 @@ function firstFrame() {
  * canvas loop runs only while the element is connected.
  */
 export class PreviewLiveWaveform extends WebComponent {
-  active = signal(false);
-  processing = signal(true);
-  mode = signal<Mode>('static');
-  _ready = signal(false);
+  readonly active = signal(false);
+  readonly processing = signal(true);
+  readonly mode = signal<Mode>('static');
+  readonly _ready = signal(false);
 
   _canvas: HTMLCanvasElement | null = null;
   _raf = 0;

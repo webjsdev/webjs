@@ -69,7 +69,7 @@ await el.updateComplete;
 // DOM now reflects count = 5</code-block>
 
     <h2>State mutation</h2>
-    <p>Signals are the default state primitive. Mutating a signal that the update cycle read (in <code>willUpdate()</code>, <code>render()</code> or <code>updated()</code>) schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared via the <code>WebComponent({ ... })</code> factory) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
+    <p>Mutating a signal that the update cycle read (in <code>willUpdate()</code>, <code>render()</code> or <code>updated()</code>) schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared via the <code>WebComponent({ ... })</code> factory) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
     <code-block>this.count.set(this.count.get() + 1);
 this.name = 'updated';                       // reactive property assignment
 // One render. changedProperties.has('name') is true; signal change drove the watcher.</code-block>

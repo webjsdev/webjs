@@ -25,16 +25,16 @@ import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 export class RouterControls extends WebComponent {
   // Instance signal mirroring whether soft navigation is currently on.
-  private soft = signal(true);
+  readonly #soft = signal(true);
 
   private toggleRouter() {
-    if (this.soft.get()) disableClientRouter();
+    if (this.#soft.get()) disableClientRouter();
     else enableClientRouter();
-    this.soft.set(!this.soft.get());
+    this.#soft.set(!this.#soft.get());
   }
 
   render() {
-    const soft = this.soft.get();
+    const soft = this.#soft.get();
     return html`
       <div class="grid gap-3">
         <div class="flex flex-wrap gap-3 items-center">

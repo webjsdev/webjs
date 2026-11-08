@@ -470,3 +470,50 @@ test('internal state is a signal, never a state: true property (#1677)', { skip 
   walk(REGISTRY_DIR);
   assert.deepEqual(offenders, [], 'hold internal state in an instance signal, as dropdown-menu does');
 });
+
+// Signal fields (#1679). Every one is `readonly`, so TypeScript rejects the
+// assignment that would replace the signal object. Internal state is a bare
+// `#private` signal and state other elements reach is a public signal field;
+// a getter/setter over a private signal is kept ONLY for a documented
+// plain-value API, which today is the sidebar provider's useSidebar() pair.
+const ACCESSOR_ALLOWED = new Set(['components/sidebar.ts#isMobile', 'components/sidebar.ts#openMobile']);
+
+function registryTsFiles() {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.ts')) out.push(p);
+    }
+  };
+  walk(REGISTRY_DIR);
+  return out;
+}
+
+test('every signal field in the registry is readonly (#1679)', { skip }, () => {
+  const bare = [];
+  for (const file of registryTsFiles()) {
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/^[ \t]+((?:(?:public|private|protected|static|declare|override|readonly)\s+)*)(#?[A-Za-z_$][\w$]*)\s*[!?]?\s*(?::[^=\n]*)?=\s*(?:signal|computed)\s*[<(]/gm)) {
+      if (!/\breadonly\b/.test(m[1])) bare.push(`${file.slice(REGISTRY_DIR.length + 1)} ${m[2]}`);
+    }
+  }
+  assert.deepEqual(bare, [], 'declare signal fields readonly');
+});
+
+test('no accessor wraps a private signal outside the documented sidebar API (#1679)', { skip }, () => {
+  const found = [];
+  for (const file of registryTsFiles()) {
+    const rel = file.slice(REGISTRY_DIR.length + 1);
+    const src = readFileSync(file, 'utf8');
+    // Any getter or setter, typed or not, single- or multi-line, whose body
+    // reaches the same-named private signal.
+    for (const m of src.matchAll(/\b(get|set)\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^{]*)?\{([\s\S]*?)\n?\s*\}/g)) {
+      const [, kind, name, body] = m;
+      if (!new RegExp(`this\\.#${name}\\.(?:get|set)\\(`).test(body)) continue;
+      if (!ACCESSOR_ALLOWED.has(`${rel}#${name}`)) found.push(`${rel} ${kind} ${name}`);
+    }
+  }
+  assert.deepEqual(found, [], 'internal state is a bare #private signal; state other elements reach is a readonly public signal field');
+});

@@ -7,15 +7,15 @@ import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { bustCaches } from '#modules/caching/actions/bust-caches.server.ts';
 
 export class CacheBuster extends WebComponent {
-  private status = signal('');
+  readonly #status = signal('');
 
   private async bust() {
-    this.status.set('evicting…');
+    this.#status.set('evicting…');
     // 'path' evicts THIS page's cached HTML (revalidatePath), so a refresh
     // re-renders with a fresh timestamp even inside the 10s window. 'tags' would
     // only evict cache() query results, which this page does not use.
     const result = await bustCaches('path');
-    this.status.set(result.success ? 'evicted, now refresh the page' : 'failed');
+    this.#status.set(result.success ? 'evicted, now refresh the page' : 'failed');
   }
 
   render() {
@@ -23,7 +23,7 @@ export class CacheBuster extends WebComponent {
       <div class="flex items-center gap-3 text-[15px]">
         <button @click=${() => this.bust()}
           class=${buttonClass({ variant: 'secondary', size: 'sm' })}>revalidate this page</button>
-        <span class="text-muted-foreground">${this.status.get()}</span>
+        <span class="text-muted-foreground">${this.#status.get()}</span>
       </div>
     `;
   }

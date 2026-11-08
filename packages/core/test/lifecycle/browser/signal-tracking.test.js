@@ -4,10 +4,9 @@
  * Every signal the synchronous update cycle reads is tracked, the same span
  * lit-labs/signals tracks: willUpdate, render and the post-commit hooks. The
  * DOM commit is not tracked, so a `watch()` part keeps its fine-grained swap
- * and does not re-render its host. Internal state lives in signals now that
- * the factory refuses `state: true`, and a component commonly derives a host
- * attribute from that state in `updated()`, which a render-only watcher never
- * saw.
+ * and does not re-render its host. A component using signals for internal
+ * state can derive a host attribute from that state in `updated()`, which a
+ * render-only watcher never saw.
  */
 import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';

@@ -28,6 +28,8 @@ export interface PropertyDeclaration<T = unknown> {
   type?: PropertyConstructor<T>;
   /** Write property changes back to the HTML attribute (kebab-cased). */
   reflect?: boolean;
+  /** Internal-only: no attribute, no reflection, but still reactive. */
+  state?: boolean;
   /** Rename the attribute, or pass `false` to suppress it entirely. */
   attribute?: string | false;
   /** Custom attribute ⇄ property serialisation. Takes precedence over `type`. */
@@ -83,10 +85,11 @@ interface WebComponentBase extends HTMLElement {
    * Schedule a re-render. Optionally record a property change so lifecycle
    * hooks can branch on what changed via `changedProperties`.
    *
-   * For instance-local state, use a signal from `@webjsdev/core`'s
-   * `signal()`. The framework's built-in SignalWatcher wires every signal
-   * the update cycle reads to a re-render automatically; explicit
-   * `requestUpdate()` is rarely needed.
+   * For instance-local state, use a reactive property (`WebComponent({
+   * open: prop<boolean>({ state: true }) })`) or a signal from
+   * `@webjsdev/core`'s `signal()`. The framework's built-in SignalWatcher
+   * wires every signal the update cycle reads to a re-render automatically;
+   * explicit `requestUpdate()` is rarely needed.
    */
   requestUpdate(name?: string, oldValue?: unknown): void;
   /** A Promise that resolves after the next render commit. */
@@ -205,6 +208,12 @@ export declare function prop<C extends PropertyConstructor<any>>(
 export declare function prop<T>(
   type: PropertyConstructor<any>,
   opts?: Omit<PropertyDeclaration<T>, 'type'>
+): PropertyDeclaration<T>;
+
+// No type constructor and no attribute: nothing says what the value is, so it
+// is `unknown` until narrowed (`prop<boolean>({ state: true })`).
+export declare function prop<T = unknown>(
+  opts: PropertyDeclaration<T> & ({ state: true } | { attribute: false })
 ): PropertyDeclaration<T>;
 
 export declare function prop<T = string>(

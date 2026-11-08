@@ -74,9 +74,7 @@ export class UiCarousel extends WebComponent({
   orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
   loop: Boolean,
 }) {
-  #edges = signal<{ prev: boolean; next: boolean }>({ prev: false, next: false });
-  get edges() { return this.#edges.get(); }
-  set edges(v) { this.#edges.set(v); }
+  readonly #edges = signal<{ prev: boolean; next: boolean }>({ prev: false, next: false });
   /** The slide nearest the start of the scroller. */
   selectedIndex = 0;
   _frame = 0;
@@ -88,11 +86,11 @@ export class UiCarousel extends WebComponent({
   }
 
   get canScrollPrev(): boolean {
-    return this.loop ? this._items().length > 1 : this.edges.prev;
+    return this.loop ? this._items().length > 1 : this.#edges.get().prev;
   }
 
   get canScrollNext(): boolean {
-    return this.loop ? this._items().length > 1 : this.edges.next;
+    return this.loop ? this._items().length > 1 : this.#edges.get().next;
   }
 
   connectedCallback(): void {
@@ -176,7 +174,7 @@ export class UiCarousel extends WebComponent({
   scrollNext(): void {
     const n = this._items().length;
     if (!n) return;
-    if (this.selectedIndex < n - 1 && this.edges.next) this.scrollTo(this.selectedIndex + 1);
+    if (this.selectedIndex < n - 1 && this.#edges.get().next) this.scrollTo(this.selectedIndex + 1);
     else if (this.loop) this.scrollTo(0);
   }
 
@@ -211,7 +209,7 @@ export class UiCarousel extends WebComponent({
     // reach the start.
     if (max > 0 && pos >= max - 1) best = items.length - 1;
     const edges = { prev: pos > 1, next: pos < max - 1 };
-    if (edges.prev !== this.edges.prev || edges.next !== this.edges.next) this.edges = edges;
+    if (edges.prev !== this.#edges.get().prev || edges.next !== this.#edges.get().next) this.#edges.set(edges);
     if (best !== this.selectedIndex) {
       this.selectedIndex = best;
       this.dispatchEvent(new CustomEvent('ui-slide-change', { bubbles: true, detail: { index: best } }));
