@@ -1,6 +1,6 @@
 {
   "name": "create-webjs",
-  "version": "0.10.28",
+  "version": "0.11.0",
   "type": "module",
   "description": "WebJs is a full-stack JavaScript framework built on web components, with server-side rendering and no build step. Runs on Node 24+ or Bun. Scaffold an app with `npm create webjs@latest my-app`.",
   "bin": {
@@ -11,7 +11,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/cli": "^0.10.0"
+    "@webjsdev/cli": "^0.11.0"
   },
   "publishConfig": {
     "access": "public"

@@ -51,7 +51,7 @@ function run(cmd, argv, opts = {}) {
   return { ok: r.status === 0, out: `${r.stdout || ''}${r.stderr || ''}` };
 }
 
-/** Pack core, server, cli and mcp as npm would publish them (cli depends on mcp). */
+/** Pack all six npm libraries so unpublished dependency ranges resolve to candidates. */
 function packCandidate() {
   // Build core's dist from THIS checkout. A worktree linked before #1671 may
   // still carry it as a symlink into another checkout, which `npm pack` would
@@ -60,8 +60,8 @@ function packCandidate() {
   execFileSync('node', ['scripts/build-framework-dist.js'], { cwd: ROOT, stdio: 'pipe' });
   const dir = mkdtempSync(join(tmpdir(), 'webjs-gate-pack-'));
   const tarballs = {};
-  for (const pkg of ['core', 'server', 'cli', 'mcp']) {
-    const out = execFileSync('npm', ['pack', '--silent', '--pack-destination', dir], { cwd: join(ROOT, 'packages', pkg), encoding: 'utf8' }).trim().split('\n').pop();
+  for (const pkg of ['core', 'server', 'cli', 'mcp', 'ui', 'intellisense']) {
+    const out = execFileSync('npm', ['pack', '--silent', '--pack-destination', dir], { cwd: join(ROOT, 'packages', ...(pkg === 'intellisense' ? ['editors', pkg] : [pkg])), encoding: 'utf8' }).trim().split('\n').pop();
     tarballs[`@webjsdev/${pkg}`] = join(dir, out);
   }
   return tarballs;
@@ -252,7 +252,10 @@ async function scaffoldStage(runtime, tarballs, port) {
     const cacheHome = join(parent, 'cache');
     const devEnv = runtime === 'bun' ? { XDG_CACHE_HOME: cacheHome } : {};
     for (const [f, src] of Object.entries(probeFiles)) { mkdirSync(dirname(join(appDir, f)), { recursive: true }); writeFileSync(join(appDir, f), src); }
-    for (const [name, tgz] of Object.entries(tarballs)) pkg.dependencies[name] = `file:${tgz}`;
+    for (const [name, tgz] of Object.entries(tarballs)) {
+      if (pkg.devDependencies) delete pkg.devDependencies[name];
+      pkg.dependencies[name] = `file:${tgz}`;
+    }
     pkg.overrides = { ...(pkg.overrides || {}), ...Object.fromEntries(Object.entries(tarballs).map(([n, t]) => [n, `file:${t}`])) };
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
     const install = () => (runtime === 'bun' ? run('bun', ['install'], { cwd: appDir, quiet: true }) : run('npm', ['install', '--no-audit', '--no-fund'], { cwd: appDir, quiet: true }));
