@@ -17,7 +17,7 @@ function group(title: string, links: DocLink[]) {
     <div class="flex flex-col gap-4">
       <div class="text-sm font-medium text-muted-foreground">${title}</div>
       <div class="flex flex-col gap-3">
-        ${links.map((l) => html`<a class=${LINK} href=${l.href} ?data-no-router=${l.href === '/' || /\.txt$/.test(l.href)}>${l.title}</a>`)}
+        ${links.map((l) => html`<a class=${LINK} href=${l.href}>${l.title}</a>`)}
       </div>
     </div>`;
 }

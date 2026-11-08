@@ -18,10 +18,10 @@ import { brandLockup } from '#lib/design/brand.ts';
  * children range, so a navigation between `(site)` and `ui/(chrome)`
  * replaces it, header and footer included, with no full page load.
  *
- * The UI link carries `data-no-router`. Crossing into /ui on a soft
- * navigation would apply its stylesheet only after the swap (the router's
- * head merge is add-only and a body stylesheet is not render-blocking), so
- * the known cross-section links take a full load and never paint unstyled.
+ * The UI link is an ordinary link: the router loads the /ui stylesheets
+ * before it swaps the page in and switches this section's sheet off as it
+ * goes (#1666, #1669), so crossing sections is a soft navigation like any
+ * other.
  *
  * The header is `position: fixed` (#610: sticky flickers on iOS WebKit during
  * a client-router navigation), so the content reserves its height through
@@ -32,13 +32,13 @@ import { brandLockup } from '#lib/design/brand.ts';
  */
 
 const NAV = [
-  { label: 'Docs', href: DOCS_START_PATH, ext: false, full: false },
-  { label: 'UI', href: UI_PATH, ext: false, full: true },
-  { label: 'Blog', href: '/blog', ext: false, full: false },
-  { label: 'Compare', href: '/compare', ext: false, full: false },
-  { label: 'Changelog', href: '/changelog', ext: false, full: false },
-  { label: 'Gallery', href: GALLERY_URL, ext: true, full: false },
-  { label: 'GitHub', href: GH_URL, ext: true, full: false },
+  { label: 'Docs', href: DOCS_START_PATH, ext: false },
+  { label: 'UI', href: UI_PATH, ext: false },
+  { label: 'Blog', href: '/blog', ext: false },
+  { label: 'Compare', href: '/compare', ext: false },
+  { label: 'Changelog', href: '/changelog', ext: false },
+  { label: 'Gallery', href: GALLERY_URL, ext: true },
+  { label: 'GitHub', href: GH_URL, ext: true },
 ];
 
 const navLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-lg transition-colors duration-[140ms] hover:text-fg hover:bg-[var(--hover-surface)]';
@@ -47,7 +47,7 @@ const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-2.5 ro
 type NavItem = (typeof NAV)[number];
 
 function navAnchor(n: NavItem, cls: string) {
-  return html`<a class=${cls} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''} ?data-no-router=${n.full}>${n.label}${n.ext ? NEW_TAB : ''}</a>`;
+  return html`<a class=${cls} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`;
 }
 
 export default function SiteLayout({ children }: LayoutProps) {

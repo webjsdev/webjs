@@ -18,7 +18,7 @@ export const description = 'How AI assistants find and install items from your r
 
 export default async function body(toc: TocEntry[]) {
   return html`
-    <p>Every WebJs app ships a read-only <a href="/docs/ai-first" data-no-router>MCP server</a>, reachable as <code>webjs mcp</code> or <code>npx @webjsdev/mcp</code>. Its <code>ui</code> tool lists the WebJs UI components, blocks and charts, and returns one item's helpers, example, install command and files.</p>
+    <p>Every WebJs app ships a read-only <a href="/docs/ai-first">MCP server</a>, reachable as <code>webjs mcp</code> or <code>npx @webjsdev/mcp</code>. Its <code>ui</code> tool lists the WebJs UI components, blocks and charts, and returns one item's helpers, example, install command and files.</p>
     ${callout(html`<p>The <code>ui</code> tool reads the registry that ships inside the installed <code>@webjsdev/ui</code> package. An agent reaches your own registry through the CLI, which has a JSON output for exactly this.</p>`, { title: 'The MCP server reads the WebJs UI registry.' })}
 
     ${heading(toc, 2, 'Prerequisites')}

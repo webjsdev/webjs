@@ -794,10 +794,13 @@ pages, luma on blocks and charts), so each is moved into `<head>` and dropped
 when it repeats a file already linked. A link that does not lead its template
 stays in `<body>`, where it is not reliably render-blocking (#406). The router
 loads a stylesheet the incoming page brings before it swaps the page in
-(#1666), so a soft navigation paints styled on its first frame. The links that commonly cross sections (the marketing header and footer
-UI links, the docs sidebar link, the `/ui` links back in the menu drawer
-and the footer) also carry
-`data-no-router`, so the usual path is a full load. Both stylesheets declare
+(#1666), so a soft navigation paints styled on its first frame, and switches
+the outgoing section's sheet off (#1669). So the links that cross sections
+(the marketing header and footer UI links, the docs sidebar link, the `/ui`
+links back) are ordinary links, and no link on the site carries
+`data-no-router`: the text and JSON files it links (`llms.txt`,
+`registries.json`) are left to the browser by the router's own non-HTML
+extension rule. Both stylesheets declare
 the same `dark:` variant on `data-theme`, so a theme choice holds across the
 two sections. `test/e2e/ui-chrome-swap.test.mjs` proves the swap in a browser.
 

@@ -32,9 +32,6 @@ import { styleLink } from '#lib/ui/style-links.ts';
  * to this header's height (shadcn's --header-height) on a page that has it.
  * Nothing measures the header (#1660). And the identity is WebJs's (the
  * WebJs mark, the name "WebJs UI"), with one credit line in the footer.
- *
- * The link back to webjs.dev carries `data-no-router`, so leaving /ui is a
- * full load, mirroring the marketing side's UI link.
  */
 
 // shadcn's ghost `sm` button with its nav padding (`px-2.5`), written out so
@@ -125,7 +122,7 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
         <div class="container-wrapper px-4 xl:px-6">
           <div class="flex h-(--footer-height) items-center justify-between">
             <p class="m-0 w-full px-1 text-center text-xs leading-loose text-muted-foreground sm:text-sm">
-              Built with <a class="font-medium text-muted-foreground underline underline-offset-4" href="/" data-no-router>WebJs</a>.
+              Built with <a class="font-medium text-muted-foreground underline underline-offset-4" href="/">WebJs</a>.
               Design and component API ported from <a class="font-medium text-muted-foreground underline underline-offset-4" href="https://ui.shadcn.com" target="_blank" rel="noopener noreferrer">shadcn/ui${NEW_TAB}</a>, MIT.
               The source code is available on <a class="font-medium text-muted-foreground underline underline-offset-4" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>.
             </p>

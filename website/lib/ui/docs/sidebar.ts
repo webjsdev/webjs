@@ -27,12 +27,9 @@ export function sectionActive(href: string, pathname: string): boolean {
 }
 
 function item(link: DocLink, active: boolean, prefix: boolean) {
-  // The llms.txt entry is a text file, not a page, so the client router
-  // leaves it to the browser rather than fetching it for a swap.
-  const file = /\.txt$/.test(link.href);
   return html`
     <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
-      <a href=${link.href} ?data-no-router=${file} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} data-match=${prefix ? 'prefix' : 'exact'} aria-current=${active ? 'page' : null} class=${cn(sidebarMenuButtonClass(), ITEM_BUTTON)}>
+      <a href=${link.href} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} data-match=${prefix ? 'prefix' : 'exact'} aria-current=${active ? 'page' : null} class=${cn(sidebarMenuButtonClass(), ITEM_BUTTON)}>
         <span class="absolute inset-0 flex w-(--sidebar-menu-width) bg-transparent"></span>
         ${link.title}
       </a>

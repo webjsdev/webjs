@@ -76,15 +76,18 @@ test('a /ui page renders the /ui chrome, not the marketing chrome', async () => 
   assert.ok(!footerOf(marketing).includes('shadcn'), 'and the marketing footer does not');
 });
 
-test('the links that cross between the sections take a full page load', async () => {
-  // A soft navigation across sections is CORRECT (the route groups swap the
-  // chrome), but the /ui stylesheet would then arrive after the swap, since
-  // the router's head merge only adds. The common links take a full load.
-  const [ui, marketing, docs] = await Promise.all([bodyOf(UI_COMPONENT), bodyOf(MARKETING_PATH), bodyOf(DOC_PATH)]);
-  assert.match(headerOf(marketing), /href="\/ui"[^>]*data-no-router/, 'the marketing header links to /ui with a full load');
-  assert.match(footerOf(marketing), /href="\/ui"[^>]*data-no-router/, 'and so does the marketing footer');
-  assert.match(docs, /href="\/ui"[^>]*data-no-router/, 'and so does the docs sidebar');
-  assert.match(headerOf(ui), /href="\/"[^>]*data-no-router/, 'the /ui header links back with a full load');
+test('the links that cross between the sections are ordinary soft navigations', async () => {
+  // The route groups swap the chrome, the router loads the incoming section's
+  // stylesheets before the swap (#1666) and switches the outgoing one off
+  // (#1669), so nothing on the site opts out of the router to cross sections.
+  // test/e2e/ui-chrome-swap.test.mjs proves the crossing in a browser.
+  const pages = await Promise.all([bodyOf(UI_COMPONENT), bodyOf(MARKETING_PATH), bodyOf(DOC_PATH), bodyOf(UI_INDEX)]);
+  const [ui, marketing, docs] = pages;
+  assert.match(headerOf(marketing), /href="\/ui"/, 'the marketing header links to /ui');
+  assert.match(footerOf(marketing), /href="\/ui"/, 'and so does the marketing footer');
+  assert.match(docs, /href="\/ui"/, 'and so does the docs sidebar');
+  assert.match(ui, /href="\/"/, '/ui links back to the marketing site');
+  for (const html of pages) assert.doesNotMatch(html, /<a\b[^>]*data-no-router/, 'and no link opts out of the router');
 });
 
 test('there is exactly one header, one footer, and one theme control', async () => {

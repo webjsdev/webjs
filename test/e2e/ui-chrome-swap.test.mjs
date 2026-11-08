@@ -5,8 +5,8 @@
  * the swap is proven in a real browser rather than inferred from the router's
  * unit tests:
  *
- *   1. A soft navigation from a marketing page to /ui, through a link with
- *      NO `data-no-router`, swaps the header and footer with no full page
+ *   1. A soft navigation from a marketing page to /ui, through the marketing header's own
+ *      UI link, swaps the header and footer with no full page
  *      load and no `webjs:navigation-fallback`.
  *   2. The /ui stylesheet is applied when the swapped content lands (the
  *      link app/ui/layout.ts leads with is hoisted into the response's head,
@@ -96,14 +96,6 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
       window.__sameDocument = true;
       window.__fallbacks = [];
       document.addEventListener('webjs:navigation-fallback', (e) => window.__fallbacks.push(e.detail?.cause));
-      // A plain in-page link to /ui with no data-no-router, the way a link
-      // in a blog post would be. The chrome's own UI links take a full load
-      // on purpose, so they cannot exercise the soft path.
-      const a = document.createElement('a');
-      a.href = '/ui';
-      a.id = 'e2e-to-ui';
-      a.textContent = 'to ui';
-      document.querySelector('main')?.append(a);
       // The font the /ui content paints in on the FIRST frame it is in the
       // document. The router loads the stylesheets a page brings before it
       // swaps the page in, so the swapped content is never unstyled.
@@ -116,7 +108,9 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
       }).observe(document.body, { childList: true, subtree: true });
     });
 
-    await page.click('#e2e-to-ui');
+    // The marketing header's own UI link: an ordinary link, so the crossing
+    // is a soft navigation (#1669 removed the full-load opt-out).
+    await page.click('.site-top header a[href="/ui"]');
     await page.waitForURL(BASE + '/ui');
     await page.waitForFunction(() => (document.querySelector('.site-top')?.textContent || '').includes('WebJs UI'));
 
