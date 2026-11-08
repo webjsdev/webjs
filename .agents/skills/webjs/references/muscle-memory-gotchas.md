@@ -314,17 +314,20 @@ The `@property()` decorator is banned by the erasable-TS invariant (decorators a
 
 ### The `@state()` decorator and `state: true`
 
-lit keeps internal reactive state in a property marked `@state()` or `{ state: true }`. WebJs has no such property: the factory THROWS on a `state` option when the class is defined (`no-state-property` flags it first). Internal state is an instance signal, and the component re-renders when any signal its update cycle read changes, including one read only in `willUpdate()` or `updated()`.
+lit's `@state()` decorator is non-erasable, so WebJs spells the same thing as a factory option. It behaves as in lit: no attribute, reassign it to re-render, and it shows up in `changedProperties`.
 
 ```ts
 // lit
 @state() private open = false;
 
 // WebJs
-readonly #open = signal(false);   // read: this.#open.get(), write: this.#open.set(true)
+class Menu extends WebComponent({ open: prop(Boolean, { state: true }) }) {
+  constructor() { super(); this.open = false; }
+  toggle() { this.open = !this.open; }
+}
 ```
 
-Keep it `#private` unless another element needs it; then make it a `readonly` public signal field (`readonly open = signal(false)`, used as `part.open.set(true)`). Never ASSIGN a signal field, the lit reflex `this.open = true`: it replaces the signal object, the component stays subscribed to the old one, and the next `.get()` throws. `readonly` makes that a compile error, and `no-signal-field-assignment` in `webjs check` flags it inside the declaring class. A getter/setter over a private signal is only for a documented plain-value API users assign like a property. In an `async render()`, read the signal before the first `await`, since reads after it are not tracked, and have an event handler read the live signal (`this.#n.set(this.#n.get() + 1)`) rather than that render-time local, or two clicks before the re-render lands count once.
+Signals work too, as lit supports them through `@lit-labs/signals`. Write a signal with `.set()`, never by assignment: `this.count = 5` on a signal field replaces the signal and the next `.get()` throws (`no-signal-field-assignment` flags it). In an `async render()`, read signals before the first `await`, since reads after it are not tracked.
 
 ### Passing a method straight to an `@event` binding
 
@@ -372,4 +375,4 @@ Context providers publish on connect via `hostConnected`, which does not run at 
 
 ### Vanilla DOM instead of Lit idioms
 
-WebJs components are Lit-shaped on purpose: the value is the declarative DX. Prefer a factory-declared reactive prop over `this.getAttribute`, a `signal` for internal state (the factory refuses lit's `state: true`), a `class=${...}` binding over `this.classList`, a `@click=${...}` binding over `this.addEventListener`, and `C.register('x')` over `customElements.define`. Vanilla DOM stays right only where the platform offers nothing declarative: `this.closest('ui-tabs')` for compound-component ancestor lookup (resolves at SSR too), slotted-content queries, global `document` / `window` listeners, and imperative `el.focus()`. This is a convention, not a lint rule. A global `document` / `window` LISTENER is one of those legitimate cases, because the event happens outside the element. A document QUERY is not: reaching for markup that another component rendered is the jQuery habit to drop, and for your OWN rendered node a `ref` replaces the selector entirely. The ownership rules at the top of `components.md` state the full test.
+WebJs components are Lit-shaped on purpose: the value is the declarative DX. Prefer a factory-declared reactive prop over `this.getAttribute`, a `state: true` prop or a `signal` for internal state, a `class=${...}` binding over `this.classList`, a `@click=${...}` binding over `this.addEventListener`, and `C.register('x')` over `customElements.define`. Vanilla DOM stays right only where the platform offers nothing declarative: `this.closest('ui-tabs')` for compound-component ancestor lookup (resolves at SSR too), slotted-content queries, global `document` / `window` listeners, and imperative `el.focus()`. This is a convention, not a lint rule. A global `document` / `window` LISTENER is one of those legitimate cases, because the event happens outside the element. A document QUERY is not: reaching for markup that another component rendered is the jQuery habit to drop, and for your OWN rendered node a `ref` replaces the selector entirely. The ownership rules at the top of `components.md` state the full test.

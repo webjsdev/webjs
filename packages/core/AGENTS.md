@@ -194,12 +194,14 @@ edit is invisible and a counterfactual passes vacuously), and run
    carries options), with defaults set via the `default` option or the
    constructor, never class-field initializers (those clobber the
    framework's accessor under modern class-field semantics). A direct
-   `static properties` block throws at runtime, and so does a `state`
-   option in the factory (#1677): internal state is an instance signal,
-   and the SignalWatcher tracks every signal the synchronous update cycle
-   reads (`willUpdate`, `render()`, `updated()`), leaving only the DOM
-   commit untracked. See `component.js`, the `no-static-properties` and
-   `no-state-property` rules, and `reactive-props-no-class-field`.
+   `static properties` block throws at runtime. `state: true` and
+   `attribute: false` both mean "no attribute", as in lit, and one
+   `hasAttribute()` check in `attribute-reader.js` decides it for the
+   attribute reader, both renderers and reflection. The SignalWatcher tracks
+   every signal the synchronous update cycle reads (`willUpdate`,
+   `render()`, `updated()`), leaving only the DOM commit untracked. See
+   `component.js`, the `no-static-properties` rule, and
+   `reactive-props-no-class-field`.
 6. **New interactivity surfaces must update the elision analyser.**
    WebJs elides display-only component modules from the browser by
    static analysis (`packages/server/src/component-elision.js`). It is a

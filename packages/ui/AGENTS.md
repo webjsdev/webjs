@@ -57,8 +57,9 @@ returning an `` html`...` `` template, declarative bindings (`@click`,
 `?attr`, `attr=`, `.prop`), and `<slot></slot>` for projecting authored
 children. Light DOM throughout, full shadow-DOM slot parity.
 
-Internal state is an instance signal, never a reactive property (#1677), and
-every signal field is `readonly` (#1679). State that stays inside its class is
+The kit holds its internal state in signals. That is the kit's choice, not a
+framework rule: `state: true` props work just as well in an app. Every signal
+field here is `readonly` (#1679). State that stays inside its class is
 a bare `#private` signal: `readonly #copied = signal(false)`, read with
 `this.#copied.get()`, written with `this.#copied.set(true)`. State another kit
 element reaches is a `readonly` PUBLIC signal field instead: a part whose

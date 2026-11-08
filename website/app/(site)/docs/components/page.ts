@@ -124,6 +124,8 @@ interface Student { name: string; gpa: number; }
 class UserCard extends WebComponent({
   count:   prop(Number, { reflect: true }),       // reflect to the attribute
   label:   prop(String, { attribute: 'aria-label' }), // renamed attribute
+  open:    prop({ state: true }),                  // internal state, no attribute (lit's @state())
+  items:   prop&lt;string[]&gt;(Array, { attribute: false }), // property-only, set with .items=\${…}
   student: prop&lt;Student&gt;(Object),                  // narrowed object type
   tags:    prop&lt;string[]&gt;(Array),                  // array-typed: pass Array, not Object
   size:    prop&lt;'sm' | 'lg'&gt;(String),              // narrowed enum type
@@ -158,6 +160,8 @@ UserCard.register('user-card');</code-block>
     <p>Property names are automatically converted between camelCase (JavaScript) and kebab-case (HTML). A property named <code>userName</code> observes the attribute <code>user-name</code>. HTML attribute names are case-insensitive and the browser lowercases them while parsing, so a camelCase attribute in markup (<code>userName="…"</code>) arrives as <code>username</code>. The property answers to that lowercased name too (lit's default attribute name), so <code>user-name</code>, <code>userName</code> and <code>username</code> all reach <code>userName</code>, in the browser and on the server. Kebab-case is the preferred spelling and the one a reflected property writes. A property with a custom <code>attribute</code> gets no lowercased alias.</p>
 
     <p>A property that renames its attribute answers to the new name and to nothing else. Given <code>open: prop(Boolean, { attribute: 'is-open' })</code>, write <code>&lt;my-el is-open&gt;</code>; <code>&lt;my-el open&gt;</code> reaches no property on either side.</p>
+
+    <p>A <code>state: true</code> or <code>attribute: false</code> property has no attribute at all and is never read from one, on either side. The way to give one a server-rendered value is a <code>.prop=\${value}</code> binding from the parent template.</p>
 
 
     <h3>Reflecting a function is refused</h3>
@@ -204,14 +208,7 @@ class TodoList extends WebComponent {
 }
 TodoList.register('todo-list');</code-block>
 
-    <p>There is no internal-state property. lit's <code>state: true</code> option does not exist here, and the factory throws when a property declares it (the <code>no-state-property</code> rule in <code>webjs check</code> flags it first). Keep a reactive property for a value that rides an attribute, reflects to one, or arrives through a <code>.prop</code> binding, and hold everything else in a signal field declared <code>readonly</code>. Keep it <code>#private</code> unless another element needs it, and make it a <code>readonly</code> public field when one does (a parent pushing state into its parts), which also lets the other side build a <code>computed()</code> from it:</p>
-
-    <code-block>class MenuItem extends WebComponent {
-  readonly #pressed = signal(false);     // internal: nothing outside reads it
-  readonly highlighted = signal(false);  // shared: the menu calls item.highlighted.set(true)
-}</code-block>
-
-    <p>A signal field is never assigned. <code>this.highlighted = true</code> (or <code>item.highlighted = true</code> from outside) replaces the signal object: the component stays subscribed to the old one, so nothing re-renders, and the next <code>.get()</code> throws a <code>TypeError</code>. <code>readonly</code> turns that into a compile error wherever <code>tsc</code> runs, and the <code>no-signal-field-assignment</code> check rule flags it inside the declaring class, plain <code>.js</code> included. A getter and setter over a private signal is only for a documented plain-value API that users assign like a property.</p>
+    <p>Everything lit offers for state works: a <code>state: true</code> property (internal, no attribute, reassign it to re-render), an <code>attribute: false</code> property (public, no attribute, set with <code>.prop=\${…}</code>), and signals. A signal is written with <code>.set()</code>, never assigned: <code>this.count = 5</code> on a signal field replaces the signal, so nothing re-renders and the next <code>.get()</code> throws. The <code>no-signal-field-assignment</code> rule in <code>webjs check</code> flags it.</p>
 
     <h3>How signal updates render</h3>
     <ul>
