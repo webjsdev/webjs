@@ -133,7 +133,7 @@ export class UiTooltip extends WebComponent({
       requestAnimationFrame(() => this._wireAria());
     }
     // Close before a back/forward snapshot so it does not restore open (#766).
-    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; this.removeAttribute('open'); });
   }
 
   disconnectedCallback(): void {

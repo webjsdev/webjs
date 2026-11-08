@@ -119,7 +119,7 @@ export class UiHoverCard extends WebComponent({
     }
     // Close before the page is cached for back/forward so a restored snapshot
     // does not come back frozen open (#766).
-    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; this.removeAttribute('open'); });
   }
 
   disconnectedCallback(): void {
