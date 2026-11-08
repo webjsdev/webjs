@@ -84,7 +84,7 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  * @property {(newValue: unknown, oldValue: unknown) => boolean} [hasChanged]
  *   Custom dirty-check function. Called by the generated setter before
  *   scheduling an update. Return `true` to trigger a re-render, `false`
- *   to skip. Default: strict inequality `(a, b) => a !== b`.
+ *   to skip. Default: `(a, b) => !Object.is(a, b)`.
  *
  *   Note: this fires on the FIRST assignment too, with `oldValue` set
  *   to `undefined`. Numeric comparators that subtract against undefined
@@ -148,12 +148,16 @@ function installAccessors(Ctor, props) {
       get() { return this.__propValues[propName]; },
       set(newVal) {
         const oldVal = this.__propValues[propName];
-        if (!changedCheck(newVal, oldVal)) return;
         this.__propValues[propName] = newVal;
+        if (!changedCheck(newVal, oldVal)) return;
         // Reflect to attribute if requested (_reflectAttribute skips a prop
         // with no attribute: `state: true` or `attribute: false`).
-        if (d.reflect && this._connected) {
-          this._reflectAttribute(propName, newVal, d);
+        if (d.reflect) {
+          if (this._connected) {
+            this._reflectAttribute(propName, newVal, d);
+          } else {
+            (this.__reflectPending ??= new Set()).add(propName);
+          }
         }
         // requestUpdate records the (name, oldValue) entry AND schedules a
         // render. During the update phase the scheduler short-circuits and
@@ -977,10 +981,8 @@ class WebComponentBase extends Base {
     // Hold a stable reference to the current Map so all hooks see the same
     // snapshot. During the update phase (steps 3-6) the Map is mutated in
     // place when property setters fire, folding those changes into THIS
-    // cycle. The Map is replaced with a fresh empty one only after a
-    // successful commit so post-commit assignments queue the NEXT cycle.
-    // On `shouldUpdate=false` or hook errors, the Map is preserved so the
-    // accumulated changes survive into the next render.
+    // cycle. The Map is replaced when this phase finishes, including skipped
+    // updates and hook errors, so post-commit writes belong to the NEXT cycle.
     const changedProperties = this._changedProperties;
 
     // --- 1. Mark we're inside an update cycle ---
@@ -1027,26 +1029,17 @@ class WebComponentBase extends Base {
         }
 
         if (!pendingCommit) {
-          // --- 6. controllers' hostUpdated (sync commit) ---
-          for (const c of this.__controllers || NO_CONTROLLERS) {
-            if (c.hostUpdated) c.hostUpdated();
-          }
           didCommit = true;
         }
       }
-      // shouldUpdate=false: preserve _changedProperties so the next
-      // requestUpdate keeps accumulating on top of the entries that
-      // didn't render this cycle.
     } catch (preCommitError) {
       console.error(`[webjs] lifecycle hook threw during update phase:`, preCommitError);
     } finally {
       this._isUpdating = false;
-      // The snapshot is consumed once the commit is DISPATCHED. For an async
-      // render it resets here too, so a property change during the in-flight
-      // fetch starts a fresh cycle (whose render token supersedes this one).
-      if (didCommit || pendingCommit) {
-        this._changedProperties = new Map();
-      }
+      // Consume this phase's snapshot even when shouldUpdate skips it. For an
+      // async render, changes during the fetch start a new cycle whose token
+      // supersedes the in-flight commit.
+      this._changedProperties = new Map();
     }
 
     // --- Async render: finish the cycle when the pending commit settles. ---
@@ -1063,10 +1056,6 @@ class WebComponentBase extends Base {
         this.__pendingAsyncCommits--;
         // A newer render superseded this one; let the newer cycle finish.
         if (token !== this.__renderToken) return;
-        // --- 6. controllers' hostUpdated (after the async commit) ---
-        for (const c of this.__controllers || NO_CONTROLLERS) {
-          if (c.hostUpdated) c.hostUpdated();
-        }
         // --- 7-8 + updateComplete ---
         this._postCommit(changedProperties);
       };
@@ -1129,7 +1118,7 @@ class WebComponentBase extends Base {
    */
   _resolveUpdate() {
     if (this._updateResolve) {
-      const settled = this._changedProperties.size === 0;
+      const settled = !this._scheduled;
       this._updateResolve(settled);
       this._updateResolve = null;
     }
@@ -1255,6 +1244,12 @@ class WebComponentBase extends Base {
    * @param {Map<string, unknown>} _changedProperties
    */
   update(_changedProperties) {
+    const pendingReflection = this.__reflectPending;
+    this.__reflectPending = undefined;
+    for (const name of pendingReflection || []) {
+      const def = this.constructor.properties[name];
+      this._reflectAttribute(name, this[name], def);
+    }
     // The signal reads render() makes are tracked by the watcher
     // _performRender runs the whole cycle under.
     let tpl;
@@ -1287,7 +1282,7 @@ class WebComponentBase extends Base {
     // The commit is untracked: a signal read while the DOM is patched (a
     // `watch()` part, a child's synchronous work) belongs to whatever read
     // it, not to this component's next render.
-    Signal.subtle.untrack(() => clientRender(tpl, this._renderRoot));
+    Signal.subtle.untrack(() => clientRender(tpl, this._renderRoot, { host: this }));
     return undefined;
   }
 
@@ -1316,7 +1311,7 @@ class WebComponentBase extends Base {
     if (this.__firstRendered && this._overridesRenderFallback()) {
       try {
         const fb = this.renderFallback();
-        if (fb !== undefined) Signal.subtle.untrack(() => clientRender(fb, this._renderRoot));
+        if (fb !== undefined) Signal.subtle.untrack(() => clientRender(fb, this._renderRoot, { host: this }));
       } catch (e) {
         console.error(`[webjs] renderFallback() threw:`, e);
       }
@@ -1335,7 +1330,7 @@ class WebComponentBase extends Base {
         // The sync path routes an identical throw to the same boundary, so
         // this is what makes the two paths agree.
         try {
-          clientRender(tpl, this._renderRoot);
+          clientRender(tpl, this._renderRoot, { host: this });
         } catch (commitError) {
           this._handleRenderError(
             commitError instanceof Error ? commitError : new Error(String(commitError)),
@@ -1372,7 +1367,7 @@ class WebComponentBase extends Base {
     );
     try {
       const fallback = this.renderError(error);
-      if (fallback !== undefined) Signal.subtle.untrack(() => clientRender(fallback, this._renderRoot));
+      if (fallback !== undefined) Signal.subtle.untrack(() => clientRender(fallback, this._renderRoot, { host: this }));
     } catch (fallbackError) {
       console.error(`[webjs] renderError() also threw:`, fallbackError);
     }
@@ -1385,8 +1380,11 @@ class WebComponentBase extends Base {
    * @private
    */
   _postCommit(changedProperties) {
+    const resolve = this._updateResolve;
+    this._updateResolve = null;
     try {
       this._tracked('__postWatcher', () => {
+        for (const c of this.__controllers || NO_CONTROLLERS) c.hostUpdated?.();
         if (!this.__firstRendered) {
           this.__firstRendered = true;
           this.firstUpdated(changedProperties);
@@ -1396,7 +1394,7 @@ class WebComponentBase extends Base {
     } catch (postCommitError) {
       console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
     } finally {
-      this._resolveUpdate();
+      resolve?.(!this._scheduled);
     }
   }
 

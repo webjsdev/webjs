@@ -181,8 +181,10 @@ function tokenize(strings) {
     state = 'text';
   };
 
+  let bindingQuote = '';
   for (let i = 0; i < strings.length; i++) {
-    const s = strings[i];
+    const s = bindingQuote ? strings[i].slice(1) : strings[i];
+    bindingQuote = '';
     for (let j = 0; j < s.length; j++) {
       const c = s[j];
       switch (state) {
@@ -393,9 +395,21 @@ function tokenize(strings) {
         });
         state = 'in-tag';
         attrName = '';
-      } else if (state === 'attr-quoted' || state === 'attr-unquoted') {
+      } else if (state === 'attr-quoted' && BINDING_PREFIXES[attrName[0]] !== undefined) {
+        const lead = chunk.slice(attrStart);
+        if (!lead.endsWith('=' + attrQuote) || !strings[i + 1].startsWith(attrQuote)) {
+          throw new Error('Event, property and boolean bindings require exactly one expression with no surrounding text.');
+        }
+        chunk = chunk.slice(0, attrStart);
         flush();
-        ops.push({ t: HOLE, k: VALUE, name: attrName, tag: currentTag });
+        ops.push({ t: HOLE, k: ATTR, kind: BINDING_PREFIXES[attrName[0]], name: attrName.slice(1), tag: currentTag, lead: lead.slice(0, -1) });
+        bindingQuote = attrQuote;
+        state = 'in-tag';
+        attrName = '';
+      } else if (state === 'attr-quoted' || state === 'attr-unquoted') {
+        const prefix = chunk.slice(attrStart);
+        flush();
+        ops.push({ t: HOLE, k: VALUE, name: attrName, tag: currentTag, quote: state === 'attr-quoted' ? attrQuote : '', prefix });
       } else {
         // A hole in a tag name, between attributes, in a close tag or a markup
         // declaration: nothing is emitted for it, as before.

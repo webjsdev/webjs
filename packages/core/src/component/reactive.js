@@ -1,13 +1,13 @@
 import { tagOf } from '../registry.js';
 
 /**
- * Default change detection: strict inequality.
+ * Default change detection: Object.is inequality (NaN is stable; signed zero changes).
  * @param {unknown} a
  * @param {unknown} b
  * @returns {boolean}
  */
 export function defaultHasChanged(a, b) {
-  return a !== b;
+  return !Object.is(a, b);
 }
 
 /**

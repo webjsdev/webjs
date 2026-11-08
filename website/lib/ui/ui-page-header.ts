@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { badgeClass } from '#modules/ui/components/badge.ts';
 
@@ -53,7 +53,7 @@ export function uiPageHeader(opts: UiPageHeaderOptions) {
 
 /** PageNav: the bar under the header holding a section's own navigation. */
 export function pageNav(content: unknown, opts: { id?: string; class?: string } = {}) {
-  return html`<div id=${opts.id ?? null} class=${cn('container-wrapper scroll-mt-24', opts.class)}>
+  return html`<div id=${opts.id ?? nothing} class=${cn('container-wrapper scroll-mt-24', opts.class)}>
     <div class="container flex items-center justify-between gap-4 py-4">${content}</div>
   </div>`;
 }

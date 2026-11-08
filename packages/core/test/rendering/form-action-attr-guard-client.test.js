@@ -196,19 +196,15 @@ function refusesOnRerender(tpl, bad, messagePattern, goodRendered = '/submit') {
 }
 
 test('client refuses a quoted property hole .action="${fn}"', () => {
-  refusesOnRerender((v) => html`<form .action="${v}"></form>`, fakeAction, /function was interpolated into \.action=/);
-});
-
-test('client refuses a quoted event hole @action="${fn}"', () => {
-  refusesOnRerender((v) => html`<form @action="${v}"></form>`, fakeAction, /function was interpolated into @action=/);
+  const host = document.createElement('div');
+  assert.throws(
+    () => render(html`<form .action="${fakeAction}"></form>`, host),
+    /function was interpolated into action=/,
+  );
 });
 
 test('client refuses a quoted boolean hole ?action="${fn}"', () => {
-  // Quoting moves this into 'attr-mixed' like the other quoted holes, so the
-  // good value renders as a literal `?action="/submit"` and the helper's
-  // default check fits. (Only the UNQUOTED bool below needs an override, since
-  // a boolean binding drops the value and writes a bare `action=""`.)
-  refusesOnRerender((v) => html`<form ?action="${v}"></form>`, fakeAction, /function was interpolated into \?action=/);
+  refusesOnRerender((v) => html`<form ?action="${v}"></form>`, fakeAction, /function was interpolated into action=/, 'action=""');
 });
 
 test('client refuses an array-wrapped function', () => {
@@ -229,13 +225,18 @@ test('client refuses an unquoted boolean hole ?action=${fn}', () => {
 // is the legitimate thing to pass one, so refusing it would be a false
 // positive.
 
-test('an unquoted @action=${fn} event binding stays legal', () => {
-  const host = document.createElement('div');
-  render(html`<form @action=${fakeAction}></form>`, host);
-  const form = host.querySelector('form');
-  assert.ok(form, 'the form still renders');
-  assert.ok(!form.hasAttribute('action'), 'an event binding writes no action attribute');
-  assert.ok(!host.innerHTML.includes('CLIENT_SECRET'), 'and leaks nothing');
+test('an unquoted or quoted @action event binding stays legal', () => {
+  for (const tpl of [
+    html`<form @action=${fakeAction}></form>`,
+    html`<form @action="${fakeAction}"></form>`,
+  ]) {
+    const host = document.createElement('div');
+    render(tpl, host);
+    const form = host.querySelector('form');
+    assert.ok(form, 'the form still renders');
+    assert.ok(!form.hasAttribute('action'), 'an event binding writes no action attribute');
+    assert.ok(!host.innerHTML.includes('CLIENT_SECRET'), 'and leaks nothing');
+  }
 });
 
 test('client still renders an array of plain strings', () => {

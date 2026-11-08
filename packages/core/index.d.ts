@@ -159,3 +159,7 @@ export function optimistic<T, R>(
   action: () => Promise<R> | R,
 ): Promise<R>;
 
+
+export { nothing, noChange } from './src/sentinels.js';
+
+export { classMap, styleMap, ifDefined } from './src/attribute-directives.js';

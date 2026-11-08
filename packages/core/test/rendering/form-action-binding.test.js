@@ -14,11 +14,12 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 
-let html, renderToString, renderToStream, setFormActionResolver, FORM_ACTION_FIELD, FORM_ACTION_ID_KEY;
+let html, renderToString, renderToStream, setFormActionResolver, FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, nothing;
 before(async () => {
   ({ html } = await import('../../src/html.js'));
   ({ renderToString, renderToStream } = await import('../../src/render-server.js'));
   ({ setFormActionResolver, FORM_ACTION_FIELD, FORM_ACTION_ID_KEY } = await import('../../src/form-action.js'));
+  ({ nothing } = await import('../../src/sentinels.js'));
 });
 
 // The marker is INLINE in the body, not read from an outer const: `String(fn)`
@@ -908,22 +909,22 @@ test('an empty author name after the hole is refused, not shipped as a duplicate
   }
 });
 
-test('a null name hole on a bound submitter is omitted, so the identity is the only name (#1573)', async () => {
+test('a nothing name hole on a bound submitter is omitted, so the identity is the only name (#1573, #1682)', async () => {
   withResolver();
-  for (const tpl of [
-    html`<form action=${submitFeedback}><button formaction=${submitFeedback} name=${null}>x</button></form>`,
-    html`<form action=${submitFeedback}><button name=${undefined} formaction=${submitFeedback}>x</button></form>`,
-  ]) {
-    const out = await renderToString(tpl, { ssr: true });
-    assert.equal((out.match(/<button[^>]*>/)[0].match(/\bname=/g) || []).length, 1, out);
-  }
+  const tpl = html`<form action=${submitFeedback}><button formaction=${submitFeedback} name=${nothing}>x</button></form>`;
+  const out = await renderToString(tpl, { ssr: true });
+  assert.equal((out.match(/<button[^>]*>/)[0].match(/\bname=/g) || []).length, 1, out);
 });
 
-test('a null method hole on a bound form gets the supplied method="post" (#1573)', async () => {
+test('a nothing method hole on a bound form gets the supplied method="post" (#1573, #1682)', async () => {
   withResolver();
-  const out = await renderToString(html`<form action=${submitFeedback} method=${null}></form>`, { ssr: true });
+  const out = await renderToString(html`<form action=${submitFeedback} method=${nothing}></form>`, { ssr: true });
   assert.match(out, /<form[^>]*method="post"/);
   assert.doesNotMatch(out, /method=""/);
+  await assert.rejects(
+    renderToString(html`<form action=${submitFeedback} method=${null}></form>`, { ssr: true }),
+    /method=""/,
+  );
 });
 
 test('a .prop on a submitter that binds NOTHING is an ordinary native property', async () => {

@@ -190,7 +190,7 @@ export default function ChartAreaInteractive() {
         </div>
         <ui-select class="hidden sm:ml-auto sm:flex">
           <select aria-label="Select a value" class=${cn(selectTriggerClass(), 'w-[160px] rounded-lg')}>
-            ${RANGES.map((r) => html`<option value=${r.value} selected=${r.value === '90d'}>${r.label}</option>`)}
+            ${RANGES.map((r) => html`<option value=${r.value} ?selected=${r.value === '90d'}>${r.label}</option>`)}
           </select>
         </ui-select>
       </div>

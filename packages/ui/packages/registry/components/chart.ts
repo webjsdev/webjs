@@ -69,7 +69,7 @@
  * })}
  * ```
  */
-import { html, svg } from '@webjsdev/core';
+import { html, svg, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import {
   RADIAN, fmt, formatValue, num, percent, estimateTextWidth, niceTicks, linearTicks, linearScale, bandScale, pointScale,
@@ -121,8 +121,8 @@ const DY: Record<VAnchor, string> = { start: '0.71em', middle: '0.355em', end: '
 export function chartText(x: number, y: number, value: unknown, o: { anchor?: 'start' | 'middle' | 'end'; vAnchor?: VAnchor; class?: string; fill?: string | null; stroke?: string; fontSize?: number; baseline?: string } = {}) {
   // A size in pixels, as Recharts takes it, written in em of the chart's
   // 12px text so it keeps its size when the chart scales (see `_watchSize`).
-  const size = o.fontSize != null ? `${fmt(o.fontSize / 12)}em` : null;
-  return svg`<text x=${fmt(x)} y=${fmt(y)} text-anchor=${o.anchor ?? 'middle'} fill=${o.fill ?? null} stroke=${o.stroke ?? null} font-size=${size} alignment-baseline=${o.baseline ?? null} class=${cn('ui-chart-text', o.class)}><tspan x=${fmt(x)} dy=${DY[o.vAnchor ?? 'end']}>${value}</tspan></text>`;
+  const size = o.fontSize != null ? `${fmt(o.fontSize / 12)}em` : nothing;
+  return svg`<text x=${fmt(x)} y=${fmt(y)} text-anchor=${o.anchor ?? 'middle'} fill=${o.fill ?? nothing} stroke=${o.stroke ?? nothing} font-size=${size} alignment-baseline=${o.baseline ?? nothing} class=${cn('ui-chart-text', o.class)}><tspan x=${fmt(x)} dy=${DY[o.vAnchor ?? 'end']}>${value}</tspan></text>`;
 }
 
 function cartesianLabelAttrs(box: { x: number; y: number; width: number; height: number }, position: LabelPosition, offset: number): { x: number; y: number; anchor: 'start' | 'middle' | 'end'; vAnchor: VAnchor } {
@@ -224,7 +224,7 @@ function frame(o: ChartBaseOptions, f: Frame) {
   const views = t ? f.points.map((p) => chartTooltipView(o.config, p.label, p.payload, t)) : [];
   // cn() keeps both aspect utilities, so an authored one replaces the default here.
   const base = /(^|\s)aspect-/.test(o.class ?? '') ? chartContainerClass().replace(' aspect-video', '') : chartContainerClass();
-  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null} data-fit=${f.fit ? 'x' : null} data-plot=${t || f.fit ? [f.plot.x, f.plot.y, f.plot.w, f.plot.h].map((v) => fmt(v)).join(' ') : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}</svg>${legendLayer(o, f)}${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
+  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? nothing} class=${cn(base, o.class)} style=${chartStyle(o.config) || nothing}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? nothing} data-hit=${t ? f.hit : nothing} data-keyboard=${t && a11y ? 'true' : nothing} data-default-index=${def ? String(t?.defaultIndex) : nothing} data-fit=${f.fit ? 'x' : nothing} data-plot=${t || f.fit ? [f.plot.x, f.plot.y, f.plot.w, f.plot.h].map((v) => fmt(v)).join(' ') : nothing}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}</svg>${legendLayer(o, f)}${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : nothing}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
       ? html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)} data-tip=${JSON.stringify(v)}></div>`
       : html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)}>${chartTooltipMarkup(v, look)}</div>`))}</div><span data-slot="chart-live" class="sr-only" aria-live="polite"></span>` : ''}</div></ui-chart>`;
 }
@@ -279,7 +279,7 @@ export interface ChartBarShapeProps {
 
 /** A bar as the kit draws one (Recharts' `<Rectangle>`), for a custom `shape` to reuse. */
 export function chartRectangle(p: Omit<ChartBarShapeProps, 'datum' | 'index' | 'dataKey'> & { strokeDasharray?: number | string; strokeDashoffset?: number; class?: string }) {
-  return svg`<path class=${cn('ui-chart-rectangle', p.class)} fill=${p.fill} fill-opacity=${p.fillOpacity ?? null} stroke=${p.stroke ?? null} stroke-width=${p.strokeWidth ?? null} stroke-dasharray=${p.strokeDasharray ?? null} stroke-dashoffset=${p.strokeDashoffset ?? null} d=${rectanglePath(p.x, p.y, p.width, p.height, p.radius)}></path>`;
+  return svg`<path class=${cn('ui-chart-rectangle', p.class)} fill=${p.fill} fill-opacity=${p.fillOpacity ?? nothing} stroke=${p.stroke ?? nothing} stroke-width=${p.strokeWidth ?? nothing} stroke-dasharray=${p.strokeDasharray ?? nothing} stroke-dashoffset=${p.strokeDashoffset ?? nothing} d=${rectanglePath(p.x, p.y, p.width, p.height, p.radius)}></path>`;
 }
 
 export interface ChartSeriesOptions {
@@ -344,7 +344,7 @@ function dotProps(spec: boolean | ChartDotOptions | ChartDotRender | undefined, 
 
 function drawDot(spec: ChartDotOptions | ChartDotRender, base: { cx: number; cy: number; r: number; fill: string; stroke: string; strokeWidth: number }, datum: ChartDatum, index: number, dataKey: string, cls: string) {
   if (typeof spec === 'function') return spec({ cx: base.cx, cy: base.cy, r: base.r, fill: base.fill, stroke: base.stroke, datum, index, dataKey });
-  return svg`<circle cx=${fmt(base.cx)} cy=${fmt(base.cy)} r=${fmt(spec.r ?? base.r)} fill=${spec.fill ?? base.fill} fill-opacity=${spec.fillOpacity ?? null} stroke=${spec.stroke ?? base.stroke} stroke-width=${spec.strokeWidth ?? base.strokeWidth} class=${cn('ui-chart-dot', cls, spec.class)}></circle>`;
+  return svg`<circle cx=${fmt(base.cx)} cy=${fmt(base.cy)} r=${fmt(spec.r ?? base.r)} fill=${spec.fill ?? base.fill} fill-opacity=${spec.fillOpacity ?? nothing} stroke=${spec.stroke ?? base.stroke} stroke-width=${spec.strokeWidth ?? base.strokeWidth} class=${cn('ui-chart-dot', cls, spec.class)}></circle>`;
 }
 
 function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOptions[]) {
@@ -399,7 +399,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
 
   // Grid lines at the value ticks and the category ticks.
   const g = o.grid;
-  const gridLine = (x1: number, y1: number, x2: number, y2: number) => svg`<line stroke="#ccc" fill="none" stroke-dasharray=${(g && g.strokeDasharray) || null} x1=${fmt(x1)} y1=${fmt(y1)} x2=${fmt(x2)} y2=${fmt(y2)}></line>`;
+  const gridLine = (x1: number, y1: number, x2: number, y2: number) => svg`<line stroke="#ccc" fill="none" stroke-dasharray=${(g && g.strokeDasharray) || nothing} x1=${fmt(x1)} y1=${fmt(y1)} x2=${fmt(x2)} y2=${fmt(y2)}></line>`;
   const valueCoords = valueTicks.map((t) => vScale(t));
   const catCoords = data.map((_, i) => catAt(i));
   const hLines = vertical ? catCoords : valueCoords;
@@ -446,7 +446,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
         const active = s.activeIndex === index ? s.activeBar ?? {} : null;
         const shape = s.shape
           ? s.shape({ ...box, radius: s.radius ?? 0, fill, datum, index, dataKey: s.dataKey, stroke: s.stroke, strokeWidth: s.strokeWidth, fillOpacity: s.fillOpacity })
-          : svg`<path class="ui-chart-rectangle" fill=${active?.fill ?? fill} fill-opacity=${active?.fillOpacity ?? s.fillOpacity ?? null} stroke=${active?.stroke ?? s.stroke ?? null} stroke-width=${active?.strokeWidth ?? s.strokeWidth ?? null} stroke-dasharray=${active?.strokeDasharray ?? null} stroke-dashoffset=${active?.strokeDashoffset ?? null} d=${rectanglePath(box.x, box.y, box.width, box.height, s.radius ?? 0)}></path>`;
+          : svg`<path class="ui-chart-rectangle" fill=${active?.fill ?? fill} fill-opacity=${active?.fillOpacity ?? s.fillOpacity ?? nothing} stroke=${active?.stroke ?? s.stroke ?? nothing} stroke-width=${active?.strokeWidth ?? s.strokeWidth ?? nothing} stroke-dasharray=${active?.strokeDasharray ?? nothing} stroke-dashoffset=${active?.strokeDashoffset ?? nothing} d=${rectanglePath(box.x, box.y, box.width, box.height, s.radius ?? 0)}></path>`;
         return svg`<g class="ui-chart-layer ui-chart-bar-rectangle" data-index=${String(index)}>${shape}</g>`;
       })}</g>${labelList(s.labels, s.dataKey, boxes, 'center')}</g>`;
     }
@@ -459,14 +459,14 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
       ? svg`<g class="ui-chart-layer ui-chart-dots">${top.map((p, i) => drawDot(dot, { cx: p[0], cy: p[1], r: 3, fill: family === 'line' ? '#fff' : s.fill ?? stroke, stroke, strokeWidth: s.strokeWidth ?? 1 }, data[i], i, s.dataKey, family === 'line' ? 'ui-chart-line-dot' : 'ui-chart-area-dot'))}</g>`
       : '';
     if (family === 'line') {
-      return svg`<g class=${cn('ui-chart-layer ui-chart-line', s.class)}><path class="ui-chart-curve ui-chart-line-curve" fill="none" stroke=${stroke} stroke-width=${s.strokeWidth ?? 1} stroke-dasharray=${s.strokeDasharray ?? null} d=${curvePath(top, curve)}></path>${dots}${labelList(s.labels, s.dataKey, pts, 'top')}</g>`;
+      return svg`<g class=${cn('ui-chart-layer ui-chart-line', s.class)}><path class="ui-chart-curve ui-chart-line-curve" fill="none" stroke=${stroke} stroke-width=${s.strokeWidth ?? 1} stroke-dasharray=${s.strokeDasharray ?? nothing} d=${curvePath(top, curve)}></path>${dots}${labelList(s.labels, s.dataKey, pts, 'top')}</g>`;
     }
     const bottom = data.map((_, i): Pt => {
       const lo = s.stackId != null ? sb[i][0] : Math.max(domain[0], Math.min(0, domain[1]));
       return vertical ? [vScale(lo), catAt(i)] : [catAt(i), vScale(lo)];
     }).reverse();
     const area = `${curvePath(top, curve)}${curvePath(bottom, curve, 'L')}Z`;
-    return svg`<g class=${cn('ui-chart-layer ui-chart-area', s.class)}><path class="ui-chart-curve ui-chart-area-area" fill=${s.fill ?? '#3182bd'} fill-opacity=${s.fillOpacity ?? 0.6} stroke="none" d=${area}></path><path class="ui-chart-curve ui-chart-area-curve" fill="none" stroke=${stroke} stroke-width=${s.strokeWidth ?? 1} stroke-dasharray=${s.strokeDasharray ?? null} d=${curvePath(top, curve)}></path>${dots}${labelList(s.labels, s.dataKey, pts, 'top')}</g>`;
+    return svg`<g class=${cn('ui-chart-layer ui-chart-area', s.class)}><path class="ui-chart-curve ui-chart-area-area" fill=${s.fill ?? '#3182bd'} fill-opacity=${s.fillOpacity ?? 0.6} stroke="none" d=${area}></path><path class="ui-chart-curve ui-chart-area-curve" fill="none" stroke=${stroke} stroke-width=${s.strokeWidth ?? 1} stroke-dasharray=${s.strokeDasharray ?? nothing} d=${curvePath(top, curve)}></path>${dots}${labelList(s.labels, s.dataKey, pts, 'top')}</g>`;
   });
 
   // Active dots per point (lines and areas).
@@ -511,7 +511,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
       const text = which === 'x'
         ? chartText(at, edge + tickSize + margin2, t.label, { anchor: 'middle', vAnchor: 'start', fill: '#666', class: 'ui-chart-cartesian-axis-tick-value' })
         : chartText(edge - tickSize - margin2, at, t.label, { anchor: 'end', vAnchor: 'middle', fill: '#666', class: 'ui-chart-cartesian-axis-tick-value' });
-      return svg`<g class="ui-chart-layer ui-chart-cartesian-axis-tick" data-coord=${fmt(t.coord)} visibility=${shown.has(t.coord) ? null : 'hidden'}>${tl}${text}</g>`;
+      return svg`<g class="ui-chart-layer ui-chart-cartesian-axis-tick" data-coord=${fmt(t.coord)} visibility=${shown.has(t.coord) ? nothing : 'hidden'}>${tl}${text}</g>`;
     })}</g></g>`;
   };
 
@@ -566,7 +566,7 @@ export interface ChartSectorProps extends SectorGeometry {
 
 /** A sector as the kit draws one, for a custom `shape` / `activeShape` to reuse. */
 export function chartSector(p: Partial<ChartSectorProps> & SectorGeometry, cls = '') {
-  return svg`<path class=${cn('ui-chart-sector', cls)} fill=${p.fill ?? null} stroke=${p.stroke ?? null} stroke-width=${p.strokeWidth ?? null} d=${sectorPath(p)}></path>`;
+  return svg`<path class=${cn('ui-chart-sector', cls)} fill=${p.fill ?? nothing} stroke=${p.stroke ?? nothing} stroke-width=${p.strokeWidth ?? nothing} d=${sectorPath(p)}></path>`;
 }
 
 export interface ChartPieOptions {
@@ -733,8 +733,8 @@ export interface ChartPolarRadiusAxisOptions {
 function polarGrid(g: ChartPolarGridOptions | false | undefined, cx: number, cy: number, radii: number[], angles: number[], outer: number, inner = 0) {
   if (!g) return '';
   const ring = (r: number) => (g.gridType === 'circle'
-    ? svg`<circle class=${cn('ui-chart-polar-grid-concentric-circle', g.class)} stroke=${g.stroke ?? '#ccc'} stroke-width=${g.strokeWidth ?? null} fill=${g.fill ?? 'none'} cx=${fmt(cx)} cy=${fmt(cy)} r=${fmt(r)}></circle>`
-    : svg`<path class=${cn('ui-chart-polar-grid-concentric-polygon', g.class)} stroke=${g.stroke ?? '#ccc'} stroke-width=${g.strokeWidth ?? null} fill=${g.fill ?? 'none'} d=${polygonPath(angles.map((a) => polarToCartesian(cx, cy, r, a)))}></path>`);
+    ? svg`<circle class=${cn('ui-chart-polar-grid-concentric-circle', g.class)} stroke=${g.stroke ?? '#ccc'} stroke-width=${g.strokeWidth ?? nothing} fill=${g.fill ?? 'none'} cx=${fmt(cx)} cy=${fmt(cy)} r=${fmt(r)}></circle>`
+    : svg`<path class=${cn('ui-chart-polar-grid-concentric-polygon', g.class)} stroke=${g.stroke ?? '#ccc'} stroke-width=${g.strokeWidth ?? nothing} fill=${g.fill ?? 'none'} d=${polygonPath(angles.map((a) => polarToCartesian(cx, cy, r, a)))}></path>`);
   return svg`<g class="ui-chart-polar-grid"><g class="ui-chart-polar-grid-concentric">${radii.map(ring)}</g>${g.radialLines === false ? '' : svg`<g class="ui-chart-polar-grid-angle">${angles.map((a) => {
     const b = polarToCartesian(cx, cy, inner, a);
     const e = polarToCartesian(cx, cy, outer, a);
@@ -783,7 +783,7 @@ export function radarChart(o: ChartBaseOptions & {
   const radars = o.radars.map((r) => {
     const pts = data.map((_, i) => at(r, i));
     const dot = dotProps(r.dot, false);
-    return svg`<g class=${cn('ui-chart-layer ui-chart-radar', r.class)}><g class="ui-chart-layer ui-chart-radar-polygon"><path class="ui-chart-polygon" fill=${r.fill ?? null} fill-opacity=${r.fillOpacity ?? null} stroke=${r.stroke ?? null} stroke-width=${r.strokeWidth ?? null} d=${polygonPath(pts)}></path></g>${dot ? svg`<g class="ui-chart-layer ui-chart-radar-dots">${pts.map((q, i) => drawDot(dot, { cx: q.x, cy: q.y, r: 3, fill: r.fill ?? '#808080', stroke: r.stroke ?? 'none', strokeWidth: r.strokeWidth ?? 1 }, data[i], i, r.dataKey, 'ui-chart-radar-dot'))}</g>` : ''}${labelList(r.labels, r.dataKey, pts.map((q, i) => ({ box: { x: q.x, y: q.y, width: 0, height: 0 }, datum: data[i], index: i })), 'top')}</g>`;
+    return svg`<g class=${cn('ui-chart-layer ui-chart-radar', r.class)}><g class="ui-chart-layer ui-chart-radar-polygon"><path class="ui-chart-polygon" fill=${r.fill ?? nothing} fill-opacity=${r.fillOpacity ?? nothing} stroke=${r.stroke ?? nothing} stroke-width=${r.strokeWidth ?? nothing} d=${polygonPath(pts)}></path></g>${dot ? svg`<g class="ui-chart-layer ui-chart-radar-dots">${pts.map((q, i) => drawDot(dot, { cx: q.x, cy: q.y, r: 3, fill: r.fill ?? '#808080', stroke: r.stroke ?? 'none', strokeWidth: r.strokeWidth ?? 1 }, data[i], i, r.dataKey, 'ui-chart-radar-dot'))}</g>` : ''}${labelList(r.labels, r.dataKey, pts.map((q, i) => ({ box: { x: q.x, y: q.y, width: 0, height: 0 }, datum: data[i], index: i })), 'top')}</g>`;
   });
   const angleAxis = aSpec ? svg`<g class=${cn('ui-chart-layer ui-chart-polar-angle-axis', aSpec.class)}>${aSpec.tick === false ? '' : data.map((d, i) => {
     const value = aSpec.dataKey ? d[aSpec.dataKey] : i;
@@ -914,7 +914,7 @@ export function radialBarChart(o: ChartBaseOptions & {
         const p0 = polarToCartesian(cx, cy, r, angle);
         const p1 = polarToCartesian(cx, cy, r, angle + (dir ? 1 : -1) * 359);
         const id = `ui-chart-radial-label-${seq}-${si}-${li}-${sec.index}`;
-        return svg`<text dominant-baseline="central" fill=${l.fill ?? null} font-size=${l.fontSize != null ? `${fmt(l.fontSize / 12)}em` : null} class=${cn('ui-chart-radial-bar-label', l.class)}><defs><path id=${id} d=${`M${fmt(p0.x)},${fmt(p0.y)} A${fmt(r)},${fmt(r)},0,1,${dir ? 0 : 1},${fmt(p1.x)},${fmt(p1.y)}`}></path></defs><textPath href=${`#${id}`}>${value}</textPath></text>`;
+        return svg`<text dominant-baseline="central" fill=${l.fill ?? nothing} font-size=${l.fontSize != null ? `${fmt(l.fontSize / 12)}em` : nothing} class=${cn('ui-chart-radial-bar-label', l.class)}><defs><path id=${id} d=${`M${fmt(p0.x)},${fmt(p0.y)} A${fmt(r)},${fmt(r)},0,1,${dir ? 0 : 1},${fmt(p1.x)},${fmt(p1.y)}`}></path></defs><textPath href=${`#${id}`}>${value}</textPath></text>`;
       }
       const q = polarToCartesian(cx, cy, r, (sec.startAngle + sec.endAngle) / 2);
       return chartText(q.x, q.y, value, { anchor: 'middle', vAnchor: 'middle', class: cn('ui-chart-label', l.class), fill: l.fill, fontSize: l.fontSize });

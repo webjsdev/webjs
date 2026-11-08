@@ -23,11 +23,12 @@ before(() => {
   globalThis.HTMLElement = window.HTMLElement;
 });
 
-let html, render, FORM_ACTION_ID_KEY, asyncAppend, repeat;
+let html, render, FORM_ACTION_ID_KEY, asyncAppend, repeat, nothing;
 before(async () => {
   ({ html } = await import('../../src/html.js'));
   ({ render } = await import('../../src/render-client.js'));
   ({ FORM_ACTION_ID_KEY } = await import('../../src/form-action.js'));
+  ({ nothing } = await import('../../src/sentinels.js'));
   ({ asyncAppend } = await import('../../src/directives.js'));
   ({ repeat } = await import('../../src/repeat.js'));
 });
@@ -186,18 +187,22 @@ test('a hole resolving to null omits the attribute, so the binding supplies it (
       ? (v) => html`<form action=${fn} method=${v}></form>`
       : (v) => html`<form action=${fn} enctype=${v}></form>`;
     render(tpl(attr === 'method' ? 'post' : 'multipart/form-data'), host);
-    render(tpl(null), host);
+    render(tpl(nothing), host);
     const form = host.querySelector('form');
     assert.equal(form.getAttribute('method'), 'post', `a null ${attr} hole leaves the supplied method`);
     if (attr === 'enctype') assert.notEqual(form.getAttribute('enctype'), '', 'no empty enctype is left behind');
   }
 });
 
-test('a null method hole is accepted on the FIRST render too (#1573)', () => {
+test('a nothing method hole is accepted on the FIRST render too (#1573, #1682)', () => {
   const fn = HOISTED();
   const host = document.createElement('div');
-  render(html`<form action=${fn} method=${null}></form>`, host);
+  render(html`<form action=${fn} method=${nothing}></form>`, host);
   assert.equal(host.querySelector('form').getAttribute('method'), 'post');
+  assert.throws(
+    () => render(html`<form action=${fn} method=${null}></form>`, host),
+    /method=""/,
+  );
 });
 
 test('an action hole that resolves to a URL releases the binding', () => {
@@ -253,7 +258,7 @@ test('an ordinary form that binds no action keeps its method hole', () => {
   const host = document.createElement('div');
   const tpl = (m) => html`<form method=${m} action="/search"><input name="q"></form>`;
   render(tpl('get'), host);
-  render(tpl(null), host);   // removing method on an UNBOUND form is fine
+  render(tpl(nothing), host);   // removing method on an UNBOUND form is fine
   const form = host.querySelector('form');
   assert.equal(form.getAttribute('action'), '/search');
   assert.equal(form.hasAttribute('method'), false);
@@ -759,23 +764,20 @@ test('a .name / .value on a NON-binding submitter is left alone', () => {
 });
 
 test('an empty name PART on a bound submitter is refused, matching SSR', () => {
-  // `name=${''}` emits `name=""` beside the identity on both renderers, so it
-  // is refused. `null` / `undefined` omit the attribute on both (#1573), so the
-  // identity's channel is free and the template is accepted.
   const formAction = HOISTED();
   const buttonAction = HOISTED();
-  assert.throws(
-    () => render(
-      html`<form action=${formAction}><button name=${''} formaction=${buttonAction}>x</button></form>`,
-      document.createElement('div'),
-    ),
-    /already carries a "name" attribute/,
-  );
-  for (const value of [null, undefined]) {
-    const host = document.createElement('div');
-    render(html`<form action=${formAction}><button name=${value} formaction=${buttonAction}>x</button></form>`, host);
-    assert.equal(host.querySelector('button').getAttribute('name'), '__webjs_action', `name=\${${String(value)}} leaves the identity's channel free`);
+  for (const empty of ['', null, undefined]) {
+    assert.throws(
+      () => render(
+        html`<form action=${formAction}><button name=${empty} formaction=${buttonAction}>x</button></form>`,
+        document.createElement('div'),
+      ),
+      /already carries a "name" attribute/,
+    );
   }
+  const host = document.createElement('div');
+  render(html`<form action=${formAction}><button name=${nothing} formaction=${buttonAction}>x</button></form>`, host);
+  assert.equal(host.querySelector('button').getAttribute('name'), '__webjs_action', 'name=${nothing} leaves the identity channel free');
 });
 
 test('a formaction binding on <input type="submit"> is refused on the client too', () => {

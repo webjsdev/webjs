@@ -76,7 +76,7 @@
  * </ui-toggle-group>
  * ```
  */
-import { WebComponent, html, prop } from '@webjsdev/core';
+import { WebComponent, html, prop, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
@@ -146,7 +146,7 @@ export class UiToggleGroup extends WebComponent({
       style=${`--gap: ${spacing ?? 2}`}
       data-variant=${this.variant}
       data-size=${this.size}
-      data-spacing=${spacing}
+      data-spacing=${spacing ?? nothing}
       data-orientation=${this.orientation}
       @ui-toggle-item-click=${this._onItemClick}
     ><slot></slot></div>`;

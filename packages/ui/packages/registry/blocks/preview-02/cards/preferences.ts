@@ -69,7 +69,7 @@ export function preferences() {
             <ui-select class="w-full">
               <select id="default-currency" name="currency" class=${cn(selectTriggerClass(), 'w-full')}>
                 <optgroup>
-                  ${CURRENCIES.map((c) => html`<option value=${c.value} selected=${c.value === 'usd'}>${c.label}</option>`)}
+                  ${CURRENCIES.map((c) => html`<option value=${c.value} ?selected=${c.value === 'usd'}>${c.label}</option>`)}
                 </optgroup>
               </select>
             </ui-select>

@@ -682,7 +682,7 @@ test('flags an incompatible `.prop` binding against the declared property type',
   assert.ok(/property 'count'/.test(ours[0].messageText), `unexpected message: ${ours[0].messageText}`);
 });
 
-test('flags a quoted binding (invariant 4) as code 9002', () => {
+test('flags a mixed specialized binding as code 9002', () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent } from '@webjsdev/core';\n` +
@@ -695,13 +695,13 @@ test('flags a quoted binding (invariant 4) as code 9002', () => {
       `import './box.ts';\n` +
       `const fn = () => {};\n` +
       `export default function P() {\n` +
-      `  return html\`<my-box @click="\${fn}"></my-box>\`;\n` +
+      `  return html\`<my-box @click="prefix \${fn}"></my-box>\`;\n` +
       `}\n`,
   });
   const ours = svc.getSemanticDiagnostics('/page.ts').filter((d) => d.source === 'webjsdev-intellisense');
   assert.equal(ours.length, 1);
   assert.equal(ours[0].code, 9002);
-  assert.ok(/must be unquoted/.test(ours[0].messageText));
+  assert.ok(/requires exactly one expression/.test(ours[0].messageText));
 });
 
 test('flags an expressionless `.prop` binding as code 9003', () => {

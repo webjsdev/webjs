@@ -211,11 +211,11 @@ const escapeForCharClass = (c) => c.replace(/[\\\]^-]/g, '\\$&');
  * is classified above. (unquoted per invariant 4)
  */
 const EVENT_BINDING_RE = new RegExp(
-  `[${SSR_DROPPED_PREFIXES.map(escapeForCharClass).join('')}][A-Za-z][\\w-]*\\s*=\\s*\\$\\{`,
+  `[${SSR_DROPPED_PREFIXES.map(escapeForCharClass).join('')}][A-Za-z][\\w-]*\\s*=\\s*[\"']?\\$\\{`,
 );
 
 /** Match a `.onclick=${...}` (native event-handler property) binding. */
-const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
+const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*["']?\$\{/;
 
 /**
  * Narrow dynamic-slot signals (#1015, retained under #1021's native-parity

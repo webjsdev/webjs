@@ -44,7 +44,7 @@
  * <ui-calendar mode="range" value="2025-06-12/2025-06-20" number-of-months="2" name="stay"></ui-calendar>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 
@@ -400,25 +400,25 @@ export class UiCalendar extends WebComponent({
     ><div class="relative flex flex-col gap-4 md:flex-row"><nav aria-label="Navigation" class="absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1"><button
       type="button"
       aria-label="Go to the Previous Month"
-      aria-disabled=${this._canGo(-1) ? null : 'true'}
+      aria-disabled=${this._canGo(-1) ? nothing : 'true'}
       class=${cn(buttonClass({ variant: 'ghost' }), NAV_BUTTON, 'rdp-button-previous')}
       @click=${() => this._turn(-1)}
     ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="cn-rtl-flip size-4 rtl:rotate-180"><path d="m15 18-6-6 6-6"></path></svg></button><button
       type="button"
       aria-label="Go to the Next Month"
-      aria-disabled=${this._canGo(1) ? null : 'true'}
+      aria-disabled=${this._canGo(1) ? nothing : 'true'}
       class=${cn(buttonClass({ variant: 'ghost' }), NAV_BUTTON, 'rdp-button-next')}
       @click=${() => this._turn(1)}
     ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="cn-rtl-flip size-4 rtl:rotate-180"><path d="m9 18 6-6-6-6"></path></svg></button></nav>${months.map((mo, mi) => {
       // No id before connect (the server never connects an element): a served
       // `-caption-0` would be shared by every calendar on the page.
-      const captionId = this._id ? `${this._id}-caption-${mi}` : null;
+      const captionId = this._id ? `${this._id}-caption-${mi}` : nothing;
       return html`<div class="flex w-full flex-col gap-4"><div class="flex h-(--cell-size) w-full items-center justify-center px-(--cell-size)">${dropdown && mi === 0
         ? this._dropdowns(mo, captionId)
         : html`<span id=${captionId} role="status" aria-live="polite" class=${cn('font-medium select-none', calendarCaptionClass())}>${caption.format(toUTC(mo))}</span>`}</div><table
         role="grid"
         aria-labelledby=${captionId}
-        aria-multiselectable=${this.mode === 'single' ? null : 'true'}
+        aria-multiselectable=${this.mode === 'single' ? nothing : 'true'}
         class="w-full border-collapse"
       ><thead aria-hidden="true"><tr class="flex">${weeks
         ? html`<th scope="col" aria-label="Week Number" class="w-(--cell-size) select-none"></th>`
@@ -440,12 +440,12 @@ export class UiCalendar extends WebComponent({
         return html`<td
           role="gridcell"
           data-day=${iso}
-          aria-selected=${st.selected ? 'true' : null}
-          data-selected=${st.selected ? 'true' : null}
-          data-today=${isToday ? 'true' : null}
-          data-outside=${isOutside ? 'true' : null}
-          data-disabled=${off ? 'true' : null}
-          data-focused=${this.#focused.get() === iso ? 'true' : null}
+          aria-selected=${st.selected ? 'true' : nothing}
+          data-selected=${st.selected ? 'true' : nothing}
+          data-today=${isToday ? 'true' : nothing}
+          data-outside=${isOutside ? 'true' : nothing}
+          data-disabled=${off ? 'true' : nothing}
+          data-focused=${this.#focused.get() === iso ? 'true' : nothing}
           class=${cn(
             'group/day relative aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-e-(--cell-radius) [&:first-child[data-selected=true]_button]:rounded-s-(--cell-radius)',
             // A week-number column makes the row's first day its second cell,
@@ -498,7 +498,7 @@ export class UiCalendar extends WebComponent({
   }
 
   // Month and year selects over the caption, as react-day-picker draws them.
-  _dropdowns(mo: CalendarDate, captionId: string | null): unknown {
+  _dropdowns(mo: CalendarDate, captionId: string | typeof nothing): unknown {
     const monthName = this._fmt({ month: 'short' });
     const lo = this._min() ?? { y: mo.y - 100, m: 0, d: 1 };
     const hi = this._max() ?? { y: mo.y + 10, m: 11, d: 31 };

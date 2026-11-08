@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from '#modules/ui/components/button.ts';
 import { badgeClass, type BadgeVariant } from '#modules/ui/components/badge.ts';
@@ -50,7 +50,7 @@ export const Button = (
   opts: { variant?: ButtonVariant; size?: ButtonSize; cls?: string; label?: string; type?: 'button' | 'submit' },
   body: Body,
 ) =>
-  html`<button type=${opts.type ?? 'button'} data-slot="button" data-variant=${opts.variant ?? 'default'} data-size=${opts.size ?? 'default'} aria-label=${opts.label ?? null} class=${cn(buttonClass({ variant: opts.variant, size: opts.size }), opts.cls)}>${body}</button>`;
+  html`<button type=${opts.type ?? 'button'} data-slot="button" data-variant=${opts.variant ?? 'default'} data-size=${opts.size ?? 'default'} aria-label=${opts.label ?? nothing} class=${cn(buttonClass({ variant: opts.variant, size: opts.size }), opts.cls)}>${body}</button>`;
 
 export const Badge = (variant: BadgeVariant, cls: string, body: Body) =>
   html`<span data-slot="badge" data-variant=${variant} class=${cn(badgeClass({ variant }), cls)}>${body}</span>`;
@@ -61,7 +61,7 @@ export const Item = (opts: { variant?: 'default' | 'outline' | 'muted'; cls?: st
   const cls = cn(itemClass({ variant: opts.variant ?? 'default' }), opts.cls);
   return opts.href
     ? html`<a href=${opts.href} data-slot="item" data-variant=${opts.variant ?? 'default'} data-size="default" class=${cn(cls, 'no-underline')}>${body}</a>`
-    : html`<div role=${opts.role ?? null} data-slot="item" data-variant=${opts.variant ?? 'default'} data-size="default" class=${cls}>${body}</div>`;
+    : html`<div role=${opts.role ?? nothing} data-slot="item" data-variant=${opts.variant ?? 'default'} data-size="default" class=${cls}>${body}</div>`;
 };
 export const ItemContent = (cls: string, body: Body) =>
   html`<div data-slot="item-content" class=${cn(itemContentClass(), cls)}>${body}</div>`;
@@ -79,15 +79,15 @@ export const FieldGroup = (body: Body) =>
 export const Field = (cls: string, body: Body) =>
   html`<div role="group" data-slot="field" data-orientation="vertical" class=${cn(fieldClass(), cls)}>${body}</div>`;
 export const FieldLabel = (opts: { for?: string; id?: string }, body: Body) =>
-  html`<label data-slot="field-label" for=${opts.for ?? null} id=${opts.id ?? null} class=${fieldLabelClass()}>${body}</label>`;
+  html`<label data-slot="field-label" for=${opts.for ?? nothing} id=${opts.id ?? nothing} class=${fieldLabelClass()}>${body}</label>`;
 export const FieldDescription = (body: Body) =>
   html`<p data-slot="field-description" class=${fieldDescriptionClass()}>${body}</p>`;
 
 export const Input = (opts: { id?: string; type?: string; placeholder?: string; value?: string }) =>
-  html`<input data-slot="input" id=${opts.id ?? null} type=${opts.type ?? 'text'} placeholder=${opts.placeholder ?? null} value=${opts.value ?? null} class=${inputClass()}>`;
+  html`<input data-slot="input" id=${opts.id ?? nothing} type=${opts.type ?? 'text'} placeholder=${opts.placeholder ?? nothing} value=${opts.value ?? nothing} class=${inputClass()}>`;
 export const Textarea = (opts: { id?: string; placeholder?: string; cls?: string }) =>
-  html`<textarea data-slot="textarea" id=${opts.id ?? null} placeholder=${opts.placeholder ?? null} class=${cn(textareaClass(), opts.cls)}></textarea>`;
+  html`<textarea data-slot="textarea" id=${opts.id ?? nothing} placeholder=${opts.placeholder ?? nothing} class=${cn(textareaClass(), opts.cls)}></textarea>`;
 export const Progress = (value: number, aria: { label?: string; labelledby?: string; valuetext?: string }) =>
-  html`<progress data-slot="progress" value=${value} max="100" aria-label=${aria.label ?? null} aria-labelledby=${aria.labelledby ?? null} aria-valuetext=${aria.valuetext ?? null} class=${progressClass()}></progress>`;
+  html`<progress data-slot="progress" value=${value} max="100" aria-label=${aria.label ?? nothing} aria-labelledby=${aria.labelledby ?? nothing} aria-valuetext=${aria.valuetext ?? nothing} class=${progressClass()}></progress>`;
 export const Separator = () =>
   html`<div role="none" data-slot="separator" data-orientation="horizontal" class=${separatorClass()}></div>`;

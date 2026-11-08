@@ -13,6 +13,7 @@ import {
   html,
   repeat,
   Suspense,
+  nothing,
 } from '../../index.js';
 import { unsafeHTML, live } from '../../src/directives.js';
 
@@ -36,11 +37,12 @@ test('renderToString: Promise-valued tree is awaited', async () => {
   assert.match(out, /<p>async<\/p>/);
 });
 
-test('renderToString: false/true/null/undefined render as empty', async () => {
-  assert.equal(await renderToString(false), '');
-  assert.equal(await renderToString(true), '');
+test('renderToString: null/undefined/nothing render as empty; booleans render as text', async () => {
+  assert.equal(await renderToString(false), 'false');
+  assert.equal(await renderToString(true), 'true');
   assert.equal(await renderToString(null), '');
   assert.equal(await renderToString(undefined), '');
+  assert.equal(await renderToString(nothing), '');
 });
 
 test('renderToString: array of values is concatenated', async () => {
@@ -202,10 +204,12 @@ test('renderToStream: plain text inside template is HTML-escaped', async () => {
   assert.doesNotMatch(out, /<x>/);
 });
 
-test('renderToStream: false/null/undefined values skip without errors', async () => {
-  const stream = renderToStream(html`<p>${false}${null}${undefined}-end</p>`, { ssr: false });
+test('renderToStream: null/undefined/nothing values skip without errors; booleans render text', async () => {
+  const stream = renderToStream(html`<p>${nothing}${null}${undefined}-end</p>`, { ssr: false });
   const out = await streamText(stream);
   assert.match(out, /<p>-end<\/p>/);
+  const boolStream = renderToStream(html`<p>${false}-end</p>`, { ssr: false });
+  assert.match(await streamText(boolStream), /<p>false-end<\/p>/);
 });
 
 test('renderToStream: error during render rejects the stream', async () => {

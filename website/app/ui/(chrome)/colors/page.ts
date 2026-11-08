@@ -79,7 +79,7 @@ function formatSelector(palette: ColorPalette) {
     <ui-select size="sm" position="popper" align="end" content-class="rounded-xl" class="ml-auto">
       <template data-select-trigger><span class="font-medium">Format: </span><span class="font-mono text-muted-foreground" data-slot="select-value"></span></template>
       <select id=${`format-${palette.name}`} data-color-format aria-label="Format" class=${cn(selectTriggerClass(), 'border-secondary bg-secondary text-secondary-foreground shadow-none')}>
-        ${COLOR_FORMATS.map((f) => html`<option value=${f} selected=${f === DEFAULT_COLOR_FORMAT} class="gap-2 rounded-lg [&>span]:flex [&>span]:items-center [&>span]:gap-2"><template><span class="font-medium">${f}</span><span class="font-mono text-xs text-muted-foreground">${formats[f]}</span></template>${f}</option>`)}
+        ${COLOR_FORMATS.map((f) => html`<option value=${f} ?selected=${f === DEFAULT_COLOR_FORMAT} class="gap-2 rounded-lg [&>span]:flex [&>span]:items-center [&>span]:gap-2"><template><span class="font-medium">${f}</span><span class="font-mono text-xs text-muted-foreground">${formats[f]}</span></template>${f}</option>`)}
       </select>
     </ui-select>
   </span>`;

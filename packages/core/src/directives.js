@@ -458,3 +458,5 @@ export function watch(sig) {
 export function isWatch(x) {
   return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'watch';
 }
+
+export { classMap, styleMap, ifDefined } from './attribute-directives.js';

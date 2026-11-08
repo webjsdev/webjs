@@ -53,7 +53,7 @@
  * </ui-menubar>
  * ```
  */
-import { WebComponent, html } from '@webjsdev/core';
+import { WebComponent, html, nothing } from '@webjsdev/core';
 import {
   UiDropdownMenu,
   UiDropdownMenuTrigger,
@@ -134,7 +134,7 @@ export class UiMenubar extends WebComponent {
     return html`<div
       data-slot="menubar"
       role="menubar"
-      aria-label=${this.getAttribute?.('aria-label') ?? null}
+      aria-label=${this.getAttribute?.('aria-label') ?? nothing}
       class=${menubarClass()}
       @keydown=${this._onKeyDown}
       @focusin=${this._onFocusIn}

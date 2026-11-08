@@ -184,7 +184,7 @@ suite('Lifecycle hooks in a real browser', () => {
     el.remove();
   });
 
-  test('shouldUpdate=false preserves changedProperties for the next cycle', async () => {
+  test('shouldUpdate=false clears changedProperties before the next cycle', async () => {
     let allow = false;
     const seen = [];
     class LcGateEl extends WebComponent({
@@ -210,15 +210,14 @@ suite('Lifecycle hooks in a real browser', () => {
     await el.updateComplete;
     assert.deepEqual(seen, []);  // still gated
 
-    // Open the gate. The next cycle should see BOTH 'a' and 'b' (plus any
-    // initial entries) in changedProperties, because they were preserved
-    // across the gated cycles.
+    // Open the gate. The next cycle sees 'a' which changed in this cycle,
+    // while 'b' was cleared along with previous gated cycles.
     allow = true;
     el.a = 3;
     await el.updateComplete;
     const lastKeys = seen[seen.length - 1];
-    assert.ok(lastKeys.includes('a'), 'a was preserved');
-    assert.ok(lastKeys.includes('b'), 'b was preserved');
+    assert.ok(lastKeys.includes('a'), 'a was included');
+    assert.ok(!lastKeys.includes('b'), 'b from gated cycle was cleared');
     el.remove();
   });
 

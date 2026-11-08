@@ -100,3 +100,7 @@ export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } 
 
 // Task controller, also available via '@webjsdev/core/task'
 export { Task, TaskStatus } from './src/task.js';
+
+export { nothing, noChange } from './src/sentinels.js';
+
+export { classMap, styleMap, ifDefined } from './src/attribute-directives.js';

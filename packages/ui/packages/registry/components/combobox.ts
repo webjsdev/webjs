@@ -60,7 +60,7 @@
  * </ui-combobox>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 import { positionFloating } from './floating.ts';
 import type { PopoverSide, PopoverAlign } from './popover.ts';
@@ -467,18 +467,18 @@ export class UiComboboxInput extends WebComponent({
     const disabled = !!root?.disabled;
     return html`<div data-slot="input-group" class=${cn(inputGroupClass(), comboboxInputClass())}><input
       data-slot="input-group-control"
-      id=${this.inputId || null}
+      id=${this.inputId || nothing}
       type="text"
       role="combobox"
       autocomplete="off"
       aria-autocomplete="list"
       aria-expanded=${s.open ? 'true' : 'false'}
-      aria-controls=${root?.listId || null}
-      aria-activedescendant=${s.activeId || null}
-      aria-label=${this.getAttribute?.('aria-label') || null}
-      aria-invalid=${this.invalid === 'true' ? 'true' : null}
-      aria-describedby=${this.describedBy || null}
-      placeholder=${this.placeholder || null}
+      aria-controls=${root?.listId || nothing}
+      aria-activedescendant=${s.activeId || nothing}
+      aria-label=${this.getAttribute?.('aria-label') || nothing}
+      aria-invalid=${this.invalid === 'true' ? 'true' : nothing}
+      aria-describedby=${this.describedBy || nothing}
+      placeholder=${this.placeholder || nothing}
       ?disabled=${disabled}
       class=${inputGroupInputClass()}
       @input=${(e: Event) => rootOf(this)?._onInput((e.target as HTMLInputElement).value)}
@@ -562,8 +562,8 @@ export class UiComboboxList extends WebComponent {
     return html`<div
       data-slot="combobox-list"
       role="listbox"
-      id=${root?.listId || null}
-      aria-multiselectable=${root?.multiple ? 'true' : null}
+      id=${root?.listId || nothing}
+      aria-multiselectable=${root?.multiple ? 'true' : nothing}
       ?data-empty=${this.empty.get()}
       class=${comboboxListClass()}
     ><slot></slot></div>`;
@@ -626,11 +626,11 @@ export class UiComboboxItem extends WebComponent({
     return html`<div
       data-slot="combobox-item"
       role="option"
-      id=${this._id ? this.optionId : null}
+      id=${this._id ? this.optionId : nothing}
       aria-selected=${s.selected ? 'true' : 'false'}
       ?data-selected=${s.selected}
       ?data-highlighted=${s.highlighted}
-      aria-disabled=${this.disabled ? 'true' : null}
+      aria-disabled=${this.disabled ? 'true' : nothing}
       ?data-disabled=${this.disabled}
       class=${comboboxItemClass()}
       @pointermove=${this._onPointerMove}
@@ -674,7 +674,7 @@ export class UiComboboxGroup extends WebComponent {
 
   render() {
     const label = this._label();
-    return html`<div data-slot="combobox-group" role="group" aria-labelledby=${label?.id || null} class=${comboboxGroupClass()}><slot></slot></div>`;
+    return html`<div data-slot="combobox-group" role="group" aria-labelledby=${label?.id || nothing} class=${comboboxGroupClass()}><slot></slot></div>`;
   }
 
   connectedCallback(): void {
@@ -695,7 +695,7 @@ export class UiComboboxLabel extends WebComponent {
   }
 
   render() {
-    return html`<div data-slot="combobox-label" id=${this._id || null} class=${comboboxLabelClass()}><slot></slot></div>`;
+    return html`<div data-slot="combobox-label" id=${this._id || nothing} class=${comboboxLabelClass()}><slot></slot></div>`;
   }
 }
 UiComboboxLabel.register('ui-combobox-label');
@@ -782,16 +782,16 @@ export class UiComboboxChipsInput extends WebComponent({
     const s = this.state.get();
     return html`<input
       data-slot="combobox-chip-input"
-      id=${this.inputId || null}
+      id=${this.inputId || nothing}
       type="text"
       role="combobox"
       autocomplete="off"
       aria-autocomplete="list"
       aria-expanded=${s.open ? 'true' : 'false'}
-      aria-controls=${root?.listId || null}
-      aria-activedescendant=${s.activeId || null}
-      aria-label=${this.getAttribute?.('aria-label') || null}
-      placeholder=${this.placeholder || null}
+      aria-controls=${root?.listId || nothing}
+      aria-activedescendant=${s.activeId || nothing}
+      aria-label=${this.getAttribute?.('aria-label') || nothing}
+      placeholder=${this.placeholder || nothing}
       ?disabled=${!!root?.disabled}
       class=${comboboxChipInputClass()}
       @input=${(e: Event) => rootOf(this)?._onInput((e.target as HTMLInputElement).value)}

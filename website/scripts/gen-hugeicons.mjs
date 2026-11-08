@@ -25,9 +25,9 @@ for (const name of [...new Set(names)].sort()) {
     const a = Object.entries(props).filter(([k]) => k !== 'key').map(([k, v]) => k === 'strokeWidth' ? 'stroke-width=${sw}' : `${attr(k)}="${v}"`).join(' ');
     return `<${tag} ${a}></${tag}>`;
   }).join('');
-  body += `export function ${name}(cls = '', sw = 1.5, opts: IconOptions = {}) {\n  return html\`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true" data-icon=\${opts.icon ?? null} class=\${cls}>${inner}</svg>\`;\n}\n\n`;
+  body += `export function ${name}(cls = '', sw = 1.5, opts: IconOptions = {}) {\n  return html\`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true" data-icon=\${opts.icon ?? nothing} class=\${cls}>${inner}</svg>\`;\n}\n\n`;
 }
-const head = `import { html } from '@webjsdev/core';
+const head = `import { html, nothing } from '@webjsdev/core';
 
 /**
  * The Hugeicons glyphs the /ui home page and header use (#1666), generated from

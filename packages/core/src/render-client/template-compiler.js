@@ -31,10 +31,10 @@ export const INSTANCE = Symbol.for('webjs.instance');
  * }} TemplateInstance
  *
  * @typedef {
- *   | { kind: 'child', marker: Comment, child?: TemplateInstance | ChildNode[] }
+ *   | { kind: 'child', marker: Comment, __eventHost?: object, child?: TemplateInstance | ChildNode[] }
  *   | { kind: 'attr', el: Element, name: string }
  *   | { kind: 'attr-mixed', el: Element, name: string, statics: string[], group: number[] }
- *   | { kind: 'event', el: Element, name: string, handler: ((e: Event) => void) | null, dispatcher: (e: Event) => void }
+ *   | { kind: 'event', el: Element, name: string, handler: (EventListenerOrEventListenerObject & AddEventListenerOptions) | null, eventHost?: object, dispatcher: (e: Event) => void }
  *   | { kind: 'prop', el: Element, name: string }
  *   | { kind: 'bool', el: Element, name: string }
  *   | { kind: 'element', el: Element, lastTarget?: any }
@@ -169,10 +169,14 @@ export function compile(tr) {
               const eq = sLast.indexOf(attrQuote);
               statics.push(eq >= 0 ? sLast.slice(0, eq) : sLast);
 
+              const specialized = isBindingPrefix(mixedAttr.name[0]);
+              if (specialized && (group.length !== 1 || statics.some((piece) => piece !== ''))) {
+                throw new Error('Event, property and boolean bindings require exactly one expression with no surrounding text.');
+              }
               parts[idx0] = {
-                kind: 'attr-mixed',
+                kind: specialized ? BINDING_PREFIXES[mixedAttr.name[0]] : 'attr-mixed',
                 path: [],
-                name: mixedAttr.name,
+                name: specialized ? mixedAttr.name.slice(1) : mixedAttr.name,
                 statics,
                 group,
               };

@@ -59,7 +59,7 @@
  * </ui-command>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { inputGroupClass, inputGroupAddonClass } from './input-group.ts';
 import { UiDialog, UiDialogContent } from './dialog.ts';
@@ -176,7 +176,7 @@ export class UiCommand extends WebComponent({
     const authored = takeAuthored(this);
     if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
     return html`<div data-slot="command" cmdk-root="" class=${cn(commandClass(), authored)} @keydown=${this._onKeyDown}>${this.label
-      ? html`<label id=${this.labelId || null} cmdk-label="" class="sr-only">${this.label}</label>`
+      ? html`<label id=${this.labelId || nothing} cmdk-label="" class="sr-only">${this.label}</label>`
       : ''}<slot></slot></div>`;
   }
 
@@ -340,7 +340,7 @@ export class UiCommandInput extends WebComponent({
 
   render() {
     const root = this._root();
-    const named = root?.label ? root.labelId || null : null;
+    const named = root?.label ? root.labelId || nothing : nothing;
     return html`<div data-slot="command-input-wrapper" cmdk-input-wrapper="" class=${commandInputWrapperClass()}><div
       data-slot="input-group" class=${cn(inputGroupClass(), commandInputGroupClass())}
     ><input
@@ -353,11 +353,11 @@ export class UiCommandInput extends WebComponent({
       spellcheck="false"
       aria-autocomplete="list"
       aria-expanded="true"
-      aria-controls=${root?.listId || null}
+      aria-controls=${root?.listId || nothing}
       aria-labelledby=${named}
-      aria-label=${named ? null : this.getAttribute?.('aria-label') || this.placeholder || null}
-      aria-activedescendant=${this.activeId.get() || null}
-      placeholder=${this.placeholder || null}
+      aria-label=${named ? nothing : this.getAttribute?.('aria-label') || this.placeholder || nothing}
+      aria-activedescendant=${this.activeId.get() || nothing}
+      placeholder=${this.placeholder || nothing}
       class=${cn(commandInputClass(), takeAuthored(this))}
       @input=${this._onInput}
     ><div data-slot="input-group-addon" data-align="inline-start" class=${inputGroupAddonClass()}><svg
@@ -383,7 +383,7 @@ export class UiCommandList extends WebComponent {
       data-slot="command-list"
       cmdk-list=""
       role="listbox"
-      id=${root?.listId || null}
+      id=${root?.listId || nothing}
       aria-label=${this.getAttribute?.('aria-label') || 'Suggestions'}
       class=${cn(commandListClass(), takeAuthored(this))}
     ><slot></slot></div>`;
@@ -443,10 +443,10 @@ export class UiCommandGroup extends WebComponent({
   render() {
     // No id before connect (the server never connects an element), so the
     // served group is named by aria-label instead of a shared `-heading` id.
-    const headingId = this.heading && this._id ? `${this._id}-heading` : null;
+    const headingId = this.heading && this._id ? `${this._id}-heading` : nothing;
     return html`<div data-slot="command-group" cmdk-group="" role="presentation" class=${cn(commandGroupClass(), takeAuthored(this))}>${this.heading
       ? html`<div cmdk-group-heading="" aria-hidden="true" id=${headingId}>${this.heading}</div>`
-      : ''}<div cmdk-group-items="" role="group" aria-labelledby=${headingId} aria-label=${this.heading && !headingId ? this.heading : null} class="flex flex-col"><slot></slot></div></div>`;
+      : ''}<div cmdk-group-items="" role="group" aria-labelledby=${headingId} aria-label=${this.heading && !headingId ? this.heading : nothing} class="flex flex-col"><slot></slot></div></div>`;
   }
 }
 UiCommandGroup.register('ui-command-group');
@@ -528,13 +528,13 @@ export class UiCommandItem extends WebComponent({
       data-slot="command-item"
       cmdk-item=""
       role="option"
-      id=${this._id ? this.optionId : null}
+      id=${this._id ? this.optionId : nothing}
       aria-selected=${s.selected ? 'true' : 'false'}
       data-selected=${s.selected ? 'true' : 'false'}
-      aria-disabled=${this.disabled ? 'true' : null}
+      aria-disabled=${this.disabled ? 'true' : nothing}
       data-disabled=${this.disabled ? 'true' : 'false'}
-      data-checked=${this.checked ? 'true' : null}
-      data-value=${this.value || null}
+      data-checked=${this.checked ? 'true' : nothing}
+      data-value=${this.value || nothing}
       class=${cn(commandItemClass(), takeAuthored(this))}
       @pointermove=${this._onPointerMove}
       @click=${this._onClick}

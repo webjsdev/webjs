@@ -1,3 +1,4 @@
+import { nothing, noChange } from '../sentinels.js';
 import { isTemplate, MARKER } from '../html.js';
 import {
   reconcileFormAction, isBoundFormAction, ABSENT, assertSubmitterHasNoName, assertSubmitterType,
@@ -12,7 +13,7 @@ import { RENDERING, SLOT_OWNER, SLOT_STATE, drainRendererBackstop, rescueAssigne
 import { compile, submitterActionBindings, INSTANCE } from './template-compiler.js';
 import { commitAdoption, planSlotAdoption, retargetParts } from './adopt-slots.js';
 import {
-  applyPart, bindPart, currentRenderRoot, findSlotHost, setCurrentRenderRoot, updateInstance,
+  applyPart, bindPart, currentRenderHost, setCurrentRenderHost, currentRenderRoot, findSlotHost, setCurrentRenderRoot, updateInstance,
 } from './parts.js';
 
 /**
@@ -20,8 +21,10 @@ import {
  *
  * @param {unknown} value
  * @param {Element | DocumentFragment | ShadowRoot} container
+ * @param {{host?: object}} [options]
  */
-export function render(value, container) {
+export function render(value, container, options = {}) {
+  if (value === noChange) return;
   const host = /** @type any */ (container);
   // Open the renderer-write window for the whole commit: every host-receiver
   // write below (and in createInstance / updateInstance / clearInstance / all
@@ -30,6 +33,8 @@ export function render(value, container) {
   // between a renderer commit and an author write.
   const prevRendering = host[RENDERING];
   host[RENDERING] = true;
+  const prevHost = currentRenderHost;
+  setCurrentRenderHost(options.host);
   const prevRenderRoot = currentRenderRoot;
   setCurrentRenderRoot(container);
   try {
@@ -69,7 +74,7 @@ export function render(value, container) {
     if (prev) clearInstance(prev, container);
     host[INSTANCE] = null;
     container.replaceChildren();
-    if (value == null || value === false || value === true) return;
+    if (value == null || value === nothing) return;
     if (Array.isArray(value)) {
       for (const v of value) {
         const text = document.createTextNode(String(v ?? ''));
@@ -80,6 +85,7 @@ export function render(value, container) {
     container.appendChild(document.createTextNode(String(value)));
   } finally {
     setCurrentRenderRoot(prevRenderRoot);
+    setCurrentRenderHost(prevHost);
     host[RENDERING] = prevRendering;
     // Outermost window closing: drain this commit's childList records off the
     // slot backstop (drainRendererBackstop processes them with a renderer-output
@@ -373,7 +379,7 @@ function clearInstance(inst, container) {
   // slot parts so they survive teardown of a collapsing conditional
   // fragment.
   for (const p of inst.bound) {
-    if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher);
+    if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher, p.handler);
     if (p.kind === 'element') {
       // Guarded for the same reason as the sibling in `disposeInstance`, and
       // the stakes are higher here: this is the container-level teardown

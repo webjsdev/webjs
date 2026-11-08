@@ -96,3 +96,5 @@ export function asyncReplace<T>(
 export function isAsyncReplace(x: unknown): x is AsyncReplaceDirective;
 export function watch<T>(sig: { get(): T; __isSignal: true }): WatchDirective<T>;
 export function isWatch(x: unknown): x is WatchDirective;
+
+export { classMap, styleMap, ifDefined } from './attribute-directives.js';

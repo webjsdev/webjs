@@ -76,7 +76,6 @@ const refused = {
   'mixed action="/x/${fn}"': () => html`<form action="/x/${leaky}"></form>`,
   'quoted prop .action="${fn}"': () => html`<form .action="${leaky}"></form>`,
   'quoted bool ?action="${fn}"': () => html`<form ?action="${leaky}"></form>`,
-  'quoted event @action="${fn}"': () => html`<form @action="${leaky}"></form>`,
   'native prop .action=${fn}': () => html`<form .action=${leaky}></form>`,
   'unquoted bool ?action=${fn}': () => html`<form ?action=${leaky}></form>`,
   'array-wrapped action=${[fn]}': () => html`<form action=${[leaky]}></form>`,
@@ -169,6 +168,7 @@ setFormActionResolver(() => null);
  */
 const allowed = {
   'unquoted event @action=${fn}': () => html`<form @action=${leaky}></form>`,
+  'quoted event @action="${fn}"': () => html`<form @action="${leaky}"></form>`,
   'custom-element event @action=${fn}': () => html`<my-el @action=${leaky}></my-el>`,
   'custom-element prop .action=${fn}': () => html`<my-el .action=${leaky}></my-el>`,
   // The `.prop` guard keys on REFLECTION, not on "is a native element", so
