@@ -777,27 +777,31 @@ ALONE: a `/ui` path loads `ui.css` and no `tailwind.css`, so `ui.css` imports
 Tailwind's preflight itself (declaring the same layer order
 `@import "tailwindcss"` does) and the rules both sheets need come from
 `public/shared-base.css`, which both inputs import. Loading both used to match
-every shared utility and `:has()` rule twice, which made a menu open slow. The
-root layout therefore links exactly one of the two by path, and
-`app/(site)/layout.ts` repeats the `tailwind.css` link for a soft navigation
-in from `/ui`. A `/ui` path that 404s or throws renders `app/ui/not-found.ts`
+every shared utility and `:has()` rule twice, which made a menu open slow. So
+the root layout links NEITHER: `app/(site)/layout.ts` links `tailwind.css` and
+`app/ui/layout.ts` links `ui.css`, each as the first thing it renders. The
+framework moves a stylesheet link that leads a layout's or page's output into
+`<head>` and switches it off when a soft navigation leaves that layout
+(#1669), so a crossing between the sections swaps one sheet for the other. A
+`/ui` path that 404s or throws renders `app/ui/not-found.ts`
 or `app/ui/error.ts`, in `/ui` classes, since the root boundaries are styled
 by `tailwind.css`. The fonts the configurator and typeset frames name
 (Inter and JetBrains Mono among them) are declared in
-`public/typeset-fonts.css`, not borrowed from `tailwind.css`. The link is emitted
-TWICE, deliberately. The root layout emits it in its leading head run for a
-`/ui` path, because only the root layout's leading `<link>` run is hoisted into
-`<head>` and a body stylesheet is not reliably render-blocking (#406).
-`app/ui/layout.ts` emits it again, which covers a soft navigation into `/ui`,
-where the root layout is not re-rendered and the router's head merge only
-adds. The router loads a stylesheet the incoming page brings before it swaps
-the page in (#1666), so that inline copy is applied on the first paint, and so
-are the per-page kit styles `lib/ui/style-links.ts` lists (new-york, which
-`app/ui/(chrome)/layout.ts` also links for its own header, nova on the docs
-pages, rhea on the AI Elements pages, luma on blocks and charts). The links that commonly cross sections (the marketing header and footer
-UI links, the docs sidebar link, the `/ui` links back in the menu drawer
-and the footer) also carry
-`data-no-router`, so the usual path is a full load. Both stylesheets declare
+`public/typeset-fonts.css`, not borrowed from `tailwind.css`. Each `/ui` page
+and frame links the kit styles `lib/ui/style-links.ts` lists as the first
+thing in its own markup (new-york, which `app/ui/(chrome)/layout.ts` also
+links for its own header, nova on the docs pages, rhea on the AI Elements
+pages, luma on blocks and charts), so each is moved into `<head>` and dropped
+when it repeats a file already linked. A link that does not lead its template
+stays in `<body>`, where it is not reliably render-blocking (#406). The router
+loads a stylesheet the incoming page brings before it swaps the page in
+(#1666), so a soft navigation paints styled on its first frame, and switches
+the outgoing section's sheet off (#1669). So the links that cross sections
+(the marketing header and footer UI links, the docs sidebar link, the `/ui`
+links back) are ordinary links, and no link on the site carries
+`data-no-router`: the text and JSON files it links (`llms.txt`,
+`registries.json`) are left to the browser by the router's own non-HTML
+extension rule. Both stylesheets declare
 the same `dark:` variant on `data-theme`, so a theme choice holds across the
 two sections. `test/e2e/ui-chrome-swap.test.mjs` proves the swap in a browser.
 

@@ -24,7 +24,10 @@
  * look exactly. Where shadcn's base form carries a layout utility the kit
  * never had (`select-none` on a button), that utility is recorded in the
  * supplement and added to every ported style here instead, so a shadcn style
- * renders the way shadcn renders it. Marker classes (`group/button`) cannot
+ * renders the way shadcn renders it. The same goes for what a native control
+ * gets from the browser and a kit custom-element host does not: the cursor,
+ * the unselectable label and the disabled look of `<ui-toggle-group-item>`,
+ * whose host is the button. Marker classes (`group/button`) cannot
  * ride `@apply`, so those stay inline in the components and are not here.
  *
  * shadcn/ui is MIT licensed; see packages/ui/THIRD_PARTY_NOTICES.md.

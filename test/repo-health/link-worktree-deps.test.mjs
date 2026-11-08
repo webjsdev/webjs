@@ -73,6 +73,9 @@ function makeWorktree({ blog = false } = {}) {
  * below assert that repair HAPPENS, and an exported opt-out would turn every one
  * of them into a vacuous pass.
  *
+ * `WEBJS_NO_WORKTREE_BUILD=1` is stripped for the same reason: the build tests
+ * below assert that the core dist IS built in the worktree.
+ *
  * `DATABASE_URL` is stripped for the same reason: the script now resolves the
  * database path the way the blog does, so an exported value would point the
  * probe outside the synthetic worktree these tests build.
@@ -81,7 +84,7 @@ function makeWorktree({ blog = false } = {}) {
  * @returns {NodeJS.ProcessEnv}
  */
 function cleanEnv(env = {}) {
-  const { WEBJS_NO_WORKTREE_SEED: _seed, WEBJS_NO_WORKTREE_REPAIR: _repair, DATABASE_URL: _db, ...rest } = process.env;
+  const { WEBJS_NO_WORKTREE_SEED: _seed, WEBJS_NO_WORKTREE_REPAIR: _repair, WEBJS_NO_WORKTREE_BUILD: _build, DATABASE_URL: _db, ...rest } = process.env;
   return { ...rest, ...env };
 }
 
@@ -117,12 +120,58 @@ describe('link-worktree-deps (#1287)', () => {
     } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
   });
 
-  test('links packages/core/dist, which is built and not committed', () => {
+  test('BUILDS packages/core/dist in the worktree with its own build script, never links it (#1671)', () => {
+    // A link at the primary's dist served a bundle built at another commit, and
+    // any build in the worktree wrote through it into the primary. The fake
+    // build script records the directory it ran in, so the assertion proves the
+    // WORKTREE's script ran against the worktree, after the node_modules links.
     const primary = makePrimary();
+    writeFileSync(join(primary, 'packages/core/dist/webjs-core.js'), '// the primary build');
     const wt = makeWorktree();
+    mkdirSync(join(wt, 'scripts'), { recursive: true });
+    writeFileSync(
+      join(wt, 'scripts/build-framework-dist.js'),
+      "const fs = require('fs');\n"
+        + "fs.mkdirSync('packages/core/dist', { recursive: true });\n"
+        + "fs.writeFileSync('packages/core/dist/webjs-core.js', '// built in ' + process.cwd() + ', node_modules linked: ' + fs.lstatSync('node_modules').isSymbolicLink());\n",
+    );
+    writeFileSync(join(wt, 'scripts/package.json'), '{"type":"commonjs"}');
     try {
       run(wt, primary);
-      assert.ok(lstatSync(join(wt, 'packages/core/dist')).isSymbolicLink(), 'core dist linked');
+      const dist = join(wt, 'packages/core/dist');
+      assert.ok(!lstatSync(dist).isSymbolicLink(), 'core dist is not a link');
+      assert.ok(lstatSync(dist).isDirectory(), 'core dist is a real directory');
+      const built = readFileSync(join(dist, 'webjs-core.js'), 'utf8');
+      assert.ok(built.includes(`built in ${wt}`), `the worktree's own build ran in the worktree, got: ${built}`);
+      assert.match(built, /node_modules linked: true/, 'the build runs after the links it resolves esbuild through');
+      assert.equal(readFileSync(join(primary, 'packages/core/dist/webjs-core.js'), 'utf8'), '// the primary build', 'primary dist untouched');
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('a failed core dist build warns, keeps the links, and never falls back to linking dist', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    mkdirSync(join(wt, 'scripts'), { recursive: true });
+    writeFileSync(join(wt, 'scripts/build-framework-dist.js'), 'process.exit(3);\n');
+    try {
+      const r = runWithResult(wt, primary);
+      assert.equal(r.status, 0, 'a build failure never fails the link step');
+      assert.match(r.stderr, /building packages\/core\/dist failed \(exit 3\)/);
+      assert.ok(lstatSync(join(wt, 'node_modules')).isSymbolicLink(), 'the links still stand');
+      assert.equal(lstatOrNull(join(wt, 'packages/core/dist')), null, 'no dist link as a fallback');
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('WEBJS_NO_WORKTREE_BUILD=1 skips the core dist build', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    mkdirSync(join(wt, 'scripts'), { recursive: true });
+    writeFileSync(join(wt, 'scripts/build-framework-dist.js'), "require('fs').writeFileSync('ran', '');\n");
+    writeFileSync(join(wt, 'scripts/package.json'), '{"type":"commonjs"}');
+    try {
+      const r = runWithResult(wt, primary, { WEBJS_NO_WORKTREE_BUILD: '1' });
+      assert.match(r.stdout, /core dist build skipped/);
+      assert.ok(!existsSync(join(wt, 'ran')), 'the build script did not run');
     } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
   });
 
@@ -162,17 +211,15 @@ describe('link-worktree-deps (#1287)', () => {
     } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
   });
 
-  test('skips a source that does not exist rather than creating a dangling link', () => {
+  test('with no build script, skips the core dist and still never links it', () => {
+    // COUNTERFACTUAL for the link pass: the primary HAS a built dist here, which
+    // is exactly what the old link pass linked.
     const primary = makePrimary();
     const wt = makeWorktree();
     try {
-      rmSync(join(primary, 'packages/core/dist'), { recursive: true, force: true });
       const out = run(wt, primary);
-      assert.ok(!existsSync(join(wt, 'packages/core/dist')), 'no dist link created');
-      let dangling = false;
-      try { dangling = lstatSync(join(wt, 'packages/core/dist')).isSymbolicLink(); } catch { /* absent, good */ }
-      assert.equal(dangling, false, 'a dangling link resolves more confusingly than a missing one');
-      assert.match(out, /not built in the primary/, 'says why it skipped');
+      assert.equal(lstatOrNull(join(wt, 'packages/core/dist')), null, 'no dist link created');
+      assert.match(out, /skipped packages\/core\/dist \(this checkout has no scripts\/build-framework-dist\.js\)/, 'says why it skipped');
     } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
   });
 
@@ -188,11 +235,12 @@ describe('link-worktree-deps (#1287)', () => {
     // with `blog-http.test.mjs` reading the same file. The repair pass sits ABOVE
     // that guard by design, so it runs in BOTH positions and would rewrite the
     // real primary's `@webjsdev/*` links here. The two escape hatches are what
-    // actually keep this test off the developer's checkout.
+    // actually keep this test off the developer's checkout, and the third keeps
+    // it from rebuilding the worktree's core dist while other tests import it.
     const out = execFileSync(process.execPath, [SCRIPT], {
       cwd: process.cwd(),
       encoding: 'utf8',
-      env: { ...process.env, WEBJS_NO_WORKTREE_SEED: '1', WEBJS_NO_WORKTREE_REPAIR: '1' },
+      env: { ...process.env, WEBJS_NO_WORKTREE_SEED: '1', WEBJS_NO_WORKTREE_REPAIR: '1', WEBJS_NO_WORKTREE_BUILD: '1' },
     });
     // Run from the repo itself, so it must recognise the primary and no-op
     // rather than linking anything.
@@ -602,3 +650,114 @@ describe('framework-link repair (#1442)', () => {
     } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
   });
 });
+
+/**
+ * `--unlink` (`npm run worktree:unlink`) is the undo the self-testing recipe
+ * runs before a real install (#1671): it removes every `node_modules` link the
+ * link pass planted, from the worktree ROOT wherever it is run, and nothing a
+ * user linked elsewhere.
+ */
+describe('link-worktree-deps --unlink (#1671)', () => {
+  /** @returns {{ status: number|null, stdout: string, stderr: string }} */
+  function unlink(cwd, primary, extra = []) {
+    const r = spawnSync(process.execPath, [SCRIPT, primary, '--unlink', ...extra], { cwd, encoding: 'utf8', env: cleanEnv() });
+    return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+  }
+
+  test('removes every planted node_modules link and leaves the primary alone', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    try {
+      run(wt, primary);
+      const r = unlink(wt, primary);
+      assert.equal(r.status, 0);
+      for (const rel of ['node_modules', 'packages/server/node_modules', 'packages/ui/node_modules', 'website/node_modules']) {
+        assert.equal(lstatOrNull(join(wt, rel)), null, `${rel} link removed`);
+      }
+      assert.ok(existsSync(join(primary, 'node_modules/ws')), 'primary root tree intact');
+      assert.ok(existsSync(join(primary, 'packages/server/node_modules/ws')), 'primary nested tree intact');
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('acts on the worktree ROOT when run from a subdirectory', () => {
+    // Run from an app dir (where doctor points people), a cwd-based walk saw
+    // only that subtree and missed the root link.
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: wt });
+      run(wt, primary);
+      mkdirSync(join(wt, 'website'), { recursive: true });
+      const r = unlink(join(wt, 'website'), primary);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(lstatOrNull(join(wt, 'node_modules')), null, 'the ROOT link is removed from a subdirectory');
+      assert.equal(lstatOrNull(join(wt, 'packages/server/node_modules')), null, 'a sibling nested link too');
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('keeps a link into anything other than the primary, and real directories', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    const elsewhere = mkdtempSync(join(tmpdir(), 'wjelsewhere-'));
+    try {
+      // A user-made link to a local package checkout, not planted by the link pass.
+      mkdirSync(join(elsewhere, 'node_modules'), { recursive: true });
+      mkdirSync(join(wt, 'packages/mine'), { recursive: true });
+      symlinkSync(join(elsewhere, 'node_modules'), join(wt, 'packages/mine/node_modules'), 'junction');
+      // A link planted when the primary still had this nested tree: dangling now.
+      mkdirSync(join(wt, 'packages/gone'), { recursive: true });
+      symlinkSync(join(primary, 'packages/gone/node_modules'), join(wt, 'packages/gone/node_modules'), 'junction');
+      // A real install.
+      mkdirSync(join(wt, 'node_modules/real-dep'), { recursive: true });
+      const r = unlink(wt, primary);
+      assert.equal(r.status, 0);
+      assert.ok(lstatOrNull(join(wt, 'packages/mine/node_modules'))?.isSymbolicLink(), 'a foreign link is kept');
+      assert.match(r.stdout, /kept packages\/mine\/node_modules/);
+      assert.equal(lstatOrNull(join(wt, 'packages/gone/node_modules')), null, 'a dangling planted link is removed');
+      assert.ok(existsSync(join(wt, 'node_modules/real-dep')), 'a real node_modules is never removed');
+    } finally {
+      rmSync(primary, { recursive: true, force: true });
+      rmSync(wt, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  test('refuses --check together with --unlink and changes nothing', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    try {
+      run(wt, primary);
+      const r = unlink(wt, primary, ['--check']);
+      assert.equal(r.status, 2);
+      assert.match(r.stderr, /--check and --unlink cannot be combined/);
+      assert.ok(lstatSync(join(wt, 'node_modules')).isSymbolicLink(), 'nothing was unlinked');
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('is idempotent: a second run removes nothing', () => {
+    const primary = makePrimary();
+    const wt = makeWorktree();
+    try {
+      run(wt, primary);
+      unlink(wt, primary);
+      const r = unlink(wt, primary);
+      assert.equal(r.status, 0);
+      assert.match(r.stdout, /removed 0 links/);
+    } finally { rmSync(primary, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+  });
+
+  test('does nothing in the primary checkout itself', () => {
+    const primary = makePrimary();
+    try {
+      const r = unlink(primary, primary);
+      assert.equal(r.status, 0);
+      assert.match(r.stdout, /this IS the primary checkout, nothing to unlink/);
+      assert.ok(existsSync(join(primary, 'node_modules/ws')));
+    } finally { rmSync(primary, { recursive: true, force: true }); }
+  });
+});
+
+/** @returns {import('node:fs').Stats | null} */
+function lstatOrNull(p) {
+  try { return lstatSync(p); } catch { return null; }
+}

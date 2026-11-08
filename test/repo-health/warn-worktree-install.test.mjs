@@ -88,6 +88,14 @@ test('with a real node_modules and a POPULATED primary, reports the detach', () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('with the root link intact, the recipe it prints is the unlink script', () => {
+  const { root, primary, worktree } = makePair();
+  try {
+    symlinkSync(join(primary, 'node_modules'), join(worktree, 'node_modules'));
+    assert.match(run(worktree).stderr, /npm run worktree:unlink/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('COUNTERFACTUAL: exit is 0 even when the gitdir pointer names a path that does not exist', () => {
   const dir = mkdtempSync(join(tmpdir(), 'warn-install-broken-'));
   try {

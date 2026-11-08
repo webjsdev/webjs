@@ -2,6 +2,7 @@ import { html, notFound, cspNonce, asset } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 import { unsafeHTML } from '@webjsdev/core/directives';
 import { FULL_SCREEN_DEMOS } from '#lib/ui/full-screen-demos.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { renderBlock } from '#modules/ui/queries/render-block.server.ts';
 import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 // The custom elements the blocks define. The block renders here as a string,
@@ -54,11 +55,13 @@ export default async function BlockView({ params, searchParams }: PageProps<'/ui
   // in the language its `?lang=` names.
   const demo = block || !FULL_SCREEN_DEMOS.has(params.name) ? null : await renderDemo(params.name, { lang: langOf(await searchParams) });
   if (!block && !demo) notFound();
+  // The stylesheets lead the markup, so the framework moves them into <head>.
   return html`
+    ${styleLinks(`/ui/view/${params.name}`)}
+    ${demo ? html`<link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>` : ''}
     <!-- The root layout reserves the fixed header's height on the page body, and
          this frame has no header. -->
     <style>:root { --header-h: 0px; }</style>
-    ${demo ? html`<link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>` : ''}
     <div data-slot="block-view" data-block=${params.name} class=${block ? 'style-new-york bg-background' : 'style-nova bg-background'}>
       ${unsafeHTML(block ? block.html : demo!.html)}
     </div>

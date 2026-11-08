@@ -6,6 +6,7 @@ import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 import { ITEM_NAME, PREVIEW_ITEMS, parseCreateParams } from '#modules/ui/create/params.ts';
 import { designSystemClass, designSystemData, designSystemStyle, menuColorCss } from '#modules/ui/create/design-system.ts';
 import { previewPlaceholder } from '#modules/ui/create/placeholder.ts';
+import { styleLink } from '#lib/ui/style-links.ts';
 // The custom elements the blocks define (the preview cards' waveform, roller
 // shades, notification settings, chat player). The block renders here as a
 // string, so its own modules never load in the browser; this generated barrel
@@ -61,7 +62,9 @@ export default async function CreatePreview({ params, searchParams }: PageProps)
       ? html`<div class="flex min-h-svh items-center justify-center p-6 md:p-10"><div class="w-full max-w-md">${unsafeHTML(demo.html)}</div></div>`
       : previewPlaceholder(name);
 
+  // The stylesheets lead the markup, so the framework moves them into <head>.
   return html`
+    ${styleLink(config.style)}
     <link rel="stylesheet" href=${asset('/public/typeset-fonts.css')}>
     <link rel="stylesheet" href=${asset('/public/create-fonts.css')}>
     <!-- The root layout reserves the fixed header's height on the body, and

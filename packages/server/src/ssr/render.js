@@ -1153,6 +1153,8 @@ export async function ssrPage(route, params, url, opts) {
       vendorPreloads,
       lazyComponents,
       nonce,
+      // The page's own URL, which hoisted stylesheet hrefs are keyed against.
+      pageUrl: url.href,
     };
     // buildDocumentParts picks up a user-supplied <!doctype><html>…</html>
     // shell from the body when present; otherwise auto-emits the framework

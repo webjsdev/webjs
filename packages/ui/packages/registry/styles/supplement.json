@@ -49,6 +49,6 @@
   "cn-tabs-list": "group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col",
   "cn-tabs-trigger": "group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start",
   "cn-toggle-group": "flex-row gap-[--spacing(var(--gap))] data-vertical:flex-col data-vertical:items-stretch",
-  "cn-toggle-group-item": "group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-l-0 group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-l group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t",
+  "cn-toggle-group-item": "cursor-default select-none aria-disabled:pointer-events-none aria-disabled:opacity-50 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-l-0 group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-l group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t",
   "cn-tooltip-content": "max-w-xs origin-(--radix-tooltip-content-transform-origin)"
 }

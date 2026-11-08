@@ -11,8 +11,9 @@ import { collectBoundaries, planBoundarySwap } from './boundaries.js';
 import { reportFallback } from './diagnostics.js';
 import { blurOutgoingFocus, diffChildren, replaceBoundaryRange, resyncEnclosingHostSlots, swapMarkerRange } from './dom-differ.js';
 import { trackedReloadSignature } from './frames.js';
-import { addNewHeadElements, mergeHead } from './head-merge.js';
+import { addNewHeadElements, mergeHead, mergeHeadStylesheets } from './head-merge.js';
 import { morphLayoutChrome, planLayoutChrome } from './layout-chrome.js';
+import { primeLiveStylesheetKeys, releaseIncomingSheets, switchOffDepartedStylesheets } from './owned-styles.js';
 import { clearPrefetchRefused, prefetchClearAll } from './prefetch.js';
 import { snapshotCache } from './snapshot-cache.js';
 import { hardNavigate } from './state.js';
@@ -84,6 +85,13 @@ export let _swapCommit = Promise.resolve();
  *   history (a revalidation, a refresh, the popstate restore).
  */
 export function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc, refresh, recordHistoryNow) {
+  // The URL the incoming page came from, which its relative stylesheet hrefs
+  // resolve against, and the live sheets' keys taken NOW, while the document
+  // still has the outgoing page's URL: every commit point below records the
+  // new history entry before it merges the head (#1669).
+  let incomingBase = typeof location !== 'undefined' ? location.href : '';
+  if (href) { try { incomingBase = new URL(href, incomingBase).href; } catch { /* keep the live url */ } }
+  primeLiveStylesheetKeys();
   // SSR action seeding (#472): ingest the incoming page's seed payload BEFORE
   // its components are grafted into the live DOM and upgrade, so a
   // soft-navigated async component resolves from the seed instead of
@@ -279,7 +287,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
       // ADD-ONLY head merge: preserve runtime-generated head content
       // (Tailwind CSS injection, etc.) that the outer layout's scripts
       // already produced.
-      addNewHeadElements(doc.head);
+      addNewHeadElements(doc.head, { base: incomingBase, frame: true });
       // `diffChildren` -> `reconcileChildren` regrafts permanent elements
       // by node identity (it imports the incoming children first, then
       // swaps the live permanent node into the imported tree), so the live
@@ -288,6 +296,8 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
       // ALSO progressively streams a Suspense boundary gates its resolves on the
       // committed frame swap, not a stale prior _swapCommit (#1048).
       _swapCommit = runWithTransition(() => {
+        // The frame's incoming sheets loaded held; they apply with the swap.
+        releaseIncomingSheets();
         diffChildren(target, source);
         reactivateScripts(target);
         upgradeCustomElements(target);
@@ -334,7 +344,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
     // commit point without a reader having to prove reachability first, which
     // is what stops the next person adding a commit point from omitting it.
     if (recordHistoryNow) recordHistoryNow();
-    swapFullBody(doc);
+    swapFullBody(doc, incomingBase, true);
     return;
   }
 
@@ -361,7 +371,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
   if (plan && refresh === 'layouts' && !chrome) {
     ingestSeeds();
     if (recordHistoryNow) recordHistoryNow();
-    swapFullBody(doc);
+    swapFullBody(doc, incomingBase, true);
     return;
   }
 
@@ -375,11 +385,32 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
     if (recordHistoryNow) recordHistoryNow();
     const { mode, live, incoming } = plan;
     // ADD-ONLY head merge: the outer layout stays mounted, so its head-bound
-    // runtime state (Tailwind injection, etc.) must not be invalidated.
-    addNewHeadElements(doc.head);
+    // runtime state (Tailwind injection, etc.) must not be invalidated. It runs
+    // ahead of the commit, as the incoming sheets' load-before-swap copies
+    // already do (#1666, Turbo's order), so the new page's sheets apply from
+    // the swap's first frame.
+    // Its stylesheets wait for the commit (#1669, below).
+    addNewHeadElements(doc.head, { base: incomingBase, styles: false });
+    // A live element inside the range this swap replaces is on its way out,
+    // so a stylesheet link there does not count as one the page keeps.
+    /** @param {Element} el */
+    const leaving = (el) => !!(live.start.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)
+      && !!(live.end.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING);
     _swapCommit = runWithTransition(() => {
+      // Everything stylesheet-related happens inside the commit, so the
+      // outgoing page, and a view transition's capture of it, keep exactly the
+      // sheets that page used, and the crossing restyles once (#1669): the
+      // incoming sheets (loaded held, stylesheets.js) are adopted, switched
+      // back on or inserted, then released, before the new markup lands.
+      mergeHeadStylesheets(doc.head, { base: incomingBase, segment: plan.segment, leaving });
+      releaseIncomingSheets();
       if (mode === 'replace') replaceBoundaryRange(live, incoming);
       else swapMarkerRange(live, incoming, doc);
+      // The swapped range's own stylesheets go with it unless the incoming
+      // page links them, in its head or its body, on a replace and on a morph
+      // alike: the server re-rendered the whole range either way, so a sheet a
+      // searchParams change dropped is retired too.
+      switchOffDepartedStylesheets(plan.segment, doc, incomingBase);
       // No key sync is needed on the anchor's own comments: the plan's anchor
       // carries EQUAL live/incoming route-keys in every tier (a changed-key
       // REPLACE anchors at a parent already compared equal; the other tiers
@@ -438,7 +469,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
   // because the user is already viewing the page).
   ingestSeeds();   // committed: past both discard branches above
   if (recordHistoryNow) recordHistoryNow();
-  swapFullBody(doc);
+  swapFullBody(doc, incomingBase, false);
 }
 
 /**
@@ -460,9 +491,12 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
  * it only past their own discard branches.
  *
  * @param {Document} doc
+ * @param {string} incomingBase  the URL the incoming page came from
+ * @param {boolean} complete  the response rendered every layout (no X-Webjs-Have), so it can retire a departed section's sheets
  */
-function swapFullBody(doc) {
-  mergeHead(doc.head);
+function swapFullBody(doc, incomingBase, complete) {
+  // Its stylesheets wait for the commit, as on a boundary swap (#1669).
+  mergeHead(doc.head, { base: incomingBase, styles: false });
   // Persist permanent elements by node identity across the full-body
   // swap: move each live [data-webjs-permanent][id] node into the matching
   // position in the incoming body BEFORE replaceChildren reads it, so the
@@ -470,7 +504,13 @@ function swapFullBody(doc) {
   regraftPermanentElements(document.body, doc.body);
   const newChildren = [...doc.body.childNodes];
   const doSwap = () => {
+    // The whole body is replaced, so every live body link is leaving.
+    mergeHeadStylesheets(doc.head, { base: incomingBase, segment: '/', leaving: () => true });
+    releaseIncomingSheets();
     document.body.replaceChildren(...newChildren);
+    // Only a response known to be complete can say a section's sheet is gone:
+    // the background restore path's head can be a reduced one (#936).
+    if (complete) switchOffDepartedStylesheets('/', doc, incomingBase);
     reactivateScripts(document.body);
     upgradeCustomElements(document.body);
     blurOutgoingFocus();

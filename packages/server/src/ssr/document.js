@@ -1,4 +1,4 @@
-import { collectHoistedHeadTags, hoistHeadTags, wrapHead } from './head.js';
+import { collectHoistedHeadTags, hoistHeadTags, hoistOwnedStylesheets, stylesheetKeys, wrapHead } from './head.js';
 
 /**
  * Derive a layout's segment path from its file path. The path identifies
@@ -331,19 +331,27 @@ export function buildDocumentParts(body, wrapOpts) {
   if (shell) {
     const headInner = buildHeadInner(wrapOpts);
     const hoist = collectHoistedHeadTags(shell.userBody);
-    const composedHead = [headInner, shell.userHead.trim(), hoist.tags.join('\n')]
+    const rootHead = [headInner, shell.userHead.trim(), hoist.tags.join('\n')]
       .filter(Boolean)
       .join('\n');
+    // A nested layout's or page's leading stylesheets join the head after the
+    // root's, so the cascade reads root to leaf (#1669).
+    const owned = hoistOwnedStylesheets(hoist.body, stylesheetKeys(rootHead, wrapOpts.pageUrl), wrapOpts.pageUrl);
+    const composedHead = [rootHead, owned.tags.join('\n')].filter(Boolean).join('\n');
     const prefix =
       `<!doctype html>\n<html${shell.htmlAttrs}>\n<head${shell.headAttrs}>\n` +
       composedHead +
       `\n</head>\n<body${shell.bodyAttrs}>\n`;
-    return { prefix, streamBody: hoist.body, closer: `\n</body>\n</html>` };
+    return { prefix, streamBody: owned.body, closer: `\n</body>\n</html>` };
   }
   // No user shell: framework owns the wrapper.
   const headHtml = wrapHead(wrapOpts);
   const { head, body: bodyOut } = hoistHeadTags(headHtml, body);
-  return { prefix: head, streamBody: bodyOut, closer: `\n</body>\n</html>` };
+  const owned = hoistOwnedStylesheets(bodyOut, stylesheetKeys(head, wrapOpts.pageUrl), wrapOpts.pageUrl);
+  const prefix = owned.tags.length
+    ? head.replace('</head>', () => owned.tags.join('\n') + '\n</head>')
+    : head;
+  return { prefix, streamBody: owned.body, closer: `\n</body>\n</html>` };
 }
 
 /** Re-export for unit testing. */

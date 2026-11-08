@@ -204,3 +204,33 @@ export function _isNonHtmlPath(pathname) {
  * alone rather than reverted.
  */
 export const WRITE_BACK_ARMED_MS = 250;
+
+/**
+ * Marks the router's temporary stylesheet copies (`stylesheets.js`). Here,
+ * in the leaf module, so `owned-styles.js` can skip those copies without
+ * importing `stylesheets.js`, which imports `head-merge.js`, which imports
+ * `owned-styles.js`.
+ */
+export const PRELOAD_ATTR = 'data-webjs-preload-style';
+
+/**
+ * Does `el`'s `rel` name a stylesheet that applies (`stylesheet`, not
+ * `alternate`). The one test both the stylesheet loader (`stylesheets.js`) and
+ * the owned-sheet merge (`owned-styles.js`) use, so the two cannot disagree.
+ * @param {Element} el
+ */
+export function relIsStylesheet(el) {
+  const rel = relTokens(el);
+  return rel.includes('stylesheet') && !rel.includes('alternate');
+}
+
+/**
+ * The lowercased tokens of `el`'s `rel`, the one parse every stylesheet test
+ * in the router builds on (`relIsStylesheet` here, and the head merge's
+ * never-remove rule, which counts an alternate stylesheet too).
+ * @param {Element} el
+ * @returns {string[]}
+ */
+export function relTokens(el) {
+  return (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
+}

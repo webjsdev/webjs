@@ -1,8 +1,7 @@
-import { html, cspNonce, asset } from '@webjsdev/core';
+import { html, cspNonce } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import { THEME_STORAGE_KEY, FORCED_THEMES } from '#lib/theme.ts';
 import { isUiPath } from '#lib/links.ts';
-import { styleLinks } from '#lib/ui/style-links.ts';
 
 /**
  * Root layout: the document shell every page shares.
@@ -121,21 +120,16 @@ export function generateMetadata(ctx: { url: string }) {
 
 export default function RootLayout({ children, url }: LayoutProps) {
   const nonce = cspNonce();
-  // /ui has its own stylesheet and fonts (#1666). They are emitted HERE, in
-  // the leading run of head-bound tags, because the framework hoists only the
-  // ROOT layout's leading <link> run into <head>, and a stylesheet left in
-  // <body> is not reliably render-blocking (#406), so a full load of a /ui
-  // page would flash unstyled. app/ui/layout.ts emits the same link again at
-  // the top of its own markup, which covers a soft navigation INTO /ui (this
-  // layout is not re-rendered then, and the router's head merge only adds).
-  // The same URL twice costs one fetch. A marketing page emits neither.
-  //
-  // The two sections' stylesheets are exclusive: a /ui page links ui.css (and
-  // its kit styles) and NOT public/tailwind.css, and a marketing page the
-  // reverse, along with each section's font preloads. ui.css carries its own
-  // reset, so loading both only doubled the rules every style recalculation
-  // walks. app/(site)/layout.ts repeats the tailwind.css link for a soft
-  // navigation from /ui into the marketing site, the mirror of app/ui/layout.ts.
+  // This layout links no stylesheet. Each section's layout links its own as
+  // the first thing it renders (app/(site)/layout.ts tailwind.css,
+  // app/ui/layout.ts ui.css, a /ui page its kit styles), and the framework
+  // moves those links into <head>, so they block first paint, and switches
+  // one off when a soft navigation leaves its section (#1669). The two
+  // sections' sheets are exclusive: ui.css carries its own reset, and loading
+  // both only doubled the rules every style recalculation walks. Linking a
+  // section's sheet HERE instead would outlive the section, since this layout
+  // is not re-rendered on a soft navigation. Only the font preloads stay
+  // here, by path, since a preload is a hint and costs nothing once loaded.
   const { pathname } = new URL(url);
   const ui = isUiPath(pathname);
   return html`
@@ -190,10 +184,8 @@ export default function RootLayout({ children, url }: LayoutProps) {
       })();
     </script>
 
-    ${ui ? html`<link rel="stylesheet" href=${asset('/public/ui.css')}>
-    ${styleLinks(pathname, new URL(url).searchParams)}
-    <link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : html`<link rel="stylesheet" href=${asset('/public/tailwind.css')}>`}
+    ${ui ? html`<link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : ''}
     <style>
       /* Foundation tokens + effects that Tailwind utilities cannot express. */
       /* A single static gradient glow layer. It used to breathe (two layers

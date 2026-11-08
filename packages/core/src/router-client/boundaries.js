@@ -159,6 +159,20 @@ export function collectBoundaries(root) {
  *   live: { routeKey: string, start: Comment, end: Comment },
  *   incoming: { routeKey: string, start: Comment, end: Comment } } | null}
  */
+/**
+ * Does segment `inner` sit at or below segment `outer`. Boundary segments are
+ * nested path prefixes, so `/ui/docs` is within `/ui` and within `/`, and
+ * `/uix` is within neither `/ui` nor `/ui/docs`. The one statement of the
+ * nesting rule: the swap plan below and the stylesheet ownership in
+ * owned-styles.js both use it, so they cannot disagree about which range a
+ * segment belongs to.
+ * @param {string} inner
+ * @param {string} outer
+ */
+export function segmentWithin(inner, outer) {
+  return inner === outer || inner.startsWith(outer === '/' ? '/' : outer + '/');
+}
+
 export function planBoundarySwap(here, there) {
   // Shared segments, shallowest first (a nested path prefix is shorter).
   const shared = [...here.keys()].filter((s) => there.has(s)).sort((a, b) => a.length - b.length);
@@ -169,7 +183,7 @@ export function planBoundarySwap(here, there) {
       let parent = null;
       for (const p of shared) {
         if (p === seg) break;
-        if (seg.startsWith(p === '/' ? p : p + '/')) parent = p;
+        if (seg !== p && segmentWithin(seg, p)) parent = p;
       }
       if (!parent) return null; // no anchored parent: degrade
       return { mode: 'replace', segment: parent, live: here.get(parent), incoming: there.get(parent) };

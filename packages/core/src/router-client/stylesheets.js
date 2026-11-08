@@ -30,13 +30,15 @@
  * that fails or stalls never holds a navigation hostage: an `error` resolves
  * the wait, and so does a timeout, Turbo's 2 seconds.
  */
+import { PRELOAD_ATTR, relIsStylesheet } from './constants.js';
+import { HELD_MEDIA_ATTR, OWNER_ATTR, holdMedia, placeOwnedLink } from './owned-styles.js';
 import { getCspNonce } from './head-merge.js';
 
 /** How long a navigation waits for one stylesheet before it swaps anyway. */
 export const STYLESHEET_TIMEOUT_MS = 2000;
 
-/** The attribute that marks the router's temporary copies. */
-export const PRELOAD_ATTR = 'data-webjs-preload-style';
+/** The attribute that marks the router's temporary copies (defined in the leaf). */
+export { PRELOAD_ATTR };
 
 /**
  * Is `el` a stylesheet that applies now: a `<link>` whose `rel` names
@@ -46,10 +48,10 @@ export const PRELOAD_ATTR = 'data-webjs-preload-style';
  * @param {Element} el
  */
 function isActiveStylesheet(el) {
-  const rel = (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
-  if (!rel.includes('stylesheet') || rel.includes('alternate')) return false;
+  if (!relIsStylesheet(el)) return false;
   if (el.hasAttribute('disabled') || !el.getAttribute('href')) return false;
-  const media = el.getAttribute('media');
+  // A held link (owned-styles.js) applies under its author's media once released.
+  const media = el.hasAttribute(HELD_MEDIA_ATTR) ? el.getAttribute(HELD_MEDIA_ATTR) : el.getAttribute('media');
   if (media && typeof matchMedia === 'function') {
     try { if (!matchMedia(media).matches) return false; } catch { /* an unparseable query applies to nothing */ return false; }
   }
@@ -141,9 +143,22 @@ export function loadIncomingStylesheets(doc, baseUrl, frameId, timeout = STYLESH
     }
     if (nonce) link.setAttribute('nonce', nonce);
     link.href = href;
+    // Loaded without applying: the outgoing page, and a view transition's
+    // capture of it, must not paint with the incoming CSS. The swap commit
+    // releases it (owned-styles.js `releaseIncomingSheets`).
+    holdMedia(link);
     copies.push(link);
     waits.push(waitForLoad(link, timeout));
-    document.head.appendChild(link);
+    // A sheet a layout owns (#1669) goes where the page's own link belongs,
+    // so the head merge can adopt this copy as that link instead of adding a
+    // second one; any other copy goes at the end of the head.
+    const owner = el.getAttribute(OWNER_ATTR);
+    if (owner) {
+      link.setAttribute(OWNER_ATTR, owner);
+      placeOwnedLink(link, owner);
+    } else {
+      document.head.appendChild(link);
+    }
   }
   if (!copies.length) return null;
   return { ready: Promise.all(waits).then(() => undefined), copies };
@@ -162,7 +177,8 @@ export function loadIncomingStylesheets(doc, baseUrl, frameId, timeout = STYLESH
 export function releaseIncomingStylesheets(incoming, timeout = STYLESHEET_TIMEOUT_MS) {
   if (!incoming || typeof document === 'undefined') return;
   for (const copy of incoming.copies) {
-    if (!copy.isConnected) continue;
+    // Gone already, or adopted by the head merge as the page's own link.
+    if (!copy.isConnected || !copy.hasAttribute(PRELOAD_ATTR)) continue;
     /** @type {HTMLLinkElement | null} */
     let twin = null;
     for (const el of document.querySelectorAll('link[href]')) {
