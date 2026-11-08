@@ -158,10 +158,11 @@ edit is invisible and a counterfactual passes vacuously), and run
    `src/`; the browser fetches them when `dist/` is present
    (`scripts/build-framework-dist.js` is wired to the `prepare`
    lifecycle so `npm publish` always rebuilds). The build never writes
-   through a symlink at its out dir: in a linked worktree
-   `packages/core/dist` is a link at the primary checkout's dist, and
-   the build replaces it with a real directory rather than overwriting
-   the primary's bundles (#1671). The browser surface is
+   through a symlink at its out dir (#1671): once esbuild succeeds it
+   swaps such a link for a real directory holding the new bundles and
+   leaves the link's target untouched, and a failed build leaves the
+   link in place. In a linked worktree `npm run worktree:link` builds
+   this dist from the worktree's sources rather than linking it. The browser surface is
    ONE self-contained file, `dist/webjs-core-browser.js` (built with
    `splitting` off, so no `chunk-*.js`): it re-exports the whole browser
    API, so the bare specifier and the `/directives`, `/context`,
