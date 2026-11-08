@@ -387,7 +387,7 @@ UiMessageScroller.register('ui-message-scroller');
 
 export class UiMessageScrollerViewport extends WebComponent {
   render() {
-    const pending = rootOf(this)?.pending.get() ?? false;
+    const pending = rootOf(this)?.pending?.get() ?? false;
     return html`<div data-slot="message-scroller-viewport" ?data-pending-scroll=${!!pending} class=${cn(messageScrollerViewportClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }

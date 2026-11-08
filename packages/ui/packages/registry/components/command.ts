@@ -255,7 +255,7 @@ export class UiCommand extends WebComponent({
     }
     const input = this._own<UiCommandInput>(`${ROOT}-input`)[0];
     if (input) input.activeId?.set(item?.optionId ?? '');
-    if (item) item.scrollIntoViewIfShown();
+    item?.scrollIntoViewIfShown?.();
     if (value !== this.value) {
       this.value = value;
       this.dispatchEvent(new CustomEvent('ui-value-change', { bubbles: true, detail: { value } }));

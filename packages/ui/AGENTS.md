@@ -72,6 +72,12 @@ readonly #copied = signal(false);   // internal
 readonly shown = signal(true);      // the parent calls group.shown.set(false)
 ```
 
+Cross-element signal reads and writes guard the signal too (`part.open?.set(value)`),
+since a matching element may not have upgraded yet. A part receiving state from
+its parent asks for a fresh sync in `connectedCallback`, so a write skipped
+before upgrade is recovered without waiting for another interaction. Navigation
+menu parts sync after their own render so their ARIA links are wired too.
+
 A signal field is never assigned: `group.shown = false` replaces the signal
 object, the part stays subscribed to the old one, and its next render throws
 on `.get()`. `readonly` makes that a type error and `no-signal-field-assignment`

@@ -108,6 +108,15 @@ export const navigationMenuIndicatorArrowClass = (): string =>
 const ROOT = 'ui-navigation-menu';
 const CLOSE_GRACE_MS = 150;
 
+// A late part asks for the current state after its first render. Measure on
+// the following microtask, once the newly opened panel has rendered too.
+function announce(el: Element): void {
+  queueMicrotask(() => {
+    (el.closest(`${ROOT}-item`) as UiNavigationMenuItem | null)?._sync?.();
+    queueMicrotask(() => (el.closest(ROOT) as UiNavigationMenu | null)?._layout?.());
+  });
+}
+
 // --------------------------------------------------------------------------
 // <ui-navigation-menu>
 // --------------------------------------------------------------------------
@@ -395,6 +404,11 @@ export class UiNavigationMenuTrigger extends WebComponent {
     super();
   }
 
+  connectedCallback(): void {
+    super.connectedCallback?.();
+    announce(this);
+  }
+
   render() {
     return html`<button
       type="button"
@@ -456,6 +470,11 @@ export class UiNavigationMenuContent extends WebComponent {
   readonly open = signal(false);
   constructor() {
     super();
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback?.();
+    announce(this);
   }
 
   render() {
