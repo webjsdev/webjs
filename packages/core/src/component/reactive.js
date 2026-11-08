@@ -108,8 +108,9 @@ export function warnUnserializableReflection(host, propName, attrName, detail) {
  * while staying JSDoc-only and no-build.
  *
  * Subclasses declare:
- *  - `static properties`: attribute/property declarations with type info,
- *    reflection, custom converters, and internal-state mode
+ *  - reactive properties, through the `WebComponent({ ... })` factory:
+ *    attribute/property declarations with type info, reflection and custom
+ *    converters (internal state is an instance signal, not a property)
  *  - `static styles`: CSSResult or array thereof (only meaningful with
  *    `static shadow = true`; light-DOM components inherit global CSS)
  *  - `static shadow`: set `true` to opt in to shadow DOM (default: `false`
