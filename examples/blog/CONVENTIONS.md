@@ -430,7 +430,7 @@ The properties shape passed to `WebComponent({ ... })` is the runtime
 declaration (reactive accessor, attribute coercion, reflection), and the
 property types flow to `this.<prop>` with no `declare` lines needed. For
 per-property options use the `prop()` helper inside the shape
-(`count: prop(Number, { reflect: true })`, `mode: prop({ state: true })`);
+(`count: prop(Number, { reflect: true })`, `mode: prop<'a' | 'b'>({ state: true })`);
 narrow a type with `prop<Student>(Object)`. Set defaults in the constructor
 after `super()`. A hand-written `static properties = { ... }` throws at
 construction. The factory gives you full intelligence in any tsserver-backed

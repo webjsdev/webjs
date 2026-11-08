@@ -152,7 +152,7 @@ class Dialog extends WebComponent({
   variant: prop<'info' | 'danger'>(String, { reflect: true }),  // narrowed union type
   student: prop<Student>(Object),                               // narrowed object type
   items: prop<Tag[]>(Array),                                    // array-typed prop uses Array, not Object
-  internal: prop({ state: true }),                             // internal state, no attribute, no type
+  internal: prop<boolean>({ state: true }),                    // internal state, no attribute (untyped is unknown)
 }) {
   constructor() {
     super();

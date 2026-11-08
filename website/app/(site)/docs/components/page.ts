@@ -124,7 +124,7 @@ interface Student { name: string; gpa: number; }
 class UserCard extends WebComponent({
   count:   prop(Number, { reflect: true }),       // reflect to the attribute
   label:   prop(String, { attribute: 'aria-label' }), // renamed attribute
-  open:    prop({ state: true }),                  // internal state, no attribute (lit's @state())
+  open:    prop<boolean>({ state: true }),         // internal state, no attribute (lit's @state())
   items:   prop&lt;string[]&gt;(Array, { attribute: false }), // property-only, set with .items=\${…}
   student: prop&lt;Student&gt;(Object),                  // narrowed object type
   tags:    prop&lt;string[]&gt;(Array),                  // array-typed: pass Array, not Object
