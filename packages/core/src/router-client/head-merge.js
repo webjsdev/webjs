@@ -7,7 +7,7 @@
  * @module
  */
 import { META_KEY_CSP_NONCE } from './constants.js';
-import { isStylesheetLink, mergeStylesheet } from './owned-styles.js';
+import { isStylesheetLink, stylesheetMerge } from './owned-styles.js';
 
 /**
  * Read the CSP nonce that the original page load published via
@@ -215,7 +215,14 @@ function reconcileHeadMetas(newHead) {
   }
 }
 
-export function addNewHeadElements(newHead) {
+/**
+ * @param {HTMLHeadElement} newHead
+ * @param {{ base?: string | null, frame?: boolean }} [opts]  `base` is the URL
+ *   the incoming page came from; `frame` marks a frame swap, which switches no
+ *   owned stylesheet on (owned-styles.js `stylesheetMerge`).
+ */
+export function addNewHeadElements(newHead, opts = {}) {
+  const mergeSheet = stylesheetMerge(opts);
   const newTitle = newHead.querySelector('title');
   if (newTitle) document.title = newTitle.textContent || '';
 
@@ -238,7 +245,7 @@ export function addNewHeadElements(newHead) {
     // here to avoid appending a duplicate when its content changed.
     if (el.tagName === 'META' && metaIdentity(el)) continue;
     // One link per stylesheet, and an owned one placed root to leaf (#1669).
-    if (isStylesheetLink(el) && mergeStylesheet(el, cloneElementWithCorrectNonce)) continue;
+    if (isStylesheetLink(el) && mergeSheet(el, cloneElementWithCorrectNonce)) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         document.head.appendChild(
@@ -282,8 +289,12 @@ function isPersistentHeadStyle(el) {
     (el.getAttribute('rel') || '').toLowerCase().split(/\s+/).includes('stylesheet');
 }
 
-/** @param {HTMLHeadElement} newHead */
-export function mergeHead(newHead) {
+/**
+ * @param {HTMLHeadElement} newHead
+ * @param {{ base?: string | null }} [opts]  the URL the incoming page came from
+ */
+export function mergeHead(newHead, opts = {}) {
+  const mergeSheet = stylesheetMerge(opts);
   const currentHead = document.head;
 
   const newTitle = newHead.querySelector('title');
@@ -335,7 +346,7 @@ export function mergeHead(newHead) {
     // A stylesheet the head already links is not appended twice, and an owned
     // one is placed root to leaf (#1669). Nothing here REMOVES a sheet: this
     // head can be a reduced one (#936).
-    if (isStylesheetLink(el) && mergeStylesheet(el, cloneElementWithCorrectNonce)) continue;
+    if (isStylesheetLink(el) && mergeSheet(el, cloneElementWithCorrectNonce)) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         currentHead.appendChild(

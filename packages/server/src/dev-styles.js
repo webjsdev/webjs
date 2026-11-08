@@ -53,9 +53,6 @@ export function preloadStyles(root, now, timeoutMs) {
   const kept = Object.create(null);
   const current = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
   for (const el of current) {
-    // A section sheet the client router switched off (#1669) is not in use,
-    // and a re-requested copy of it would come back switched on.
-    if (el.hasAttribute('data-wj-style-off')) continue;
     let url;
     try { url = new URL(el.getAttribute('href'), location.href); } catch (_) { continue; }
     if (url.origin !== location.origin) continue;
@@ -85,10 +82,23 @@ export function preloadStyles(root, now, timeoutMs) {
     url.searchParams.set('__webjs_dev', String(stamp()));
     const next = /** @type {Element} */ (old.cloneNode(false));
     next.setAttribute('href', url.pathname + url.search);
+    // A switched-off sheet's copy loads under a media query that matches
+    // nothing, so it never applies for the frame before its load handler
+    // switches it off; the handler then puts the original media back.
+    const off = next.hasAttribute('data-wj-style-off');
+    const media = next.getAttribute('media');
+    if (off) next.setAttribute('media', 'not all');
     const pair = { key, old, next, state: 'pending' };
     pairs.push(pair);
     waits.push(new Promise(function (resolve) {
       next.addEventListener('load', function () {
+        // A section sheet the client router switched off (#1669) is refreshed
+        // too, so returning to the section switches on the edited file, but
+        // its copy stays off until then, like the link it replaces.
+        if (off) {
+          if (next.sheet) next.sheet.disabled = true;
+          if (media === null) next.removeAttribute('media'); else next.setAttribute('media', media);
+        }
         pair.state = 'load';
         if (committed) settleLoaded(pair);
         resolve(undefined);

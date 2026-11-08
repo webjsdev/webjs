@@ -157,4 +157,25 @@ suite('dev stylesheet re-request (#1398, #1535)', () => {
       teardown();
     }
   });
+
+  test('a sheet the client router switched off is refreshed too, and its copy stays off (#1669)', async () => {
+    setup();
+    try {
+      const old = link(container, SHEET, { 'data-wj-style-off': '' });
+      await settled(old);
+      old.sheet.disabled = true;
+
+      const { links, commit } = await preloadStyles(container);
+      assert.equal(links.length, 1, 'the switched-off sheet is re-requested, so a return to its section gets the edit');
+      const next = links[0];
+      // The load handler runs after this test's own; let it.
+      await new Promise((r) => setTimeout(r, 0));
+      assert.equal(next.sheet && next.sheet.disabled, true, 'the fresh copy is off, like the link it replaces');
+      assert.equal(next.hasAttribute('media'), false, 'and its original media is back');
+      commit();
+      assert.deepEqual([...container.querySelectorAll('link')], [next], 'the old copy is gone');
+    } finally {
+      teardown();
+    }
+  });
 });

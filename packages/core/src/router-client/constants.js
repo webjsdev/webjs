@@ -212,3 +212,14 @@ export const WRITE_BACK_ARMED_MS = 250;
  * `owned-styles.js`.
  */
 export const PRELOAD_ATTR = 'data-webjs-preload-style';
+
+/**
+ * Does `el`'s `rel` name a stylesheet that applies (`stylesheet`, not
+ * `alternate`). The one test both the stylesheet loader (`stylesheets.js`) and
+ * the owned-sheet merge (`owned-styles.js`) use, so the two cannot disagree.
+ * @param {Element} el
+ */
+export function relIsStylesheet(el) {
+  const rel = (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
+  return rel.includes('stylesheet') && !rel.includes('alternate');
+}

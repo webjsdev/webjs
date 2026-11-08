@@ -30,7 +30,7 @@
  * that fails or stalls never holds a navigation hostage: an `error` resolves
  * the wait, and so does a timeout, Turbo's 2 seconds.
  */
-import { PRELOAD_ATTR } from './constants.js';
+import { PRELOAD_ATTR, relIsStylesheet } from './constants.js';
 import { getCspNonce } from './head-merge.js';
 
 /** How long a navigation waits for one stylesheet before it swaps anyway. */
@@ -47,8 +47,7 @@ export { PRELOAD_ATTR };
  * @param {Element} el
  */
 function isActiveStylesheet(el) {
-  const rel = (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
-  if (!rel.includes('stylesheet') || rel.includes('alternate')) return false;
+  if (!relIsStylesheet(el)) return false;
   if (el.hasAttribute('disabled') || !el.getAttribute('href')) return false;
   const media = el.getAttribute('media');
   if (media && typeof matchMedia === 'function') {

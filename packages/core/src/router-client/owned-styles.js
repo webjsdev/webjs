@@ -23,15 +23,15 @@
  * snapshot serializes it and a restore knows which sheets were off.
  *
  * Why it cannot reintroduce #936. A sheet is switched off ONLY when the range
- * that owns it is REPLACED, never because the incoming head lacks it: a
- * reduced `X-Webjs-Have` response omits what the client already has, and
- * reading that absence as "no longer needed" is what left the page unstyled
- * there. Everything inside a replaced range was re-rendered by the server, so
- * the incoming head carries every owned sheet that range still needs. A sheet
- * with no owner (the root layout's, or one an app writes into its head) is
- * never touched.
+ * that owns it is SWAPPED (replaced, or morphed in place), never because the
+ * incoming head lacks it in general: a reduced `X-Webjs-Have` response omits
+ * what the client already has, and reading that absence as "no longer needed"
+ * is what left the page unstyled there. Everything inside a swapped range was
+ * re-rendered by the server, so the incoming head carries every owned sheet
+ * that range still needs. A sheet with no owner (the root layout's, or one an
+ * app writes into its head) is never touched.
  */
-import { PRELOAD_ATTR } from './constants.js';
+import { PRELOAD_ATTR, relIsStylesheet } from './constants.js';
 
 /** The server's tag naming a hoisted stylesheet's owner segment. */
 export const OWNER_ATTR = 'data-wj-style-owner';
@@ -47,29 +47,63 @@ const DEV_REFRESH_PARAM = '__webjs_dev';
  * @param {Element} el
  */
 export function isStylesheetLink(el) {
-  if (el.tagName !== 'LINK' || !el.getAttribute('href')) return false;
-  const rel = (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
-  return rel.includes('stylesheet') && !rel.includes('alternate');
+  return el.tagName === 'LINK' && !!el.getAttribute('href') && relIsStylesheet(el);
 }
 
 /**
- * The identity of a stylesheet link: its resolved URL with the dev refresh's
- * cache-buster stripped, so a sheet the dev refresh re-requested still matches
- * the bare href the next response carries.
+ * The identity of a stylesheet link: its URL resolved against `base`, with the
+ * dev refresh's cache-buster stripped (so a sheet the dev refresh re-requested
+ * still matches the bare href the next response carries), plus the `media` it
+ * applies under (a print copy and a screen copy of one file are two sheets).
+ * The server's hoist keys sheets the same way.
  * @param {Element} el
- * @param {string} [base]
+ * @param {string} base
  * @returns {string | null}
  */
-export function stylesheetKey(el, base) {
+function keyFor(el, base) {
   const href = el.getAttribute('href');
   if (!href) return null;
   try {
-    const url = new URL(href, base || document.baseURI);
+    const url = new URL(href, base);
     url.searchParams.delete(DEV_REFRESH_PARAM);
-    return url.href;
+    const media = (el.getAttribute('media') || '').trim();
+    return media && media !== 'all' ? `${url.href} ${media}` : url.href;
   } catch {
     return null;
   }
+}
+
+/**
+ * The key of each live link, taken against the URL the document had when the
+ * router first saw it. A swap records the new history entry before it merges
+ * the head, so by then `document.baseURI` is the NEW page's, and resolving a
+ * live relative href against it would name a different file.
+ * @type {WeakMap<Element, string>}
+ */
+const liveKeys = new WeakMap();
+
+/**
+ * Record the key of every live head stylesheet the router has not seen yet,
+ * against the current `document.baseURI`. Called when the router enables and
+ * at the start of every swap, before the history entry moves.
+ */
+export function primeLiveStylesheetKeys() {
+  if (typeof document === 'undefined' || !document.head) return;
+  for (const el of document.head.querySelectorAll('link[href]')) {
+    if (liveKeys.has(el) || !isStylesheetLink(el)) continue;
+    const key = keyFor(el, document.baseURI);
+    if (key) liveKeys.set(el, key);
+  }
+}
+
+/** @param {Element} el */
+function liveKey(el) {
+  let key = liveKeys.get(el);
+  if (!key) {
+    key = keyFor(el, document.baseURI) || '';
+    if (key) liveKeys.set(el, key);
+  }
+  return key || null;
 }
 
 /**
@@ -82,36 +116,36 @@ function ownedWithin(owner, segment) {
   return owner === segment || owner.startsWith(segment === '/' ? '/' : segment + '/');
 }
 
-/** @param {HTMLLinkElement} link @param {boolean} off */
+/**
+ * Switch a link off or on. A sheet still loading has no `sheet` yet, so it is
+ * marked now and disabled once it loads, if it is still marked then: removing
+ * it instead would leave a back / forward restore painting before a reload.
+ * @param {HTMLLinkElement} link
+ * @param {boolean} off
+ */
 function setOff(link, off) {
   if (off) link.setAttribute(OFF_ATTR, '');
   else link.removeAttribute(OFF_ATTR);
-  if (link.sheet) link.sheet.disabled = off;
-}
-
-/**
- * The live stylesheet links in `<head>` other than the router's temporary
- * copies, keyed by `stylesheetKey`.
- * @returns {Map<string, HTMLLinkElement>}
- */
-function liveStylesheets() {
-  /** @type {Map<string, HTMLLinkElement>} */
-  const out = new Map();
-  for (const el of document.head.querySelectorAll('link[href]')) {
-    if (el.hasAttribute(PRELOAD_ATTR) || !isStylesheetLink(el)) continue;
-    const key = stylesheetKey(el);
-    if (key && !out.has(key)) out.set(key, /** @type {HTMLLinkElement} */ (el));
+  if (link.sheet) { link.sheet.disabled = off; return; }
+  if (off) {
+    link.addEventListener('load', () => {
+      if (link.sheet && link.hasAttribute(OFF_ATTR)) link.sheet.disabled = true;
+    }, { once: true });
   }
-  return out;
 }
 
 /**
- * Merge one incoming head stylesheet into the live head. Returns true when it
- * is handled here, so the caller does not append it.
+ * Start merging one incoming head's stylesheets into the live head. Returns a
+ * `merge(el, clone)` that answers true when it handled `el`, so the caller
+ * does not append it. The live head is read once, here, and kept current as
+ * the merge inserts.
  *
+ * For each incoming stylesheet:
  * - The live head already links the file: no second copy (two links to one
- *   URL are two active sheets). An owned one that was off is switched back on,
- *   and takes the incoming owner.
+ *   URL are two active sheets). An owned one that was off is switched back
+ *   on. The owner moves only OUTWARD: a sheet a layout and a page under it
+ *   both link belongs to the layout, so it stays while the layout does, even
+ *   when this response re-rendered only the page.
  * - The incoming link is one a snapshot recorded as off: nothing to do, since
  *   that page did not use it.
  * - An incoming OWNED sheet the head lacks is inserted root to leaf: after the
@@ -120,58 +154,83 @@ function liveStylesheets() {
  *   them in, so the cascade does not change with how the page was reached.
  * - Anything else is left to the caller's append.
  *
- * @param {Element} incoming  A `<link rel="stylesheet">` from the parsed page.
- * @param {(el: Element) => Element} clone  Builds the node to insert.
- * @returns {boolean}
+ * In `frame` mode (a frame swap whose response turned out to be a whole
+ * page) nothing owned is switched on, re-owned, or inserted: the page around
+ * the frame decides which sheets apply, and a frame swap never switches one
+ * off either.
+ *
+ * @param {{ base?: string | null, frame?: boolean }} [opts]  `base` is the URL
+ *   the incoming document came from, which its relative hrefs resolve against.
+ * @returns {(el: Element, clone: (el: Element) => Element) => boolean}
  */
-export function mergeStylesheet(incoming, clone) {
-  if (incoming.hasAttribute(OFF_ATTR)) return true;
-  const key = stylesheetKey(incoming);
-  if (!key) return false;
-  const live = liveStylesheets();
-  const existing = live.get(key);
-  if (existing) {
-    if (existing.hasAttribute(OFF_ATTR)) setOff(existing, false);
+export function stylesheetMerge(opts = {}) {
+  const base = opts.base || (typeof document !== 'undefined' ? document.baseURI : '');
+  /** @type {Map<string, HTMLLinkElement>} */
+  const live = new Map();
+  for (const el of document.head.querySelectorAll('link[href]')) {
+    if (el.hasAttribute(PRELOAD_ATTR) || !isStylesheetLink(el)) continue;
+    const key = liveKey(el);
+    if (key && !live.has(key)) live.set(key, /** @type {HTMLLinkElement} */ (el));
+  }
+  return (incoming, clone) => {
+    if (incoming.hasAttribute(OFF_ATTR)) return true;
+    const key = keyFor(incoming, base);
+    if (!key) return false;
     const owner = incoming.getAttribute(OWNER_ATTR);
-    if (owner && existing.hasAttribute(OWNER_ATTR)) existing.setAttribute(OWNER_ATTR, owner);
+    const existing = live.get(key);
+    if (existing) {
+      if (opts.frame) return true;
+      if (existing.hasAttribute(OFF_ATTR)) setOff(existing, false);
+      const held = existing.getAttribute(OWNER_ATTR);
+      if (owner && held !== null && ownedWithin(held, owner)) existing.setAttribute(OWNER_ATTR, owner);
+      return true;
+    }
+    if (!owner) return false;
+    if (opts.frame) return true;
+    /** @type {HTMLLinkElement | null} */
+    let after = null;
+    /** @type {HTMLLinkElement | null} */
+    let firstOwned = null;
+    for (const el of live.values()) {
+      const o = el.getAttribute(OWNER_ATTR);
+      if (o === null) continue;
+      if (!firstOwned) firstOwned = el;
+      if (ownedWithin(owner, o)) after = el;
+    }
+    const node = /** @type {HTMLLinkElement} */ (clone(incoming));
+    // Absolute, so the inserted link names the file the response meant
+    // whatever the document's URL is when it is next read.
+    try { node.setAttribute('href', new URL(/** @type {string} */ (incoming.getAttribute('href')), base).href); } catch { /* keep as authored */ }
+    if (after) after.after(node);
+    else if (firstOwned) firstOwned.before(node);
+    else document.head.appendChild(node);
+    liveKeys.set(node, key);
+    live.set(key, node);
     return true;
-  }
-  const owner = incoming.getAttribute(OWNER_ATTR);
-  if (!owner) return false;
-  /** @type {HTMLLinkElement | null} */
-  let after = null;
-  /** @type {HTMLLinkElement | null} */
-  let firstOwned = null;
-  for (const el of live.values()) {
-    const o = el.getAttribute(OWNER_ATTR);
-    if (o === null) continue;
-    if (!firstOwned) firstOwned = el;
-    if (ownedWithin(owner, o)) after = el;
-  }
-  const node = clone(incoming);
-  if (after) after.after(node);
-  else if (firstOwned) firstOwned.before(node);
-  else document.head.appendChild(node);
-  return true;
+  };
 }
 
 /**
  * Switch off every owned stylesheet whose boundary sits at or below the
- * REPLACED `segment` and that the incoming head does not carry. Called inside
- * the swap commit of the boundary replace tier only: a morph keeps every
- * boundary, a frame response has no head, and the full-body path's head can
- * be reduced, so none of them can say a sheet is gone.
+ * swapped `segment` and that the incoming head does not carry. Called inside
+ * the swap commit of the boundary tiers, a replace or a morph: the server
+ * re-rendered everything inside that range, so the incoming head carries every
+ * owned sheet the range still uses. Never from a frame swap, which has no
+ * head of its own, nor from the full-body path, whose head can be a reduced
+ * one that omits what the client already has (#936).
  *
- * @param {string} segment  The segment of the range being replaced.
+ * @param {string} segment  The segment of the range being swapped.
  * @param {Element | null} incomingHead
+ * @param {string | null} [base]  The URL the incoming document came from.
  */
-export function switchOffDepartedStylesheets(segment, incomingHead) {
+export function switchOffDepartedStylesheets(segment, incomingHead, base) {
   if (typeof document === 'undefined' || !document.head) return;
+  const from = base || document.baseURI;
   const carried = new Set();
   if (incomingHead) {
     for (const el of incomingHead.querySelectorAll('link[href]')) {
       if (!isStylesheetLink(el) || el.hasAttribute(OFF_ATTR)) continue;
-      const key = stylesheetKey(el);
+      const key = keyFor(el, from);
       if (key) carried.add(key);
     }
   }
@@ -179,11 +238,8 @@ export function switchOffDepartedStylesheets(segment, incomingHead) {
     if (el.hasAttribute(PRELOAD_ATTR) || el.hasAttribute(OFF_ATTR) || !isStylesheetLink(el)) continue;
     const owner = /** @type {string} */ (el.getAttribute(OWNER_ATTR));
     if (!ownedWithin(owner, segment)) continue;
-    const key = stylesheetKey(el);
+    const key = liveKey(el);
     if (key && carried.has(key)) continue;
-    const link = /** @type {HTMLLinkElement} */ (el);
-    // A sheet that never loaded has nothing to keep parsed, so it goes.
-    if (!link.sheet) { link.remove(); continue; }
-    setOff(link, true);
+    setOff(/** @type {HTMLLinkElement} */ (el), true);
   }
 }
