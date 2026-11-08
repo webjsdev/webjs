@@ -63,8 +63,10 @@ function stubSpawn(dir, { write = '.built{}', code = 0, signal = null, error = f
     child.pid = 1;
     setTimeout(async () => {
       if (during) await during(calls.length);
-      if (error) return child.emit('error', new Error('spawn sh ENOENT'));
+      // Written before an `error` too, so a test can tell an errored run from
+      // one that was recorded only because nothing was there to record.
       if (write !== false) await writeFile(join(dir, output), write, 'utf8');
+      if (error) return child.emit('error', new Error('spawn sh ENOENT'));
       child.emit('exit', signal ? null : code, signal);
     }, 0);
     return child;
