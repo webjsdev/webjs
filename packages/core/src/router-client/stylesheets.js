@@ -31,6 +31,7 @@
  * the wait, and so does a timeout, Turbo's 2 seconds.
  */
 import { PRELOAD_ATTR, relIsStylesheet } from './constants.js';
+import { OWNER_ATTR, placeOwnedLink } from './owned-styles.js';
 import { getCspNonce } from './head-merge.js';
 
 /** How long a navigation waits for one stylesheet before it swaps anyway. */
@@ -143,7 +144,16 @@ export function loadIncomingStylesheets(doc, baseUrl, frameId, timeout = STYLESH
     link.href = href;
     copies.push(link);
     waits.push(waitForLoad(link, timeout));
-    document.head.appendChild(link);
+    // A sheet a layout owns (#1669) goes where the page's own link belongs,
+    // so the head merge can adopt this copy as that link instead of adding a
+    // second one; any other copy goes at the end of the head.
+    const owner = el.getAttribute(OWNER_ATTR);
+    if (owner) {
+      link.setAttribute(OWNER_ATTR, owner);
+      placeOwnedLink(link, owner);
+    } else {
+      document.head.appendChild(link);
+    }
   }
   if (!copies.length) return null;
   return { ready: Promise.all(waits).then(() => undefined), copies };
@@ -162,7 +172,8 @@ export function loadIncomingStylesheets(doc, baseUrl, frameId, timeout = STYLESH
 export function releaseIncomingStylesheets(incoming, timeout = STYLESHEET_TIMEOUT_MS) {
   if (!incoming || typeof document === 'undefined') return;
   for (const copy of incoming.copies) {
-    if (!copy.isConnected) continue;
+    // Gone already, or adopted by the head merge as the page's own link.
+    if (!copy.isConnected || !copy.hasAttribute(PRELOAD_ATTR)) continue;
     /** @type {HTMLLinkElement | null} */
     let twin = null;
     for (const el of document.querySelectorAll('link[href]')) {

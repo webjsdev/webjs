@@ -305,7 +305,7 @@ export function collectHoistedHeadTags(bodyHtml) {
  * (breaks the ES-module waterfall without a bundler) and any user-declared
  * `metadata.preload` entries.
  *
- * @param {{ metadata: Record<string,any>, moduleUrls: string[], dev: boolean, streaming: boolean, preloads?: string[], lazyComponents?: Record<string, string>, nonce?: string }} opts
+ * @param {{ metadata: Record<string,any>, moduleUrls: string[], dev: boolean, streaming: boolean, preloads?: string[], lazyComponents?: Record<string, string>, nonce?: string, pageUrl?: string }} opts
  */
 /**
  * Extract leading `<script>`, `<style>`, and `<link>` tags from the body
@@ -335,8 +335,9 @@ export const _hoistHeadTags = hoistHeadTags;
  * Its value is the SEGMENT of the `wj:children` range the link was rendered
  * in: a nested layout's own markup sits inside its parent's range, and a
  * page's inside its own boundary or its innermost layout's. The client router
- * removes the link when it replaces that range and the incoming page no longer
- * carries the same href, so a section's stylesheet leaves with the section.
+ * switches the sheet off when it swaps that range and the incoming page no
+ * longer links the same file, so a section's stylesheet leaves with the
+ * section, and switches it back on when a later page links it again.
  */
 export const STYLE_OWNER_ATTR = 'data-wj-style-owner';
 
@@ -377,16 +378,21 @@ function tagAttrs(tag) {
 /**
  * The identity of a stylesheet `<link>`, or null when the tag is not an
  * active one (`rel` naming `stylesheet` and not `alternate`, with an href).
- * The href plus the `media` it applies under, so a print sheet and a screen
- * sheet of one file are two sheets. The router keys its sheets the same way.
+ * The URL the href resolves to against the page's own URL (`base`), plus the
+ * `media` it applies under, so `./a.css` and `/a.css` on one page are one
+ * sheet and a print sheet and a screen sheet of one file are two. The router
+ * keys its sheets the same way (owned-styles.js). With no base the href is
+ * used as written.
  * @param {string} tag
+ * @param {string} [base]
  * @returns {string | null}
  */
-function stylesheetTagKey(tag) {
+function stylesheetTagKey(tag, base) {
   const attrs = tagAttrs(tag);
   const rel = (attrs.get('rel') || '').toLowerCase().split(/\s+/);
-  const href = attrs.get('href');
+  let href = attrs.get('href');
   if (!rel.includes('stylesheet') || rel.includes('alternate') || !href) return null;
+  if (base) { try { href = new URL(href, base).href; } catch { /* keep as written */ } }
   const media = (attrs.get('media') || '').trim();
   return media && media !== 'all' ? `${href} ${media}` : href;
 }
@@ -394,12 +400,13 @@ function stylesheetTagKey(tag) {
 /**
  * The keys (`stylesheetTagKey`) of every stylesheet `<link>` in an HTML string.
  * @param {string} html
+ * @param {string} [base]  The page's URL, which hrefs resolve against.
  * @returns {Set<string>}
  */
-export function stylesheetKeys(html) {
+export function stylesheetKeys(html, base) {
   const out = new Set();
   for (const m of html.matchAll(LINK_TAG_RE)) {
-    const key = stylesheetTagKey(m[0]);
+    const key = stylesheetTagKey(m[0], base);
     if (key) out.add(key);
   }
   return out;
@@ -425,9 +432,10 @@ export function stylesheetKeys(html) {
  *
  * @param {string} bodyHtml
  * @param {Set<string>} [seen]  Keys (`stylesheetKeys`) already linked in the head (mutated).
+ * @param {string} [base]  The page's URL, which hrefs resolve against for the key.
  * @returns {{ tags: string[], body: string }}
  */
-export function hoistOwnedStylesheets(bodyHtml, seen = new Set()) {
+export function hoistOwnedStylesheets(bodyHtml, seen = new Set(), base) {
   if (!bodyHtml.includes(BOUNDARY_OPEN)) return { tags: [], body: bodyHtml };
   /** @type {string[]} */
   const tags = [];
@@ -455,7 +463,7 @@ export function hoistOwnedStylesheets(bodyHtml, seen = new Set()) {
       const token = m[1];
       const lead = m[0].slice(0, m[0].length - token.length);
       pos += m[0].length;
-      const key = token.startsWith('<!--') ? null : stylesheetTagKey(token);
+      const key = token.startsWith('<!--') ? null : stylesheetTagKey(token, base);
       if (!key) {
         out += lead + token;
         continue;

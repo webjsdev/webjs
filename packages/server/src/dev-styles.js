@@ -96,8 +96,10 @@ export function preloadStyles(root, now, timeoutMs) {
         // too, so returning to the section switches on the edited file, but
         // its copy stays off until then, like the link it replaces.
         if (off) {
-          if (next.sheet) next.sheet.disabled = true;
+          // Media first: Firefox and WebKit give the link a new sheet object
+          // when its media changes, so disabling before would be lost.
           if (media === null) next.removeAttribute('media'); else next.setAttribute('media', media);
+          if (next.sheet) next.sheet.disabled = true;
         }
         pair.state = 'load';
         if (committed) settleLoaded(pair);

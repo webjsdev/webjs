@@ -14,7 +14,7 @@
 import { _applySwap } from '../../../src/router-client.js';
 import { OFF_ATTR, OWNER_ATTR, primeLiveStylesheetKeys, switchOffDepartedStylesheets } from '../../../src/router-client/owned-styles.js';
 import { addNewHeadElements } from '../../../src/router-client/head-merge.js';
-import { PRELOAD_ATTR } from '../../../src/router-client/stylesheets.js';
+import { PRELOAD_ATTR, loadIncomingStylesheets, releaseIncomingStylesheets } from '../../../src/router-client/stylesheets.js';
 import { assert } from '../../../../../test/browser-assert.js';
 
 const TEST_ATTR = 'data-owned-styles-test';
@@ -175,12 +175,36 @@ suite('Client router: owned stylesheets leave with their layout (#1669)', () => 
     _applySwap(incoming('b', 'after'), null, true, null);
     assert.equal(link.isConnected, true, 'kept, so a restore can switch it on with no reload');
     assert.equal(link.hasAttribute(OFF_ATTR), true);
+    assert.equal(link.getAttribute('media'), 'not all', 'it loads without applying, so no frame paints it');
     await loaded;
     // The router's load listener was added after this test's, so let the
     // rest of the load event's listeners run first.
     await new Promise((r) => setTimeout(r, 0));
     assert.equal(link.sheet.disabled, true, 'disabled once it loaded');
+    assert.equal(link.hasAttribute('media'), false, 'and its own media is back');
     assert.notEqual(probeWidth(), '122px');
+  });
+
+  test('the router\'s temporary copy of an owned sheet becomes the page\'s link, so it is linked once', async () => {
+    const root = sheet('.wj-adopt-root {}');
+    await addLiveSheet(root, '/');
+    const href = sheet('#wj-owned-probe { width: 126px; display: block; }');
+    const doc = incoming('b', 'adopt', ownedLink(href, '/p'));
+    // What a navigation does: load the incoming sheets first, then swap.
+    const pending = loadIncomingStylesheets(doc, location.href, null);
+    assert.ok(pending, 'the new sheet is loading through a copy');
+    const [copy] = pending.copies;
+    assert.equal(copy.previousElementSibling && copy.previousElementSibling.getAttribute('href'), root, 'placed after its enclosing owner, where the page link belongs');
+    await pending.ready;
+    _applySwap(doc, null, true, null);
+    const links = [...document.head.querySelectorAll('link')].filter((l) => l.href === href);
+    assert.equal(links.length, 1, 'one link to the file, never two');
+    assert.equal(links[0], copy, 'the copy was adopted');
+    assert.equal(copy.hasAttribute(PRELOAD_ATTR), false);
+    assert.equal(copy.getAttribute(OWNER_ATTR), '/p');
+    releaseIncomingStylesheets(pending);
+    assert.equal(copy.isConnected, true, 'releasing the navigation keeps the adopted link');
+    assert.equal(probeWidth(), '126px');
   });
 
   test('a relative href is keyed against the url it was served at, not the new one', async () => {

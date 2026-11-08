@@ -128,6 +128,17 @@ test('an attribute name inside another attribute\'s quoted value is not read as 
   assert.equal(out, body);
 });
 
+test('with the page url, a relative and an absolute href to one file are one sheet', () => {
+  const body = `${open('/docs')}<link rel="stylesheet" href="./a.css"><p></p>${close('/docs')}`;
+  const { tags } = hoistOwnedStylesheets(body, stylesheetKeys('<link rel="stylesheet" href="/docs/a.css">', 'http://x/docs/page'), 'http://x/docs/page');
+  assert.deepEqual(tags, [], 'the head already links /docs/a.css, which ./a.css names from /docs/page');
+  const { prefix } = _buildDocumentParts(
+    `<link rel="stylesheet" href="/docs/a.css">${body}`,
+    { metadata: {}, moduleUrls: [], dev: false, streaming: false, pageUrl: 'http://x/docs/page' },
+  );
+  assert.equal(prefix.match(/a\.css/g).length, 1, 'linked once');
+});
+
 test('a print sheet and a screen sheet of one file are two sheets', () => {
   const body = `${open('/')}<link rel="stylesheet" href="/a.css"><div></div>${close('/')}`;
   const { tags } = hoistOwnedStylesheets(body, stylesheetKeys('<link rel="stylesheet" href="/a.css" media="print">'));

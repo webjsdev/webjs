@@ -117,9 +117,14 @@ function ownedWithin(owner, segment) {
 }
 
 /**
- * Switch a link off or on. A sheet still loading has no `sheet` yet, so it is
- * marked now and disabled once it loads, if it is still marked then: removing
- * it instead would leave a back / forward restore painting before a reload.
+ * Switch a link off or on. A sheet still loading has no `sheet` yet. It is
+ * neither removed (a back / forward restore would then paint before a reload)
+ * nor left to apply: a stylesheet takes effect when it loads, a rendering
+ * frame can fall before its `load` task, and the departed section's rules
+ * would paint for that frame. So it loads under a media query that matches
+ * nothing, the standard way to fetch a sheet without applying it (a
+ * `disabled` link is never fetched at all), and on load it is disabled if it
+ * is still marked off, then given its own media back.
  * @param {HTMLLinkElement} link
  * @param {boolean} off
  */
@@ -127,11 +132,47 @@ function setOff(link, off) {
   if (off) link.setAttribute(OFF_ATTR, '');
   else link.removeAttribute(OFF_ATTR);
   if (link.sheet) { link.sheet.disabled = off; return; }
-  if (off) {
-    link.addEventListener('load', () => {
-      if (link.sheet && link.hasAttribute(OFF_ATTR)) link.sheet.disabled = true;
-    }, { once: true });
+  if (!off || link.getAttribute('media') === 'not all') return;
+  const media = link.getAttribute('media');
+  link.setAttribute('media', 'not all');
+  const settle = () => {
+    link.removeEventListener('load', settle);
+    link.removeEventListener('error', settle);
+    // Media first: Firefox and WebKit give the link a new sheet object when
+    // its media changes, so disabling before would be lost.
+    if (media === null) link.removeAttribute('media');
+    else link.setAttribute('media', media);
+    if (link.sheet && link.hasAttribute(OFF_ATTR)) link.sheet.disabled = true;
+  };
+  link.addEventListener('load', settle);
+  link.addEventListener('error', settle);
+}
+
+/**
+ * Put an owned stylesheet link where a full load would have it: after the
+ * last live owned sheet of its own boundary or an enclosing one, else before
+ * the first owned sheet, else at the end of the head. Root to leaf, so the
+ * cascade does not depend on how the page was reached. The router's
+ * temporary copies are placed the same way, which is what lets the head
+ * merge adopt a copy as the real link without moving it.
+ * @param {Element} node
+ * @param {string} owner
+ */
+export function placeOwnedLink(node, owner) {
+  /** @type {Element | null} */
+  let after = null;
+  /** @type {Element | null} */
+  let firstOwned = null;
+  for (const el of document.head.querySelectorAll(`link[${OWNER_ATTR}]`)) {
+    // The router's temporary copies count too (they carry their owner), so
+    // two sheets one navigation brings keep their relative order.
+    if (el === node || !isStylesheetLink(el)) continue;
+    if (!firstOwned) firstOwned = el;
+    if (ownedWithin(owner, /** @type {string} */ (el.getAttribute(OWNER_ATTR)))) after = el;
   }
+  if (after) after.after(node);
+  else if (firstOwned) firstOwned.before(node);
+  else document.head.appendChild(node);
 }
 
 /**
@@ -172,10 +213,15 @@ export function stylesheetMerge(opts = {}) {
   const base = opts.base || (typeof document !== 'undefined' ? document.baseURI : '');
   /** @type {Map<string, HTMLLinkElement>} */
   const live = new Map();
+  /** The router's load-before-swap copies (stylesheets.js), by key. */
+  /** @type {Map<string, HTMLLinkElement>} */
+  const copies = new Map();
   for (const el of document.head.querySelectorAll('link[href]')) {
-    if (el.hasAttribute(PRELOAD_ATTR) || !isStylesheetLink(el)) continue;
+    if (!isStylesheetLink(el)) continue;
     const key = liveKey(el);
-    if (key && !live.has(key)) live.set(key, /** @type {HTMLLinkElement} */ (el));
+    if (!key) continue;
+    const into = el.hasAttribute(PRELOAD_ATTR) ? copies : live;
+    if (!into.has(key)) into.set(key, /** @type {HTMLLinkElement} */ (el));
   }
   return (incoming, clone) => {
     // A link a snapshot recorded as off, or one of the router's temporary
@@ -204,25 +250,26 @@ export function stylesheetMerge(opts = {}) {
       }
       return true;
     }
+    // The sheet is already loading through the router's temporary copy
+    // (stylesheets.js), which sits where this link belongs: adopt it as the
+    // page's own link rather than adding a second link to the same file.
+    const copy = opts.frame ? null : copies.get(key);
+    if (copy) {
+      for (const attr of incoming.attributes) {
+        if (attr.name !== 'href' && attr.name !== 'nonce') copy.setAttribute(attr.name, attr.value);
+      }
+      copy.removeAttribute(PRELOAD_ATTR);
+      copies.delete(key);
+      live.set(key, copy);
+      return true;
+    }
     if (!owner) return false;
     if (opts.frame) return true;
-    /** @type {HTMLLinkElement | null} */
-    let after = null;
-    /** @type {HTMLLinkElement | null} */
-    let firstOwned = null;
-    for (const el of live.values()) {
-      const o = el.getAttribute(OWNER_ATTR);
-      if (o === null) continue;
-      if (!firstOwned) firstOwned = el;
-      if (ownedWithin(owner, o)) after = el;
-    }
     const node = /** @type {HTMLLinkElement} */ (clone(incoming));
     // Absolute, so the inserted link names the file the response meant
     // whatever the document's URL is when it is next read.
     try { node.setAttribute('href', new URL(/** @type {string} */ (incoming.getAttribute('href')), base).href); } catch { /* keep as authored */ }
-    if (after) after.after(node);
-    else if (firstOwned) firstOwned.before(node);
-    else document.head.appendChild(node);
+    placeOwnedLink(node, owner);
     liveKeys.set(node, key);
     live.set(key, node);
     return true;

@@ -42,4 +42,11 @@ assert.ok(dollar.includes("href=\"/x$'y.css\" data-wj-style-owner=\"/\">"), `[${
 assert.equal(dollar.split('</head>').length, 2, `[${runtime}] and the head is closed once`);
 assert.equal(dollar.match(/href="\/p\.css"/g).length, 2, `[${runtime}] the print and the screen copy are both kept`);
 
+// With the page url, ./a.css and /docs/a.css name one file, linked once.
+const relative = _buildDocumentParts(
+  '<link rel="stylesheet" href="/docs/a.css"><!--wj:children:/docs:/docs--><link rel="stylesheet" href="./a.css"><p></p><!--/wj:children:/docs-->',
+  { metadata: {}, moduleUrls: [], dev: false, streaming: false, pageUrl: 'http://x/docs/page' },
+).prefix;
+assert.equal(relative.match(/a\.css/g).length, 1, `[${runtime}] a relative and an absolute href to one file are one sheet`);
+
 console.log(`[${runtime}] owned stylesheet hoist parity OK`);
