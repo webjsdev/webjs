@@ -288,6 +288,11 @@ async function scaffoldStage(runtime, tarballs, port) {
         if (!['@webjsdev/core', '@webjsdev/server', '@webjsdev/cli'].includes(name)) delete old.dependencies[name];
       }
       writeFileSync(pkgPath, JSON.stringify(old, null, 2));
+      // Start the previous install without candidate package metadata in Bun's
+      // lockfile or node_modules. Keep the runtime cache itself: the subsequent
+      // old -> candidate reinstall is the cache-upgrade scenario being tested.
+      rmSync(join(appDir, 'node_modules'), { recursive: true, force: true });
+      for (const lock of ['bun.lock', 'bun.lockb', 'package-lock.json']) rmSync(join(appDir, lock), { force: true });
       const previousInstall = run('bun', ['install'], { cwd: appDir, quiet: true, timeoutMs: 120_000 });
       record(stage, `install previous release ${from} to warm the cache`, previousInstall.ok, previousInstall.ok ? '' : previousInstall.out.slice(-800));
       if (previousInstall.ok) {
