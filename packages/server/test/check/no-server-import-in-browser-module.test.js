@@ -47,9 +47,7 @@ const INTERACTIVE_COMPONENT = `import { WebComponent } from '@webjsdev/core';
 import { signal } from '@webjsdev/core';
 
 class CrispWorkspace extends WebComponent {
-  static properties = { open: { state: true } };
-  declare open: boolean;
-  constructor() { super(); this.open = false; }
+  #open = signal(false);
   render() { return this.html\`<div>workspace</div>\`; }
 }
 CrispWorkspace.register('crisp-workspace');
@@ -288,11 +286,9 @@ import { signal } from '@webjsdev/core';
 import { auth } from '../lib/auth.server.ts';
 
 class UserBadge extends WebComponent {
-  static properties = { name: { state: true } };
-  declare name: string;
-  constructor() { super(); this.name = ''; }
-  async connectedCallback() { super.connectedCallback(); this.name = (await auth()).user; }
-  render() { return this.html\`<span>\${this.name}</span>\`; }
+  #name = signal('');
+  async connectedCallback() { super.connectedCallback(); this.#name.set((await auth()).user); }
+  render() { return this.html\`<span>\${this.#name.get()}</span>\`; }
 }
 UserBadge.register('user-badge');
 `,
@@ -661,10 +657,8 @@ import { signal } from '@webjsdev/core';
 import type { Todo } from '../db/schema.server.ts';
 
 class TodoList extends WebComponent {
-  static properties = { items: { state: true } };
-  declare items: Todo[];
-  constructor() { super(); this.items = []; }
-  render() { return this.html\`<ul>\${this.items.length}</ul>\`; }
+  #items = signal<Todo[]>([]);
+  render() { return this.html\`<ul>\${this.#items.get().length}</ul>\`; }
 }
 TodoList.register('todo-list');
 `,
@@ -695,10 +689,8 @@ import { signal } from '@webjsdev/core';
 import { type Todo, todos } from '../db/schema.server.ts';
 
 class TodoList extends WebComponent {
-  static properties = { items: { state: true } };
-  declare items: Todo[];
-  constructor() { super(); this.items = todos.findMany(); }
-  render() { return this.html\`<ul>\${this.items.length}</ul>\`; }
+  #items = signal<Todo[]>(todos.findMany());
+  render() { return this.html\`<ul>\${this.#items.get().length}</ul>\`; }
 }
 TodoList.register('todo-list');
 `,
