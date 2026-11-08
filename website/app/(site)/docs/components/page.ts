@@ -171,7 +171,7 @@ UserCard.register('user-card');</code-block>
     <blockquote>If you are coming from React: properties in WebJs serve a similar role to props, but they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
 
     <h2>State</h2>
-    <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (<code>readonly #items = signal(...)</code> class fields) carry component-local state; module-scope signals share state across components.</p>
+    <p>Signals are one of the state options, next to <code>state: true</code> and <code>attribute: false</code> properties. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (<code>readonly #items = signal(...)</code> class fields) carry component-local state; module-scope signals share state across components.</p>
 
     <code-block>import { WebComponent, html, signal } from '@webjsdev/core';
 

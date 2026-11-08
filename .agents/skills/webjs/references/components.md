@@ -4,7 +4,7 @@
 
 - What a component owns (markup, state, listeners, styling), and the rules that follow from it: refs over selectors, no state on `<body>`, ARIA derived in `render()`
 - Declaring reactive properties through the `WebComponent({ ... })` factory and `prop()`, with options (`reflect`, `state`, `attribute`, `default`, `converter`, `hasChanged`)
-- Signals as the default state primitive for component-local and shared state, plus `effect` / `batch`
+- Signals for component-local and shared state, plus `effect` / `batch`, alongside lit's `state: true` / `attribute: false` properties
 - The Lit-aligned lifecycle and exactly which hooks SSR runs versus skips
 - Light DOM (default) versus shadow DOM, and the light-host `display: block` rule
 - Slots with full shadow-DOM parity in both DOM modes
@@ -197,9 +197,9 @@ For an array-typed prop pass `Array`, not `Object` (`array-prop-uses-array-type`
 
 **Never use a class-field declaration OR initializer** (`count = 0`, `student: Student = {...}`, `todos!: Todo[]`). Under `useDefineForClassFields` even a type-only `todos!: Todo[]` compiles to define an own property after `super()`, which clobbers the prototype's reactive accessor and silently breaks reactivity. Only declare props in the factory and read/write them off `this`. The `reactive-props-no-class-field` rule catches this.
 
-## Signals are the default state primitive
+## Signals
 
-Reserve the factory for values that ride an HTML attribute, reflect to one, or arrive via `.prop=${value}` SSR hydration. For everything else use signals.
+A signal is one of the state options listed above, alongside `state: true` and `attribute: false` properties.
 
 ```ts
 import { signal, computed } from '@webjsdev/core';
