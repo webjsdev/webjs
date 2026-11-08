@@ -43,7 +43,7 @@
  * </ui-slider>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { ensureId } from '../lib/utils.ts';
 
 /** One native `<input type="range">`, styled to match the drawn slider. */
@@ -219,11 +219,11 @@ export class UiSlider extends WebComponent({
         aria-valuemin=${String(min)}
         aria-valuemax=${String(max)}
         aria-valuenow=${String(values[i])}
-        aria-valuetext=${input.getAttribute('aria-valuetext') || null}
+        aria-valuetext=${input.getAttribute('aria-valuetext') || nothing}
         aria-orientation=${orientation}
-        aria-labelledby=${labels.length ? labels.join(' ') : null}
-        aria-label=${!labels.length && input.getAttribute('aria-label') ? input.getAttribute('aria-label') : null}
-        aria-disabled=${input.disabled ? 'true' : null}
+        aria-labelledby=${labels.length ? labels.join(' ') : nothing}
+        aria-label=${!labels.length && input.getAttribute('aria-label') ? input.getAttribute('aria-label') : nothing}
+        aria-disabled=${input.disabled ? 'true' : nothing}
         ?data-disabled=${input.disabled}
         data-orientation=${orientation}
         class=${sliderThumbClass()}

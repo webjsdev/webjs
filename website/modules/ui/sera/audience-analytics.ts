@@ -5,7 +5,7 @@
  * editorials) element for element as server markup. The line chart is the
  * kit's server-rendered SVG, so it needs no deferred load.
  */
-import { html, svg } from '@webjsdev/core';
+import { html, svg, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { buttonGroupClass } from '#modules/ui/components/button-group.ts';
@@ -24,7 +24,7 @@ import { MoreHorizontalIcon } from '#lib/ui/lucide.ts';
 // lucide icons written out so a button's icon can carry the data-icon
 // attribute the sera button sizes key their padding on.
 const icon = (paths: unknown, opts: { dataIcon?: string; cls?: string } = {}) =>
-  svg`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=${opts.dataIcon ?? null} class=${opts.cls ?? null}>${paths}</svg>`;
+  svg`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=${opts.dataIcon ?? nothing} class=${opts.cls ?? nothing}>${paths}</svg>`;
 const chevronDown = () => svg`<path d="m6 9 6 6 6-6"></path>`;
 const download = () => svg`<path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path>`;
 const trendingUp = () => svg`<path d="M16 7h6v6"></path><path d="m22 7-8.5 8.5-5-5L2 17"></path>`;

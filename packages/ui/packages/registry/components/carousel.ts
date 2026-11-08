@@ -40,7 +40,7 @@
  * </ui-carousel>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -110,7 +110,7 @@ export class UiCarousel extends WebComponent({
       data-slot="carousel"
       role="region"
       aria-roledescription="carousel"
-      aria-label=${this.getAttribute?.('aria-label') || null}
+      aria-label=${this.getAttribute?.('aria-label') || nothing}
       class="relative"
       @keydown=${this._onKeyDown}
       @scroll=${this._onScroll}

@@ -6,7 +6,7 @@
  * The header, the type icon and the pagination are exported, since the media
  * library table screen renders the same ones.
  */
-import { html, svg } from '@webjsdev/core';
+import { html, svg, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { badgeClass } from '#modules/ui/components/badge.ts';
 import {
@@ -40,7 +40,7 @@ type DataIcon = 'inline-start' | 'inline-end';
  * takes only a class, and it lacks a few of the icons these screens use.
  */
 function lucide(name: string, body: ReturnType<typeof svg>, cls = '', dataIcon?: DataIcon) {
-  return svg`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=${dataIcon ?? null} class=${'lucide lucide-' + name + (cls ? ' ' + cls : '')}>${body}</svg>`;
+  return svg`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=${dataIcon ?? nothing} class=${'lucide lucide-' + name + (cls ? ' ' + cls : '')}>${body}</svg>`;
 }
 
 export const SlidersHorizontalIcon = (cls = '', dataIcon?: DataIcon) =>

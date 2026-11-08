@@ -61,6 +61,7 @@ export class SiteNavMenu extends WebComponent({
    */
   private _onBeforeCache = () => {
     this.open = false;
+    this.removeAttribute('open');
     const details = this._detailsRef.value;
     if (details) details.open = false;
   };

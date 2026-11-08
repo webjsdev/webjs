@@ -399,7 +399,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
 
   // Grid lines at the value ticks and the category ticks.
   const g = o.grid;
-  const gridLine = (x1: number, y1: number, x2: number, y2: number) => svg`<line stroke="#ccc" fill="none" stroke-dasharray=${(g && g.strokeDasharray) || null} x1=${fmt(x1)} y1=${fmt(y1)} x2=${fmt(x2)} y2=${fmt(y2)}></line>`;
+  const gridLine = (x1: number, y1: number, x2: number, y2: number) => svg`<line stroke="#ccc" fill="none" stroke-dasharray=${(g && g.strokeDasharray) || nothing} x1=${fmt(x1)} y1=${fmt(y1)} x2=${fmt(x2)} y2=${fmt(y2)}></line>`;
   const valueCoords = valueTicks.map((t) => vScale(t));
   const catCoords = data.map((_, i) => catAt(i));
   const hLines = vertical ? catCoords : valueCoords;
@@ -511,7 +511,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
       const text = which === 'x'
         ? chartText(at, edge + tickSize + margin2, t.label, { anchor: 'middle', vAnchor: 'start', fill: '#666', class: 'ui-chart-cartesian-axis-tick-value' })
         : chartText(edge - tickSize - margin2, at, t.label, { anchor: 'end', vAnchor: 'middle', fill: '#666', class: 'ui-chart-cartesian-axis-tick-value' });
-      return svg`<g class="ui-chart-layer ui-chart-cartesian-axis-tick" data-coord=${fmt(t.coord)} visibility=${shown.has(t.coord) ? null : 'hidden'}>${tl}${text}</g>`;
+      return svg`<g class="ui-chart-layer ui-chart-cartesian-axis-tick" data-coord=${fmt(t.coord)} visibility=${shown.has(t.coord) ? nothing : 'hidden'}>${tl}${text}</g>`;
     })}</g></g>`;
   };
 

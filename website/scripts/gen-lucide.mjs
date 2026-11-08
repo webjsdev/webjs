@@ -39,10 +39,10 @@ for (const name of [...new Set(wanted)].sort()) {
     const a = Object.entries(props).filter(([k]) => k !== 'key').map(([k, v]) => `${k}="${v}"`).join(' ');
     return `<${tag} ${a}></${tag}>`;
   }).join('');
-  body += `export function ${name}(cls = '', opts: IconOptions = {}) {\n  return svg\`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=\${opts.icon ?? null} class=\${'lucide lucide-${file}' + (cls ? ' ' + cls : '')}>${inner}</svg>\`;\n}\n\n`;
+  body += `export function ${name}(cls = '', opts: IconOptions = {}) {\n  return svg\`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=\${opts.icon ?? nothing} class=\${'lucide lucide-${file}' + (cls ? ' ' + cls : '')}>${inner}</svg>\`;\n}\n\n`;
 }
 
-const head = `import { svg } from '@webjsdev/core';
+const head = `import { svg, nothing } from '@webjsdev/core';
 
 /**
  * The Lucide icons the /ui docs demos use (#1666), generated from lucide

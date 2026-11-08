@@ -372,7 +372,7 @@ export class UiSelect extends WebComponent({
         data-value=${e.value}
         aria-selected=${selected ? 'true' : 'false'}
         data-state=${selected ? 'checked' : 'unchecked'}
-        aria-disabled=${e.disabled ? 'true' : null}
+        aria-disabled=${e.disabled ? 'true' : nothing}
         ?data-disabled=${e.disabled}
         class=${e.cls ? cn(selectItemClass(), e.cls) : selectItemClass()}
         @click=${() => this._choose(e.index)}

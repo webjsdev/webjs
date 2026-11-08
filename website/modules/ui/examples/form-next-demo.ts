@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import {
@@ -34,7 +34,7 @@ export default function BugReportForm(state: BugReportState = {}, action?: typeo
         </div>
         <div data-slot="card-content" class=${cardContentClass()}>
           <div data-slot="field-group" class=${fieldGroupClass()}>
-            <div data-slot="field" data-orientation="vertical" data-invalid=${errors.title ? 'true' : null} class=${fieldClass()}>
+            <div data-slot="field" data-orientation="vertical" data-invalid=${errors.title ? 'true' : nothing} class=${fieldClass()}>
               <label data-slot="field-label" for="bug-report-title" class=${fieldLabelClass()}>Bug Title</label>
               <input
                 data-slot="input"
@@ -43,15 +43,15 @@ export default function BugReportForm(state: BugReportState = {}, action?: typeo
                 value=${values.title ?? ''}
                 placeholder="Login button not working on mobile"
                 autocomplete="off"
-                aria-invalid=${errors.title ? 'true' : null}
-                aria-describedby=${errors.title ? 'bug-report-title-error' : null}
+                aria-invalid=${errors.title ? 'true' : nothing}
+                aria-describedby=${errors.title ? 'bug-report-title-error' : nothing}
                 class=${cn(inputClass(), 'group-aria-busy:opacity-50')}
               >
               ${errors.title ? html`
                 <div role="alert" data-slot="field-error" id="bug-report-title-error" class=${fieldErrorClass()}>${errors.title}</div>
               ` : ''}
             </div>
-            <div data-slot="field" data-orientation="vertical" data-invalid=${errors.description ? 'true' : null} class=${fieldClass()}>
+            <div data-slot="field" data-orientation="vertical" data-invalid=${errors.description ? 'true' : nothing} class=${fieldClass()}>
               <label data-slot="field-label" for="bug-report-description" class=${fieldLabelClass()}>Description</label>
               <textarea
                 data-slot="textarea"
@@ -59,7 +59,7 @@ export default function BugReportForm(state: BugReportState = {}, action?: typeo
                 name="description"
                 rows="6"
                 placeholder="I'm having an issue with the login button on mobile."
-                aria-invalid=${errors.description ? 'true' : null}
+                aria-invalid=${errors.description ? 'true' : nothing}
                 aria-describedby=${errors.description ? 'bug-report-description-desc bug-report-description-error' : 'bug-report-description-desc'}
                 class=${cn(textareaClass(), 'min-h-24 resize-none group-aria-busy:opacity-50')}
               >${values.description ?? ''}</textarea>

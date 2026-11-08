@@ -25,10 +25,10 @@ for (const name of [...new Set(wanted)].sort()) {
   const slug = kebab(name);
   const svgText = readFileSync(`${pkg}/icons/outline/${slug}.svg`, 'utf8');
   const inner = svgText.slice(svgText.indexOf('>') + 1, svgText.lastIndexOf('</svg>')).replace(/\s+/g, ' ').trim();
-  body += `\nexport function ${name}(cls = '', opts: IconOptions = {}) {\n  return svg\`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=\${opts.icon ?? null} class=\${'tabler-icon tabler-icon-${slug}' + (cls ? ' ' + cls : '')}>${inner}</svg>\`;\n}\n`;
+  body += `\nexport function ${name}(cls = '', opts: IconOptions = {}) {\n  return svg\`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=\${opts.icon ?? nothing} class=\${'tabler-icon tabler-icon-${slug}' + (cls ? ' ' + cls : '')}>${inner}</svg>\`;\n}\n`;
 }
 
-writeFileSync(out, `import { svg } from '@webjsdev/core';
+writeFileSync(out, `import { svg, nothing } from '@webjsdev/core';
 
 /**
  * The Tabler icons the /ui docs demos use (#1666), generated from

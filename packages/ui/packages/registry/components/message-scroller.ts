@@ -59,7 +59,7 @@
  * </ui-message-scroller>
  * ```
  */
-import { WebComponent, html, prop, signal } from '@webjsdev/core';
+import { WebComponent, html, prop, signal, nothing } from '@webjsdev/core';
 import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -399,7 +399,7 @@ export class UiMessageScrollerContent extends WebComponent {
       data-slot="message-scroller-content"
       role="log"
       aria-relevant="additions"
-      aria-label=${this.getAttribute?.('aria-label') || null}
+      aria-label=${this.getAttribute?.('aria-label') || nothing}
       class=${cn(messageScrollerContentClass(), takeAuthored(this))}
     ><slot></slot><div data-message-scroller-spacer aria-hidden="true" hidden style="overflow-anchor: none"></div></div>`;
   }
@@ -459,11 +459,11 @@ export class UiMessageScrollerButton extends WebComponent({
       data-variant=${this.variant}
       data-size=${this.size}
       data-active=${active ? 'true' : 'false'}
-      tabindex=${active ? null : '-1'}
-      aria-hidden=${active ? null : 'true'}
+      tabindex=${active ? nothing : '-1'}
+      aria-hidden=${active ? nothing : 'true'}
       class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), messageScrollerButtonClass(), takeAuthored(this))}
       @click=${() => (toStart ? root?.scrollToStart() : root?.scrollToEnd())}
-      aria-label=${this.label || null}
+      aria-label=${this.label || nothing}
     ><slot><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>${this.label ? '' : html`<span class="sr-only">${toStart ? 'Scroll to start' : 'Scroll to end'}</span>`}</slot></button>`;
   }
 }

@@ -73,6 +73,7 @@ export class DocsDrawer extends WebComponent({
    */
   private _onBeforeCache = () => {
     this.close();
+    this.removeAttribute('open');
     this._toggleRef.value?.setAttribute('aria-expanded', 'false');
   };
   private _onMediaChange = () => this.syncScrollLock();

@@ -223,10 +223,10 @@ export class UiQuestionnaire extends WebComponent({
     }
     return html`<form
       data-slot="questionnaire"
-      action=${this.action || null}
-      method=${this.method || null}
+      action=${this.action || nothing}
+      method=${this.method || nothing}
       ?novalidate=${this.#enhanced.get()}
-      data-shortcuts=${this.shortcuts || null}
+      data-shortcuts=${this.shortcuts || nothing}
       class=${cn(questionnaireClass(), takeAuthored(this))}
     ><slot></slot></form>`;
   }
@@ -462,10 +462,10 @@ export class UiQuestionnaireProgress extends WebComponent {
       role="progressbar"
       aria-label="Questionnaire progress"
       aria-live="polite"
-      aria-valuemin=${total ? '1' : null}
-      aria-valuemax=${total ? String(total) : null}
-      aria-valuenow=${total ? String(current) : null}
-      aria-valuetext=${label || null}
+      aria-valuemin=${total ? '1' : nothing}
+      aria-valuemax=${total ? String(total) : nothing}
+      aria-valuenow=${total ? String(current) : nothing}
+      aria-valuetext=${label || nothing}
       class=${cn(questionnaireProgressClass(), takeAuthored(this))}
     >${label}</div>`;
   }
@@ -564,7 +564,7 @@ export class UiQuestionnaireTitle extends WebComponent {
 
   render() {
     const item = itemOf(this);
-    return html`<legend data-slot="questionnaire-title" id=${item?._id ? item.titleId : null} class=${cn(questionnaireTitleClass(), takeAuthored(this))}><slot></slot></legend>`;
+    return html`<legend data-slot="questionnaire-title" id=${item?._id ? item.titleId : nothing} class=${cn(questionnaireTitleClass(), takeAuthored(this))}><slot></slot></legend>`;
   }
 }
 UiQuestionnaireTitle.register('ui-questionnaire-title');
@@ -577,7 +577,7 @@ export class UiQuestionnaireDescription extends WebComponent {
 
   render() {
     const item = itemOf(this);
-    return html`<p data-slot="questionnaire-description" id=${item?._id ? item.descriptionId : null} class=${cn(questionnaireDescriptionClass(), takeAuthored(this))}><slot></slot></p>`;
+    return html`<p data-slot="questionnaire-description" id=${item?._id ? item.descriptionId : nothing} class=${cn(questionnaireDescriptionClass(), takeAuthored(this))}><slot></slot></p>`;
   }
 }
 UiQuestionnaireDescription.register('ui-questionnaire-description');
@@ -655,17 +655,17 @@ export class UiQuestionnaireChoice extends WebComponent({
       ?data-checked=${this.#live.get()}
       ?data-unchecked=${!this.#live.get()}
       ?data-disabled=${disabled}
-      data-shortcut=${shortcut || null}
+      data-shortcut=${shortcut || nothing}
       class=${cn(questionnaireChoiceClass(), takeAuthored(this))}
     ><input
       data-slot="questionnaire-choice-input"
       type=${type}
-      name=${item?.name || null}
+      name=${item?.name || nothing}
       value=${this.value}
       ?checked=${this.checked}
       ?disabled=${disabled}
       ?required=${!!item?.required && type === 'radio'}
-      aria-keyshortcuts=${shortcut ? shortcut.toUpperCase() : null}
+      aria-keyshortcuts=${shortcut ? shortcut.toUpperCase() : nothing}
       class="cn-questionnaire-choice-input absolute inset-0 z-10 size-full cursor-pointer opacity-0"
     ><span aria-hidden="true" data-slot="questionnaire-choice-indicator"
       class="cn-questionnaire-choice-indicator pointer-events-none relative flex shrink-0 items-center justify-center border group-data-[type=radio]/questionnaire-choice:rounded-full"
@@ -711,9 +711,9 @@ export class UiQuestionnaireInput extends WebComponent({
     return html`<div data-slot="questionnaire-input-wrapper" class=${cn('cn-questionnaire-input-wrapper group/questionnaire-input relative min-w-0', takeAuthored(this))}><input
       data-slot="questionnaire-input"
       type="text"
-      name=${item?.name || null}
-      placeholder=${this.placeholder || null}
-      aria-label=${this.getAttribute?.('aria-label') || null}
+      name=${item?.name || nothing}
+      placeholder=${this.placeholder || nothing}
+      aria-label=${this.getAttribute?.('aria-label') || nothing}
       ?disabled=${!!item?.disabled}
       class=${questionnaireInputClass()}
     ></div>`;
@@ -737,9 +737,9 @@ export class UiQuestionnaireError extends WebComponent {
     const fallback = item?.required ? 'Choose an answer to continue.' : 'Choose an answer or skip this question.';
     return html`<p
       data-slot="questionnaire-error"
-      id=${item?._id ? item.errorId : null}
+      id=${item?._id ? item.errorId : nothing}
       ?hidden=${!invalid}
-      role=${invalid ? 'alert' : null}
+      role=${invalid ? 'alert' : nothing}
       class=${cn(questionnaireErrorClass(), takeAuthored(this))}
     ><slot>${fallback}</slot></p>`;
   }
