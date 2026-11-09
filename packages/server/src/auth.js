@@ -256,7 +256,7 @@ export function GitHub(opts = {}) {
  */
 export function createAuth(config) {
   const { secret } = config;
-  if (!secret) throw new Error('createAuth() requires a `secret` (set AUTH_SECRET or SESSION_SECRET)');
+  if (!secret) throw new Error('createAuth() needs a `secret` to sign its session: pass secret: process.env.AUTH_SECRET and set AUTH_SECRET in .env (webjs create writes one).');
 
   const strategy = config.session?.strategy || 'jwt';
   const maxAge = config.session?.maxAge || DEFAULT_MAX_AGE;

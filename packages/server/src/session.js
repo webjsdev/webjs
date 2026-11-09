@@ -317,7 +317,13 @@ const sessionMap = shared('session-map', () => new WeakMap());
  */
 export function session(opts = {}) {
   const secret = opts.secret || process.env.SESSION_SECRET;
-  if (!secret) throw new Error('session() requires secret option or SESSION_SECRET env var');
+  if (!secret) {
+    throw new Error(
+      'session() needs a secret to sign its cookie: set SESSION_SECRET in .env (webjs create writes one; '
+      + 'generate another with node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))") '
+      + 'or pass session({ secret }).',
+    );
+  }
 
   const storage = opts.storage || cookieSessionStorage();
   const cookieName = opts.cookieName || 'webjs.sid';
