@@ -70,6 +70,19 @@ function classBodies(masked) {
 }
 
 /**
+ * An initializer that ends this way cannot stop at the newline: it has no
+ * value yet, or it ends on an operator (`label =`, `a ||`, `cond ?`).
+ */
+const INIT_CONTINUES_RE = /(?:^|[=?:,.+\-*/%&|^!~<>])\s*$/;
+
+/**
+ * A line starting this way continues the initializer above it, as JavaScript
+ * reads it: no class member starts with an operator, and a `(`, `[` or a
+ * template after a field with no `;` is a call, an index or a tag of it.
+ */
+const LINE_CONTINUES_RE = /^\s*(?:[?:.+\-*/%&|^,=<>([`]|in\b|instanceof\b)/;
+
+/**
  * The depth-0 members of a class body: the constructor's raw text, every
  * instance field initializer's raw text, and a `static shadow` initializer.
  * Reads positions from `maskedBody` (strings, templates and comments blanked)
@@ -119,8 +132,13 @@ function members(maskedBody, rawBody) {
     const field = staticShadow ? null : /^(?:(?:readonly|declare|accessor)\s+)*(#?[\w$]+)\s*=(?!=)/.exec(rest);
     const assign = staticShadow || field;
     if (!assign || /^static\b/.test(rest) && !staticShadow) continue;
-    // The initializer runs to the next depth-0 `;` or line end.
-    let j = i + assign[0].length;
+    // The initializer runs to the next depth-0 `;`, or to a line end that
+    // closes it: a Prettier-wrapped `label =\n  'Save'` or a multi-line
+    // ternary carries on, and cutting it at its first newline would read a
+    // changed value as unchanged and swap a class whose live elements keep
+    // the old one. Running long only ever refuses a swap.
+    const from = i + assign[0].length;
+    let j = from;
     let d = 0;
     let inTpl = false;
     for (; j < maskedBody.length; j++) {
@@ -129,7 +147,10 @@ function members(maskedBody, rawBody) {
       if (inTpl) continue;
       if (ch === '{' || ch === '(' || ch === '[') d++;
       else if (ch === '}' || ch === ')' || ch === ']') { if (d === 0) break; d--; }
-      else if (d === 0 && (ch === ';' || ch === '\n')) break;
+      else if (d === 0 && ch === ';') break;
+      else if (d === 0 && ch === '\n'
+        && !INIT_CONTINUES_RE.test(maskedBody.slice(from, j))
+        && !LINE_CONTINUES_RE.test(maskedBody.slice(j + 1))) break;
     }
     const text = squash(rawBody.slice(i, j));
     if (staticShadow) shadow = squash(rawBody.slice(i + assign[0].length, j));

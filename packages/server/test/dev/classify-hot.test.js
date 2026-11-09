@@ -115,6 +115,33 @@ test('a changed static shadow reloads', async () => {
   assert.equal((await findHotBoundaries(['/c/counter.ts'], c)).ok, true);
 });
 
+// Review of #1689: Prettier wraps a long initializer onto the next line, and a
+// multi-line ternary spans several. Cutting the initializer at its first
+// newline read `label =` both times, so a changed value hot-swapped and the
+// live elements kept the old one.
+test('a changed initializer that continues on the next line reloads', async () => {
+  const cases = [
+    ["label =\n    'Save';", "label =\n    'Submit';"],
+    ['mode = this.count\n    ? 1\n    : 2;', 'mode = this.count\n    ? 1\n    : 3;'],
+    ['items = [\n    1,\n  ]\n  .map((n) => n * 2);', 'items = [\n    1,\n  ]\n  .map((n) => n * 3);'],
+  ];
+  for (const [before, after] of cases) {
+    const c = ctx({ '/c/counter.ts': COMPONENT(after) });
+    c.baselineOf = () => hotSignature(COMPONENT(before));
+    assert.deepEqual(await findHotBoundaries(['/c/counter.ts'], c), { ok: false, why: 'instance-fields-changed', by: '/c/counter.ts' }, after);
+    c.baselineOf = () => hotSignature(COMPONENT(after));
+    assert.equal((await findHotBoundaries(['/c/counter.ts'], c)).ok, true, `unchanged: ${after}`);
+  }
+  const shadow = ctx({ '/c/counter.ts': COMPONENT('static shadow =\n    true;') });
+  shadow.baselineOf = () => hotSignature(COMPONENT('static shadow =\n    false;'));
+  assert.deepEqual(await findHotBoundaries(['/c/counter.ts'], shadow), { ok: false, why: 'static-shadow-changed', by: '/c/counter.ts' });
+});
+
+test('a field with no semicolon still ends at its line, so the next member is its own', () => {
+  const sig = hotSignature(COMPONENT("label = 'Save'\n  step = 1\n  shown = true"));
+  assert.equal(sig.classes[0].fields, "label = 'Save'\nstep = 1\nshown = true");
+});
+
 test('a non-class export reloads, a class export hot-swaps (counterfactual)', async () => {
   const withConst = COMPONENT('', 'export const LIMIT = 3;');
   assert.deepEqual(await findHotBoundaries(['/c/counter.ts'], ctx({ '/c/counter.ts': withConst })), { ok: false, why: 'non-component-exports', by: '/c/counter.ts' });
