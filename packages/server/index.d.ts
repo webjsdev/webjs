@@ -860,6 +860,11 @@ export declare class Session {
   /** Set a value readable once on the next request, then cleared. */
   flash(key: string, value: unknown): void;
   destroy(): void;
+  /**
+   * Give the session a new id, keeping its data. Call it after a login to
+   * prevent session fixation; `deleteOld` also deletes the old id's stored data.
+   */
+  regenerateId(deleteOld?: boolean): void;
 }
 
 /** Session middleware factory. */

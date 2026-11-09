@@ -102,6 +102,8 @@ Credentials({});
 function useSession(s: Session) {
   const v = s.get<string>('userId');
   s.set('userId', 'x');
+  // After a login, rotate the id to prevent session fixation.
+  s.regenerateId(true);
   void v;
 }
 
