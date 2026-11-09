@@ -135,6 +135,9 @@ const ELEMENT_STYLES = new WeakMap();
 /** Light-DOM classes already told that `static styles` needs shadow DOM. @type {WeakSet<Function>} */
 const WARNED_LIGHT_STYLES = new WeakSet();
 
+/** Controller classes whose `hostUpdate()` already threw at SSR. @type {WeakSet<Function>} */
+const REPORTED_SSR_CONTROLLERS = new WeakSet();
+
 /** What `getPropertyOptions()` answers for an undeclared name, Lit's default declaration. */
 const DEFAULT_DECLARATION = Object.freeze({ type: String });
 
@@ -1461,8 +1464,17 @@ class WebComponentBase extends Base {
     this._isUpdating = true;
     try {
       this.willUpdate(changedProperties);
+      // Each controller is isolated: a `hostUpdate()` that reaches for the
+      // browser (a third-party Lit controller written for the client) is
+      // reported once per controller class and skipped, so the component
+      // still renders its first paint instead of an error state.
       for (const c of this.__controllers || NO_CONTROLLERS) {
-        if (c.hostUpdate) c.hostUpdate();
+        if (!c.hostUpdate) continue;
+        try {
+          c.hostUpdate();
+        } catch (err) {
+          reportSsrControllerError(this, c, err);
+        }
       }
       this._reflectDeclaredAttributes();
     } finally {
@@ -1908,6 +1920,27 @@ class WebComponentBase extends Base {
   renderFallback() {
     return undefined;
   }
+}
+
+/**
+ * Report a controller whose `hostUpdate()` threw during SSR, once per
+ * controller class.
+ * @param {any} host
+ * @param {any} controller
+ * @param {unknown} err
+ */
+function reportSsrControllerError(host, controller, err) {
+  const Cls = controller && controller.constructor;
+  if (Cls && REPORTED_SSR_CONTROLLERS.has(Cls)) return;
+  if (Cls) REPORTED_SSR_CONTROLLERS.add(Cls);
+  const tag = host.__ssrTag || tagOf(host.constructor) || 'a component';
+  console.error(
+    `[webjs] ${Cls && Cls.name ? Cls.name : 'A controller'}.hostUpdate() threw during SSR of <${tag}>, so it was skipped ` +
+      `and the component rendered without it. Controllers' hostUpdate() runs on the server too; guard browser-only ` +
+      `work with \`if (isServer) return;\` (isServer from '@webjsdev/core'), or move it to hostConnected() or hostUpdated(), ` +
+      `which never run at SSR.`,
+    err,
+  );
 }
 
 /**

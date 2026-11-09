@@ -41,6 +41,26 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> a component touched a genuinely browser-only global in its <code>constructor</code> or <code>render()</code>, both of which run during SSR. The SSR pipeline constructs the component and calls <code>render()</code> on the server, where the live DOM does not exist. (The attribute methods, <code>closest()</code>, and the host IDL reflections ARE backed by a server shim and do not crash; only the live-DOM surface does.)</p>
     <p><strong>Fix:</strong> move browser-only reads (<code>localStorage</code>, viewport, <code>matchMedia</code>, <code>navigator.*</code>) into <code>connectedCallback</code>, which runs only in the browser, then write the value to a signal to refine the first paint. Defaults for the first paint go in the constructor; server-known data comes through the page function as a prop. See <a href="/docs/components">Components</a> and <a href="/docs/progressive-enhancement">Progressive Enhancement</a>. The <code>no-browser-globals-in-render</code> check rule catches this ahead of time.</p>
 
+    <h2 id="ssr-controller">A controller's <code>hostUpdate()</code> is reported as skipped during SSR</h2>
+    <p><strong>Symptom:</strong> the server logs that a controller's <code>hostUpdate()</code> threw during SSR and was skipped, and the component's first paint lacks whatever that controller derives.</p>
+    <p><strong>Cause:</strong> controllers' <code>hostUpdate()</code> runs on the server too, as in Lit's SSR, so derived state reaches the first paint. A controller written for the browser (reading <code>window</code>, measuring the DOM) throws there. WebJs isolates each controller, logs once per controller class, and keeps rendering.</p>
+    <p><strong>Fix:</strong> guard the browser work with <code>if (isServer) return;</code> (<code>isServer</code> from <code>@webjsdev/core</code>), or move it to <code>hostConnected()</code> or <code>hostUpdated()</code>, which never run at SSR. See <a href="/docs/controllers">Controllers</a>.</p>
+
+    <h2 id="task-args">A Task's function receives an array instead of a value</h2>
+    <p><strong>Symptom:</strong> <code>task: async (id) =&gt; fetchItem(id)</code> requests <code>/items/7</code> as <code>/items/[7]</code> or similar, or a destructured argument is <code>undefined</code>.</p>
+    <p><strong>Cause:</strong> the task function is called as <code>task(args, { signal })</code> with the whole array <code>args()</code> returned, exactly as Lit's <code>Task</code> calls it.</p>
+    <p><strong>Fix:</strong> destructure it, <code>task: async ([id], { signal }) =&gt; fetchItem(id, { signal })</code>. See <a href="/docs/task">Task</a>.</p>
+
+    <h2 id="context-subscribe">A context consumer never updates after the provider's <code>setValue()</code></h2>
+    <p><strong>Symptom:</strong> a <code>ContextConsumer</code> reads the provided value once and keeps it after the provider changes.</p>
+    <p><strong>Cause:</strong> <code>subscribe</code> defaults to <code>false</code>, as in Lit, so the consumer asks once per connection.</p>
+    <p><strong>Fix:</strong> pass <code>subscribe: true</code> (<code>new ContextConsumer(this, { context, subscribe: true })</code>). A consumer that stays <code>undefined</code> because its provider upgrades later needs a <code>ContextRoot</code> attached early (<code>new ContextRoot().attach(document.body)</code>), which replays subscribing requests. Context keys match by identity: <code>createContext('theme')</code> returns the string key, so two modules creating the same string share it. See <a href="/docs/context">Context</a>.</p>
+
+    <h2 id="static-literal">A <code>literal</code> template throws "must be a 'literal' result"</h2>
+    <p><strong>Symptom:</strong> a static-html template from <code>@webjsdev/core/static-html</code> throws when a tag name comes from a variable.</p>
+    <p><strong>Cause:</strong> as in Lit, a hole in <code>literal\`...\`</code> accepts only another <code>literal</code> result, so a runtime string cannot become markup by accident.</p>
+    <p><strong>Fix:</strong> wrap a trusted runtime string in <code>unsafeStatic(value)</code>, and never pass user input through it. See <a href="/docs/directives">Directives</a>.</p>
+
     <h2>A custom element renders but never reacts to a property change</h2>
     <p><strong>Symptom:</strong> the component paints correctly on first load, but assigning a reactive property later does not re-render it.</p>
     <p><strong>Cause:</strong> you wrote a class-field initializer for a declared reactive property (<code>count: number = 0</code> or <code>count = 0</code> alongside <code>WebComponent({ count: Number })</code>). Under modern class-field semantics that compiles to a define on <code>this</code> AFTER <code>super()</code>, which overwrites the framework's reactive accessor, so subsequent assignments bypass the update.</p>

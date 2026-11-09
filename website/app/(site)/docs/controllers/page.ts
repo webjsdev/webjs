@@ -26,7 +26,7 @@ export default function Controllers() {
     <ul>
       <li><strong>hostConnected()</strong>: called when the host component's <code>connectedCallback</code> fires. Set up subscriptions, timers, and event listeners here.</li>
       <li><strong>hostDisconnected()</strong>: called when the host component's <code>disconnectedCallback</code> fires. Clean up resources.</li>
-      <li><strong>hostUpdate()</strong>: called before the host's <code>render()</code> method. Pre-render controller logic.</li>
+      <li><strong>hostUpdate()</strong>: called before the host's <code>render()</code> method. Pre-render controller logic. It also runs during SSR, so derived state reaches the first paint; guard browser-only work with <code>if (isServer) return;</code>. A <code>hostUpdate()</code> that throws on the server is skipped and reported once per controller class, and the component still renders.</li>
       <li><strong>hostUpdated()</strong>: called after the host's <code>render()</code> method, before <code>firstUpdated()</code>. Post-render controller logic.</li>
     </ul>
 
