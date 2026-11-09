@@ -904,7 +904,7 @@ export default function LandingPage() {
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">The app has a shape before your agent starts</h2>
           <p class="text-fg-muted text-base leading-[1.6] m-0">
             A scaffolded app arrives small: a layout, a home page, a database
-            and a 46-line AGENTS.md. Your agent already writes Next.js routes and Lit
+            and a 47-line AGENTS.md. Your agent already writes Next.js routes and Lit
             components, and the brief names only what differs, so it starts on
             your feature with its context still free.
             Every feature also has a runnable demo at gallery.webjs.dev.
@@ -913,7 +913,7 @@ export default function LandingPage() {
         <!-- THREE artifacts: what a scaffolded app arrives with, where a
              feature's code goes, and how the UI is built. The first window is
              COPIED FROM A REAL SCAFFOLDED APP (ls app/ and wc -l AGENTS.md), so
-             regenerate one and re-check it before editing. The 46 goes stale
+             regenerate one and re-check it before editing. The 47 goes stale
              quietly when the brief changes.
 
              (No backticks in here, per invariant 9: a backtick inside an html
@@ -931,7 +931,7 @@ icon.svg   layout.ts
 page.ts    manifest.webmanifest
 
 <span class="text-accent">$</span> wc -l my-app/AGENTS.md
-46 my-app/AGENTS.md
+47 my-app/AGENTS.md
 <span class="text-fg-subtle"># the brief: what differs from</span>
 <span class="text-fg-subtle"># Next.js routing and Lit.</span></code></pre>
             </figure>

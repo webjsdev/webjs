@@ -15,8 +15,9 @@ routing and Lit components, with the differences below.
   and its `/directives`, `/context`, `/task` and `/signals` subpaths. The base
   class is `WebComponent`. Register with `Class.register('my-tag')` or
   `customElements.define`.
-- Components render light DOM by default and `<slot>` works there too.
-  `static shadow = true` opts into shadow DOM.
+- Components render light DOM by default and `<slot>` works there too. Keep
+  them light: page styles such as Tailwind and the UI kit do not reach into a
+  shadow root. Use `static shadow = true` only when light DOM cannot work.
 - TypeScript must be erasable, so no decorators and no enums.
 - Server-only code and server actions live in `*.server.ts` files. With
   `'use server'` at the top, their exports are callable from components and
