@@ -841,6 +841,8 @@ export const uuid = () => text();
 // the column is narrowed on read/write instead of \`unknown\`.
 export const json = <T>() => text({ mode: 'json' }).$type<T>();
 export const bool = () => integer({ mode: 'boolean' });
+// A point in time, read and written as a JavaScript Date (createdAt and updatedAt
+// too). For a plain number of milliseconds, use integer() instead.
 export const timestamp = () => integer({ mode: 'timestamp_ms' });
 export const createdAt = () => timestamp().notNull().defaultNow();
 export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
@@ -866,6 +868,8 @@ export const uuid = () => pgUuid();
 // the column is narrowed on read/write instead of \`unknown\`.
 export const json = <T>() => jsonb().$type<T>();
 export const bool = () => boolean();
+// A point in time, read and written as a JavaScript Date (createdAt and updatedAt
+// too). For a plain number of milliseconds, use integer() instead.
 export const timestamp = () => pgTimestamp({ withTimezone: true });
 export const createdAt = () => timestamp().notNull().defaultNow();
 export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
@@ -890,8 +894,18 @@ export const users = table('users', {
   settings: json<{ theme?: string }>(),
   createdAt: createdAt(),
 });
-// Relations live here (one defineRelations for the whole schema). Empty
-// for now; add per-model relations as your schema grows.
+// A foreign key belongs on the COLUMN, as in any Drizzle schema:
+//   export const posts = table('posts', {
+//     id: pk(),
+//     userId: integer().notNull().references(() => users.id),
+//     title: text().notNull(),
+//   });
+// A relation (what db.query's \`with\` follows) belongs HERE, in the one
+// defineRelations for the whole schema (Drizzle 1.0), never on a column:
+//   export const relations = defineRelations({ users, posts }, (r) => ({
+//     posts: { author: r.one.users({ from: r.posts.userId, to: r.users.id }) },
+//     users: { posts: r.many.posts() },
+//   }));
 export const relations = defineRelations({ users }, () => ({}));
 
 // Derived types, never hand-written.
