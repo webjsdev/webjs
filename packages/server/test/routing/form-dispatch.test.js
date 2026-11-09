@@ -668,6 +668,57 @@ export default ({ actionData }) => html\`<form action=\${count}></form><p id="n"
   assert.equal(second.status, 303, 'prevState.n (1) + 1 = 2, a success');
 });
 
+test('a render that shows a flash is never shared-cacheable, even on a public page', async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/p/actions/p.server.ts': `'use server';\nexport async function save() { return { success: true, message: 'Saved for one visitor' }; }\n`,
+      'app/pub/page.ts': `
+import { html } from ${CORE};
+import { save } from '../../modules/p/actions/p.server.ts';
+export const metadata = { cacheControl: 'public, max-age=60' };
+export default ({ actionData }) => html\`<form action=\${save}></form><p>\${actionData?.message ?? 'none'}</p>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const plain = await app.handle(new Request('http://x/pub'));
+  assert.match(plain.headers.get('cache-control') || '', /public/, 'a normal render keeps the page header');
+  const cookie = flashCookie(await submit(app, '/pub', {}));
+  const landed = await app.handle(new Request('http://x/pub', { headers: { cookie } }));
+  assert.match(await landed.text(), /Saved for one visitor/);
+  assert.equal(landed.headers.get('cache-control'), 'private, no-store', "one visitor's result never reaches a shared cache");
+});
+
+test('a success that redirects or returns nothing clears an earlier flash', async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/f/actions/f.server.ts': `'use server';\nimport { redirect } from ${CORE};\nexport async function step(prev, input) { const mode = input.get('mode'); if (mode === 'fail') return { success: false, error: 'nope' }; if (mode === 'go') redirect('/done'); }\n`,
+      'app/step/page.ts': `
+import { html } from ${CORE};
+import { step } from '../../modules/f/actions/f.server.ts';
+export default () => html\`<form action=\${step}></form>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const id = identityOf(await (await app.handle(new Request('http://x/step'))).text());
+  const failed = await app.handle(new Request('http://x/step', form({ mode: 'fail', __webjs_action: id })));
+  assert.equal(failed.status, 422);
+  const cookie = flashCookie(failed);
+  assert.ok(cookie, 'the failure is carried as the next prevState');
+  for (const mode of ['go', 'none']) {
+    const req = new Request('http://x/step', form({ mode, __webjs_action: id }));
+    req.headers.set('cookie', cookie);
+    const res = await app.handle(req);
+    assert.equal(res.status, 303, mode);
+    const set = res.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash='));
+    assert.ok(set, `${mode}: the flash is rewritten`);
+    assert.match(set, /^__webjs_flash=;.*Max-Age=0/, `${mode}: the stale failure is cleared, not carried into the next prevState`);
+  }
+});
+
 test('a redirect thrown during the FAILED-action re-render returns 302 (GET-shaped)', async () => {
   // A failed action re-renders the SAME page through ssrPage (a GET-shaped page
   // render at 422). If THAT render throws a gate redirect, it resolves via the

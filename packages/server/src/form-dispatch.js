@@ -620,7 +620,12 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
       // The action finished its work before throwing (create, then redirect),
       // so it evicts and reports exactly as a returned result does.
       const done = await completionHeaders();
-      return new Response(null, { status: 303, headers: { location: headerSafeLocation(e.url), ...done } });
+      const res = new Response(null, { status: 303, headers: { location: headerSafeLocation(e.url), ...done } });
+      // The action finished, so an earlier flash (a failure kept as the next
+      // prevState) no longer describes it: in Next the redirect unmounts the
+      // form and its state goes with it.
+      res.headers.append('set-cookie', flashSetCookie(null));
+      return res;
     }
     // `route` and `params` ride along so the boundary renders inside its
     // layouts, exactly as it does on the page-render path (#1298).
@@ -691,10 +696,10 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // The result survives the redirect (Next's useActionState shows a success
     // message after a submit): the page it lands on reads it as actionData
     // once, and the next submission of this action gets it as prevState.
-    if (result !== undefined && result !== null) {
-      const value = await encodeFlash({ id, result, shown: false });
-      res.headers.append('set-cookie', flashSetCookie(value));
-    }
+    // A success with nothing to carry still replaces an earlier flash, so the
+    // next submission's prevState is never a stale failure.
+    const value = result !== undefined && result !== null ? await encodeFlash({ id, result, shown: false }) : null;
+    res.headers.append('set-cookie', flashSetCookie(value));
     return res;
   }
 

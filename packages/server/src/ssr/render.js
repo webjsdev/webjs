@@ -961,9 +961,13 @@ export async function ssrPage(route, params, url, opts) {
   // Read BEFORE the HTML-cache lookup, since a page carrying actionData is
   // never served from or written to the cache. A speculative prefetch never
   // consumes it.
+  // Set when this render shows a flash: its body then carries one visitor's
+  // action result, so the response must never reach a shared cache (below).
+  let showsFlash = false;
   if (!opts.actionData && opts.req && opts.req.headers.get('x-webjs-prefetch') !== '1') {
     const flash = await readFlash(opts.req);
     if (flash && !flash.shown) {
+      showsFlash = true;
       opts = { ...opts, actionData: flash.result };
       try {
         const shown = await encodeFlash({ ...flash, shown: true });
@@ -1284,6 +1288,10 @@ export async function ssrPage(route, params, url, opts) {
     // like one where it works. Dev only: a production header would publish how
     // many server calls a page made, for no benefit.
     if (opts.dev) res.headers.set('X-Webjs-Seed', seedHeader);
+    // A 200 takes the page's metadata.cacheControl, but a render showing a
+    // flash is per-visitor (like the 422 re-render, which is never cached), so
+    // a page marked public must not hand this body to a shared cache.
+    if (showsFlash) res.headers.set('cache-control', 'private, no-store');
     // REDUCED response (#1009): the X-Webjs-Have short-circuit omitted the
     // outer-layout chrome, so these bytes are only valid for a request that
     // sent a matching `have`. Left shared-cacheable, a CDN edge could store the

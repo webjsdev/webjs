@@ -55,6 +55,8 @@ try {
   assert.equal(res.status, 303, `${runtime}: form redirect status`);
   assert.equal(res.headers.get('location'), ENCODED, `${runtime}: form redirect location`);
   assert.equal(res.headers.get('x-webjs-invalidate'), 'posts', `${runtime}: a redirecting form action evicts its tags`);
+  const flash = res.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash='));
+  assert.match(flash || '', /^__webjs_flash=;.*Max-Age=0/, `${runtime}: a redirecting form action clears an earlier flash`);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
