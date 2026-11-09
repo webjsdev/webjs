@@ -19,7 +19,7 @@ import {
 } from './responses.js';
 import { devImport } from '../dev-import.js';
 import { applySeoDefaults } from './seo.js';
-import { isControlFlowThrow } from '../action-error.js';
+import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from '../action-error.js';
 import { readFlash, encodeFlash, FLASH_COOKIE } from '../action-flash.js';
 import { requestCookieStore } from '../context.js';
 
@@ -1349,6 +1349,21 @@ export async function ssrPage(route, params, url, opts) {
     // rendering the boundary, so the sink gets the ORIGINAL error even if the
     // boundary itself swallows or transforms it. notFound / redirect are
     // sentinels (control flow), not errors, so they are excluded above.
+    //
+    // Production sanitizes what the boundary sees (Next.js parity): error.ts
+    // and global-error.ts receive a generic message plus a `digest`, never the
+    // raw message (a driver error, a path, a connection string), and the full
+    // error is logged under the same digest so a user-reported digest maps
+    // back to it. The sinks get the original error, carrying the digest too.
+    // Dev passes the real error through unchanged.
+    let boundaryErr = err;
+    if (!opts.dev) {
+      let digest;
+      try { digest = await errorDigest(err); } catch { digest = crypto.randomUUID().replace(/-/g, '').slice(0, 10); }
+      try { if (err && typeof err === 'object' && /** @type {any} */ (err).digest == null) /** @type {any} */ (err).digest = digest; } catch { /* frozen */ }
+      console.error(`[webjs] render error [digest=${digest}]:`, err);
+      boundaryErr = Object.assign(new Error(GENERIC_ERROR_MESSAGE), { digest });
+    }
     if (typeof opts.onError === 'function') {
       try { opts.onError(err); } catch { /* a throwing sink must not affect the response */ }
     }
@@ -1381,7 +1396,7 @@ export async function ssrPage(route, params, url, opts) {
       try {
         const mod = await loadModule(route.errors[i], opts.dev);
         if (!mod.default) continue;
-        const tree = await mod.default({ ...ctx, error: err });
+        const tree = await mod.default({ ...ctx, error: boundaryErr });
         // The layouts that wrap THIS boundary: its own segment and every
         // ancestor (#1298). A layout deeper than the boundary never rendered.
         const wrapLayouts = layoutsForBoundary(route.layouts, boundarySegmentPath(route.errors[i]));
@@ -1447,7 +1462,7 @@ export async function ssrPage(route, params, url, opts) {
       try {
         const mod = await loadModule(opts.globalError, opts.dev);
         if (mod.default) {
-          const tree = await mod.default({ error: err });
+          const tree = await mod.default({ error: boundaryErr });
           const body = await renderToString(tree, { ssr: true, dev: opts.dev });
           return htmlResponse(body, 500, opts.req, url);
         }
@@ -1465,10 +1480,10 @@ export async function ssrPage(route, params, url, opts) {
       }
     }
     // Default: dev shows stack, prod shows a terse message (no stack trace leaks).
-    console.error('[webjs] unhandled render error:', err);
+    if (opts.dev) console.error('[webjs] unhandled render error:', err);
     const body = opts.dev
       ? `<h1>Server error</h1><pre style="white-space:pre-wrap">${escapeHtml(safeErrorText(err))}</pre>`
-      : `<h1>Server error</h1><p>Something went wrong. Please try again.</p>`;
+      : `<h1>Server error</h1><p>Something went wrong. Please try again.</p><p><small>Digest: ${escapeHtml(String(/** @type {any} */ (boundaryErr).digest || ''))}</small></p>`;
     return htmlResponse(
       wrapInDocument(body, { metadata, moduleUrls: [], dev: opts.dev, nonce: errNonce }),
       500,

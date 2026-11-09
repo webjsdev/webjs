@@ -47,13 +47,14 @@ export default function ErrorHandling() {
     <code-block>// app/error.ts: root error boundary
 import { html } from '@webjsdev/core';
 
-export default function ErrorPage({ error }: { error: Error }) {
+export default function ErrorPage({ error }: { error: Error &amp; { digest?: string } }) {
   return html${'`'}
     &lt;h1&gt;Something went wrong&lt;/h1&gt;
-    &lt;p&gt;${'${error.message}'}&lt;/p&gt;
+    &lt;p&gt;${'${error.message}'} (ref ${'${error.digest}'})&lt;/p&gt;
     &lt;a href="/"&gt;Go home&lt;/a&gt;
   ${'`'};
 }</code-block>
+    <p id="error-digest"><strong>What the boundary sees in production.</strong> As in Next.js, <code>error.ts</code> and <code>global-error.ts</code> receive a sanitized error in production: its <code>message</code> is the generic <code>Internal server error</code> and it carries a short <code>digest</code>. The raw message never reaches the page, because a thrown message is not something you control and may name a driver, a path or a connection string. The full error is logged on the server under <code>[digest=...]</code>, and your <code>onError</code> / <code>onRequestError</code> reporters receive the original error carrying the same <code>digest</code>, so a reference a user reads off the page finds the report. In development the boundary receives the real error unchanged.</p>
 
     <h3>Nesting</h3>
     <p>Error boundaries are nested. The framework walks from the throwing component outward until it finds the nearest <code>error.ts</code>:</p>

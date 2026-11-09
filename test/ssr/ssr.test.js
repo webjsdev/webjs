@@ -1734,14 +1734,27 @@ test('ssrPage: error.js boundary catches a render throw and returns 500', async 
   writeFileSync(errorFile,
     `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
     `export default function Err({ error }) {\n` +
-    `  return html\`<p>Handled: \${error.message}</p>\`;\n` +
+    `  return html\`<p>Handled: \${error.message} [\${error.digest || ''}]</p>\`;\n` +
     `}\n`);
 
   const route = { file: pageFile, layouts: [], errors: [errorFile], metadataFiles: [] };
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  // Production sanitizes what the boundary sees (Next parity): a generic
+  // message plus a digest, never the raw thrown message.
+  const origError = console.error;
+  const logged = [];
+  console.error = (...a) => logged.push(a.map(String).join(' '));
+  let resp;
+  try { resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir }); }
+  finally { console.error = origError; }
   assert.equal(resp.status, 500);
   const body = await resp.text();
-  assert.ok(body.includes('Handled: kaboom'));
+  const m = /Handled: Internal server error \[([0-9a-f]{10})\]/.exec(body);
+  assert.ok(m, 'prod boundary gets the generic message and a digest');
+  assert.ok(!body.includes('kaboom'), 'the raw message never reaches the page');
+  assert.ok(logged.some((l) => l.includes(`digest=${m[1]}`) && l.includes('kaboom')), 'the full error is logged under the digest');
+  // Dev passes the real error through.
+  const dev = await ssrPage(route, {}, new URL('http://localhost/'), { dev: true, appDir });
+  assert.match(await dev.text(), /Handled: kaboom/);
 });
 
 test('ssrPage: error.js that itself throws falls through to the default 500', async () => {
