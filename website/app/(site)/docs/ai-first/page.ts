@@ -110,23 +110,22 @@ export async function createPost(
     <p>The scaffold ships a single cross-agent source of truth rather than a per-tool rule duplicate for each agent:</p>
     <ul>
       <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent, opening with the WebJs brief: what differs from Next.js routing and Lit components</li>
-      <li><code>.agents/rules/workflow.md</code>, the git, test, and review workflow rules</li>
       <li>A thin bridge for Claude Code, <code>CLAUDE.md</code>, which imports <code>AGENTS.md</code> (Cursor, opencode, Antigravity and the Copilot coding agent read <code>AGENTS.md</code> natively)</li>
     </ul>
-    <p>Every agent gets the same rules from that one source: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
+    <p>That is the whole agent doc set, deliberately short. An agent already knows Next.js routing and Lit components, so the brief spends its words only on what differs, and the tokens an agent would have spent reading a long rule file go to the app instead. Your team's own git and review process stays yours.</p>
 
     <p>For Claude Code the scaffold also wires a <code>PostToolUse</code> hook, <code>.claude/hooks/check-on-edit.sh</code>, that runs <code>webjs check --json</code> after each edit to an app source file and hands that file's violations back to the agent with their fixes, so a wrong Lit or Next.js habit is corrected in the same turn. It is silent when the file is clean, and <code>WEBJS_NO_CHECK_ON_EDIT=1</code> turns it off.</p>
 
-    <h3>10. Autonomous Mode</h3>
-    <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
+    <h3>10. Hooks Instead of Rules</h3>
+    <p>For Claude Code the scaffold enforces what a rule file would otherwise ask for: a branch guard refuses an edit on <code>main</code>, a tests hook warns when source is committed without a test, and a stop hook asks for a commit before a turn ends with uncommitted work. A hook fires when it matters and costs nothing otherwise.</p>
 
     <h3>11. Automatic Tests and Docs</h3>
-    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention lives in <code>AGENTS.md</code> and <code>.agents/rules/workflow.md</code>, and is enforced via <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
+    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The scaffold's tests hook backs it, and <code>webjs test</code> and <code>webjs check</code> verify it. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
 
     <h3>12. Scaffold + Persistence Defaults</h3>
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. WebJs enforces this with three guardrails:</p>
     <ul>
-      <li><strong>Exactly two scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default) and <code>--template api</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>. Auth is one of the full-stack gallery cards, not a separate template.</li>
+      <li><strong>Exactly two scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default) and <code>--template api</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>. Auth is a feature you add (see the <a href="/docs/authentication">authentication docs</a>), not a separate template.</li>
       <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code>, <code>db/columns.server.ts</code>, <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.dev.before</code> + <code>webjs.start.before</code> steps running <code>webjs db migrate</code> (idempotent, so a <code>db:generate</code>'d migration applies on the next boot), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent edits the schema, runs <code>db:generate</code>, and <code>npm run dev</code> applies it, and won't accidentally fall back to JSON files for persistence.</li>
       <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in <code>AGENTS.md</code>, so an agent reading it takes the database path.</li>
     </ul>
@@ -134,7 +133,7 @@ export async function createPost(
     <code-block>User asks for…                                          Scaffold
 ─────────────────────────────────────────────────────────────────────
 Todo app, blog, notes, dashboard, marketplace, social   default
-App with auth / login / signup / accounts (SaaS)        default (auth card)
+App with auth / login / signup / accounts (SaaS)        default
 HTTP/JSON API only, no UI                                --template api</code-block>
     <p>The scaffold is REFERENCE, not the final product. The agent's job after scaffolding is to replace the example <code>app/page.ts</code> ("Hello from …"), the example <code>User</code> model in <code>db/schema.server.ts</code>, and the example components with the app the user actually requested. The infrastructure (Drizzle wiring, test config, agent rules, route conventions) stays.</p>
 
@@ -147,7 +146,7 @@ HTTP/JSON API only, no UI                                --template api</code-bl
       <li><strong>Add a new API endpoint</strong>: create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
       <li><strong>Add a server action</strong>: create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
       <li><strong>Add a component</strong>: create a file, extend the <code>WebComponent({ ... })</code> factory with your property shape, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
-      <li><strong>Add authentication</strong>: start from the auth gallery card (<code>app/features/auth/</code> and <code>modules/auth/</code>), which wires a login, a signed session and a protected route.</li>
+      <li><strong>Add authentication</strong>: wire <code>createAuth()</code> from <code>@webjsdev/server</code>, or copy the gallery's auth demo (<code>gallery/app/features/auth/</code> and <code>gallery/modules/auth/</code>), which has a login, a signed session and a protected route.</li>
       <li><strong>Add a database model</strong>: edit <code>db/schema.server.ts</code>, run <code>webjs db generate</code> then <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
       <li><strong>Debug an issue</strong>: read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>
     </ul>

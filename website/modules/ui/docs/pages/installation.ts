@@ -53,12 +53,10 @@ export default async function body(toc: TocEntry[]) {
     ${codeFigure(`npm create webjs@latest my-app
 cd my-app && npm run dev`, { lang: 'bash' })}
     <p>A new app is ready for the kit. <code>webjs create</code> writes the same <code>components.json</code>, <code>lib/utils/cn.ts</code> and theme that <code>init</code> would.</p>
-    <p>It also ships a browsable feature gallery. Its demos import a small example design system of their own from <code>modules/gallery/ui/</code>, away from <code>components/ui/</code>, so the kit's components land beside them without touching them. Its colors and fonts are the theme in <code>styles/globals.css</code>, so a preset from <a href="/ui/create">/ui/create</a> repaints it:</p>
+    <p>Its colors and fonts are the theme in <code>styles/globals.css</code>, so a preset from <a href="/ui/create">/ui/create</a> repaints it:</p>
     ${commandBlock(packageCommands('init --preset b0'))}
     <p>Add the components you need:</p>
     ${commandBlock(packageCommands('add button card dialog'))}
-    <p>When you are done with the gallery, clear it. The reset removes the demos, their design system and the gallery's layout, and keeps <code>cn.ts</code>, the theme and everything <code>add</code> wrote. The layout it leaves renders each page as it is, so a full-screen block such as <code>dashboard-01</code> fills the window:</p>
-    ${codeFigure(`npm run gallery:clear`, { lang: 'bash' })}
     <p>Inside a WebJs app, <code>webjs ui</code> runs the same commands, since <code>@webjsdev/ui</code> ships with the WebJs CLI: <code>webjs ui add button card dialog</code>.</p>
 
     ${heading(toc, 2, 'Existing Project')}

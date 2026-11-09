@@ -75,9 +75,7 @@ older, unrelated Java framework also used the name WebJS.
 > - Any product UI (todo, blog, notes, dashboard, marketplace, social, e-commerce, a SaaS with accounts…) → **default** (`webjs create <name>`)
 > - Backend-only HTTP/JSON API, no UI → **`--template api`**
 >
-> Auth is one of the full-stack gallery cards (login, a signed session, and a real protected route), so a default app already carries a promotable auth baseline.
->
-> **The scaffold is a starting point, grown in place.** It ships a gallery index home, a neutral-palette root layout, database wiring, and a densely-commented feature gallery (single-concept demos under `app/features/` plus the `app/examples/todo` app, with logic in `modules/`). The framework context ships as a short brief in `AGENTS.md`, alongside `.agents/rules/workflow.md`. Read the brief and browse the gallery, then build the app the user asked for on top of the scaffold, pruning the demos it does not use.
+> **The scaffold is minimal, grown in place.** It ships a root layout, a starting home page, a theme toggle, database wiring, and one starter test. The framework context is a short brief in `AGENTS.md`: WebJs follows Next.js App Router routing and Lit's component APIs, so the brief lists only what differs, and `webjs check` refuses the rest with the fix. Build the app the user asked for on top of the scaffold. Runnable demos of every feature live at [gallery.webjs.dev](https://gallery.webjs.dev) (source in `gallery/`).
 >
 > Full rules: [`AGENTS.md` → How AI agents must scaffold](./AGENTS.md#how-ai-agents-must-scaffold).
 > Full framework docs (every API, every recipe): **https://webjs.dev/docs**.
@@ -91,8 +89,6 @@ cd my-app && npm run dev
 # Backend-only API (routes + modules + Drizzle, no UI)
 npm create webjs@latest my-api  -- --template api
 
-# Auth (login/signup, session, a protected route) ships as a gallery card
-# in the default full-stack app. No separate template needed.
 
 # Prefer Bun? webjs runs on Node 24+ or Bun. Add --runtime bun to any
 # template (it is orthogonal to --template), or scaffold through Bun and
@@ -134,7 +130,7 @@ packages/
   webjsdev/         # unscoped npm name for @webjsdev/cli (so `npm i -g webjsdev` works without a scope)
 examples/
   blog/             # full-featured reference app (auth, posts, comments, chat)
-gallery/            # the feature gallery every scaffolded app ships, as a live app
+gallery/            # the feature gallery at gallery.webjs.dev, a live app
 website/            # landing site AND the documentation at /docs and gallery at /ui
 AGENTS.md           # AI-agent contract for the framework
 CLAUDE.md           # Claude Code quick-reference

@@ -184,11 +184,6 @@ lib/
                          lockfile + applies the
                          runtime-rewrite transforms to the copied deploy +
                          agent-config files when bun.
-  api-gallery.js         Backend-features showcase for --template api:
-                         JSON/HTTP endpoints under app/api/features/ (the
-                         api counterpart of the UI gallery). Auth is a
-                         full-stack GALLERY card now (gallery/
-                         {app/features/auth,modules/auth}), not a template.
   runtime-rewrite.js     Pure transforms (#541) that DERIVE the bun-mode
                          variant of each canonical node template:
                          `bunifyProse` (npm->bun command forms in markdown),
@@ -207,22 +202,16 @@ lib/
                          `test/runtime-rewrite/`.
 templates/               Verbatim files copied into every new app.
                          {{APP_NAME}} placeholder is substituted at
-                         copy time. The AGENTS.md / CLAUDE.md /
-                         .agents/rules/workflow.md
-                         / .github/copilot-instructions.md / .editorconfig
-                         / .env.example / .claude.json / .claude/hooks/
-                         all live here. .claude/hooks/check-on-edit.{sh,mjs}
+                         copy time. The AGENTS.md (the brief alone) /
+                         CLAUDE.md / .editorconfig / .env.example /
+                         .claude.json / .claude/hooks/ all live here. .claude/hooks/check-on-edit.{sh,mjs}
                          is the PostToolUse feedback loop: after an edit to
                          app source it runs the app's own `webjs check --json`
                          (never npx) and returns only the edited file's
                          violations as decision: block feedback. Test:
-                         test/hooks/check-on-edit.test.mjs. AGENTS.md ALSO gets a template-specific
-                         {{PLAYBOOK}} injection: create.js substitutes the
-                         full-stack or api build playbook from
-                         templates/partials/agents-playbook-{fullstack,api}.md
-                         (the shared meta-rules stay in AGENTS.md, so the two
-                         stay single-sourced). The partials are NOT copied as
-                         app files.
+                         test/hooks/check-on-edit.test.mjs. Both templates
+                         ship the same AGENTS.md; there is no playbook, no
+                         rule directory and no gallery in a generated app.
 README.md                npm-facing package readme.
 ```
 
@@ -282,7 +271,7 @@ verbatim.
    any of the three. Adding a runtime is a `VALID_RUNTIMES` entry +
    transforms, never a new template.
 2. **Scaffold is reference, not the final product.** The scaffold
-   output ships an example `app/page.ts` ("Hello from …"), an example
+   output ships a starting `app/page.ts`, an example
    `User` Drizzle model, an example `theme-toggle` component. AI agents
    asked to build a real app MUST replace those with the actual app.
    The post-scaffold success message in `lib/create.js` prints this
@@ -297,15 +286,11 @@ verbatim.
    convention (stated in the scaffold's AGENTS.md).
 4. **Template files are verbatim copies** with `{{APP_NAME}}` substitution.
    When editing `templates/AGENTS.md` (whose brief section must stay byte-identical
-   to `packages/mcp/src/brief.js`) or `templates/.agents/rules/workflow.md`, remember they ship
-   into every scaffolded app. Write for the audience of an AI agent
-   working inside a freshly-scaffolded WebJs project. `templates/AGENTS.md`
-   is the one exception to "verbatim": it carries a `{{PLAYBOOK}}` marker
-   that `create.js` replaces with the full-stack or api build playbook from
-   `templates/partials/agents-playbook-{fullstack,api}.md`, so the api app
-   never ships UI-only guidance. Keep the shared parts (the brief, typing,
-   data) in `AGENTS.md` itself and only the template-divergent build steps
-   in the partials.
+   to `packages/mcp/src/brief.js`), remember it ships into every scaffolded
+   app and is the agent's ONLY WebJs doc there. Keep it short: an agent
+   already knows Next.js routing and Lit components, so it carries only what
+   differs. Anything else belongs in a loud `webjs check` or runtime refusal,
+   or on the docs site.
 5. **`templates/CLAUDE.md` uses Claude Code's `@import` syntax**
    (`@AGENTS.md`). See https://code.claude.com/docs/en/claude-md.md#import-additional-files
 

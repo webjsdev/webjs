@@ -60,9 +60,8 @@ test('blocks a feature-src commit that stages no scaffold surface', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-// The gallery is the canonical repo-root `gallery/` app since #1370, not the
-// old `packages/cli/templates/gallery/` copy (which prepack now generates and
-// postpack deletes), so the gate has to recognise a demo at the new path.
+// The gallery is the standalone repo-root `gallery/` app, so the gate has to
+// recognise a demo there.
 test('allows a feature-src commit that also stages a gallery demo', () => {
   const { dir, git } = makeRepo();
   try {
@@ -73,9 +72,9 @@ test('allows a feature-src commit that also stages a gallery demo', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('allows a feature-src commit that also stages the brief (it survives gallery:clear)', () => {
-  // The brief's source is pasted into the scaffold AGENTS.md and survives
-  // gallery:clear, so a brief update satisfies the gate the same as a gallery demo.
+test('allows a feature-src commit that also stages the brief', () => {
+  // The brief's source is pasted into the scaffold AGENTS.md, so a brief update
+  // satisfies the gate the same as a gallery demo.
   const { dir, git } = makeRepo();
   try {
     writeFileSync(join(dir, 'packages/core/src/x.js'), 'v2\n');

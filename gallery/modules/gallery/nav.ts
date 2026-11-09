@@ -2,7 +2,7 @@
  * The gallery's demo index, ONE source of truth for both the home cards and the
  * left sidebar (so they can never drift). A browser-safe data module (no server
  * imports, no client globals): the home flattens the groups into its card grid,
- * and <gallery-nav> renders them grouped. gallery:clear removes this module.
+ * and <gallery-nav> renders them grouped.
  *
  * Blurbs are INTENT-shaped, not noun-shaped: each one opens on the job you would
  * be doing when you want this demo, because the index is the first thing an

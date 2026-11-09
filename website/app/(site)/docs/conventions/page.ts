@@ -8,7 +8,7 @@ export default function Conventions() {
     <p>WebJs is an <strong>AI-first framework</strong>. It ships an opinionated conventions system that both humans and AI agents follow. The conventions are enforced via config files, CLI commands, and guardrails that ensure consistent, high-quality code across the entire project, whether written by a person or an agent.</p>
 
     <h2>Where the conventions live</h2>
-    <p>The project conventions ship as prose in <code>AGENTS.md</code> (the WebJs brief plus a build checklist), plus the git, test, and review workflow rules in <code>.agents/rules/workflow.md</code>. There is no separate <code>CONVENTIONS.md</code> file. All AI agents read <code>AGENTS.md</code> before writing code. The conventions define:</p>
+    <p>The project conventions ship as prose in <code>AGENTS.md</code>, which opens with the WebJs brief. There is no separate <code>CONVENTIONS.md</code> file and no rule directory. All AI agents read <code>AGENTS.md</code> before writing code. The conventions define:</p>
 
     <ul>
       <li><strong>Module architecture</strong>: where actions, queries, and components go.</li>
@@ -20,7 +20,7 @@ export default function Conventions() {
     </ul>
 
     <h3>How to Override Architectural Conventions</h3>
-    <p>The conventions are prose, so you customize them by editing <code>AGENTS.md</code> or the workflow rules (<code>.agents/rules/workflow.md</code>) to match your team's preferences. For example, if you prefer shadow DOM components by default (the scaffold defaults to light DOM + Tailwind), state that in <code>AGENTS.md</code>:</p>
+    <p>The conventions are prose, so you customize them by editing <code>AGENTS.md</code> to match your team's preferences. For example, if you prefer shadow DOM components by default (the scaffold defaults to light DOM + Tailwind), state that in <code>AGENTS.md</code>:</p>
 
     <code-block># Component patterns
 
@@ -48,7 +48,7 @@ webjs check --rules</code-block>
     <ol>
       <li>Read <code>AGENTS.md</code> for the project conventions and follow them by judgment.</li>
       <li>Run <code>webjs check</code> and fix every violation: they are correctness bugs, not style.</li>
-      <li>To change a convention, edit the prose in <code>AGENTS.md</code> or <code>.agents/rules/workflow.md</code>. There is no <code>package.json</code> switch and nothing to toggle.</li>
+      <li>To change a convention, edit the prose in <code>AGENTS.md</code>. There is no <code>package.json</code> switch and nothing to toggle.</li>
       <li>Run <code>webjs check</code> before every commit. AI agents run it automatically as part of their workflow.</li>
     </ol>
 
@@ -131,7 +131,6 @@ After merging, should &lt;branch&gt; be deleted or kept?</code-block>
       </thead>
       <tbody>
         <tr><td><code>AGENTS.md</code></td><td>All agents (Cursor, opencode, Antigravity, Copilot coding agent read it natively)</td><td>Framework API, conventions, recipes (the source of truth)</td></tr>
-        <tr><td><code>.agents/rules/workflow.md</code></td><td>All agents</td><td>Git, test, and review workflow rules</td></tr>
         <tr><td><code>CLAUDE.md</code></td><td>Claude Code</td><td>Thin bridge pointing at AGENTS.md</td></tr>
         <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>Hooks: the branch guard, the server-import guard, the tests gate, and a check-on-edit loop that runs <code>webjs check</code> on every edited file</td></tr>
         <tr><td><code>.github/pull_request_template.md</code></td><td>All (via GitHub)</td><td>PR checklist: tests, docs, convention check</td></tr>
@@ -139,27 +138,6 @@ After merging, should &lt;branch&gt; be deleted or kept?</code-block>
       </tbody>
     </table>
 
-    <p>All config files encode the same rules: the framework conventions, git workflow, and quality expectations. Each is formatted for its target agent's native config format.</p>
-
-    <h2>Autonomous Mode</h2>
-    <p>When an agent runs in sandbox or bypass-permissions mode, it follows these defaults instead of asking questions:</p>
-
-    <table>
-      <thead>
-        <tr><th>Decision</th><th>Autonomous Default</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>On <code>main</code>, need a branch</td><td>Auto-create <code>feature/&lt;task-slug&gt;</code></td></tr>
-        <tr><td>Parent branch has new commits</td><td>Auto-rebase before starting</td></tr>
-        <tr><td>Ready to merge</td><td>Auto-merge (no prompt)</td></tr>
-        <tr><td>Delete branch after merge?</td><td>Delete feature/fix branches, keep long-lived branches</td></tr>
-        <tr><td>Commit message</td><td>Auto-generate meaningful message</td></tr>
-        <tr><td>Tests failing</td><td>Fix them, don't ask</td></tr>
-        <tr><td>Convention violations</td><td>Fix them, don't ask</td></tr>
-      </tbody>
-    </table>
-
-    <p>The principle: in autonomous mode, the agent is <em>more</em> disciplined, not less. It follows every rule but makes decisions instead of blocking on questions.</p>
 
     <h2>webjs create</h2>
     <p>The scaffolding command generates a complete project with all conventions, config files, and example tests pre-configured:</p>
@@ -171,12 +149,11 @@ cd my-app && npm run dev</code-block>
     <p>This generates:</p>
     <ul>
       <li><code>app/</code> with root layout + page</li>
-      <li><code>modules/</code> skeleton for feature-scoped code</li>
+      <li>an empty <code>modules/</code> for feature-scoped code</li>
       <li><code>components/</code> with a theme toggle component</li>
       <li><code>db/schema.server.ts</code>: the Drizzle schema, SQLite by default, example <code>User</code> model. <code>db/connection.server.ts</code> exports the <code>db</code> connection.</li>
       <li><code>test/&lt;feature&gt;/</code> with example tests, and <code>browser/</code> and <code>e2e/</code> subfolders</li>
-      <li><code>.agents/rules/workflow.md</code>: git, test, and review workflow rules</li>
-      <li><code>AGENTS.md</code>: full framework API reference</li>
+      <li><code>AGENTS.md</code>: the WebJs brief, what differs from Next.js routing and Lit components</li>
       <li>A thin <code>CLAUDE.md</code> bridge pointing at AGENTS.md</li>
       <li><code>.editorconfig</code> for consistent formatting</li>
       <li><code>package.json</code> with scripts (<code>dev</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>ci</code>, <code>doctor</code>, <code>typecheck</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>)</li>

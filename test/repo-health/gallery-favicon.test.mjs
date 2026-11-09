@@ -17,12 +17,8 @@
  * the middle is not enough, since a linked-and-served placeholder is
  * indistinguishable from the real thing to the request pipeline.
  *
- * This lives in the REPO suite rather than in `gallery/test/`, for two reasons.
- * It is a cross-app assertion (it reads `website/public/`, which exists only
- * here), and `gallery/test/**` is scaffold PAYLOAD: `copyGallery()` copies it
- * into every generated app, where a `website/` to compare against never exists
- * and where a stray directory also defeats `gallery:clear`'s prune of an empty
- * `test/` (asserted by test/scaffolds/scaffold-gallery.test.js).
+ * This lives in the REPO suite rather than in `gallery/test/` because it is a
+ * cross-app assertion: it reads `website/public/`, which exists only here.
  *
  * Companion to site-seo-tags.test.mjs, which covers the website's own icons.
  * That one asserts hand-written `<link>` markup because the website writes its

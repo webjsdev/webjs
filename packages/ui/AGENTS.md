@@ -782,8 +782,8 @@ when the caller passes an explicit custom `--registry <url>`.
   custom-element files are left whole (the element IS the component). A
   version-skew note: local-first pins `add`/`view` to the INSTALLED ui version,
   and `diff` is how a user detects upstream drift. The scaffold no longer
-  pre-copies ui components (it initialises the app for `webjs ui add` and the
-  gallery cards style with plain Tailwind), so components are added on demand.
+  pre-copies ui components (it initialises the app for `webjs ui add` and its
+  shell styles with plain Tailwind), so components are added on demand.
 
 ## Webjs‑CLI subcommand
 

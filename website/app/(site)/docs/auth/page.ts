@@ -68,7 +68,7 @@ export async function loginWithGoogle() {
 export async function logout() {
   return signOut({ redirectTo: '/' });
 }</code-block>
-    <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the scaffold's auth gallery card renders its logout button.</p>
+    <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the auth demo in the WebJs gallery renders its logout button.</p>
 
     <h2>Return to the page the user started from</h2>
     <p>Pass <code>redirectTo</code> and the user lands there after signing in, for OAuth providers as well as credentials. A plain form is enough: the mounted handler reads the field, carries it through the provider round trip in a short-lived signed cookie, and the callback lands on it.</p>
@@ -93,7 +93,7 @@ export default function LoginPage({ searchParams }) {
     &lt;form method="POST" action="/api/auth/signin/credentials"&gt;...&lt;/form&gt;
   \`;
 }</code-block>
-    <p>The scaffold's auth gallery card wires exactly this, so a wrong password shows a message on the login page instead of bouncing to the landing page with no feedback.</p>
+    <p>The auth demo in the WebJs gallery wires exactly this, so a wrong password shows a message on the login page instead of bouncing to the landing page with no feedback.</p>
 
     <h2>Callbacks</h2>
     <p>Customize the session and JWT with callbacks:</p>

@@ -1,9 +1,9 @@
 // Auth: password login/signup on top of createAuth, a signed session cookie, and
 // a genuinely protected route. This card wires a REAL auth baseline (a users
 // table with a passwordHash, createAuth in modules/auth/auth.server.ts, and the
-// /features/auth/dashboard subtree gated by a middleware.ts), so a fresh app can
-// promote it into a product. gallery:clear removes the whole surface (this card,
-// modules/auth, app/api/auth, the passwordHash column) back to the minimal base.
+// /features/auth/dashboard subtree gated by a middleware.ts). To copy it into an
+// app, take this card, modules/auth, app/api/auth and the passwordHash column
+// together.
 //
 // This index page is public and reads the current session with currentUser() so
 // it can show who is signed in. The read is a 'use server' action, so the same

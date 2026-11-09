@@ -201,7 +201,7 @@ webjs test --browser</code-block>
       <li><code>test/&lt;feature&gt;/browser/&lt;name&gt;.test.js</code>: browser tests (with the <code>--browser</code> flag)</li>
       <li><code>test/&lt;feature&gt;/e2e/&lt;name&gt;.test.{ts,mjs}</code>: e2e (opt in with <code>WEBJS_E2E=1</code>)</li>
     </ul>
-    <p>With no browser test files yet (a fresh app after <code>npm run gallery:clear</code>), <code>webjs test --browser</code> prints <code>no browser tests yet</code> and exits 0 instead of failing, so a missing layer never turns <code>npm run ci</code> red. Once one file matches the <code>files</code> globs in <code>web-test-runner.config.js</code>, the browser layer runs as usual.</p>
+    <p>With no browser test files yet (an app that removed the starter test), <code>webjs test --browser</code> prints <code>no browser tests yet</code> and exits 0 instead of failing, so a missing layer never turns <code>npm run ci</code> red. Once one file matches the <code>files</code> globs in <code>web-test-runner.config.js</code>, the browser layer runs as usual.</p>
 
     <h2>webjs ci command</h2>
     <p>One command for every layer. A scaffolded app declares its gate once, in <code>package.json</code> under <code>webjs.ci</code>, and <code>npm run ci</code> runs it with a timed result line per step, the Rails <code>bin/ci</code> model:</p>
@@ -278,7 +278,7 @@ webjs check --rules</code-block>
     e2e/hello.test.ts</code-block>
 
     <h2>AI Agent Testing Convention</h2>
-    <p>In a WebJs project, AI agents are expected to write tests automatically with every code change. The convention is defined in <code>.agents/rules/workflow.md</code>, which the scaffold ships beside <code>AGENTS.md</code>:</p>
+    <p>In a WebJs project, AI agents are expected to write tests automatically with every code change. For Claude Code the scaffold's tests hook warns when a source change is committed without one (set <code>WEBJS_TEST_GATE=block</code> to make it refuse). A good default for what each change needs:</p>
     <ul>
       <li><strong>New server action</strong> needs a unit test (round-trip it through <code>invokeActionForTest</code>).</li>
       <li><strong>New component</strong> needs a unit test (SSR rendering), plus a browser test via <code>ssrFixture()</code> when hydration / DOM / slots matter.</li>

@@ -55,7 +55,7 @@ Files:
 
       ${heading(toc, 3, 'Open the page')}
       <p>The page lands at its route under <code>app/</code>, so <code>login-03</code> is served at <code>/login</code> as soon as <code>npm run dev</code> picks it up.</p>
-      <p>A block page renders inside your root layout, like every page. The root layout <code>webjs create</code> writes puts every page in a centered <code>max-w-3xl</code> column, both with the gallery and after <code>npm run gallery:clear</code>, and a full-screen block (the login, signup, sidebar and dashboard blocks) needs the whole viewport. Let the root layout render <code>\${children}</code> bare, and move the column into a route group's layout, such as <code>app/(site)/layout.ts</code>, for the pages that want it.</p>
+      <p>A block page renders inside your root layout, like every page. The root layout <code>webjs create</code> writes puts every page in a centered <code>max-w-5xl</code> column under a navbar, and a full-screen block (the login, signup, sidebar and dashboard blocks) needs the whole viewport. Let the root layout render <code>\${children}</code> bare, and move the column into a route group's layout, such as <code>app/(site)/layout.ts</code>, for the pages that want it.</p>
 
       ${heading(toc, 3, 'Wire the form')}
       <p>A block ships no server action, so its <code>&lt;form&gt;</code> has no <code>action</code> yet. Bind your own <code>'use server'</code> action to it:</p>

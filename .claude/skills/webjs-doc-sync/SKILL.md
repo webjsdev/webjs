@@ -60,16 +60,13 @@ applies, then update or consciously skip each.
    auto-generated from conventional PR titles, so NEVER hand-write it; the blog is
    manual.
 5. **The scaffold templates: `packages/cli/templates/`.** Every new app ships
-   these. The scaffold is single-source: `AGENTS.md` (the brief plus a build
-   checklist from `templates/partials/`) and `.agents/rules/workflow.md`, read by
-   every tool. There are no per-agent rule files to keep in lockstep. A change
+   these. The scaffold's only agent doc is `AGENTS.md`, the brief alone, read
+   by every tool (plus the thin `CLAUDE.md` bridge). A change
    to how apps are AUTHORED lands on the docs site. When the change is to what
-   `webjs create` GENERATES (a gallery/showcase demo, a template, the generated
-   layout/home/theme/schema, a scaffold convention), this surface has more parts
-   (the `packages/cli/lib/*` generators, the repo-root `gallery/**` app whose
-   demos prepack bundles into the CLI, the scaffold tests, the framework
-   template-matrix docs, the preview
-   apps) and a mandatory `generate + boot + webjs check` step: use the dedicated
+   `webjs create` GENERATES (a template, the generated layout/home/theme/schema,
+   a scaffold convention) or to a gallery demo, this surface has more parts
+   (the `packages/cli/lib/create.js` generator, the standalone `gallery/` app,
+   the scaffold tests, the framework template-matrix docs) and a mandatory `generate + boot + webjs check` step: use the dedicated
    **`webjs-scaffold-sync`** skill for those, and treat this doc-sync entry as the
    docs-only slice. The CLI help text in `packages/cli/` is part of this surface
    for a new command or flag.
