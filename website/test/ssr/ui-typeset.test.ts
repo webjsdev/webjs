@@ -40,7 +40,7 @@ test('/ui/typeset renders the three panels, in shadcn\'s order', async () => {
   assert.match(html, /data-slot="typeset-docs"/, 'the docs panel');
   assert.match(html, /<ui-tabs-trigger value="docs"[\s\S]*?>Docs</);
   assert.match(html, /<ui-tabs-trigger value="prompt"[\s\S]*?>Prompt</);
-  assert.match(html, /\/public\/typeset-fonts\.css/, 'the typeset faces are linked');
+  assert.match(html, /\/typeset-fonts\.css/, 'the typeset faces are linked');
   // shadcn's DOM order: docs, preview, customizer (md:flex-row-reverse shows it the other way).
   const at = (re: RegExp) => html.search(re);
   assert.ok(at(/data-slot="typeset-docs"/) < at(/data-slot="typeset-preview"/));
@@ -79,7 +79,7 @@ test('a non-default param reaches the preview src, the links and the docs code',
   assert.match(html, /--typeset-size: 18px;/);
   assert.match(html, /class=&quot;typeset typeset-chat max-w-\[37em\]&quot;|class="typeset typeset-chat max-w-\[37em\]"/);
   assert.match(decode(html), /family=Lora:wght@400\.\.700/, 'the Google Fonts link loads it');
-  assert.match(decode(html), /src: url\('\/public\/fonts\/lora\.woff2'\)/, 'and the self-hosted rules declare it');
+  assert.match(decode(html), /src: url\('\/fonts\/lora\.woff2'\)/, 'and the self-hosted rules declare it');
   // The specimen switch and Open in New Tab carry the params.
   assert.match(decode(html), /href="\/ui\/typeset\?body=lora&heading=montserrat&scale=18"[^>]*data-item="docs"/);
   // shadcn's serializer keeps a non-default item in the query too.

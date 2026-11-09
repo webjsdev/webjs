@@ -7,5 +7,5 @@
  * agent), saved by scripts/fetch-fonts.mjs, which prints this block.
  * Instrument Serif comes at weight 400 alone, as shadcn's preview loads it.
  */
-@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400 800;font-display:swap;src:url('/public/fonts/eb-garamond.woff2') format('woff2');}
-@font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;font-display:swap;src:url('/public/fonts/instrument-serif.woff2') format('woff2');}
+@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400 800;font-display:swap;src:url('/fonts/eb-garamond.woff2') format('woff2');}
+@font-face{font-family:'Instrument Serif';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/instrument-serif.woff2') format('woff2');}

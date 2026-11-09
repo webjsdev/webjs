@@ -79,7 +79,7 @@ export function loginForm(opts: { class?: string } = {}) {
             </div>
           </form>
           <div class="relative hidden bg-muted md:block">
-            <img src="/public/placeholder.svg" alt="" class="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale">
+            <img src="/placeholder.svg" alt="" class="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale">
           </div>
         </div>
       </div>

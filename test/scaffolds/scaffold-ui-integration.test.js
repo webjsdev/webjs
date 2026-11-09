@@ -69,7 +69,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     // a content hash in production and is served immutable: a deploy that
     // changes the CSS changes the url, and no browser or CDN can serve the old
     // bytes at the stable path. Still a plain static stylesheet, JS-off safe.
-    assert.match(layout, /<link rel="stylesheet" href=\$\{asset\('\/public\/tailwind\.css'\)\}>/,
+    assert.match(layout, /<link rel="stylesheet" href=\$\{asset\('\/tailwind\.css'\)\}>/,
       'layout links the static compiled stylesheet through asset()');
     assert.match(layout, /import \{[^}]*\basset\b[^}]*\} from '@webjsdev\/core'/,
       'and imports asset from core');

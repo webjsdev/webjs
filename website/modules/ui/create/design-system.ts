@@ -125,7 +125,7 @@ export function fontFamily(name: string): string {
 
 /** The stylesheet a style needs: each kit style is its own sheet in public/ui-styles/. */
 export function styleSheetHref(style: string): string | null {
-  return PRESET_STYLES.includes(style) ? `/public/ui-styles/${style}.css` : null;
+  return PRESET_STYLES.includes(style) ? `/ui-styles/${style}.css` : null;
 }
 
 /**

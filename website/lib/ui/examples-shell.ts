@@ -66,8 +66,8 @@ function mobilePicture(name: ExampleSlug) {
   const [width, height] = size;
   const title = EXAMPLES.find((e) => e.slug === name)?.name ?? name;
   return html`<div class="md:hidden">
-    <img src=${asset(`/public/images/examples/${name}-light.png`)} width=${String(width)} height=${String(height)} alt=${title} class="block h-auto w-full dark:hidden">
-    <img src=${asset(`/public/images/examples/${name}-dark.png`)} width=${String(width)} height=${String(height)} alt=${title} class="hidden h-auto w-full dark:block">
+    <img src=${asset(`/images/examples/${name}-light.png`)} width=${String(width)} height=${String(height)} alt=${title} class="block h-auto w-full dark:hidden">
+    <img src=${asset(`/images/examples/${name}-dark.png`)} width=${String(width)} height=${String(height)} alt=${title} class="hidden h-auto w-full dark:block">
   </div>`;
 }
 

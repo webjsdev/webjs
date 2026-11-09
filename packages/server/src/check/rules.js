@@ -137,6 +137,11 @@ export const RULES = [
       'Flags `import \'./styles.css\'` (or any `.css` import, including `import styles from \'./x.module.css\'`). Importing CSS is a bundler feature WebJs does not have: Node refuses the `.css` extension, Bun silently turns the import into a no-op on the server, and the browser refuses a stylesheet as a module script, so the importing module never loads. The same refusal runs at load time. Load a stylesheet with `<link rel="stylesheet" href="...">` in the root layout (the scaffold links its Tailwind output this way), or scope CSS to a component with `static styles = css` and `static shadow = true`.',
   },
   {
+    name: 'no-public-route-conflict',
+    description:
+      'Files in `public/` are served at the URL ROOT, as in Next.js (`public/logo.png` is `/logo.png`; there is no `/public/` prefix), and before every route, so a public file wins over a dynamic route. A public file at the same URL as a static page, a `route.{js,ts}` handler, or a metadata route (`public/robots.txt` beside `app/robots.ts`) would make one of them unreachable, so it is flagged here and refused at production boot. Rename or move one side.',
+  },
+  {
     name: 'no-page-route-conflict',
     description:
       'A `page.{js,ts}` and a `route.{js,ts}` must not answer the same URL (including through a route group, `app/(a)/x/page.ts` beside `app/x/route.ts`). Next.js refuses this at build time; WebJs refuses to boot in production and answers every dev request with the problem, because the route handler would shadow the page and it could never render. Move the route handler to its own folder (`app/api/...`) or delete the page.',

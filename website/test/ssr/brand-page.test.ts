@@ -28,7 +28,7 @@ test('/brand renders its sections', async () => {
 
 test('every asset /brand offers for download exists and is path-weight', async () => {
   const html = await renderToString(BrandPage());
-  const files = [...new Set([...html.matchAll(/\/public\/brand\/([a-z0-9.-]+\.(?:svg|zip))/g)].map((m) => m[1]))];
+  const files = [...new Set([...html.matchAll(/\/brand\/([a-z0-9.-]+\.(?:svg|zip))/g)].map((m) => m[1]))];
   assert.ok(files.length >= 5, `expected the asset set, saw ${files.length}`);
   for (const f of files) {
     const p = resolve(ROOT, 'public/brand', f);

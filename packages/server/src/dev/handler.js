@@ -31,6 +31,7 @@ import { validateAppLayout, AppLayoutError, cssImportProblems } from '../app-lay
 import { applyPendingCookies } from '../cookie-store.js';
 import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
 import { loadEnvFiles, envMode } from '../env-files.js';
+import { buildPublicIndex } from '../public-files.js';
 import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
@@ -359,7 +360,7 @@ export async function createRequestHandler(opts) {
 
   // Install the resolver behind the isomorphic `asset()` helper (#1194), the
   // same provider seam `cspNonce()` uses. An author writes
-  // `href=${asset('/public/app.css')}` and gets the fingerprinted url on the
+  // `href=${asset('/app.css')}` and gets the fingerprinted url on the
   // server; the browser has no provider and returns the path unchanged.
   //
   // The `public/` gate is defensive rather than decorative. `resolveUrlToFile`
@@ -457,8 +458,10 @@ export async function createRequestHandler(opts) {
   // at one URL, ...) refuses to boot in production, as Next refuses to build.
   // Dev keeps serving so an edit can fix it: ensureReady re-checks on every
   // rebuild and answers each request with the problem until then.
+  // Every file under public/, by the root url it is served at (public-files.js).
+  const publicFiles = buildPublicIndex(appDir);
   if (!dev) {
-    const problems = validateAppLayout(appDir, routeTable);
+    const problems = validateAppLayout(appDir, routeTable, publicFiles);
     if (problems.length) throw new AppLayoutError(problems);
     // Both a middleware.* and a proxy.* at the root: also refused at boot.
     await findRootMiddleware(appDir);
@@ -534,6 +537,7 @@ export async function createRequestHandler(opts) {
 
   const state = {
     routeTable,
+    publicFiles,
     actionIndex: null,
     middleware: null,
     bodyLimits,
@@ -712,7 +716,7 @@ export async function createRequestHandler(opts) {
         const now = () => performance.now();
         try {
           if (!analysisDone) {
-            const layoutProblems = validateAppLayout(appDir, state.routeTable);
+            const layoutProblems = validateAppLayout(appDir, state.routeTable, state.publicFiles);
             if (layoutProblems.length) throw new AppLayoutError(layoutProblems);
             let m = now();
             state.moduleGraph = await buildModuleGraph(appDir);
@@ -1075,6 +1079,7 @@ export async function createRequestHandler(opts) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
+    state.publicFiles = buildPublicIndex(appDir);
     // Adding or deleting app/icon.* changes whether the head auto-links it.
     setMetadataIconRoutes(state.routeTable.metadataRoutes);
     // Refresh the generated route types (#258) so adding/removing a route file
@@ -1456,7 +1461,7 @@ export async function createRequestHandler(opts) {
       // Default `'ignore'` is a no-op. The root `/` and file paths are
       // exempt; `/__webjs/*` is exempt too (defense in depth, the redirects
       // above already skip it). The funnel in handle() still wraps this.
-      const canonical = applyTrailingSlash(req, trailingSlashPolicy);
+      const canonical = applyTrailingSlash(req, trailingSlashPolicy, (p) => !!state.publicFiles && state.publicFiles.has(p));
       if (canonical) return canonical;
     }
 
@@ -1549,20 +1554,20 @@ export async function createRequestHandler(opts) {
     const earlyStatic = await tryServeFrameworkStatic(path, req.method.toUpperCase(), { coreDir, appDir, dev, versioned: url.searchParams.has('v') });
     if (earlyStatic) return earlyStatic;
 
-    // `/public/*` needs neither the module graph nor the vendor importmap, so
+    // A `public/` file (served at the url root) needs neither the module graph nor the vendor importmap, so
     // in DEV serve it here rather than behind the analysis (#1397). A cold
-    // `/public/tailwind.css` measured 1907ms at 4a335549, of which 1900ms was
+    // `/tailwind.css` measured 1907ms at 4a335549, of which 1900ms was
     // `ensureReady()`, which is why the stylesheet is the request most exposed
     // to the next `node --watch` restart. DEV ONLY on purpose: in prod
     // `/__webjs/ready` already holds traffic off a cold instance until the
     // analysis and the first vendor attempt have both completed, and hoisting
-    // there would silently un-gate a `/public/*` file that an app middleware
+    // there would silently un-gate a public file that an app middleware
     // protects. The consequence in dev is that root middleware does not run
     // for these paths, the same trade the framework statics above already make
     // in both modes. `state.regenerateRules` is loaded at boot inside
     // createRequestHandler, so the #967 on-request rebuild is available here,
     // ahead of ensureReady.
-    if (dev) {
+    if (dev && req.method === 'GET') {
       const publicResp = await tryServePublicAsset(path, {
         appDir, dev, versioned: url.searchParams.has('v'), regenerateRules: state.regenerateRules,
       });

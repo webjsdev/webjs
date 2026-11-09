@@ -24,8 +24,8 @@ import { html, asset } from '@webjsdev/core';
 // page or layout into the browser bundle. Hoisting the constant here would
 // therefore ship this module and its importer for no benefit. Calling inside
 // the template keeps the module inert and costs a memoized lookup.
-const LOCKUP_DARK = '/public/brand/webjs-lockup-on-dark.svg';
-const LOCKUP_LIGHT = '/public/brand/webjs-lockup-on-light.svg';
+const LOCKUP_DARK = '/brand/webjs-lockup-on-dark.svg';
+const LOCKUP_LIGHT = '/brand/webjs-lockup-on-light.svg';
 
 /** Intrinsic aspect of the lockup files (722 x 190). */
 const RATIO = 722 / 190;
@@ -57,14 +57,14 @@ export function brandLockup(_id: string, opts: { height?: number } = {}) {
  *
  * `height` drives the box, width follows the ratio, the same as the lockup.
  * For a square placement that needs its own background (favicon, avatar, app
- * icon) use the tiled file at /public/brand/webjs-monogram.svg instead.
+ * icon) use the tiled file at /brand/webjs-monogram.svg instead.
  */
 export function brandMark(_id: string, opts: { height?: number } = {}) {
   const h = opts.height ?? 24;
   return html`
     <span class="inline-flex items-center" style="height:${h}px">
-      <img src=${asset('/public/brand/webjs-mark-on-dark.svg')} alt="WebJs" class="block w-auto hidden dark:block" style="height:${h}px" />
-      <img src=${asset('/public/brand/webjs-mark-on-light.svg')} alt="WebJs" class="block w-auto dark:hidden" style="height:${h}px" />
+      <img src=${asset('/brand/webjs-mark-on-dark.svg')} alt="WebJs" class="block w-auto hidden dark:block" style="height:${h}px" />
+      <img src=${asset('/brand/webjs-mark-on-light.svg')} alt="WebJs" class="block w-auto dark:hidden" style="height:${h}px" />
     </span>
   `;
 }

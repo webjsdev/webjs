@@ -89,7 +89,7 @@ test('why metadata is self-consistent and points at the dedicated /why-webjs soc
   assert.equal(m.openGraph.description, m.description, 'og:description matches the meta description');
   assert.equal(m.twitter.description, m.description, 'twitter:description matches the meta description');
   assert.equal(m.openGraph.url, 'https://webjs.dev/why-webjs', 'og:url is the canonical /why-webjs URL');
-  assert.match(m.openGraph.image, /\/public\/og-why\.png$/, 'og:image is the dedicated /why card');
+  assert.match(m.openGraph.image, /\/og-why\.png$/, 'og:image is the dedicated /why card');
   assert.equal(m.twitter.image, m.openGraph.image, 'twitter image matches the og image');
 });
 

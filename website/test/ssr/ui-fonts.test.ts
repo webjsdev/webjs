@@ -81,7 +81,7 @@ test('the configurator preview declares the two faces only it offers', () => {
   assert.match(css, /font-family:'EB Garamond';font-style:normal;font-weight:400 800;[^}]*eb-garamond\.woff2/);
   assert.match(css, /font-family:'Instrument Serif';font-style:normal;font-weight:400;[^}]*instrument-serif\.woff2/);
   const page = readFileSync(resolve(ROOT, 'app/ui/preview/[name]/page.ts'), 'utf8');
-  assert.match(page, /asset\('\/public\/create-fonts\.css'\)/, 'the preview frame links them');
+  assert.match(page, /asset\('\/create-fonts\.css'\)/, 'the preview frame links them');
   const typeset = readFileSync(resolve(ROOT, 'public/typeset-fonts.css'), 'utf8');
   assert.doesNotMatch(typeset, /EB Garamond|Instrument Serif/, 'and the typeset faces stay as they were');
 });

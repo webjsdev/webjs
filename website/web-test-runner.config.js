@@ -40,6 +40,29 @@ function stripTypesPlugin() {
 }
 
 import { createServer as createPortProbe } from 'node:net';
+import { statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+
+const PUBLIC_DIR = fileURLToPath(new URL('./public/', import.meta.url));
+
+/**
+ * Serve `public/` at the url root, as the WebJs server does (Next.js parity):
+ * a request for `/ui-styles/nova.css` is answered from
+ * `public/ui-styles/nova.css`. The test server's own root is the app dir, so
+ * without this the pages under test would 404 their stylesheets and scripts.
+ * @returns {(ctx: any, next: () => Promise<unknown>) => Promise<unknown>}
+ */
+function publicAtRoot() {
+  return (ctx, next) => {
+    let p = ctx.path;
+    try { p = decodeURIComponent(p); } catch { /* keep raw */ }
+    if (p !== '/' && !p.includes('..')) {
+      try { if (statSync(join(PUBLIC_DIR, p)).isFile()) ctx.url = '/public' + ctx.url; } catch { /* not a public file */ }
+    }
+    return next();
+  };
+}
 
 /**
  * A kernel-assigned free port for this run's dev server (#1593).
@@ -66,6 +89,7 @@ export default {
   files: ['test/**/browser/**/*.test.js'],
   nodeResolve: true,
   plugins: [stripTypesPlugin()],
+  middleware: [publicAtRoot()],
   // Playwright launches headless browsers with `--hide-scrollbars`, which makes
   // every scrollbar zero-width. That hides a whole class of real layout bug:
   // #1147 (the docs drawer's scroll lock shifting the fixed site header) only

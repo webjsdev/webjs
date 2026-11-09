@@ -30,7 +30,7 @@ const data: {
   user: {
     name: 'vivek',
     email: 'vivek@example.com',
-    avatar: 'https://webjs.dev/public/avatars/vivek.jpg',
+    avatar: 'https://webjs.dev/avatars/vivek.jpg',
   },
   teams: [
     { name: 'Acme Inc', logo: GalleryVerticalEndIcon, plan: 'Enterprise' },

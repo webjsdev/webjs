@@ -135,9 +135,10 @@ export function readTrailingSlashPolicy(pkg) {
  *
  * @param {Request} req
  * @param {'never' | 'always' | 'ignore'} policy
+ * @param {(path: string) => boolean} [isPublicFile] a url that is a `public/` file is left alone
  * @returns {Response | null}
  */
-export function applyTrailingSlash(req, policy) {
+export function applyTrailingSlash(req, policy, isPublicFile) {
   if (policy !== 'never' && policy !== 'always') return null;
   let url;
   try {
@@ -153,6 +154,13 @@ export function applyTrailingSlash(req, policy) {
   // `//host`): canonicalizing it would emit a protocol-relative, cross-origin
   // Location (an open redirect). Let the router handle the weird path instead.
   if (!isSameOriginPath(path)) return null;
+  // A `public/` file is served at exactly its own url (a file is a leaf, even
+  // one with no extension such as `/LICENSE`), so it is never canonicalized.
+  if (typeof isPublicFile === 'function') {
+    let decoded = path;
+    try { decoded = decodeURIComponent(path); } catch { /* keep raw */ }
+    if (isPublicFile(decoded)) return null;
+  }
 
   /** @type {string | null} */
   let canonical = null;

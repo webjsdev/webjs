@@ -36,7 +36,7 @@ const GROUPS = [
 
 // What the frame holds: the design-system wrapper with an open menu surface,
 // and the preview page's own menu script.
-const FRAME = '<div data-slot="design-system" class="style-nova"><div data-slot="dropdown-menu-content">menu</div><span data-design-system-text="style">Nova</span><span data-design-system-text="font">Inter</span></div><script src="/public/ui-menu-color.js"></script>';
+const FRAME = '<div data-slot="design-system" class="style-nova"><div data-slot="dropdown-menu-content">menu</div><span data-design-system-text="style">Nova</span><span data-design-system-text="font">Inter</span></div><script src="/ui-menu-color.js"></script>';
 
 const mount = async (config = normalizeConfig({}), { welcome = false } = {}) => {
   try {

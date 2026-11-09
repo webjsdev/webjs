@@ -50,8 +50,8 @@ const FILES = {
   'app/layout.ts': `
 import { html, asset } from '@webjsdev/core';
 export default ({ children }) => html\`<!doctype html><html><head>
-<link rel="stylesheet" href=\${asset('/public/app.css')}>
-<link rel="preload" href="/public/app.css" as="style">
+<link rel="stylesheet" href=\${asset('/app.css')}>
+<link rel="preload" href="/app.css" as="style">
 </head><body>\${children}</body></html>\`;
 `,
   'app/page.ts': `import { html } from '@webjsdev/core';\nexport default () => html\`<main>hi</main>\`;`,
@@ -67,14 +67,14 @@ test('a prod handler renders asset() fingerprinted and serves it immutable', asy
   assert.equal(page.status, 200);
   const html = await page.text();
 
-  const m = html.match(/<link rel="stylesheet" href="(\/public\/app\.css\?v=[0-9a-f]+)"/);
+  const m = html.match(/<link rel="stylesheet" href="(\/app\.css\?v=[0-9a-f]+)"/);
   assert.ok(m, `the marked url should carry ?v=, got:\n${html.slice(0, 400)}`);
 
   // The UNMARKED preload is untouched. This is the property the previous
   // design (#1196) could not hold: it rewrote every asset-looking url in the
   // document, which desynced font preloads from the `@font-face url()` that
   // actually fetches them. Opt-in means the author decides per url.
-  assert.match(html, /<link rel="preload" href="\/public\/app\.css" as="style">/);
+  assert.match(html, /<link rel="preload" href="\/app\.css" as="style">/);
 
   // And the emitted url is really servable, with the caching that is the
   // whole point: a hashed url is immutable for a year, a bare one is not.
@@ -82,7 +82,7 @@ test('a prod handler renders asset() fingerprinted and serves it immutable', asy
   assert.equal(hashed.status, 200);
   assert.match(hashed.headers.get('cache-control') || '', /immutable/);
 
-  const bare = await app.handle(new Request('http://x/public/app.css'));
+  const bare = await app.handle(new Request('http://x/app.css'));
   assert.equal(bare.status, 200);
   assert.doesNotMatch(bare.headers.get('cache-control') || '', /immutable/);
 });
@@ -94,6 +94,6 @@ test('a dev handler leaves asset() urls untouched', async () => {
   const appDir = makeApp(FILES);
   const app = await createRequestHandler({ appDir, dev: true });
   const html = await (await app.handle(new Request('http://x/'))).text();
-  assert.match(html, /<link rel="stylesheet" href="\/public\/app\.css">/);
+  assert.match(html, /<link rel="stylesheet" href="\/app\.css">/);
   assert.doesNotMatch(html, /\?v=/);
 });

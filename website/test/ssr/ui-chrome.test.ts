@@ -167,11 +167,11 @@ test('the card grid has all five of shadcn\'s columns', async () => {
 test('below md the home page shows a picture of the grid instead of the grid', async () => {
   const html = await page('/ui');
   assert.match(html, /<section class="-mx-4 w-\[140vw\] overflow-hidden md:hidden">/);
-  assert.match(html, /<img src="\/public\/images\/home-cards-light\.png[^"]*"[^>]*class="block h-auto w-full dark:hidden"/);
-  assert.match(html, /<img src="\/public\/images\/home-cards-dark\.png[^"]*"[^>]*class="hidden h-auto w-full dark:block"/);
+  assert.match(html, /<img src="\/images\/home-cards-light\.png[^"]*"[^>]*class="block h-auto w-full dark:hidden"/);
+  assert.match(html, /<img src="\/images\/home-cards-dark\.png[^"]*"[^>]*class="hidden h-auto w-full dark:block"/);
   assert.match(html, /<section class="style-rhea hidden md:block">/);
   for (const theme of ['light', 'dark']) {
-    const res = await handle(`/public/images/home-cards-${theme}.png`);
+    const res = await handle(`/images/home-cards-${theme}.png`);
     assert.equal(res.status, 200, `the ${theme} picture is served`);
   }
 });

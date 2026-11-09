@@ -57,7 +57,7 @@ function userNav() {
     <ui-dropdown-menu-trigger>
       <button type="button" class=${cn(buttonClass({ variant: 'ghost' }), 'relative h-8 w-8 rounded-full')} aria-label="Account">
         <span data-slot="avatar" class=${cn(avatarClass(), 'h-9 w-9')}>
-          <img data-slot="avatar-image" class=${avatarImageClass()} src="/public/avatars/vivek.jpg" alt="@vivek">
+          <img data-slot="avatar-image" class=${avatarImageClass()} src="/avatars/vivek.jpg" alt="@vivek">
           <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>VK</span>
         </span>
       </button>

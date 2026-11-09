@@ -57,7 +57,7 @@ test('ui.css carries no kit style; each is its own sheet', async () => {
   // and the docs render included, and the configurator links only those.
   const { STYLE_NAMES } = await import('../../scripts/scope-ui-styles.mjs');
   for (const name of ['new-york', 'nova']) assert.ok(STYLE_NAMES.includes(name), `the build compiles ${name}`);
-  assert.equal(styleSheetHref('nova'), '/public/ui-styles/nova.css');
+  assert.equal(styleSheetHref('nova'), '/ui-styles/nova.css');
   assert.equal(styleSheetHref('not-a-style'), null, 'a name nothing builds gets no sheet');
 });
 
@@ -110,7 +110,7 @@ function wrappers(html: string): Set<string> {
 
 /** The kit styles a chunk of markup links. */
 function linked(html: string): Set<string> {
-  return new Set([...html.matchAll(/<link rel="stylesheet" href="\/public\/ui-styles\/([a-z-]+)\.css/g)].map((m) => m[1]));
+  return new Set([...html.matchAll(/<link rel="stylesheet" href="\/ui-styles\/([a-z-]+)\.css/g)].map((m) => m[1]));
 }
 
 /**
@@ -145,14 +145,14 @@ test('every /ui page and frame links the sheet of every style it renders', async
       // so a soft navigation's response carries them in <head> too and the
       // router switches them off when that boundary is replaced (#1669).
       if (!head.has(style)) problems.push(`${path}: renders .style-${style} and has no ${style}.css in <head>`);
-      else if (!new RegExp(`href="/public/ui-styles/${style}\\.css[^"]*"[^>]*data-wj-style-owner=`).test(html.slice(0, split))) {
+      else if (!new RegExp(`href="/ui-styles/${style}\\.css[^"]*"[^>]*data-wj-style-owner=`).test(html.slice(0, split))) {
         problems.push(`${path}: ${style}.css is in <head> with no owner, so it would outlive the page`);
       }
     }
     // Every copy of a sheet is matched again, so each is linked once, and a
     // link left in the body was not hoisted (it did not lead its template).
     for (const style of linked(body)) problems.push(`${path}: links ${style}.css in its body`);
-    for (const m of html.slice(0, split).matchAll(/href="(\/public\/[^"?]+\.css)/g)) {
+    for (const m of html.slice(0, split).matchAll(/href="(\/[^"?]+\.css)/g)) {
       if (html.slice(0, split).split(`href="${m[1]}`).length > 2) problems.push(`${path}: links ${m[1]} twice`);
     }
     // A frame is a page of its own, so it links only what it renders.

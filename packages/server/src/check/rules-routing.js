@@ -12,6 +12,7 @@ import {
 import { buildRouteTable } from '../router.js';
 import { maskComments } from '../js-scan.js';
 import { validateAppLayout } from '../app-layout.js';
+import { buildPublicIndex } from '../public-files.js';
 import { findJsxIsm } from '@webjsdev/core/server';
 import { htmlTemplateStrings } from '../dev-source-locations.js';
 
@@ -56,7 +57,7 @@ export function checkNoJsxAttributes(files, violations) {
 export async function checkAppLayout(appDir, violations) {
   let table;
   try { table = await buildRouteTable(appDir); } catch { return; }
-  for (const p of validateAppLayout(appDir, table)) violations.push(p);
+  for (const p of validateAppLayout(appDir, table, buildPublicIndex(appDir))) violations.push(p);
 }
 
 /**

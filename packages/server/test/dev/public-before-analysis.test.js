@@ -4,7 +4,7 @@
  *
  * A static asset needs neither the module graph nor the vendor importmap, but
  * it used to be handled inside `handleCore`, which runs after the whole-app
- * analysis. On the website app a cold `/public/tailwind.css` measured 1907ms,
+ * analysis. On the website app a cold `/tailwind.css` measured 1907ms,
  * of which 1900ms was `ensureReady()`, which is why the stylesheet is the
  * request most exposed to the next `node --watch` restart and why a burst of
  * agent edits leaves the page unstyled.
@@ -89,7 +89,7 @@ test('dev serves /public/* before the analysis completes', async () => {
   const app = await createRequestHandler({ appDir: makeApp({ slowMiddleware: true }), dev: true });
   /** @type {string[]} */
   const order = [];
-  const publicP = app.handle(new Request('http://x/public/a.css')).then((r) => { order.push('public'); return r; });
+  const publicP = app.handle(new Request('http://x/a.css')).then((r) => { order.push('public'); return r; });
   const warmP = app.warmup().then(() => { order.push('warm'); });
   const [res] = await Promise.all([publicP, warmP]);
   assert.deepEqual(order, ['public', 'warm'], 'the CSS lands before the analysis finishes');
@@ -102,12 +102,12 @@ test('dev serves /public/* before the analysis completes', async () => {
 // in both modes); silently extending it to prod would un-gate a protected asset.
 test('root middleware does not run for /public/* in dev, and does in prod', async () => {
   const devApp = await createRequestHandler({ appDir: makeApp({ slowMiddleware: true }), dev: true });
-  const devRes = await devApp.handle(new Request('http://x/public/a.css'));
+  const devRes = await devApp.handle(new Request('http://x/a.css'));
   assert.equal(devRes.status, 200);
   assert.equal(devRes.headers.get('x-mw'), null, 'dev takes the early path, ahead of middleware');
 
   const prodApp = await createRequestHandler({ appDir: makeApp({ slowMiddleware: true }), dev: false });
-  const prodRes = await prodApp.handle(new Request('http://x/public/a.css'));
+  const prodRes = await prodApp.handle(new Request('http://x/a.css'));
   assert.equal(prodRes.status, 200);
   assert.equal(prodRes.headers.get('x-mw'), '1', 'prod still runs root middleware for a public asset');
 });
@@ -118,7 +118,7 @@ test('root middleware does not run for /public/* in dev, and does in prod', asyn
 //
 // The vector has to use an encoded SLASH (`..%2F`), not encoded dots. The
 // WHATWG URL parser decodes `%2E%2E` to `..` and then normalises the dot
-// segment away, so `/public/%2E%2E/secret.txt` arrives as `/secret.txt` and
+// segment away, so `/%2E%2E/secret.txt` arrives as `/secret.txt` and
 // never enters the public branch at all: asserting on it would pass with the
 // guard removed, which is a test that observes nothing. `..%2F` survives
 // parsing intact, so the branch is entered with a path that `join` then
@@ -127,7 +127,7 @@ test('the traversal guard travels with the moved code (dev early path)', async (
   const appDir = makeApp();
   writeFileSync(join(appDir, 'secret.txt'), 'nope\n');
   const app = await createRequestHandler({ appDir, dev: true });
-  const res = await app.handle(new Request('http://x/public/..%2Fsecret.txt'));
+  const res = await app.handle(new Request('http://x/..%2Fsecret.txt'));
   assert.equal(res.status, 404, 'a path that escapes appDir/public/ is refused');
   assert.notEqual(await res.text(), 'nope\n');
 });
@@ -136,7 +136,7 @@ test('the traversal guard travels with the moved code (dev early path)', async (
 // it 404s through normal routing exactly as it did before the extraction.
 test('a missing /public/* file still falls through to normal routing', async () => {
   const app = await createRequestHandler({ appDir: makeApp(), dev: true });
-  const res = await app.handle(new Request('http://x/public/nope.png'));
+  const res = await app.handle(new Request('http://x/nope.png'));
   assert.equal(res.status, 404);
 });
 
@@ -155,7 +155,7 @@ test('/sw.js and /offline.html still serve at the root through the early path', 
 // before it is served, on the early path too.
 test('a stale webjs.dev.regenerate output is rebuilt before serving on the early path', async () => {
   const app = await createRequestHandler({ appDir: makeApp({ regenerate: true }), dev: true });
-  const res = await app.handle(new Request('http://x/public/gen.css'));
+  const res = await app.handle(new Request('http://x/gen.css'));
   assert.equal(res.status, 200);
   assert.equal(await res.text(), 'body{color:lime}', 'the stale output was regenerated, not served as-is');
 });
@@ -169,16 +169,16 @@ test('a stale webjs.dev.regenerate output is rebuilt before serving on the early
 // drop the fingerprint handling on the call site that still serves it.
 test('?v= still yields immutable through the extracted serve (prod), un-versioned keeps the 1h fallback', async () => {
   const app = await createRequestHandler({ appDir: makeApp(), dev: false });
-  const versioned = await app.handle(new Request('http://x/public/a.css?v=abc123'));
+  const versioned = await app.handle(new Request('http://x/a.css?v=abc123'));
   assert.match(versioned.headers.get('cache-control') || '', /immutable/, 'content-addressed is immutable');
-  const plain = await app.handle(new Request('http://x/public/a.css'));
+  const plain = await app.handle(new Request('http://x/a.css'));
   assert.doesNotMatch(plain.headers.get('cache-control') || '', /immutable/, 'un-fingerprinted is not');
 
   // The dev half of the same concern, which IS on the early path: a `?v=`
   // request still resolves and serves rather than falling through, even though
   // the header it earns in dev is `no-cache` either way.
   const devApp = await createRequestHandler({ appDir: makeApp(), dev: true });
-  const devVersioned = await devApp.handle(new Request('http://x/public/a.css?v=abc123'));
+  const devVersioned = await devApp.handle(new Request('http://x/a.css?v=abc123'));
   assert.equal(devVersioned.status, 200, 'a fingerprinted asset still serves on the dev early path');
   assert.equal(await devVersioned.text(), 'body{color:red}\n');
 });

@@ -16,7 +16,7 @@ const assert = {
 suite('composite parts outrank the part they compose over', () => {
   suiteSetup(async () => {
     // ui.css and the two styles the tests render, as a /ui page links them.
-    for (const href of ['/public/ui.css', '/public/ui-styles/nova.css', '/public/ui-styles/new-york.css']) {
+    for (const href of ['/ui.css', '/ui-styles/nova.css', '/ui-styles/new-york.css']) {
       if (document.querySelector(`link[href="${href}"]`)) continue;
       const link = document.createElement('link');
       link.rel = 'stylesheet';

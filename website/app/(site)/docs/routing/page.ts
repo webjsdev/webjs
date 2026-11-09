@@ -698,7 +698,7 @@ export default function Loading() {
     <h2>Route Resolution Order</h2>
     <p>When a request arrives, WebJs resolves it in this order:</p>
     <ol>
-      <li><strong>Static file</strong>: if a file exists in the project's public/static directory, it is served directly.</li>
+      <li><strong>Static file</strong>: a file in <code>public/</code> is served at the url root, as in Next.js: <code>public/logo.png</code> is <code>/logo.png</code>, and there is no <code>/public/</code> prefix. A public file wins over a <em>dynamic</em> route at the same url; one at the same url as a static page, a <code>route.ts</code> or a metadata route is an error (<code>no-public-route-conflict</code>: <code>webjs check</code> reports it and production refuses to start), since one would hide the other.</li>
       <li><strong>API route</strong>: <code>route.ts</code> handlers are matched against the URL by the same positional specificity as pages (below), so <code>api/auth/callback/github/route.ts</code> answers before <code>api/auth/[...path]/route.ts</code>. WebSocket upgrades also match here.</li>
       <li><strong>Page route</strong>: <code>page.ts</code> files are matched by positional specificity (segment by segment, a static segment beats a dynamic one beats a catch-all, so the catch-all kind is lowest at its position rather than blanket-last), with ties broken by a stable alphabetical key rather than file order.</li>
       <li><strong>Not found</strong>: if nothing matches, <code>not-found.ts</code> is rendered with a <code>404</code> status.</li>

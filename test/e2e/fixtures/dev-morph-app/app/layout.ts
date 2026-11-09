@@ -23,7 +23,7 @@ import '#components/counter.ts';
 export default function RootLayout({ children }: LayoutProps) {
   return html`
     <script>window.__docToken = window.__docToken || String(Math.random());</script>
-    <link rel="stylesheet" href="/public/app.css">
+    <link rel="stylesheet" href="/app.css">
     <header id="layout-marker">LAYOUT_A</header>
     <morph-counter></morph-counter>
     <main>${children}</main>

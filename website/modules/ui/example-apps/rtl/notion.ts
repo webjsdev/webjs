@@ -32,7 +32,7 @@ export function notionPromptForm(lang: RtlLang) {
     [s.technicalSpecs, '🔧'], [s.analyticsReport, '📈'],
   ].map(([title, image]) => ({ title, icon: html`<span class="flex size-4 items-center justify-center">${image}</span>` }));
   const users = [
-    { title: 'vivek', src: '/public/avatars/vivek.jpg' },
+    { title: 'vivek', src: '/avatars/vivek.jpg' },
     ...['maxleiter', 'evilrabbit'].map((name) => ({ title: name, src: `https://github.com/${name}.png` })),
   ];
   const mentionable = [...pages, ...users.map((u) => ({ title: u.title, icon: tinyAvatar(u.src, u.title) }))];
@@ -116,7 +116,7 @@ export function notionPromptForm(lang: RtlLang) {
                   </ui-dropdown-menu-item>
                   <ui-dropdown-menu-item>${IconCircleDashedPlus()} ${s.allSourcesAccess}</ui-dropdown-menu-item>
                   <ui-dropdown-menu-sub>
-                    <ui-dropdown-menu-sub-trigger>${tinyAvatar('/public/avatars/vivek.jpg', 'vivek')} vivek</ui-dropdown-menu-sub-trigger>
+                    <ui-dropdown-menu-sub-trigger>${tinyAvatar('/avatars/vivek.jpg', 'vivek')} vivek</ui-dropdown-menu-sub-trigger>
                     <ui-dropdown-menu-sub-content side="left" class="w-72 rounded-lg p-0">
                       <ui-command label=${s.findKnowledge}>
                         <ui-command-input placeholder=${s.findKnowledge}></ui-command-input>

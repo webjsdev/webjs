@@ -414,13 +414,13 @@ test('handle: /public/* serves static files with MIME', async () => {
     'public/hello.txt': 'hello world',
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/public/hello.txt'));
+  const resp = await app.handle(new Request('http://x/hello.txt'));
   assert.equal(resp.status, 200);
   assert.ok(resp.headers.get('content-type').includes('text/plain'));
   assert.equal(await resp.text(), 'hello world');
 });
 
-test('handle: /favicon.ico is aliased to /public/favicon.ico', async () => {
+test('handle: /favicon.ico is aliased to /favicon.ico', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'public/favicon.ico': 'X',
@@ -530,7 +530,7 @@ test('handle: prod responses on user source include ETag + max-age', async () =>
     'public/hello.txt': 'hello',
   });
   const app = await createRequestHandler({ appDir, dev: false });
-  const resp = await app.handle(new Request('http://x/public/hello.txt'));
+  const resp = await app.handle(new Request('http://x/hello.txt'));
   assert.equal(resp.status, 200);
   const etag = resp.headers.get('etag');
   // The ETag is WEAK (W/"..."): it is computed over the uncompressed body and
@@ -1188,7 +1188,7 @@ test('startServer: non-text content-type is NOT compressed even with gzip offere
   const { server, close } = await startServer({ appDir, dev: false, port: 0, logger, compress: true });
   try {
     const addr = server.address();
-    const resp = await fetch(`http://127.0.0.1:${addr.port}/public/logo.png`, {
+    const resp = await fetch(`http://127.0.0.1:${addr.port}/logo.png`, {
       headers: { 'accept-encoding': 'gzip' },
     });
     assert.equal(resp.status, 200);
@@ -1276,7 +1276,7 @@ test('handle: fileResponse 404 for a deleted file inside /public', async () => {
     'public/real.txt': 'hi',
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/public/gone.txt'));
+  const resp = await app.handle(new Request('http://x/gone.txt'));
   assert.equal(resp.status, 404);
 });
 
@@ -1535,13 +1535,13 @@ test('fileResponse prod: ETag is a WEAK 16-char SHA-1 hex digest in quotes', asy
     'public/static.txt': 'fixed body for etag check',
   });
   const app = await createRequestHandler({ appDir, dev: false });
-  const resp = await app.handle(new Request('http://x/public/static.txt'));
+  const resp = await app.handle(new Request('http://x/static.txt'));
   assert.equal(resp.status, 200);
   const etag = resp.headers.get('etag');
   assert.match(etag, /^W\/"[0-9a-f]{16}"$/,
     `ETag must be a weak 16-char hex slice in quotes; got ${etag}`);
   // Second request must produce identical ETag (stable hash).
-  const resp2 = await app.handle(new Request('http://x/public/static.txt'));
+  const resp2 = await app.handle(new Request('http://x/static.txt'));
   assert.equal(resp2.headers.get('etag'), etag, 'ETag must be stable across requests');
 });
 

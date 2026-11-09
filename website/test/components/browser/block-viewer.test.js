@@ -79,7 +79,7 @@ suite('block viewer', () => {
     if (!document.querySelector('link[data-test-ui-css]')) {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
-      link.href = '/public/ui.css';
+      link.href = '/ui.css';
       link.dataset.testUiCss = '';
       const loaded = new Promise((resolve, reject) => { link.onload = resolve; link.onerror = reject; });
       document.head.appendChild(link);

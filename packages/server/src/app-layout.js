@@ -44,11 +44,37 @@ function rel(appDir, file) {
  *
  * @param {string} appDir
  * @param {import('./router.js').RouteTable} table
+ * @param {Set<string>} [publicFiles] url paths of the files under `public/`
  * @returns {LayoutProblem[]}
  */
-export function validateAppLayout(appDir, table) {
+export function validateAppLayout(appDir, table, publicFiles) {
   /** @type {LayoutProblem[]} */
   const problems = [];
+
+  // A public file at the url of a static page, a route handler or a metadata
+  // route: one would silently shadow the other (public files are served
+  // before routes, as in Next, which refuses the same conflict). A DYNAMIC
+  // route is not a conflict: the public file simply wins for its one url.
+  if (publicFiles && publicFiles.size) {
+    const staticOwner = new Map();
+    for (const r of [...(table.pages || []), ...(table.apis || [])]) {
+      if (r.paramNames && r.paramNames.length) continue;
+      const dir = /** @type {any} */ (r).routeDir;
+      const url = '/' + (dir === '.' ? '' : dir.split('/').filter((s) => !(s.startsWith('(') && s.endsWith(')'))).join('/'));
+      staticOwner.set(url, r.file);
+    }
+    for (const m of table.metadataRoutes || []) staticOwner.set(m.urlPath, m.file);
+    for (const url of publicFiles) {
+      const owner = staticOwner.get(url);
+      if (!owner) continue;
+      problems.push({
+        rule: 'no-public-route-conflict',
+        file: `public${url}`,
+        message: `public${url} is served at ${url}, the same url as ${rel(appDir, owner)}, so one of them can never be reached.`,
+        fix: `Rename or move one of them: public files are served at the url root (public/logo.png is /logo.png), before every route.`,
+      });
+    }
+  }
 
   // A page and a route handler answering the same URL. Next refuses this
   // ("Conflicting route and page"); WebJs used to let the route handler win

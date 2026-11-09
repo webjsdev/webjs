@@ -137,7 +137,7 @@ for (const fam of wanted) {
   console.log(`saved ${file} (${(bytes.length / 1024).toFixed(1)} KB, weight ${latin.weight})`);
   const face =
     `@font-face{font-family:'${fam.face ?? fam.name}';font-style:normal;font-weight:${latin.weight};font-display:swap;` +
-    `src:url('/public/fonts/${file}') format('woff2');}`;
+    `src:url('/fonts/${file}') format('woff2');}`;
   faces.push(face);
   if (TYPESET_SLUGS.has(fam.slug)) typesetFaces.push(face);
   if (SERA_SLUGS.has(fam.slug)) seraFaces.push(face);
@@ -162,7 +162,7 @@ for (const fam of rtl ? RTL_FAMILIES : []) {
     console.log(`saved ${file} (${(bytes.length / 1024).toFixed(1)} KB, weight ${weight})`);
     rtlFaces.push(
       `@font-face{font-family:'${fam.name}';font-style:normal;font-weight:${weight};font-display:swap;` +
-      `src:url('/public/fonts/${file}') format('woff2');unicode-range:${unicode};}`,
+      `src:url('/fonts/${file}') format('woff2');unicode-range:${unicode};}`,
     );
   }
 }

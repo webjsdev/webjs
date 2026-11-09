@@ -37,6 +37,7 @@ import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './he
 import { devImport } from '../dev-import.js';
 import { runMetadataRoute } from '../metadata-routes.js';
 import { loadMiddlewareFile } from '../middleware-load.js';
+import { publicFilePath, resolvePublicFile } from '../public-files.js';
 
 /**
  * Serve framework-internal static assets that depend on NEITHER the whole-app
@@ -141,11 +142,9 @@ export async function tryServeFrameworkStatic(path, method, { coreDir, appDir, d
 }
 
 /**
- * Serve `/public/*`, plus a small set of ROOT assets that must serve at the
- * site root even though they live under public/. A service worker registered at
- * /sw.js scopes to the origin root, so it MUST serve at / (not /public/sw.js),
- * and so must its offline fallback. Same remap shape as the /favicon.ico
- * special-case. (#830)
+ * Serve a file from `public/` at the URL root (public-files.js): `public/a.css`
+ * is `/a.css`, `public/sw.js` is `/sw.js` (so a service worker scopes to the
+ * origin root, #830), `public/favicon.ico` is `/favicon.ico`.
  *
  * Extracted (#1397) so the dev pre-`ensureReady()` call site and the
  * `handleCore` one share ONE implementation, and the containment guard below
@@ -155,50 +154,38 @@ export async function tryServeFrameworkStatic(path, method, { coreDir, appDir, d
  * @param {{ appDir: string, dev: boolean, versioned?: boolean, regenerateRules: any[] }} ctx
  * @returns {Promise<Response|null>} a Response, or null when the path is not a
  *   public asset OR the file does not exist, in both of which cases the caller
- *   must fall through to the rest of the pipeline (a missing `/public/x.png`
- *   404s through normal routing today, and that must not change). A containment
- *   rejection returns a 404 Response and short-circuits.
+ *   must fall through to the rest of the pipeline (a missing `/x.png`
+ *   404s through normal routing). A path that escapes `public/` is simply not
+ *   a public file and falls through the same way.
  */
 export async function tryServePublicAsset(path, ctx) {
-  const { appDir, dev, versioned, regenerateRules } = ctx;
-  const ROOT_ASSETS = { '/sw.js': '/public/sw.js', '/offline.html': '/public/offline.html' };
-  if (!(path.startsWith('/public/') || path === '/favicon.ico' || path in ROOT_ASSETS)) return null;
-  const p = path === '/favicon.ico' ? '/public/favicon.ico' : (ROOT_ASSETS[path] || path);
-  const abs = join(appDir, p);
-  // Containment check. `join` normalises `..` segments, so a path
-  // like `/public/..%2Fsecret/x.svg` decodes to `/public/../secret/
-  // x.svg` and `join(appDir, ...)` resolves it to `appDir/secret/
-  // x.svg`. The resulting `abs` could be inside `appDir` but OUTSIDE
-  // `appDir/public/`, exposing files the user reasonably thought were
-  // private under their non-public directories. Reject anything
-  // that doesn't stay under `appDir/public/` (and the favicon
-  // exception, which is already validated above).
-  // The live vector encodes the SLASH, not the dots: the WHATWG URL
-  // parser decodes `%2E%2E` and normalises the dot segment away, so a
-  // `/public/%2E%2E/x` request arrives here as plain `/x` and never
-  // enters this branch. `..%2F` survives parsing intact and does.
-  const publicRoot = join(appDir, 'public') + sep;
-  if (!abs.startsWith(publicRoot)) {
-    return new Response(null, { status: 404 });
-  }
+  const { appDir, dev, versioned, regenerateRules, publicFiles } = ctx;
+  // `public/` is served at the URL ROOT (Next.js parity): `public/logo.png`
+  // is `/logo.png`. `publicFilePath` keeps the containment guard: `join`
+  // normalises `..`, so a `/..%2Fsecret/x.svg` that survived URL parsing
+  // (the WHATWG parser normalises a decoded `%2E%2E` away, but not `..%2F`)
+  // would otherwise resolve outside `public/`. A path escaping it is not a
+  // public file and falls through to the routes.
+  if (!publicFilePath(appDir, path)) return null;
   // On-request regeneration (#967): in dev, if a `webjs.dev.regenerate` rule
   // matches this output and it is stale (a source is newer, or it is missing),
   // rebuild it to completion BEFORE serving, so a newly added utility class is
   // never served stale. No-op when no rule matches or the output is fresh, and
   // never runs in prod (rules are empty there). This replaces the fragile
   // `tailwindcss --watch` that could die mid-session and serve stale CSS.
-  if (dev && regenerateRules.length) {
-    await maybeRegenerate(appDir, p.replace(/^\/+/, ''), regenerateRules);
+  if (dev && regenerateRules && regenerateRules.length) {
+    await maybeRegenerate(appDir, `public${path}`, regenerateRules);
   }
+  const abs = resolvePublicFile(appDir, path, { dev, index: publicFiles });
+  if (!abs) return null;
   // A `?v=<hash>` public asset is content-addressed -> immutable (#243).
-  if (await exists(abs)) {
-    const res = await fileResponse(abs, { dev, immutable: versioned });
-    // A worker served below its registration path only controls that subtree
-    // unless the response opts it up to the root scope. (#830)
-    if (path === '/sw.js') res.headers.set('Service-Worker-Allowed', '/');
-    return res;
-  }
-  return null;
+  const res = await fileResponse(abs, { dev, immutable: versioned });
+  // A worker served below its registration path only controls that subtree
+  // unless the response opts it up to the root scope. Served at the root
+  // already, so this only matters to a worker under a subdirectory, but it is
+  // harmless and keeps a registration with `scope: '/'` working. (#830)
+  if (path === '/sw.js') res.headers.set('Service-Worker-Allowed', '/');
+  return res;
 }
 
 export async function handleCore(req, ctx) {
@@ -243,12 +230,6 @@ export async function handleCore(req, ctx) {
     const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
     return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins, logger);
   }
-
-  // Static: /public/*, the #830 root remaps, and /favicon.ico. In dev this
-  // already ran before ensureReady() (#1397); this stays the LIVE path in prod
-  // and the fallback in dev, and both call sites share one implementation.
-  const publicResp = await tryServePublicAsset(path, { appDir, dev, versioned, regenerateRules: state.regenerateRules });
-  if (publicResp) return publicResp;
 
   // User source modules (served as ES modules, with action-file rewriting).
   //
@@ -358,6 +339,17 @@ export async function handleCore(req, ctx) {
       console.warn(hint);
       return new Response(hint, { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     }
+  }
+
+  // Static files from `public/`, served at the URL root (Next.js parity), after
+  // the app's own source modules and before every route, so a public file
+  // beats a dynamic route at the same url. One at the url of a static page, a
+  // route.ts or a metadata route is refused at boot (no-public-route-conflict).
+  // In dev this already ran before ensureReady() (#1397); this stays the LIVE
+  // path in prod and the fallback in dev, both sharing one implementation.
+  if (method === 'GET' || method === 'HEAD') {
+    const publicResp = await tryServePublicAsset(path, { appDir, dev, versioned, regenerateRules: state.regenerateRules, publicFiles: state.publicFiles });
+    if (publicResp) return method === 'HEAD' ? new Response(null, { status: publicResp.status, headers: publicResp.headers }) : publicResp;
   }
 
   // Metadata routes: /sitemap.xml, /robots.txt, /icon, /opengraph-image, etc.

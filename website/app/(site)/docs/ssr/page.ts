@@ -280,7 +280,7 @@ import '#components/hero-banner.ts';
 export const metadata = {
   title: 'Home | My App',
   description: 'Welcome to my webjs application.',
-  openGraph: { title: 'My App', image: '/public/og.png' },
+  openGraph: { title: 'My App', image: '/og.png' },
 };
 
 export default function Home() {

@@ -35,7 +35,7 @@ export default async function TypesetPreview({ params, searchParams }: PageProps
   const content = html`<div class="typeset w-full [--typeset-flow:var(--preview-flow)] [--typeset-leading:var(--preview-leading)]">${unsafeHTML(FIXTURES[name as ItemName])}</div>`;
 
   return html`
-    <link rel="stylesheet" href=${asset('/public/typeset-fonts.css')}>
+    <link rel="stylesheet" href=${asset('/typeset-fonts.css')}>
     <!-- The root layout reserves the fixed header's height on the body, and
          this frame has no header. -->
     <style>:root { --header-h: 0px; }</style>

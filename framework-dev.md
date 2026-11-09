@@ -109,7 +109,7 @@ The purge is zone-wide rather than a path list: both asset-serving hostnames (`w
 
   ```sh
   curl -s https://webjs.up.railway.app/public/tailwind.css -o /tmp/o
-  curl -s https://webjs.dev/public/tailwind.css -o /tmp/e
+  curl -s https://webjs.dev/tailwind.css -o /tmp/e
   cmp /tmp/o /tmp/e && echo fresh || echo stale
   ```
 

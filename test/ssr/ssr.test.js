@@ -111,12 +111,12 @@ test('hoistHeadTags: lifts leading <link rel="icon"> to head', () => {
   // them in their template body must be hoisted, otherwise the tab icon
   // never appears.
   const bodyHtml =
-    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
-    '<link rel="apple-touch-icon" href="/public/favicon.png">' +
+    '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' +
+    '<link rel="apple-touch-icon" href="/favicon.png">' +
     '<main>page</main>';
   const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
-  assert.ok(head.includes('<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">'));
-  assert.ok(head.includes('<link rel="apple-touch-icon" href="/public/favicon.png">'));
+  assert.ok(head.includes('<link rel="icon" href="/favicon.svg" type="image/svg+xml">'));
+  assert.ok(head.includes('<link rel="apple-touch-icon" href="/favicon.png">'));
   assert.equal(body, '<main>page</main>');
 });
 
@@ -147,11 +147,11 @@ test('hoistHeadTags: lifts head-bound tags at the top of body (no wrapper now)',
   // partial-nav uses inline comment markers instead. Head-bound tags
   // emitted at the top of a layout template lift directly into <head>.
   const bodyHtml =
-    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
+    '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' +
     '<script>var t=1;</script>' +
     '<main>page</main>';
   const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
-  assert.ok(head.includes('<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">'));
+  assert.ok(head.includes('<link rel="icon" href="/favicon.svg" type="image/svg+xml">'));
   assert.ok(head.includes('<script>var t=1;</script>'));
   assert.ok(body.startsWith('<main>page</main>'),
     `body starts with the first non-head content, got: ${body.slice(0, 80)}`);
@@ -696,8 +696,8 @@ test('a declared metadata.icons suppresses the icon route (Next precedence)', (t
   // and the route is often a placeholder the app has outgrown, which is
   // exactly the gallery's case.
   withIconRoutes(t, ['icon', 'apple-icon']);
-  const html = render({ icons: '/public/favicon.svg' });
-  assert.match(html, /<link rel="icon" href="\/public\/favicon\.svg">/);
+  const html = render({ icons: '/favicon.svg' });
+  assert.match(html, /<link rel="icon" href="\/favicon\.svg">/);
   assert.doesNotMatch(html, /href="\/icon"/);
   assert.doesNotMatch(html, /href="\/apple-icon"/);
 });
@@ -782,8 +782,8 @@ test('a nested icon route is not the app favicon', (t) => {
 test('app/manifest.*: linked automatically, a declared manifest wins, null opts out', (t) => {
   withStaticIcons(t, [{ stem: 'manifest', urlPath: '/manifest.webmanifest', static: true, contentType: 'application/manifest+json' }]);
   assert.match(render({}), /<link rel="manifest" href="\/manifest\.webmanifest">/);
-  const declared = render({ manifest: '/public/site.webmanifest' });
-  assert.match(declared, /<link rel="manifest" href="\/public\/site\.webmanifest">/);
+  const declared = render({ manifest: '/site.webmanifest' });
+  assert.match(declared, /<link rel="manifest" href="\/site\.webmanifest">/);
   assert.doesNotMatch(declared, /href="\/manifest\.webmanifest"/);
   assert.doesNotMatch(render({ manifest: null }), /rel="manifest"/);
 });

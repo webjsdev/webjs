@@ -38,7 +38,7 @@ const UI_OG_TITLE = 'WebJs UI';
  */
 export function generateMetadata(ctx: { url: string }) {
   const { origin, pathname } = new URL(ctx.url);
-  const image = `${origin}/public/og.png`;
+  const image = `${origin}/og.png`;
   return {
     description: UI_DESCRIPTION,
     openGraph: {
@@ -65,7 +65,7 @@ export default function UiLayout({ children }: LayoutProps) {
   // First in the markup, so the framework moves it into <head> and switches it
   // off when a soft navigation leaves /ui (#1669).
   return html`
-    <link rel="stylesheet" href=${asset('/public/ui.css')}>
+    <link rel="stylesheet" href=${asset('/ui.css')}>
     <div class="ui-site">
       ${children}
     </div>

@@ -117,7 +117,7 @@ export function generateMetadata() {
       title: TITLE,
       description: DESCRIPTION,
       url: CANONICAL,
-      image: `${SITE_URL}/public/og-what.png`,
+      image: `${SITE_URL}/og-what.png`,
       'image:width': '1200',
       'image:height': '630',
       'image:alt': 'What is WebJs? A full-stack JavaScript web framework built on web components',
@@ -127,7 +127,7 @@ export function generateMetadata() {
       card: 'summary_large_image',
       title: TITLE,
       description: DESCRIPTION,
-      image: `${SITE_URL}/public/og-what.png`,
+      image: `${SITE_URL}/og-what.png`,
     },
     jsonLd: [
       {

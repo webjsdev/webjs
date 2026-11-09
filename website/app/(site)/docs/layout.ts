@@ -134,7 +134,7 @@ const DOCS_OG_TITLE = 'WebJs documentation';
 
 export function generateMetadata(ctx: { url: string }) {
   const { origin, pathname } = new URL(ctx.url);
-  const image = `${origin}/public/og.png`;
+  const image = `${origin}/og.png`;
   return {
     description: DOCS_DESCRIPTION,
     openGraph: {

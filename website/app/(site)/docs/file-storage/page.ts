@@ -44,7 +44,7 @@ setFileStore(diskStore({ dir: '/var/data/uploads', baseUrl: '/files' }));</code-
     <p>Add the uploads directory to <code>.gitignore</code>, because it holds user data, not source.</p>
 
     <h2>Traversal-safe keys</h2>
-    <p>Every key is resolved to an absolute path under <code>dir</code> and rejected if it escapes, using the same containment guard the <code>/public/*</code> serve path uses. A key with <code>..</code>, an absolute path, a leading slash, a NUL byte, a backslash, or the reserved <code>.meta</code> suffix throws (<code>assertSafeKey</code>) before any filesystem operation. Never trust a user-supplied filename as a key. Use <code>generateKey</code>:</p>
+    <p>Every key is resolved to an absolute path under <code>dir</code> and rejected if it escapes, using the same containment guard the <code>public/</code> serve path uses. A key with <code>..</code>, an absolute path, a leading slash, a NUL byte, a backslash, or the reserved <code>.meta</code> suffix throws (<code>assertSafeKey</code>) before any filesystem operation. Never trust a user-supplied filename as a key. Use <code>generateKey</code>:</p>
 
     <code-block>const key = generateKey(file.name);   // &lt;uuid&gt;.&lt;ext&gt;, opaque + safe</code-block>
 

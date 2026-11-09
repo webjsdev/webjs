@@ -67,7 +67,7 @@ test('the declared favicon size matches the real asset and clears Google 48px fl
   assert.ok(sizes, 'the PNG icon declares a size');
   const [declaredW, declaredH] = sizes!.split('x');
   const declared = Number(declaredW);
-  const file = attr(png!, 'href')!.replace(/^\/public\//, '');
+  const file = attr(png!, 'href')!.replace(/^\//, '');
   const { width, height } = pngSize(resolve(WEBSITE_ROOT, 'public', file));
 
   assert.equal(declaredW, declaredH, 'declared as square');
@@ -83,7 +83,7 @@ test('the declared favicon size matches the real asset and clears Google 48px fl
 test('the apple-touch icon points at a correctly sized asset', async () => {
   const apple = (await servedIconLinks()).find((l) => attr(l, 'rel') === 'apple-touch-icon');
   assert.ok(apple, 'serves an apple-touch-icon');
-  const file = attr(apple!, 'href')!.replace(/^\/public\//, '');
+  const file = attr(apple!, 'href')!.replace(/^\//, '');
   const { width } = pngSize(resolve(WEBSITE_ROOT, 'public', file));
   assert.equal(Number(attr(apple!, 'sizes')!.split('x')[0]), width,
     'the declared apple-touch size matches the real asset');

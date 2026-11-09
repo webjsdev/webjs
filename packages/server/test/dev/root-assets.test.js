@@ -51,14 +51,15 @@ for (const dev of [true, false]) {
   });
 }
 
-test('the underlying /public/* path still serves (backward compatible)', async () => {
-  const app = await createRequestHandler({ appDir: makeApp(), dev: true });
-  const res = await app.handle(new Request('http://x/public/sw.js'));
-  assert.equal(res.status, 200, '/public/sw.js still works');
-  // The root-scope header is only added for the root /sw.js path.
-  assert.equal(res.headers.get('service-worker-allowed'), null,
-    'the /public/* path does not carry the root-scope header');
-});
+for (const dev of [true, false]) {
+  test(`the /public/ url prefix is gone: public/sw.js is not at /public/sw.js (dev=${dev})`, async () => {
+    // Next.js parity: public/ is served at the url root and nowhere else.
+    const app = await createRequestHandler({ appDir: makeApp(), dev });
+    const res = await app.handle(new Request('http://x/public/sw.js'));
+    assert.equal(res.status, 404, 'no /public/ prefix');
+    await res.text();
+  });
+}
 
 test('a non-remapped root path is not exposed (no traversal, no accidental root serving)', async () => {
   const appDir = makeApp();

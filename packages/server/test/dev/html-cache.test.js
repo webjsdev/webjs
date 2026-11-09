@@ -161,7 +161,7 @@ function originPage({ revalidate } = {}) {
     (revalidate != null ? `export const revalidate = ${revalidate};\n` : '') +
     `export default function P({ url }) {\n` +
     `  const origin = new URL(url).origin;\n` +
-    `  return html\`<h1>og \${origin}/public/og.png</h1>\`;\n` +
+    `  return html\`<h1>og \${origin}/og.png</h1>\`;\n` +
     `}\n`
   );
 }
@@ -238,14 +238,14 @@ test('a hostile X-Forwarded-Host cannot poison the cached HTML a clean visitor i
   );
   assert.match(
     await attack.text(),
-    /https:\/\/evil\.example\/public\/og\.png/,
+    /https:\/\/evil\.example\/og\.png/,
     'the attacker still gets their own chosen origin back: that response is theirs, and is not what this fix is about',
   );
 
   // The victim: a later request carrying no forwarded headers at all.
   const clean = await (await app.handle(shellRequest('http://real.example/'))).text();
   assert.doesNotMatch(clean, /evil\.example/, 'the poisoned body is never served to a clean request');
-  assert.match(clean, /http:\/\/real\.example\/public\/og\.png/, 'the clean request gets its own origin');
+  assert.match(clean, /http:\/\/real\.example\/og\.png/, 'the clean request gets its own origin');
 });
 
 test('a single-host deploy still serves the cached body (the fix does not disable caching)', async () => {
@@ -275,7 +275,7 @@ test('WEBJS_NO_TRUST_PROXY=1 keeps the forwarded host out of the origin entirely
       )
     ).text();
     assert.doesNotMatch(attack, /evil\.example/, 'the escape hatch still disables forwarded-header trust');
-    assert.match(attack, /http:\/\/real\.example\/public\/og\.png/);
+    assert.match(attack, /http:\/\/real\.example\/og\.png/);
   } finally {
     if (prev === undefined) delete process.env.WEBJS_NO_TRUST_PROXY;
     else process.env.WEBJS_NO_TRUST_PROXY = prev;

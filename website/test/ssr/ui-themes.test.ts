@@ -60,7 +60,7 @@ test('a page using theme-blue renders the class inside .ui-site and links the st
   assert.ok(site >= 0, 'the page renders inside .ui-site');
   const blue = html.search(/class="[^"]*\btheme-blue\b/);
   assert.ok(blue > site, 'the bubble preview wears theme-blue inside .ui-site');
-  assert.match(html, /<link[^>]+href="\/public\/ui\.css[^"]*"/, 'the page links ui.css, which compiles the theme classes');
+  assert.match(html, /<link[^>]+href="\/ui\.css[^"]*"/, 'the page links ui.css, which compiles the theme classes');
 });
 
 test('/ui/init returns the registry payload for a preset', async () => {

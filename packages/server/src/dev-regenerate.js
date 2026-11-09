@@ -63,8 +63,8 @@ export const REGENERATE_MANIFEST = '.webjs/regenerate.json';
  * Read + normalize the `webjs.dev.regenerate` rules from an app's
  * `package.json`. Defensive: a missing/malformed block yields `[]` (a plain app
  * runs unchanged). Each rule's `output` is normalized to an appDir-relative path
- * with no leading slash so it matches a served `/public/...` path after the
- * slash is stripped.
+ * with no leading slash (`public/tailwind.css`), the file a request for the
+ * root url `/tailwind.css` maps to under `public/`.
  *
  * @param {string} appDir
  * @param {(p: string) => Promise<string>} [read] injectable reader for tests

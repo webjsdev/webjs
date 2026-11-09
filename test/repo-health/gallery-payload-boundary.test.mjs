@@ -141,8 +141,8 @@ test('no gallery-only branding reaches scaffold payload', async () => {
   // gallery/lib/design/brand.ts, or restyling gallery/app/opengraph-image.ts or
   // gallery/app/global-error.ts, which read like brand surfaces and are payload.
   const markers = [
-    '/public/brand/webjs-lockup', // the brand lockup asset path
-    '/public/fonts/inter', // the self-hosted font paths
+    '/brand/webjs-lockup', // the brand lockup asset path
+    '/fonts/inter', // the self-hosted font paths
     'Inter Tight', // the display face
     '0.16 52', // the warm accent hue literal
   ];
