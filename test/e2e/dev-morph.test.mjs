@@ -251,6 +251,10 @@ export default function Home() {
       assert.equal(after.token, before.token, 'the document never loaded again, so this was a real in-place refresh');
       assert.equal(after.scrollY, before.scrollY, 'the reader kept their place');
       assert.equal(after.count, 'count 2', 'and the hydrated counter outside the changed region kept its state');
+      // The tab says what it did (#1689); logged once the stylesheet swap commits.
+      const said = '[webjs] page updated in place (app/page.ts)';
+      for (let i = 0; i < 60 && !page.consoleLines.some((l) => l.includes(said)); i++) await sleep(50);
+      assert.ok(page.consoleLines.some((l) => l.includes(said)), `the tab logged the in-place update (saw: ${page.consoleLines.join(' | ')})`);
 
       // The stylesheet has to be RE-REQUESTED, and the dev client's explicit
       // refresh is the only thing that can cause it. The link is hoisted into

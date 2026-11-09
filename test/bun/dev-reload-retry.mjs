@@ -71,6 +71,9 @@ try {
   assert.match(client, /var __webjsWhenReady = createReadyProbe\(/, `the reload client gates on the readiness probe on ${runtime}`);
   assert.doesNotMatch(client, /tries > 100/, `and the probe no longer gives up on ${runtime}`);
   assert.doesNotThrow(() => new Function(client), `the served reload client parses on ${runtime}`);
+  // A reload a restart forces says why after it lands, from sessionStorage.
+  assert.match(client, /\nprintPendingReason\(__webjsStore\(\), __webjsInfo\);\n/, `the reloaded page prints why on ${runtime}`);
+  assert.doesNotMatch(client, /location\.reload\(\);/, `every reload goes through reloadWithReason on ${runtime}`);
 
   console.log(`OK  dev SSE carries the retry: 300 reconnect hint, and the reload client waits out a restart, on ${runtime} (#893, #1689)`);
 } finally {

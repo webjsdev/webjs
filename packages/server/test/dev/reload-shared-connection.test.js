@@ -179,7 +179,7 @@ test('the reload client probes the server is up before reloading (no restart fla
   assert.match(clientSrc, /typeof refresh === 'function'/, 'and only used when it is actually a function');
   assert.match(clientSrc, /mode === 'page' \|\| mode === 'shell'/, 'only the two morphable verdicts take the refresh path');
   assert.match(clientSrc, /var mode = verdict\.v;/, 'and the mode is the verdict object\'s v (#1689)');
-  assert.match(clientSrc, /if \(!ok\) \{ location\.reload\(\); return; \}/, 'a refresh that declines falls back to a full reload');
+  assert.match(clientSrc, /if \(!ok\) \{ __webjsReload\(\{ why: 'refresh-failed', by: verdict\.by \}\); return; \}/, 'a refresh that declines falls back to a full reload, naming why (#1689)');
   // A swap never re-requests a stylesheet on its own (mergeHead preserves them
   // per #936, and the dev href carries no content hash), so `webjs.dev.regenerate`
   // would never run and a newly added utility class would have no backing rule.

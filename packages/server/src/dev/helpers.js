@@ -432,6 +432,10 @@ const DEV_HOT_CLIENT_SRC = readFileSync(new URL('../dev-hot-client.js', import.m
 const DEV_READY_PROBE_SRC = readFileSync(new URL('../dev-ready-probe.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
 
+// Why a full reload happened, printed after it (#1689), same shared-source rule.
+const DEV_RELOAD_REASON_SRC = readFileSync(new URL('../dev-reload-reason.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 // The embed host's reload hold (#1532), same shared-source rule.
 const DEV_RELOAD_HOLD_SRC = readFileSync(new URL('../dev-reload-hold.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
@@ -499,6 +503,13 @@ ${RELOAD_WORKER_SRC}
 ${DEV_STYLES_SRC}
 ${DEV_RELOAD_HOLD_SRC}
 ${DEV_READY_PROBE_SRC}
+${DEV_RELOAD_REASON_SRC}
+// Every full reload goes through here, so the reloaded page can say why
+// (#1689); the reason a previous page stored is printed once, now.
+function __webjsStore() { try { return globalThis.sessionStorage || null; } catch (_) { return null; } }
+function __webjsInfo(msg) { console.info(msg); }
+function __webjsReload(verdict) { reloadWithReason(verdict, location, __webjsStore(), __webjsInfo); }
+printPendingReason(__webjsStore(), __webjsInfo);
 // A framing host holds reloads while its agent builds (#1532): the embed bridge
 // sets __webjsEmbedHold, every signal below is kept (strongest verdict wins),
 // and releasing the hold applies that one reload, or none if nothing changed.
@@ -550,7 +561,7 @@ function __webjsApplyReload(verdict) {
       preloadStyles().then(function (styles) {
         styles.commit();
         console.info('[webjs] stylesheets refreshed' + (verdict.by ? ' (' + verdict.by + ')' : ''));
-      }).then(null, function () { location.reload(); });
+      }).then(null, function () { __webjsReload({ why: 'styles-failed', by: verdict.by }); });
       return;
     }
     // Runtime feature detection, never an assumption. The refresh entry is
@@ -587,16 +598,17 @@ function __webjsApplyReload(verdict) {
       // no rule. The old sheets stay applied until the swap, then go.
       preloadStyles().then(function (styles) {
         return refresh(mode).then(function (ok) {
-          if (!ok) { location.reload(); return; }
+          if (!ok) { __webjsReload({ why: 'refresh-failed', by: verdict.by }); return; }
           styles.commit();
+          console.info('[webjs] ' + (mode === 'shell' ? 'layout' : 'page') + ' updated in place' + (verdict.by ? ' (' + verdict.by + ')' : ''));
         });
-      }).then(null, function () { location.reload(); });
+      }).then(null, function () { __webjsReload({ why: 'refresh-failed', by: verdict.by }); });
       return;
     }
-    // Say why when the server gave a reason (#1689: a component edit the hot
-    // swap refused names its guard, such as constructor-changed).
-    if (verdict.v === 'reload' && verdict.why) console.info('[webjs] full reload: ' + verdict.why + (verdict.by ? ' (' + verdict.by + ')' : ''));
-    location.reload();
+    // The reloaded page says why (#1689): the server's reason (a component
+    // edit the hot swap refused names its guard, such as constructor-changed),
+    // or that this page has no client router to apply a refresh with.
+    __webjsReload(mode === 'page' || mode === 'shell' ? { why: 'no-client-router', by: verdict.by } : verdict);
   });
 }
 // Apply a verdict that carries component modules (#1689): load the rebuilt
@@ -609,10 +621,7 @@ function __webjsApplyHot(verdict, mods) {
   var refresh = globalThis.__webjsRefreshPage;
   var mode = verdict.v;
   var by = verdict.by ? ' (' + verdict.by + ')' : '';
-  function reload(why) {
-    console.info('[webjs] full reload: ' + why + by);
-    location.reload();
-  }
+  function reload(why) { __webjsReload({ why: why, by: verdict.by }); }
   if ((mode === 'page' || mode === 'shell') && typeof refresh !== 'function') { reload('no-client-router'); return; }
   dismissDevOverlay();
   preloadStyles().then(function (styles) {
