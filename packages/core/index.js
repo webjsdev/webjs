@@ -10,6 +10,7 @@ export { html, svg, mathml, isTemplate, MARKER } from './src/html.js';
 export { isServer } from './src/is-server.js';
 export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
 export { WebComponent, prop } from './src/component.js';
+export { defaultConverter, notEqual } from './src/converters.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';

@@ -9,6 +9,7 @@
  */
 
 export * from './src/component.js';
+export * from './src/converters.js';
 export type {
   Metadata,
   MetadataContext,

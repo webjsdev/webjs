@@ -7,6 +7,7 @@ import { getRequest, getSession, Credentials, GitHub, cookies, headers, createRe
 import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
 import type { LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
+import { defaultConverter, notEqual } from '@webjsdev/core';
 
 // getSession() reads the request in scope, the way cookies() and headers() do.
 // Agents also chained the two WebJs calls, getSession(getRequest()), and
@@ -101,3 +102,12 @@ export async function revalidateHabits() {
   await revalidateTag('posts', { expire: 3600 });
   await revalidateTag('posts');
 }
+
+// Lit's defaultConverter and notEqual, imported from @webjsdev/core as from
+// lit: a converter that delegates to the default, and a custom hasChanged.
+export const litHelperHabits = {
+  converter: {
+    fromAttribute: (value: string | null) => (value ? new Date(value) : defaultConverter.fromAttribute(value, String)),
+  },
+  hasChanged: (value: unknown, old: unknown) => notEqual(value, old),
+};
