@@ -6,6 +6,7 @@ import { findInstrumentationClient } from './instrumentation.js';
  * @typedef {{
  *   pattern: RegExp,
  *   paramNames: string[],
+ *   paramKinds?: ParamKind[],
  *   file: string,
  *   routeDir: string,
  *   layouts: string[],
@@ -149,10 +150,11 @@ export async function buildRouteTable(appDir) {
 
     if (stem === 'page') {
       const segs = dir === '.' ? [] : dir.split('/');
-      const { pattern, paramNames, isCatchAll } = segmentsToPattern(segs);
+      const { pattern, paramNames, paramKinds, isCatchAll } = segmentsToPattern(segs);
       pages.push({
         pattern,
         paramNames,
+        paramKinds,
         file,
         routeDir: dir,
         layouts: [],
@@ -194,8 +196,8 @@ export async function buildRouteTable(appDir) {
     } else if (stem === 'route') {
       // route.js / route.ts can live anywhere under app/ (matches NextJs).
       const segs = dir === '.' ? [] : dir.split('/');
-      const { pattern, paramNames } = segmentsToPattern(segs);
-      apis.push({ pattern, paramNames, file, routeDir: dir, middlewares: [] });
+      const { pattern, paramNames, paramKinds } = segmentsToPattern(segs);
+      apis.push({ pattern, paramNames, paramKinds, file, routeDir: dir, middlewares: [] });
     }
   }
 
@@ -387,6 +389,8 @@ export function compareSpecificity(a, b) {
  */
 function segmentsToPattern(segments, prefix = '') {
   const paramNames = [];
+  /** @type {ParamKind[]} parallel to paramNames */
+  const paramKinds = [];
   let isCatchAll = false;
   let isOptionalCatchAll = false;
   const parts = segments
@@ -395,17 +399,22 @@ function segmentsToPattern(segments, prefix = '') {
       // Optional catch-all: [[...slug]] matches with AND without params
       if (seg.startsWith('[[...') && seg.endsWith(']]')) {
         paramNames.push(seg.slice(5, -2));
+        paramKinds.push('optional');
         isCatchAll = true;
         isOptionalCatchAll = true;
         return '(.*)';
       }
       if (seg.startsWith('[...') && seg.endsWith(']')) {
         paramNames.push(seg.slice(4, -1));
+        paramKinds.push('catchall');
         isCatchAll = true;
-        return '(.*)';
+        // At least one character: a required catch-all never matches its
+        // empty base (`/docs` is a 404 for `docs/[...slug]`, as in Next).
+        return '(.+)';
       }
       if (seg.startsWith('[') && seg.endsWith(']')) {
         paramNames.push(seg.slice(1, -1));
+        paramKinds.push('single');
         return '([^/]+)';
       }
       return escapeRe(seg);
@@ -420,9 +429,44 @@ function segmentsToPattern(segments, prefix = '') {
   const pattern = new RegExp(`^${escapeRe(prefix)}${regexBody}${isOptionalCatchAll ? suffix : '/?$'}`);
   if (!isOptionalCatchAll) {
     // Standard pattern needs end anchor
-    return { pattern: new RegExp(`^${escapeRe(prefix)}${body}/?$`), paramNames, isCatchAll };
+    return { pattern: new RegExp(`^${escapeRe(prefix)}${body}/?$`), paramNames, paramKinds, isCatchAll };
   }
-  return { pattern, paramNames, isCatchAll };
+  return { pattern, paramNames, paramKinds, isCatchAll };
+}
+
+/** @typedef {'single' | 'catchall' | 'optional'} ParamKind */
+
+/** @param {string} s */
+function safeDecode(s) {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
+/**
+ * Build a route's params from a pattern match, Next.js style: a dynamic
+ * `[id]` is a string, a catch-all `[...slug]` is a `string[]` (the tail split
+ * on `/`, then each piece decoded), and an EMPTY optional catch-all
+ * `[[...slug]]` omits its key entirely. Returns null when a required
+ * catch-all came back empty (no match).
+ * @param {{ paramNames: string[], paramKinds?: ParamKind[] }} route
+ * @param {RegExpExecArray} m
+ * @returns {Record<string, string | string[]> | null}
+ */
+export function fillParams(route, m) {
+  /** @type {Record<string, string | string[]>} */
+  const params = {};
+  for (let i = 0; i < route.paramNames.length; i++) {
+    const name = route.paramNames[i];
+    const kind = route.paramKinds ? route.paramKinds[i] : 'single';
+    const raw = m[i + 1] || '';
+    if (kind === 'single') { params[name] = safeDecode(raw); continue; }
+    const pieces = raw.replace(/\/+$/, '').split('/').filter((p, j, all) => p !== '' || (j > 0 && j < all.length - 1)).map(safeDecode);
+    if (!pieces.length) {
+      if (kind === 'catchall') return null;
+      continue; // empty optional catch-all: the key is absent, as in Next
+    }
+    params[name] = pieces;
+  }
+  return params;
 }
 
 /** @param {string} s */
@@ -438,9 +482,8 @@ export function matchPage(table, pathname) {
   for (const route of table.pages) {
     const m = route.pattern.exec(pathname);
     if (!m) continue;
-    /** @type {Record<string,string>} */
-    const params = {};
-    route.paramNames.forEach((n, i) => (params[n] = decodeURIComponent(m[i + 1] || '')));
+    const params = fillParams(route, m);
+    if (!params) continue;
     return { route, params };
   }
   return null;
@@ -454,9 +497,8 @@ export function matchApi(table, pathname) {
   for (const route of table.apis) {
     const m = route.pattern.exec(pathname);
     if (!m) continue;
-    /** @type {Record<string,string>} */
-    const params = {};
-    route.paramNames.forEach((n, i) => (params[n] = decodeURIComponent(m[i + 1] || '')));
+    const params = fillParams(route, m);
+    if (!params) continue;
     return { route, params };
   }
   return null;

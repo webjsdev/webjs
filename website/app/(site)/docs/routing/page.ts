@@ -201,22 +201,25 @@ export default async function UserPage({ params }: { params: { id: string } }) {
     <h3>Catch-All Routes (<code>[...rest]</code>)</h3>
     <p>
       Prefix the parameter name with <code>...</code> to capture all remaining path
-      segments as a single string.
+      segments. As in Next.js, the value is an array of the segments, each
+      decoded. A required catch-all needs at least one segment (<code>/files</code>
+      alone is a 404); an optional catch-all <code>[[...path]]</code> also
+      matches the bare base, where its key is absent from <code>params</code>.
     </p>
 
     <code-block>app/
 └── files/
     └── [...path]/
-        └── page.ts     # /files/a/b/c → { path: "a/b/c" }</code-block>
+        └── page.ts     # /files/a/b/c → { path: ["a", "b", "c"] }</code-block>
 
     <code-block>// app/files/[...path]/page.ts
 import { html } from '@webjsdev/core';
 
-export default function FilesPage({ params }: { params: { path: string } }) {
-  const segments = params.path.split('/');
+export default function FilesPage({ params }: { params: { path: string[] } }) {
+  const segments = params.path;
   return html\`
     &lt;h1&gt;File browser&lt;/h1&gt;
-    &lt;p&gt;Current path: /files/\${params.path}&lt;/p&gt;
+    &lt;p&gt;Current path: /files/\${segments.join('/')}&lt;/p&gt;
     &lt;ul&gt;
       \${segments.map((s) =&gt; html\`&lt;li&gt;\${s}&lt;/li&gt;\`)}
     &lt;/ul&gt;
