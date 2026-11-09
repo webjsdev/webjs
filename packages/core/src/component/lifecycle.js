@@ -199,6 +199,30 @@ function installAccessors(Ctor, props) {
   return plan;
 }
 
+
+/**
+ * The declarative CLOSED shadow root the parser attached to `el`, through
+ * `ElementInternals.shadowRoot`, or null when there is none or internals are
+ * unavailable. `attachInternals()` may be called once per element, so the
+ * internals object is handed back to the component's own later call instead
+ * of that call throwing. A component that already took its internals (in its
+ * constructor, the form-associated pattern) makes this throw, and then the
+ * caller falls back to attachShadow(), Lit's behaviour.
+ * @param {HTMLElement} el
+ * @returns {ShadowRoot | null}
+ */
+function declarativeClosedRoot(el) {
+  if (typeof el.attachInternals !== 'function') return null;
+  let internals;
+  try {
+    internals = el.attachInternals();
+  } catch {
+    return null;
+  }
+  Object.defineProperty(el, 'attachInternals', { value: () => internals, configurable: true, writable: true });
+  return internals.shadowRoot ?? null;
+}
+
 class WebComponentBase extends Base {
   /** Whether to use shadow DOM. Default: false (light DOM). @type {boolean} */
   static shadow = false;
@@ -1038,8 +1062,14 @@ class WebComponentBase extends Base {
   createRenderRoot() {
     const Ctor = /** @type any */ (this.constructor);
     if (Ctor.shadow !== true) return this;
-    const existing = this.shadowRoot;
-    const root = existing ?? /** @type any */ (this).attachShadow(Ctor.shadowRootOptions ?? { mode: 'open' });
+    const options = Ctor.shadowRootOptions ?? { mode: 'open' };
+    // A CLOSED declarative root is invisible to `this.shadowRoot`, and
+    // attachShadow() on an element that has one empties it (the spec reuses
+    // the root but removes its children), so the server-rendered markup would
+    // vanish and the first render would build from nothing. Lit has the same
+    // gap; ElementInternals reaches the declarative root, so use it.
+    const existing = this.shadowRoot ?? (options.mode === 'closed' ? declarativeClosedRoot(this) : null);
+    const root = existing ?? /** @type any */ (this).attachShadow(options);
     const list = Ctor.elementStyles;
     if (list.length) {
       // A shadow root that came from Declarative Shadow DOM (SSR) carries the

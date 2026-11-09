@@ -145,4 +145,50 @@ suite('renderRoot and createRenderRoot()', () => {
     assert.ok(err, 'connect threw');
     assert.match(String(/** @type {any} */ (err).message), /super\.createRenderRoot\(\)/);
   });
+
+  // The server writes shadowrootmode="closed" for a closed root. A closed
+  // declarative root is invisible to this.shadowRoot, and attachShadow() on
+  // the element empties it, so the client must reach it through internals.
+  test('a closed declarative shadow root is reused, not emptied by attachShadow()', async () => {
+    if (typeof Element.prototype.setHTMLUnsafe !== 'function') return; // DSD parsing unavailable
+    const name = tag();
+    const host = document.createElement('div');
+    host.setHTMLUnsafe(`<${name}><template shadowrootmode="closed"><p data-ssr>from server</p></template></${name}>`);
+    document.body.append(host);
+    let attachCalls = 0;
+    class E extends WebComponent {
+      static shadow = true;
+      static shadowRootOptions = { mode: 'closed' };
+      attachShadow(init) { attachCalls++; return super.attachShadow(init); }
+      render() { return html`<p>from client</p>`; }
+    }
+    E.register(name);
+    const el = host.querySelector(name);
+    await el.updateComplete;
+    assert.equal(attachCalls, 0, 'the declarative root was reached without attachShadow()');
+    assert.equal(el.shadowRoot, null, 'the root stays closed');
+    assert.ok(el.renderRoot, 'renderRoot is the closed root');
+    assert.ok(el.renderRoot.querySelector('p'), 'the root kept its content');
+    host.remove();
+  });
+
+  test("a component's own attachInternals() still works after the framework took internals", async () => {
+    if (typeof Element.prototype.setHTMLUnsafe !== 'function') return;
+    const name = tag();
+    const host = document.createElement('div');
+    host.setHTMLUnsafe(`<${name}><template shadowrootmode="closed"><p>x</p></template></${name}>`);
+    document.body.append(host);
+    class E extends WebComponent {
+      static shadow = true;
+      static shadowRootOptions = { mode: 'closed' };
+      firstUpdated() { this.internals = this.attachInternals(); }
+      render() { return html`<p>x</p>`; }
+    }
+    E.register(name);
+    const el = host.querySelector(name);
+    await el.updateComplete;
+    assert.ok(el.internals, 'the later call returned the internals instead of throwing');
+    assert.equal(el.internals.shadowRoot, el.renderRoot);
+    host.remove();
+  });
 });
