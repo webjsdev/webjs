@@ -76,7 +76,7 @@ s.set('role', 'admin');</code-block>
     <code-block>if (s.has('userId')) { /* authenticated */ }</code-block>
 
     <h3>s.flash(key, value)</h3>
-    <p>Sets a value that exists for one request only. Use for success/error messages after redirects.</p>
+    <p>Sets a value that lasts until it is read, as in Remix: <code>s.get(key)</code> returns it once and the next save drops it, while <code>s.has(key)</code> checks without consuming. Use for success/error messages after redirects.</p>
 
     <code-block>s.flash('message', 'Post created!');
 // Next request: s.get('message') → 'Post created!'

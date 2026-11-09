@@ -882,7 +882,7 @@ export declare class Session {
   set(key: string, value: unknown): void;
   has(key: string): boolean;
   unset(key: string): void;
-  /** Set a value readable once on the next request, then cleared. */
+  /** Set a value that lasts until a `get()` reads it (Remix's flash); `has()` does not consume it. */
   flash(key: string, value: unknown): void;
   destroy(): void;
   /**

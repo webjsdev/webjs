@@ -28,12 +28,49 @@ test('Session unset removes a key', () => {
   assert.equal(s.get('a'), undefined);
 });
 
-test('Session flash value is readable', () => {
+test('Session flash value is readable once, as in Remix', () => {
   const s = new Session();
   s.flash('msg', 'hello');
+  assert.equal(s.has('msg'), true, 'has() does not consume it');
   assert.equal(s.get('msg'), 'hello');
-  assert.equal(s.has('msg'), true);
+  assert.equal(s.get('msg'), undefined, 'the read consumed it');
+  assert.equal(s.has('msg'), false);
 });
+
+for (const [label, storage] of [
+  ['cookie', () => cookieSessionStorage()],
+  ['store', () => storeSessionStorage({ store: memoryStore() })],
+]) {
+  test(`${label} storage: a flashed value survives one redirect and is gone after it is read`, async () => {
+    // Two agents building apps hit this: flash() is the "show once" tool, and
+    // the value came back on every later request because a read kept it and
+    // the next save serialized it again.
+    const st = storage();
+    const action = await st.read(undefined);
+    action.flash('manage', 'secret-link');
+    const afterAction = await st.save(action);
+
+    const landing = await st.read(afterAction);
+    assert.equal(landing.get('manage'), 'secret-link', 'the redirect target reads it');
+    const afterLanding = await st.save(landing);
+
+    const later = await st.read(afterLanding ?? afterAction);
+    assert.equal(later.get('manage'), undefined, 'and the next request does not');
+  });
+
+  test(`${label} storage: an unread flash value waits for its read`, async () => {
+    const st = storage();
+    const s = await st.read(undefined);
+    s.flash('notice', 'saved');
+    s.set('user', 1);
+    const c1 = await st.save(s);
+    const next = await st.read(c1);
+    assert.equal(next.get('user'), 1);
+    const c2 = await st.save(next);
+    const after = await st.read(c2 ?? c1);
+    assert.equal(after.get('notice'), 'saved', 'a request that never read it leaves it in place');
+  });
+}
 
 test('Session dirty tracking', () => {
   const s = new Session();

@@ -104,10 +104,20 @@ export class Session {
     };
   }
 
-  /** @param {string} key @returns {unknown} */
+  /**
+   * A value, or a flash value, which reading consumes (Remix's semantics): the
+   * next save drops it, so a "shown once" message is shown once. It used to be
+   * kept and re-serialized on every save, so it never went away.
+   * @param {string} key @returns {unknown}
+   */
   get(key) {
     if (this.#destroyed) return undefined;
-    return this.#data.get(key) ?? this.#flash.get(key);
+    if (this.#data.has(key)) return this.#data.get(key);
+    if (!this.#flash.has(key)) return undefined;
+    const value = this.#flash.get(key);
+    this.#flash.delete(key);
+    this.#dirty = true;
+    return value;
   }
 
   /** @param {string} key @param {unknown} value */
@@ -132,7 +142,8 @@ export class Session {
   }
 
   /**
-   * Set a value that exists for one request only.
+   * Set a value that lasts until the next `get()` of it, as in Remix: flash it
+   * in an action, read it once on the page the redirect lands on.
    * @param {string} key @param {unknown} value
    */
   flash(key, value) {
