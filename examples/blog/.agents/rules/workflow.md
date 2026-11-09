@@ -1,8 +1,8 @@
 # Antigravity Workspace Rules: webjs app
 
 You are working on a webjs app, an AI-first, no-build, web-components-first
-framework. Read AGENTS.md for the full API reference and CONVENTIONS.md for
-project-specific conventions before writing any code. When AGENTS.md does not
+framework. Read AGENTS.md (the WebJs brief plus this app's
+layout and conventions) before writing any code. When AGENTS.md does not
 cover what you need, the full hosted docs are at **https://webjs.dev/docs**.
 
 ## Persistence + scaffold rules (non-negotiable)
@@ -13,7 +13,7 @@ cover what you need, the full hosted docs are at **https://webjs.dev/docs**.
   a Drizzle table. NEVER create `data/*.json`, `db.json`, or any JSON file as a
   fake database. NEVER use module-scope arrays / Maps as a substitute. NEVER
   use localStorage for app data. These are project conventions in
-  CONVENTIONS.md (a JSON file used as a database resets on reload and
+  AGENTS.md (a JSON file used as a database resets on reload and
   cannot scale).
 - **The scaffold is reference, not the final product.** Replace `app/page.ts`,
   the example `User` model, the example users module, etc. with the app the
@@ -47,8 +47,8 @@ Quality bar stays the same, no blocking on questions.
 Every code change must include:
 1. Server tests in `test/<feature>/*.test.ts` (node:test).
 2. Browser tests in `test/<feature>/browser/*.test.js` (WTR + Playwright, real Chromium).
-3. Documentation updates. Walk every surface in the **Definition of done**
-   section of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md, README.md, docs/,
+3. Documentation updates. Walk every surface in the documentation
+   list (AGENTS.md, README.md, docs/,
    website/, scaffold scripts) and either update it or write
    "N/A because <reason>" in the PR body. Docs land on the same PR as the
    code, never as a follow-up.

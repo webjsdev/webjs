@@ -261,40 +261,13 @@ turning the flag off.
 
 ## Conventions
 
-- **One exported function per action/query file.** Name the file after the function.
-- **ActionResult<T> envelope** for all actions: `{ success: true, data } | { success: false, error, status }`.
-- **Routes are thin adapters.** Business logic lives in modules. A route imports a module function, calls it, translates the result to a Response.
-- **Server-only imports** (the DB driver, node:crypto, etc.) only in `.server.ts` files, `db/`, or `lib/`.
+How to write WebJs code is the brief in the root `AGENTS.md` (Next.js App
+Router routing, Lit component APIs, imported from `@webjsdev/*`) plus
+https://webjs.dev/docs. This app adds a few conventions of its own:
+
+- **One exported function per action/query file**, named after the function.
+- **ActionResult<T> envelope** for all actions; the shared type lives in `modules/auth/types.ts`.
+- **Routes are thin adapters.** Business logic lives in modules.
 - **No barrel files.** Import from the specific file.
-- **Types per module** in `types.ts`. Shared types (ActionResult) live in `modules/auth/types.ts`.
-- **globalThis for dev singletons** (the Drizzle `db`, WS clients, comment bus): survives module cache-busting.
-
-## Invariants
-
-1. Never import a DB driver (`node:sqlite`) or `node:*` from components or pages.
-2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
-3. Event/property/boolean bindings in `html` take exactly one expression, quoted or unquoted, as in Lit: `@click=${fn}` and `@click="${fn}"` are the same binding, and surrounding text is a render error.
-4. Component state lives in signals from `@webjsdev/core`. Read with
-   `signal.get()` inside `render()`, write with `signal.set(value)`.
-   Module-scope signals share state across components; instance
-   signals (created in the constructor) carry component-local state.
-5. Pages/layouts are server-only functions returning TemplateResult.
-
-## Recipes
-
-### Add a page
-Create `app/<path>/page.ts`. Export default async function returning `html\`...\``.
-
-### Add an API endpoint
-Create `app/api/<path>/route.ts`. Export named functions: `GET`, `POST`, etc.
-
-### Add a server action
-Create `modules/<feature>/actions/<name>.server.ts`. Export one async function.
-Import from auth/types.ts for ActionResult<T>.
-
-### Add a component
-Create `modules/<feature>/components/<name>.ts` or `components/<name>.ts`.
-Extend the `WebComponent({ ... })` factory to declare reactive properties (e.g. `extends WebComponent({ count: Number })`; per-prop options via `prop(Number, { reflect: true })`), add `static styles` for shadow-DOM components, implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen. A hand-written `static properties` throws at construction (`no-static-properties`); set defaults in the constructor, never a class-field initializer. **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
-
-### Add a database model
-Edit `db/schema.server.ts`. Run `webjs db generate` then `webjs db migrate`.
+- **globalThis for dev singletons** (the Drizzle `db`, WS clients, comment bus), so they survive module cache-busting.
+- **Data lives in Drizzle + SQLite**, never JSON files, module-scope arrays, or localStorage.

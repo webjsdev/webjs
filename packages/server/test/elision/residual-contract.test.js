@@ -347,7 +347,6 @@ test('every surface that enumerates the residuals names all three', async () => 
   /** The phrase every copy of the list opens with. */
   const ANCHOR = 'computes the tag it waits for';
   const SURFACES = [
-    'AGENTS.md',
     'packages/server/AGENTS.md',
     'packages/server/src/component-elision.js',
     'packages/core/src/component.d.ts',
