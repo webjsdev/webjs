@@ -340,6 +340,12 @@
     },
     "noChange": {
       "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "applyActionRefresh": {
+      "exempt": "internal: RPC stub plumbing (revalidatePath in-place refresh)"
+    },
+    "permanentRedirect": {
+      "demo": "app/features/routing/legacy/page.ts"
     }
   },
   "serverSpecifier": "@webjsdev/server",

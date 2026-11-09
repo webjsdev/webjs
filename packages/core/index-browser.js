@@ -76,6 +76,9 @@ export { takeSeed, scanSeeds, seedStats, SEED_MISS } from './src/action-seed-cli
 // Client tag-cache coordinator for HTTP-verb actions (#488): tag-based
 // browser-cache eviction after a mutation. Inert server-side.
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
+// Effects an RPC action response asks the browser for (revalidatePath's
+// in-place refresh), read by the generated action stub.
+export { applyActionRefresh } from './src/action-effects-client.js';
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';

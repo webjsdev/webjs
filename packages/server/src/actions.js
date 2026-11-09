@@ -16,7 +16,7 @@ import { runActionChain } from './action-middleware.js';
 import { isStreamable, streamActionResponse } from './action-stream.js';
 import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
-import { getBodyLimits } from './context.js';
+import { getBodyLimits, refreshHeaderValue } from './context.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { FORM_ACTION_ID_KEY, FORM_ACTION_FIELD } from '@webjsdev/core';
@@ -322,7 +322,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // `method` is a default POST), so the first client call resolves from the
   // seed with no hydration round-trip. The browser-cache staleness check is
   // GET-only (only a GET is browser-cached).
-  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig',
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh',
     // Streaming RPC (#489): an action returning a stream / async iterable sends
     // back a framed body; the stub decodes it into an async iterable the caller
     // `for await`s. The imports are small constants + one decoder factory.
@@ -343,6 +343,9 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // caught on the next read).
   lines.push(`async function __handle(res, fn, key, since) {`);
   lines.push(`  const inv = __tagHdr(res.headers.get('x-webjs-invalidate')); if (inv.length) __markStale(inv);`);
+  // revalidatePath() in the action: refresh the page on screen in place when
+  // it was revalidated, BEFORE the caller's await resolves (Next behaviour).
+  lines.push(`  const rf = res.headers.get('x-webjs-refresh'); if (rf) await __refresh(rf);`);
   lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t, since); }`);
   lines.push(`  const ct = res.headers.get('content-type') || '';`);
   // A streamed result (#489): the action returned a stream / async iterable.
@@ -557,6 +560,8 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
         const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
         if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
       }
+      const refresh = refreshHeaderValue();
+      if (refresh) headers['x-webjs-refresh'] = refresh;
       return streamActionResponse(result, { signal: req.signal, onError, headers, dev: idx.dev });
     }
     if (method === 'GET') {
@@ -575,6 +580,10 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
         headers['x-webjs-invalidate'] = inv.join(',');
       }
     }
+    // revalidatePath() during the action (Next parity): the browser refreshes
+    // those paths, and the page on screen in place when it is one of them.
+    const refresh = refreshHeaderValue();
+    if (refresh) headers['x-webjs-refresh'] = refresh;
     return rpcResponse(result ?? null, { headers });
   } catch (e) {
     if (typeof onError === 'function') onError(e);

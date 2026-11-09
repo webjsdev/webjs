@@ -146,7 +146,20 @@ export async function publishPost(input) {
 
     <p><strong>Why the origin is part of the key.</strong> <code>ctx.url</code> is built from the <code>X-Forwarded-Host</code> / <code>X-Forwarded-Proto</code> headers your proxy sends, and neither Cloudflare nor Railway strips a client-supplied <code>X-Forwarded-Host</code>: they forward it. So without the origin in the key, one request carrying <code>X-Forwarded-Host: evil.example</code> would bake an attacker-chosen origin into the shared body, and every later visitor to that path would be served it until the entry expired (a poisoned <code>og:image</code>, canonical link, OAuth callback URL, or absolute asset URL). With the origin in the key, a normal visitor resolves their origin from the proxy-set <code>Host</code> and reads their own entry. A single-host deploy has exactly one origin, so exactly one entry per URL and an unchanged hit rate; a genuine multi-domain deploy gets correctly separated entries instead of serving one domain's HTML on another.</p>
 
-    <p><code>revalidatePath(path)</code> evicts the server HTML cache for one path, and <code>revalidateAll()</code> clears everything. This is distinct from the client-side <code>revalidate()</code> from <code>@webjsdev/core</code>, which evicts the browser snapshot cache used by client navigation. Time-based eviction is handled automatically by the store TTL (the <code>revalidate</code> seconds).</p>
+    <p><code>revalidatePath(path)</code> evicts the server HTML cache for one path, and <code>revalidateAll()</code> clears everything. As in Next.js, it takes an optional type: <code>revalidatePath('/blog', 'layout')</code> revalidates <code>/blog</code> and every path below it, and a route pattern (<code>revalidatePath('/blog/[slug]', 'page')</code>) revalidates every page it matches. Both of those clear the whole HTML cache, since entries are keyed by concrete URL.</p>
+
+    <p id="revalidate-path-refresh"><strong>The page on screen refreshes.</strong> When a server action called from a component (over RPC) calls <code>revalidatePath</code>, the response tells the browser which paths changed. The router drops its cached copies of them, and if the page on screen is one of them it is re-rendered in place before <code>await action()</code> resolves, with the same no-reload morph <code>refreshPage()</code> uses, so hydrated component state outside the changed region survives. A <code>'layout'</code> revalidation refreshes the whole shell. So the Next.js idiom needs nothing more:</p>
+    <code-block>// modules/posts/actions/like.server.ts
+'use server';
+import { revalidatePath } from '@webjsdev/server';
+
+export async function like(id: string) {
+  await db.update(posts).set({ likes: sql\`likes + 1\` }).where(eq(posts.id, id));
+  await revalidatePath(\`/posts/\${id}\`);  // the post page re-renders with the new count
+}</code-block>
+    <p>A form-bound action answered in place (a <code>422</code> re-render) carries the same header and the router drops those cached copies; a successful form submission redirects, and the page it lands on is rendered fresh by the server anyway.</p>
+
+    <p>This is distinct from the client-side <code>revalidate()</code> from <code>@webjsdev/core</code>, which evicts the browser snapshot cache used by client navigation. Time-based eviction is handled automatically by the store TTL (the <code>revalidate</code> seconds).</p>
 
     <p><strong>Origin resolution.</strong> Because keys carry the origin, a bare path like <code>'/blog'</code> does not name one entry. Called from a server action it resolves the origin from the request that triggered the mutation, which is the same origin as the pages being evicted, so the ordinary flow needs nothing extra. From a background job or worker that serves no HTTP traffic of its own, there is no request to resolve against, so pass the absolute url instead (<code>revalidatePath('https://app.example/blog')</code>). A bare path with no request in scope warns once naming the path rather than quietly evicting nothing. Under <code>webjs.basePath</code> pass the public url and WebJs strips the mount prefix for you, since entries are keyed on the app-root-relative path.</p>
 

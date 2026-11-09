@@ -800,7 +800,7 @@ export declare function revalidateTags(tags: string[]): Promise<void>;
  * `webjs.basePath` the absolute url is the PUBLIC one and its mount prefix is
  * stripped, so it evicts the entry the write actually stored.
  */
-export declare function revalidatePath(path: string): Promise<void>;
+export declare function revalidatePath(path: string, type?: 'page' | 'layout'): Promise<void>;
 /** Evict all cached HTML (per-process generation bump). */
 export declare function revalidateAll(): Promise<void>;
 

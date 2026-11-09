@@ -119,6 +119,7 @@ export { asset, setAssetUrlProvider } from './src/asset-url.js';
 export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';
 export { takeSeed, scanSeeds, seedStats, SEED_MISS } from './src/action-seed-client.js';
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
+export { applyActionRefresh } from './src/action-effects-client.js';
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';

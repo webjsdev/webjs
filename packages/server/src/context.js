@@ -36,7 +36,10 @@ import { shared } from './process-shared.js';
  * wrong `revalidate` on a cookie-reading page fails safe (uncached) instead of
  * leaking one visitor's view to another.
  *
- * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean }} Store
+ * `revalidatedPaths` collects every `revalidatePath()` call made while serving
+ * the request, so an RPC action response can tell the browser to refresh them.
+ *
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[] }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -219,4 +222,30 @@ export function cookies() {
     has: (name) => Object.prototype.hasOwnProperty.call(map, name),
     entries: () => Object.entries(map),
   };
+}
+
+/**
+ * Record a `revalidatePath()` call against the current request (a no-op with
+ * no ambient request).
+ * @param {string} path app-root-relative pathname, or a route pattern
+ * @param {boolean} layout Next's `'layout'` type
+ */
+export function recordRevalidatedPath(path, layout) {
+  const store = als.getStore();
+  if (!store) return;
+  (store.revalidatedPaths ||= []).push({ path, layout });
+}
+
+/**
+ * The `x-webjs-refresh` header value for the paths revalidated during this
+ * request, or null when there were none. Each path is percent-encoded (a path
+ * may contain a comma) and a layout entry carries a `;layout` suffix.
+ * @returns {string | null}
+ */
+export function refreshHeaderValue() {
+  const list = als.getStore()?.revalidatedPaths;
+  if (!list || !list.length) return null;
+  const seen = new Set();
+  for (const { path, layout } of list) seen.add(encodeURIComponent(path) + (layout ? ';layout' : ''));
+  return [...seen].join(',');
 }

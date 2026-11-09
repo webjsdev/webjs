@@ -1,7 +1,7 @@
 import { isNotFound, isRedirect, isForbidden, isUnauthorized, FORM_ACTION_FIELD } from '@webjsdev/core';
 import { ssrPage, ssrNotFound, ssrForbidden, ssrUnauthorized } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
-import { getBodyLimits } from './context.js';
+import { getBodyLimits, refreshHeaderValue } from './context.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { makeThenable } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
@@ -639,9 +639,15 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     invalidated = resolveTags(actionConfigFn(mod, 'invalidates'), args);
     if (invalidated.length) await revalidateTags(invalidated);
   }
-  const invalidateHeader = invalidated.length
+  /** @type {Record<string, string> | null} */
+  let invalidateHeader = invalidated.length
     ? { 'x-webjs-invalidate': invalidated.join(',') }
     : null;
+  // revalidatePath() in the action: the router drops its cached copies of
+  // those paths when it applies an in-place response (the redirect a success
+  // answers with re-renders the target on the server anyway).
+  const refresh = refreshHeaderValue();
+  if (refresh) invalidateHeader = { ...(invalidateHeader || {}), 'x-webjs-refresh': refresh };
 
   // An action MAY return a `Response` directly (e.g. a content-negotiated
   // `streamResponse`, #248). Honor it verbatim, so the action owns the status +
