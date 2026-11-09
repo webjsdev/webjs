@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createRequestHandler } from '../../packages/server/src/dev.js';
 import { REFUSED, caseFiles } from '../muscle-memory/refused-cases.mjs';
+import { makeEnvApp, EXPECTED_GREETING } from '../muscle-memory/env-app.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
@@ -52,9 +53,7 @@ const quiet = { info() {}, warn() {}, error() {}, debug() {} };
 // env files (Bun's own .env loading must not win over Next's order), public/.
 {
   const app = join(ROOT, 'test/muscle-memory/works');
-  writeFileSync(join(app, '.env'), 'MM_GREETING=from-env\n');
-  writeFileSync(join(app, '.env.local'), 'MM_GREETING=from-env-local\n');
-  try {
+  {
     const h = await createRequestHandler({ appDir: app, dev: false, logger: quiet });
     await h.warmup?.();
     const go = (path, init = {}) => h.handle(new Request('http://localhost' + path, { redirect: 'manual', ...init }));
@@ -66,13 +65,21 @@ const quiet = { info() {}, warn() {}, error() {}, debug() {} };
     assert.equal((await go('/api/items/2')).status, 404, `${runtime}: notFound() in a route handler`);
     assert.equal((await go('/api/items/first')).status, 307, `${runtime}: redirect() in a route handler`);
     assert.match(await (await go('/docs/a/b')).text(), /Path: a \/ b/, `${runtime}: catch-all arrays`);
-    // Next's order skips .env.local in test mode (NODE_ENV=test, set by `bun test`).
-    const expected = process.env.NODE_ENV === 'test' ? /Greeting: from-env</ : /Greeting: from-env-local/;
-    assert.match(await (await go('/greeting')).text(), expected, `${runtime}: env files load in Next's order`);
     assert.equal((await go('/logo.svg')).status, 200, `${runtime}: public/ at the root`);
+  }
+}
+
+// Env files, in an app of their own (writing them into the shared fixture raced
+// the parallel works test).
+{
+  const { dir, cleanup } = makeEnvApp();
+  try {
+    const h = await createRequestHandler({ appDir: dir, dev: false, logger: quiet });
+    await h.warmup?.();
+    const text = await (await h.handle(new Request('http://localhost/greeting'))).text();
+    assert.match(text, EXPECTED_GREETING(), `${runtime}: env files load in Next's order`);
   } finally {
-    rmSync(join(app, '.env'), { force: true });
-    rmSync(join(app, '.env.local'), { force: true });
+    cleanup();
   }
 }
 

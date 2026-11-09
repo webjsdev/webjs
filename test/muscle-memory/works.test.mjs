@@ -12,12 +12,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { checkConventions } from '@webjsdev/server/check';
 import { createRequestHandler } from '@webjsdev/server';
+import { makeEnvApp, EXPECTED_GREETING } from './env-app.mjs';
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), 'works');
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
@@ -54,10 +54,7 @@ test('the corpus renders every Lit idiom on the server', async () => {
 });
 
 test('the corpus behaves the Next.js way on the server', async () => {
-  // `.env.local` is gitignored, so the env pair is written for this test only.
-  writeFileSync(join(APP, '.env'), 'MM_GREETING=from-env\n');
-  writeFileSync(join(APP, '.env.local'), 'MM_GREETING=from-env-local\n');
-  try {
+  {
     const h = await createRequestHandler({ appDir: APP, dev: false, logger: quiet });
     await h.warmup?.();
     const go = (path, init = {}) => h.handle(new Request('http://localhost' + path, { redirect: 'manual', ...init }));
@@ -90,11 +87,6 @@ test('the corpus behaves the Next.js way on the server', async () => {
     assert.match(await (await go('/docs/a/b')).text(), /Path: a \/ b/, 'a catch-all param is an array');
     const perm = await go('/old-about');
     assert.equal(perm.status, 308, 'permanentRedirect() is a 308');
-    const greeting = await (await go('/greeting')).text();
-    // Next's order: .env.local overrides .env, except in test mode (NODE_ENV=test,
-    // which `bun test` sets), where it is skipped so tests are reproducible.
-    if (process.env.NODE_ENV === 'test') assert.match(greeting, /Greeting: from-env</, '.env.local is skipped in test mode');
-    else assert.match(greeting, /Greeting: from-env-local/, '.env.local overrides .env');
     const logo = await go('/logo.svg');
     assert.equal(logo.status, 200, 'public/logo.svg is served at /logo.svg');
     assert.match(await logo.text(), /<svg/);
@@ -114,8 +106,17 @@ test('the corpus behaves the Next.js way on the server', async () => {
     const ok = await submit('Ada');
     assert.equal(ok.status, 303, 'redirect() after the write answers 303, so the browser GETs the target');
     assert.equal(ok.headers.get('location'), '/guestbook?thanks=1');
+  }
+});
+
+test('env files load in Next.js order, in an app of their own', async () => {
+  const { dir, cleanup } = makeEnvApp();
+  try {
+    const h = await createRequestHandler({ appDir: dir, dev: false, logger: quiet });
+    await h.warmup?.();
+    const greeting = await (await h.handle(new Request('http://localhost/greeting'))).text();
+    assert.match(greeting, EXPECTED_GREETING(), '.env.local overrides .env (skipped in test mode)');
   } finally {
-    rmSync(join(APP, '.env'), { force: true });
-    rmSync(join(APP, '.env.local'), { force: true });
+    cleanup();
   }
 });
