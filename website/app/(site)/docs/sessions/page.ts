@@ -53,11 +53,11 @@ export default session({
 });</code-block>
 
     <h2>Session Class API</h2>
-    <p>Use <code>getSession(req)</code> in any server-side code (API routes, server actions, middleware):</p>
+    <p>Call <code>getSession()</code> in any server-side code (pages, server actions, API routes, middleware). With no argument it reads the request in scope, the way <code>cookies()</code> and <code>headers()</code> do; a route handler can pass its <code>req</code> instead, and <code>getSession(getRequest())</code> works too:</p>
 
     <code-block>import { getSession } from '@webjsdev/server';
 
-const s = getSession(req);</code-block>
+const s = getSession();</code-block>
 
     <h3>s.get(key)</h3>
     <p>Returns the value for the key, checking both regular data and flash data.</p>
@@ -128,11 +128,11 @@ export async function POST(req: Request) {
 
     <h2>Example: Flash Messages</h2>
     <code-block>// In a server action after creating a post:
-const s = getSession(req);
+const s = getSession();
 s.flash('success', 'Post published!');
 
 // In the page that renders after redirect:
-const s = getSession(req);
+const s = getSession();
 const message = s.get('success');  // 'Post published!', only this request</code-block>
 
     <h2>Session Options</h2>

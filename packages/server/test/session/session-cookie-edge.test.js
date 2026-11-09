@@ -130,6 +130,22 @@ test('getSession() throws when called outside the session middleware', () => {
   assert.throws(() => getSession(req), /outside of session middleware/);
 });
 
+test('getSession() with no argument reads the request in scope, like cookies() (#1686)', async () => {
+  const { withRequest, getRequest } = await import('../../src/context.js');
+  const mw = session({ secret: 's' });
+  const req = new Request('http://x/');
+  /** @type {any[]} */
+  const seen = [];
+  await withRequest(req, () => mw(req, async () => {
+    seen.push(getSession(), getSession(getRequest()), getSession(req));
+    return new Response('ok');
+  }));
+  assert.ok(seen[0] instanceof Session, 'the no-argument form returns the session');
+  assert.equal(seen[0], seen[1], 'getSession(getRequest()) is the same session');
+  assert.equal(seen[0], seen[2], 'and so is getSession(req)');
+  assert.throws(() => getSession(), /outside of session middleware/, 'outside a request it still throws');
+});
+
 test('session middleware sets the Session on the Request (getSession returns it)', async () => {
   // Confirm the WeakMap wiring: the handler called within next() can
   // resolve getSession(req) → the same Session storage.read produced.

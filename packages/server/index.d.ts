@@ -892,7 +892,11 @@ export declare const cookieSession: typeof cookieSessionStorage;
 /** Alias of `storeSessionStorage`. */
 export declare const storeSession: typeof storeSessionStorage;
 /** Read the session for a request (after the session middleware ran). */
-export declare function getSession(req: Request): Session;
+/**
+ * The session for the current request. With no argument it reads the request
+ * in scope (as `cookies()` and `headers()` do); passing `getRequest()` also works.
+ */
+export declare function getSession(req?: Request | null): Session;
 
 // ---------------------------------------------------------------------------
 // broadcast.js

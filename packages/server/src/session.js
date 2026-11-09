@@ -21,7 +21,7 @@
  */
 
 import { getStore } from './cache.js';
-import { markDynamicAccess } from './context.js';
+import { markDynamicAccess, getRequest } from './context.js';
 import { shared } from './process-shared.js';
 
 // -- Web Crypto helpers ------------------------------------------------------
@@ -382,20 +382,22 @@ export function session(opts = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * Get the Session for the current request.
+ * Get the Session for the current request. With no argument it reads the
+ * request in scope, the way `cookies()` and `headers()` do, so a page, action
+ * or route handler calls `getSession()`; passing `getRequest()` works too.
  *
  * ```js
- * const s = getSession(req);
+ * const s = getSession();
  * s.get('userId');
  * s.set('userId', user.id);
  * s.flash('message', 'Saved!');
  * ```
  *
- * @param {Request} req
+ * @param {Request | null} [req]  defaults to the request in scope
  * @returns {Session}
  */
 export function getSession(req) {
-  const s = sessionMap.get(req);
+  const s = sessionMap.get(req ?? /** @type {Request} */ (getRequest()));
   if (!s) throw new Error('getSession() called outside of session middleware');
   // A session read is per-user, so mark the request dynamic so the server HTML
   // cache excludes it even when the page declared `revalidate` (#241).
