@@ -27,7 +27,7 @@ import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
 import { readRegenerateRules, isRegenerateOutputPath } from '../dev-regenerate.js';
 import { classifyChangedPath, mergeVerdicts } from '../dev-classify.js';
 import { ensureStripper, stripTypeScript } from '../ts-strip.js';
-import { hotSignature, findHotBoundaries } from '../dev-hot-classify.js';
+import { hotSignature, findHotBoundaries, primeHotBaselines } from '../dev-hot-classify.js';
 import { toUrlPath } from '../ssr/preloads.js';
 import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
@@ -565,7 +565,7 @@ export async function createRequestHandler(opts) {
     // file as the open tabs hold it (#1689): set from disk at the first
     // analysis, then from every edit's source, since a tab applies every
     // verdict. Never cleared.
-    /** @type {Map<string, import('../dev-hot-classify.js').HotSignature>} */
+    /** @type {Map<string, import('../dev-hot-classify.js').HotSignature | Promise<import('../dev-hot-classify.js').HotSignature | null>>} */
     hotSignatures: new Map(),
     // The disk stamp of every shipped module as the last analysis found it, on
     // Bun only (#1689): a rebuild adds each one that moved since to its changed
@@ -769,12 +769,11 @@ export async function createRequestHandler(opts) {
               state.componentFiles = new Set(components.map((c) => c.file));
               if (bunVersions) state.shippedStamps = new Map([...state.shippedFiles].map((f) => [f, diskStamp(f)]));
               // The hot-swap baseline of every shipped component the tabs
-              // have not had a signature recorded for yet (#1689).
-              await Promise.all([...state.componentFiles].map(async (f) => {
-                if (!state.shippedFiles.has(f) || state.hotSignatures.has(f)) return;
-                const sig = await readHotSignature(f);
-                if (sig) state.hotSignatures.set(f, sig);
-              }));
+              // have not had a signature recorded for yet (#1689), read in
+              // the background: only a later edit needs it, so the first
+              // request does not wait on it (`hotVerdict` awaits it).
+              primeHotBaselines([...state.componentFiles].filter((f) => state.shippedFiles.has(f)),
+                state.hotSignatures, readHotSignature);
             }
             // Fold the elision verdict into app-module content hashes (#243): an
             // app module's served body is elision-transformed, so a verdict flip

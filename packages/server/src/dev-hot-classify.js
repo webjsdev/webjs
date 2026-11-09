@@ -197,6 +197,33 @@ export function hotSignature(erasedSrc) {
 }
 
 /**
+ * Start reading the hot-swap baseline of each file `baselines` has none for,
+ * WITHOUT waiting: the reads only matter once a later edit arrives, so the
+ * analysis that gates the first request must not wait on N reads and strips
+ * (#1689). Each entry holds the pending read until it lands, and
+ * `findHotBoundaries` awaits whatever `baselineOf` returns. A read that lands
+ * after a newer signature was recorded for its file (an edit's) is dropped.
+ *
+ * @param {Iterable<string>} files
+ * @param {Map<string, HotSignature | Promise<HotSignature | null>>} baselines
+ * @param {(abs: string) => Promise<HotSignature | null>} read never rejects
+ * @returns {void}
+ */
+export function primeHotBaselines(files, baselines, read) {
+  for (const f of files) {
+    if (baselines.has(f)) continue;
+    const pending = read(f).then((sig) => {
+      if (baselines.get(f) === pending) {
+        if (sig) baselines.set(f, sig);
+        else baselines.delete(f);
+      }
+      return sig;
+    });
+    baselines.set(f, pending);
+  }
+}
+
+/**
  * Walk each changed shipped file UP the shipped importer graph to the component
  * modules (the hot BOUNDARIES) that would have to be re-imported for the tab to
  * run the edit. A component module stops the walk; a route module (a page or
@@ -213,7 +240,7 @@ export function hotSignature(erasedSrc) {
  *   routeFiles: Set<string>,
  *   importersOf: (abs: string) => Iterable<string>,
  *   signatureOf: (abs: string) => HotSignature | null | Promise<HotSignature | null>,
- *   baselineOf: (abs: string) => HotSignature | null | undefined,
+ *   baselineOf: (abs: string) => HotSignature | null | undefined | Promise<HotSignature | null>,
  *   sideEffectOf: (abs: string) => boolean | Promise<boolean>,
  *   rel?: (abs: string) => string,
  * }} ctx
@@ -242,7 +269,7 @@ export async function findHotBoundaries(changed, ctx) {
   }
   if (!boundaries.size) return fail('no-hot-boundary', [...changed][0] || '');
   for (const b of boundaries) {
-    const base = ctx.baselineOf(b);
+    const base = await ctx.baselineOf(b);
     if (!base) return fail('no-hot-baseline', b);
     const sig = await ctx.signatureOf(b);
     if (!sig) return fail('no-hot-baseline', b);

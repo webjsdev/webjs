@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hotSignature, findHotBoundaries } from '../../src/dev-hot-classify.js';
+import { hotSignature, findHotBoundaries, primeHotBaselines } from '../../src/dev-hot-classify.js';
 
 const COMPONENT = (body = '', extra = '') => `
 import { WebComponent, html } from '@webjsdev/core';
@@ -193,4 +193,41 @@ class B extends A { constructor() { super(); } }
   assert.equal(a.priv, false, 'a # inside a string is not a private member');
   assert.equal(b.ctor, 'constructor() { super(); }');
   assert.equal(sig.componentOnlyExports, true, 'no exports at all is component-only');
+});
+
+// Review of #1689: the baselines used to be read inside the analysis that gates
+// the first request, which waited on a read and a strip per shipped component.
+// They are now started in the background and awaited only by a later edit.
+test('primeHotBaselines returns at once, and the boundary walk awaits a pending baseline', async () => {
+  const baselines = new Map();
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const reads = [];
+  primeHotBaselines(['/c/counter.ts', '/c/other.ts'], baselines, async (f) => {
+    reads.push(f);
+    await gate;
+    return hotSignature(f === '/c/counter.ts' ? COMPONENT() : COMPONENT().replace(/Counter/g, 'Other'));
+  });
+  assert.deepEqual(reads, ['/c/counter.ts', '/c/other.ts'], 'every read starts at once');
+  assert.ok(baselines.get('/c/counter.ts') instanceof Promise, 'the entry holds the pending read');
+  const c = ctx({ '/c/counter.ts': COMPONENT().replace('this.count = 0;', 'this.count = 10;') });
+  c.baselineOf = (f) => baselines.get(f);
+  const verdict = findHotBoundaries(['/c/counter.ts'], c);
+  release();
+  assert.deepEqual(await verdict, { ok: false, why: 'constructor-changed', by: '/c/counter.ts' }, 'compared against the baseline once it lands');
+  assert.equal(baselines.get('/c/counter.ts').classes[0].name, 'Counter', 'and the settled read replaces the promise');
+});
+
+test('a baseline read that lands after a newer signature does not overwrite it', async () => {
+  const baselines = new Map();
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  primeHotBaselines(['/c/counter.ts'], baselines, async () => { await gate; return hotSignature(COMPONENT()); });
+  const newer = hotSignature(COMPONENT('step = 2;'));
+  baselines.set('/c/counter.ts', newer);
+  release();
+  await gate;
+  await new Promise((r) => setImmediate(r));
+  assert.equal(baselines.get('/c/counter.ts'), newer);
+  primeHotBaselines(['/c/counter.ts'], baselines, () => { throw new Error('a recorded file is not read again'); });
 });

@@ -131,6 +131,17 @@ try {
   assert.ok(doc && doc.includes(`import "${verdict.modules[0]}";`), `the boot import carries the version on ${runtime}\n${doc}`);
   assert.ok(!doc.includes('"/components/counter.ts"'), `no bare reference to the bumped component is left on ${runtime}`);
 
+  // The component's hot-swap baseline was read in the background at the first
+  // analysis, never awaited by a request (review of #1689). A constructor edit
+  // is still compared against it, so the swap is refused and the tab reloads.
+  const ctorFrame = reloadFrame(15_000);
+  await sleep(300);
+  writeFileSync(join(dir, 'components/counter.ts'), counterSrc(1).replace('this.count = 0;', 'this.count = 5;'));
+  const ctorData = await ctorFrame;
+  assert.ok(ctorData, `no reload frame after the constructor edit on ${runtime}\n--- server log ---\n${log}`);
+  const ctor = JSON.parse(ctorData);
+  assert.deepEqual([ctor.v, ctor.why], ['reload', 'constructor-changed'], `the background baseline caught the constructor edit on ${runtime}, got ${ctorData}`);
+
   console.log(`OK  webjs dev versions the served import of an edited browser module on ${runtime} (#1689)`);
 } finally {
   if (child && child.pid) {
