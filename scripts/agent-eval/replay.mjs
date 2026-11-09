@@ -47,7 +47,7 @@ export function verifyKind(cmd) {
 /** A shell command that changes files: an in-place edit, a move, a copy, a delete, a redirect into a file, or the gallery reset. */
 // `git show REF:path > dest`, the one git command that writes a file.
 const RESTORE_RE = /\bgit show [^:\s]+:("[^"]+"|\S+)\s*>\s*("[^"]+"|\S+)/g;
-const MUTATES_RE = /\bmkdir\s|\bsed\s+-i|\bmv\s|\bcp\s|\brm\s|cat\s*>|\btee\s|>\s*[\w./#-]+\.(?:ts|js|mjs|json|css|md)\b|gallery:clear|clear-gallery/;
+const MUTATES_RE = /\bpython3?\s+-\s*<<|\bnode\s+(?:-e|--eval)\b[^\n]*writeFileSync|\bmkdir\s|\bsed\s+-i|\bmv\s|\bcp\s|\brm\s|cat\s*>|\btee\s|>\s*[\w./#-]+\.(?:ts|js|mjs|json|css|md)\b|gallery:clear|clear-gallery/;
 
 export function verifyPassed(kind, out) {
   if (kind === 'check') return /all checks pass/.test(out) && !/\d+ violation/.test(out);
