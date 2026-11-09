@@ -321,3 +321,16 @@ test('lookupExport: source under a SYMLINKED directory is searched (pnpm / works
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('lookupExport: a lower-camel convention name finds its upper-camel type (#1686)', async () => {
+  // generateMetadata is a file convention, not an export; an eval agent got
+  // nothing back and reverse-engineered the contract from the type files.
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { readFile } = await import('node:fs/promises');
+  const roots = resolveFrameworkRoots(resolve(REPO, 'gallery'), { exists: existsSync });
+  const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+  const out = await lookupExport({ roots, readFile, readdir }, 'generateMetadata', 'core');
+  assert.match(out, /^"generateMetadata" is not an export; its type is GenerateMetadata:/);
+  assert.match(out, /export type GenerateMetadata =/);
+  assert.ok(out.split('\\n').length < 40);
+});

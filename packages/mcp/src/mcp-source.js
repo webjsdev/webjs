@@ -345,9 +345,10 @@ function declarationFrom(lines, line, isTypes) {
  * @param {{ roots: Array<{ pkg: string, root: string, src: string }>, readFile: Function, readdir: Function }} deps
  * @param {string} name an export name, e.g. `createAuth`
  * @param {string} [pkgFilter] one of the framework packages, e.g. `server`
+ * @param {boolean} [caseRetried] internal: the case-swapped retry is already this call
  * @returns {Promise<string>}
  */
-export async function lookupExport(deps, name, pkgFilter) {
+export async function lookupExport(deps, name, pkgFilter, caseRetried = false) {
   const n = String(name || '').trim();
   if (!/^[A-Za-z_$][\w$]*$/.test(n)) return 'Pass an export name (letters, digits, _ or $), e.g. `createAuth`.';
   const roots = pkgFilter ? deps.roots.filter((r) => r.pkg === pkgFilter) : deps.roots;
@@ -380,6 +381,13 @@ export async function lookupExport(deps, name, pkgFilter) {
   }
   const searched = deps.roots.map((r) => r.pkg).join(', ');
   if (!hits.length) {
+    // The name as written with another case: a convention is written lower
+    // camel (`generateMetadata`) and its type upper (`GenerateMetadata`).
+    const other = n[0] === n[0].toLowerCase() ? n[0].toUpperCase() + n.slice(1) : n[0].toLowerCase() + n.slice(1);
+    if (other !== n && !caseRetried) {
+      const cased = await lookupExport(deps, other, pkgFilter, true);
+      if (cased.startsWith('@webjsdev/')) return `"${n}" is not an export; its type is ${other}:\n${cased}`;
+    }
     const members = await lookupMember(deps, roots, n);
     if (members) return members;
     return `No export named "${n}" in the searched @webjsdev/* packages (${roots.map((r) => r.pkg).join(', ')}${pkgFilter ? `; resolvable: ${searched}` : ''}). Try \`query\` for a substring search, or \`path\` to read a file.`;

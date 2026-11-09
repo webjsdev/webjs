@@ -337,3 +337,22 @@ export interface MetadataContext {
    */
   actionData?: unknown;
 }
+
+/**
+ * A page's or layout's `generateMetadata` export, Next.js's: called per
+ * request with the page context and a promise of the metadata the outer
+ * layouts resolved, it returns this segment's {@link Metadata}. Export a static
+ * `metadata` object instead when nothing depends on the request.
+ *
+ * @example
+ * ```ts
+ * // app/posts/[slug]/page.ts
+ * import type { Metadata, MetadataContext } from '@webjsdev/core';
+ * export async function generateMetadata({ params }: MetadataContext, parent: Promise<Metadata>): Promise<Metadata> {
+ *   const post = await getPost(params.slug);
+ *   const images = (await parent).openGraph?.images ?? [];
+ *   return { title: post?.title ?? 'Not found', openGraph: { images } };
+ * }
+ * ```
+ */
+export type GenerateMetadata = (ctx: MetadataContext, parent: Promise<Metadata>) => Metadata | Promise<Metadata>;

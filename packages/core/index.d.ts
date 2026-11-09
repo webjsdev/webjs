@@ -26,6 +26,7 @@ export type {
   AuthorMetadata,
   PreloadDescriptor,
   JsonLd,
+  GenerateMetadata,
 } from './src/metadata.d.ts';
 
 // Typed route props + the opt-in generated route union (#258). The

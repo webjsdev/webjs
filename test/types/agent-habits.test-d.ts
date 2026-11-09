@@ -6,7 +6,7 @@
 import { getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler, revalidateTag } from '@webjsdev/server';
 import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
-import type { LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
+import type { GenerateMetadata, LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
 import { defaultConverter, notEqual } from '@webjsdev/core';
 
 // getSession() reads the request in scope, the way cookies() and headers() do.
@@ -110,4 +110,10 @@ export const litHelperHabits = {
     fromAttribute: (value: string | null) => (value ? new Date(value) : defaultConverter.fromAttribute(value, String)),
   },
   hasChanged: (value: unknown, old: unknown) => notEqual(value, old),
+};
+
+// generateMetadata written the Next.js way, typed through GenerateMetadata.
+export const generateMetadataHabit: GenerateMetadata = async ({ params }, parent) => {
+  const images = (await parent).openGraph?.images ?? [];
+  return { title: params.slug ?? 'Not found', openGraph: { images } };
 };

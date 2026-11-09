@@ -82,7 +82,10 @@ src/
                          that is no export but a member of an exported type
                          (`actionData` on `PageProps`, the most grepped term
                          in the #1686 eval builds) prints that member's doc and
-                         declaration, headed by the owning type (lookupMember).
+                         declaration, headed by the owning type (lookupMember). A name that matches
+                         nothing is retried once with its first letter's case
+                         swapped, so a convention (`generateMetadata`) finds its
+                         type (`GenerateMetadata`).
   check-report.js        projectCheck(violations) -> { violations, summary }.
                          The shared shape returned by BOTH the MCP `check` tool
                          and `webjs check --json` (the CLI imports it from
