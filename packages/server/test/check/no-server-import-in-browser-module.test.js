@@ -731,3 +731,23 @@ test('message prints the full import chain and names the types-module fix (#804)
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('the message names the helper that makes a page ship, not just the page', async () => {
+  // Found by an agent building an app: a page shipped because a plain helper it
+  // imported built an Intl formatter at module scope, and the message blamed
+  // the page, so the agent moved the wrong code. The elision verdict knows the
+  // blocker, so the message names it.
+  const dir = await makeApp({
+    'app/layout.ts': "import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html`<html><body>${children}</body></html>`; }\n",
+    'lib/format.ts': "export const fmt = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });\nexport const label = (d: Date) => fmt.format(d);\n",
+    'lib/db.server.ts': 'export function listEvents() { return []; }\n',
+    'app/page.ts': "import { html } from '@webjsdev/core';\nimport { label } from '../lib/format.ts';\nimport { listEvents } from '../lib/db.server.ts';\nexport default function P() { return html`<p>${label(new Date())} ${listEvents().length}</p>`; }\n",
+  });
+  try {
+    const v = find(await checkConventions(dir), 'app/page.ts');
+    assert.equal(v.length, 1, JSON.stringify(v));
+    assert.match(v[0].message, /It ships because lib\/format\.ts .*fix that module, not this page/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

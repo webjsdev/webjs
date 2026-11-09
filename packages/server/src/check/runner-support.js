@@ -193,9 +193,9 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
   // rule treats every candidate as shipping (which is correct: with elision
   // off, a display-only page really does ship its server import too).
   const elideEnabled = await readElideEnabledForCheck(appDir);
-  const { elidableComponents, inertRouteModules, importOnlyRouteModules } = elideEnabled
+  const { elidableComponents, inertRouteModules, importOnlyRouteModules, shippedRouteModules } = elideEnabled
     ? await analyzeElision(components, routeModules, moduleGraph, (f) => readFile(f, 'utf8'), appDir)
-    : { elidableComponents: new Set(), inertRouteModules: new Set(), importOnlyRouteModules: new Map() };
+    : { elidableComponents: new Set(), inertRouteModules: new Set(), importOnlyRouteModules: new Map(), shippedRouteModules: new Map() };
 
   // Candidate browser-shipped modules: components that are NOT elided, plus
   // route modules that are NOT inert and NOT import-only (an import-only
@@ -286,11 +286,20 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
       ? `${typesHint}Keep the server call off this browser-shipped ${kind}. Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC; or (3) move this ${kind}'s own client work (the module-scope call, browser-global access, or client-effecting util import that pins it) into a component, so the ${kind} elides again as a dropped carrier and its server import never loads.`
       : `${typesHint}Keep the server call off this browser-shipped ${kind} (it always ships and is never elided). Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); or (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC.`;
 
+    // Name WHY the page or layout ships, from the same elision verdict. The
+    // cause is often a plain helper it imports (a module-scope Intl formatter,
+    // say), and blaming the page alone sent an agent to fix the wrong file.
+    const why = canElide && shippedRouteModules ? shippedRouteModules.get(file) : undefined;
+    const whyText = !why ? ''
+      : why.blocker
+        ? ` It ships because ${relative(appDir, why.blocker)} ${why.reason}; fix that module, not this ${kind}.`
+        : ` It ships because it ${why.reason}.`;
+
     violations.push({
       rule: 'no-server-import-in-browser-module',
       file: relFile,
       message:
-        `This ${kind} ships to the browser (the build does not elide it) but transitively imports the server-only module ${relServer} (${chain}). In the browser that import resolves to a stub, so the module crashes at load (the stub throws, or a server-only export such as \`auth\` is missing). \`webjs typecheck\` and the rest of \`webjs check\` pass; only the running ${kind} fails.`,
+        `This ${kind} ships to the browser (the build does not elide it) but transitively imports the server-only module ${relServer} (${chain}).${whyText} In the browser that import resolves to a stub, so the module crashes at load (the stub throws, or a server-only export such as \`auth\` is missing). \`webjs typecheck\` and the rest of \`webjs check\` pass; only the running ${kind} fails.`,
       fix: fixText,
     });
   }
