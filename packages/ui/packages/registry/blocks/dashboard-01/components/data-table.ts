@@ -124,7 +124,14 @@ function row(r: DashboardRow, state: RowState) {
       </td>
       <td data-slot="table-cell" class=${cell()}>
         <div class="flex items-center justify-center">
-          <input type="checkbox" data-slot="checkbox" data-row-select class=${checkboxClass()} aria-label="Select row" .checked=${selected}>
+          ${state === FIRST_PAINT
+            // The first paint is part of the PAGE's template (the page never
+            // hydrates), so it states the checkbox as an attribute; a page
+            // template may not carry a `.prop` binding. The element's own
+            // repaints set the live property, which a box the user has
+            // toggled still follows.
+            ? html`<input type="checkbox" data-slot="checkbox" data-row-select class=${checkboxClass()} aria-label="Select row" ?checked=${selected}>`
+            : html`<input type="checkbox" data-slot="checkbox" data-row-select class=${checkboxClass()} aria-label="Select row" .checked=${selected}>`}
         </div>
       </td>
       <td data-slot="table-cell" class=${cell()}>
