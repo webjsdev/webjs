@@ -3,9 +3,10 @@
 // WebJs type, not on the agent's own logic. It must compile clean with no
 // casts. The rule from now on: an eval typecheck failure caused by a framework
 // type adds a block here, beside the fix that made it compile.
-import { getRequest, getSession, Credentials, GitHub } from '@webjsdev/server';
+import { getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler } from '@webjsdev/server';
+import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
-import type { PageProps } from '@webjsdev/core';
+import type { LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
 
 // getSession() reads the request in scope, the way cookies() and headers() do.
 // Agents also chained the two WebJs calls, getSession(getRequest()), and
@@ -56,4 +57,39 @@ export function authMiddlewareHabits(instance: AuthInstance) {
     callbacks: { authorized: ({ auth }) => !!auth },
   };
   return [middleware, wrapped, config];
+}
+
+// Route props the Next.js 15 way and the Next.js 14 way, and the route-handler
+// context written inline as Next documents it. (Plan workstream 3, #1686.)
+export async function routePropHabits(
+  { params, searchParams }: PageProps<'/rooms/[id]'>,
+  layout: LayoutProps,
+  untyped: PageProps,
+) {
+  const { id } = await params;
+  const sync: string = params.id;
+  const sp = await searchParams;
+  const q = typeof sp.q === 'string' ? sp.q : '';
+  const slug: string = untyped.params.slug ?? '';
+  return [id, sync, q, slug, layout.children];
+}
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return Response.json({ id, url: req.url });
+}
+export async function handlerContextHabit(req: Request, ctx: RouteHandlerContext<'/api/rooms/[id]'>) {
+  const { id } = await ctx.params;
+  return new Response(id + req.method);
+}
+
+// Request-scope readers and the test helpers, as an app's server tests call them.
+export async function requestHabits() {
+  const ua = getRequest()?.headers.get('user-agent') ?? '';
+  const fromHeaders = (await headers()).get('accept') ?? headers().get('accept');
+  const theme: string = cookies().get('theme')?.value ?? 'light';
+  const app = await createRequestHandler({ appDir: '.', dev: true });
+  const res = await testRequest(app.handle, '/');
+  const { cookies: jar } = await loginAndGetCookies(app.handle, { email: 'a@b.c', password: 'secret-123' });
+  const sent = await submitForm(app.handle, '/rooms/1', { day: '2026-11-10', hours: ['1', '2'] }, { cookies: jar });
+  return [ua, fromHeaders, theme, res.status, sent.headers.get('location')];
 }
