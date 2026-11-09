@@ -267,12 +267,15 @@ jobs:
       # state on both runtimes.
       # dev-service-worker rides here too (#1689): /sw.js is the dev kill switch
       # through both listener shells.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker on Bun
+      # dev-watch-poll rides here too (#1689): a directory out of file watches
+      # is polled instead, over each runtime's own fs.watch and statSync.
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll on Bun
         run: |
           bun test/bun/dev-hot-server-fresh.mjs
           bun test/bun/dev-hot-served-versions.mjs
           bun test/bun/dev-html-cache-rebuild.mjs
           bun test/bun/dev-service-worker.mjs
+          bun test/bun/dev-watch-poll.mjs
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-watch-error.mjs
           bun test/bun/dev-watch-replaced.mjs

@@ -375,6 +375,7 @@ export async function startServer(opts) {
       warned.add(key);
       logger.warn(`file watcher skipped ${err && err.path ? err.path : 'a path'} (${err && err.code ? err.code : String(err)})`);
     };
+    let pollFallbackWarned = false;
     const watchRoot = (root) => {
       // Output nothing serves (`*.log`, coverage/, ...) and the root's
       // `.gitignore` never reload the page: `npm run dev > dev.log` made every
@@ -397,6 +398,15 @@ export async function startServer(opts) {
           rebuild();
         },
         onError: onWatchError,
+        // Out of inotify watches (#1689): the directory is polled instead, and
+        // the fix is printed once per process rather than per directory.
+        onFallback: (name, err) => {
+          if (pollFallbackWarned) return;
+          pollFallbackWarned = true;
+          const code = (err && err.code) || 'ENOSPC';
+          const what = name ? `${name}/` : 'the app root';
+          logger.warn(`[webjs] the file watch limit is reached (${code}), so ${what} is watched by polling every 1s. Raise it: sudo sysctl fs.inotify.max_user_watches=524288 (persist it in /etc/sysctl.d/).`);
+        },
       });
       watcherAbort.signal.addEventListener('abort', close, { once: true });
     };
