@@ -235,12 +235,14 @@ describe('E2E: dev embed bridge (#1498)', {
     assert.equal(await frame().evaluate(() => window.__mark), 'same-document', 'an empty hold reloads nothing');
 
     // Held across two component edits (each a full-reload verdict): nothing.
+    // Each adds a non-component export, which the component hot swap refuses
+    // (#1689), so the verdict stays a full reload rather than a hot swap.
     from = await count();
     await page.evaluate(() => window.send({ type: 'hold', enabled: true }));
     await message((m) => m.type === 'hold' && m.enabled === true, from);
-    appendFileSync(join(dir, 'components/trouble.ts'), '\n// held edit 1\n');
+    appendFileSync(join(dir, 'components/trouble.ts'), '\nexport const held1 = 1;\n');
     await sleep(400);
-    appendFileSync(join(dir, 'components/trouble.ts'), '\n// held edit 2\n');
+    appendFileSync(join(dir, 'components/trouble.ts'), '\nexport const held2 = 2;\n');
     await sleep(2500);
     assert.equal(await frame().evaluate(() => window.__mark), 'same-document', 'no reload while held');
     assert.equal((await page.evaluate(() => window.__msgs)).slice(from).filter((m) => m.type === 'ready').length, 0);
