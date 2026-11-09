@@ -137,6 +137,12 @@
     "isCSS": {
       "exempt": "internal: value type guard used by the renderer"
     },
+    "CSSResult": {
+      "exempt": "internal: the class css returns, exported for Lit parity and instanceof; authors use the css tag (demoed)"
+    },
+    "unsafeCSS": {
+      "exempt": "deferred: agent-facing (Lit's escape hatch for a trusted string in a css hole, documented on the docs-site styling page); no single-concept gallery demo yet"
+    },
     "isCache": {
       "exempt": "internal: directive type guard used by the renderer"
     },
