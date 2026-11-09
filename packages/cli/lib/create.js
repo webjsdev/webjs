@@ -731,6 +731,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // SYNTAX errors. Use a `const` object + union for enum-shaped
       // values; write fields + constructor assignments explicitly.
       erasableSyntaxOnly: true,
+      // Type-only imports must say `import type` (Lit's `PropertyValues`,
+      // a Drizzle row type). The type stripper erases only what is marked, so
+      // an unmarked type import survives into the served module and fails at
+      // load with "does not provide an export named"; this flag makes tsc
+      // report it at edit time instead.
+      verbatimModuleSyntax: true,
       // @webjsdev/intellisense (standalone, no Lit dependency) gives the editor,
       // inside html`` templates:
       //   • go-to-definition on custom-element tags, attributes, and CSS classes

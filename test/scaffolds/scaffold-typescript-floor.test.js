@@ -46,6 +46,7 @@ const REQUIRES = {
   skipLibCheck: '2.0.0',
   plugins: '2.3.0',
   allowImportingTsExtensions: '5.0.0',
+  verbatimModuleSyntax: '5.0.0',
   // The option this guard exists for.
   erasableSyntaxOnly: '5.8.0',
 };

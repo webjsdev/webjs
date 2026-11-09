@@ -52,6 +52,46 @@ export interface ReactiveController {
 }
 
 /**
+ * Lit's `ReactiveControllerHost`: what a controller may rely on from its host.
+ * Every `WebComponent` satisfies it, so a controller typed against it works
+ * with WebJs and Lit alike.
+ */
+export interface ReactiveControllerHost {
+  addController(controller: ReactiveController): void;
+  removeController(controller: ReactiveController): void;
+  requestUpdate(): void;
+  readonly updateComplete: Promise<boolean>;
+}
+
+/** Lit's `ComplexAttributeConverter`: the object form of a property `converter`. */
+export interface ComplexAttributeConverter<Type = unknown, TypeHint = unknown> {
+  fromAttribute?(value: string | null, type?: TypeHint): Type;
+  toAttribute?(value: Type, type?: TypeHint): unknown;
+}
+
+/** Lit's `PropertyDeclarations`: the shape of a `static properties` block. */
+export interface PropertyDeclarations {
+  readonly [key: string]: PropertyDeclaration | PropertyConstructor;
+}
+
+/**
+ * Lit's `PropertyValueMap<T>`: a `changedProperties` Map whose keys and old
+ * values are typed against the component (`PropertyValues<this>`).
+ */
+export interface PropertyValueMap<T> extends Map<PropertyKey, unknown> {
+  get<K extends keyof T>(k: K): T[K] | undefined;
+  set<K extends keyof T>(key: K, value: T[K]): this;
+  has<K extends keyof T>(k: K): boolean;
+  delete<K extends keyof T>(k: K): boolean;
+}
+
+/**
+ * Lit's `PropertyValues`: the `changedProperties` argument of the lifecycle
+ * hooks. `PropertyValues<this>` types its keys against the component.
+ */
+export type PropertyValues<T = any> = T extends object ? PropertyValueMap<T> : Map<PropertyKey, unknown>;
+
+/**
  * Base class for interactive web components.
  *
  * Declare reactive properties in either of two equivalent ways. The
@@ -135,15 +175,15 @@ interface WebComponentBase extends HTMLElement {
   /** Called on connect, right before the first update is queued. */
   enableUpdating(requestedUpdate: boolean): void;
   /** Decide whether to update. Default returns `true`. */
-  shouldUpdate(changedProperties: Map<string, unknown>): boolean;
+  shouldUpdate(changedProperties: PropertyValues): boolean;
   /** Pre-render hook. Safe to set properties; folds into current cycle. */
-  willUpdate(changedProperties: Map<string, unknown>): void;
+  willUpdate(changedProperties: PropertyValues): void;
   /** Render-and-commit step. Default calls `render()` and commits. */
-  update(changedProperties: Map<string, unknown>): void;
+  update(changedProperties: PropertyValues): void;
   /** Post-render hook. Runs after every commit. */
-  updated(changedProperties: Map<string, unknown>): void;
+  updated(changedProperties: PropertyValues): void;
   /** One-shot hook after the first render lands in the DOM. */
-  firstUpdated?(changedProperties: Map<string, unknown>): void;
+  firstUpdated?(changedProperties: PropertyValues): void;
   /** Optional render-error boundary inside the component. */
   renderError?(error: Error): TemplateResult | void;
   /**

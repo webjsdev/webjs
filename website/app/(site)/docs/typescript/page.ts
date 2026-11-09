@@ -29,6 +29,7 @@ export default function TypeScript() {
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
     "plugins": [{ "name": "@webjsdev/intellisense" }]
   },
   "include": [
@@ -46,6 +47,7 @@ export default function TypeScript() {
     <p>Key settings explained:</p>
     <ul>
       <li><strong>erasableSyntaxOnly: true</strong>: rejects non-erasable TypeScript syntax (<code>enum</code>, <code>namespace</code> with values, constructor parameter properties, legacy decorators, <code>import = require</code>) at compile time. Required because Node's built-in stripper only supports erasable TypeScript. Violations surface as red squiggles in the editor. See <strong>TypeScript Feature Support</strong> below for the erasable equivalents.</li>
+      <li><strong>verbatimModuleSyntax: true</strong>: a type-only import must say <code>import type</code> (<code>import type { PropertyValues } from '@webjsdev/core'</code>). The stripper erases only what is marked, so an unmarked import of a type survives into the served module and fails at load with "does not provide an export named"; this flag makes the compiler report it at edit time instead.</li>
       <li><strong>noEmit: true</strong>: WebJs never compiles TypeScript to JavaScript on disk. The TypeScript compiler is used only for type-checking (<code>tsc --noEmit</code>). Node runs your <code>.ts</code> files directly via its built-in stripper.</li>
       <li><strong>allowImportingTsExtensions: true</strong>: lets you write <code>import { foo } from './bar.ts'</code> with the explicit <code>.ts</code> extension. This is the WebJs convention (see below).</li>
       <li><strong>include covers test/</strong>: <code>npm run typecheck</code> reads the tests you write, so a type error there is a failed check rather than something a reviewer has to spot. Note what is NOT here: <code>checkJs</code>, which turns on checking of your <code>.js</code> files too (and implies <code>allowJs</code>). That is a real option for a JSDoc-typed codebase, covered under <strong>JSDoc Alternative</strong> below, but it is not the default here, because a browser test written as <code>.js</code> is served to a real browser and has none of the test-runner globals in scope, so each one would report an unresolved name.</li>
@@ -71,6 +73,18 @@ import { db } from '#db/connection.server';       // ERROR</code-block>
       <li>The dev server reads <code>.ts</code> files from disk, strips them (Node's <code>module.stripTypeScriptTypes</code> or <code>amaro</code> on Bun), and serves the result with position-preserving whitespace replacement.</li>
       <li>When the browser requests a <code>.js</code> file that doesn't exist but a sibling <code>.ts</code> does, WebJs falls back to the <code>.ts</code> version automatically. This means libraries that import without extensions can still work.</li>
     </ul>
+
+    <h2>Lit's component types</h2>
+    <p>The type names a Lit author imports are exported from <code>@webjsdev/core</code> with Lit's shapes, as types only (import them with <code>import type</code>): <code>PropertyValues</code> and <code>PropertyValueMap</code> (the <code>changedProperties</code> argument, <code>PropertyValues&lt;this&gt;</code> for typed keys), <code>PropertyDeclaration</code> and <code>PropertyDeclarations</code> (a <code>static properties</code> block), <code>ReactiveController</code> and <code>ReactiveControllerHost</code>, and <code>ComplexAttributeConverter</code>.</p>
+    <code-block>import { WebComponent, html } from '@webjsdev/core';
+import type { PropertyValues } from '@webjsdev/core';
+
+class Counter extends WebComponent({ count: Number }) {
+  willUpdate(changed: PropertyValues&lt;this&gt;) {
+    if (changed.has('count')) this.dataset.even = String(this.count % 2 === 0);
+  }
+  render() { return html\`&lt;p&gt;\${this.count}&lt;/p&gt;\`; }
+}</code-block>
 
     <h2>Full-Stack Type Safety</h2>
     <p>Server actions in WebJs provide end-to-end type safety without code generation. When a client component imports from a <code>.server.ts</code> file, TypeScript sees the real function signature:</p>

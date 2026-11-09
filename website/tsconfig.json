@@ -11,7 +11,8 @@
     "checkJs": false,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "erasableSyntaxOnly": true
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true
   },
   "include": ["app/**/*", "components/**/*", "lib/**/*", "modules/**/*", "test/**/*"],
   "exclude": ["node_modules", ".webjs"]

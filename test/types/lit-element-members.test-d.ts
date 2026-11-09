@@ -1,9 +1,12 @@
 /**
- * Type fixture: the Lit element members WebComponent implements type-check the
- * way a Lit author writes them. Run by `test/types/type-fixtures.test.mjs` via
- * `tsc --noEmit --strict`.
+ * Type fixture: the Lit element members and type names WebComponent
+ * implements type-check the way a Lit author writes them. Run by
+ * `test/types/type-fixtures.test.mjs` via `tsc --noEmit --strict`.
  */
 import { WebComponent, html } from '@webjsdev/core';
+import type {
+  PropertyValues, PropertyValueMap, PropertyDeclarations, ReactiveControllerHost, ComplexAttributeConverter,
+} from '@webjsdev/core';
 
 class LitShaped extends WebComponent {
   static shadow = true;
@@ -45,4 +48,29 @@ const names: PropertyKey[] = [...LitShaped.elementProperties.keys()];
 LitShaped.addInitializer((el) => el.requestUpdate());
 LitShaped.finalize();
 
-export { LitShaped, LightByOverride, t, names };
+class TypedHooks extends WebComponent({ count: Number }) {
+  static properties: PropertyDeclarations = { extra: { type: String } };
+  willUpdate(changed: PropertyValues<this>) {
+    const old: number | undefined = changed.get('count');
+    void old;
+  }
+  updated(changed: PropertyValues) {
+    void changed.has('anything');
+  }
+}
+
+class HostOnlyController {
+  host: ReactiveControllerHost;
+  constructor(host: ReactiveControllerHost) {
+    this.host = host;
+    host.addController({ hostConnected: () => host.requestUpdate() });
+  }
+}
+const dateConverter: ComplexAttributeConverter<Date> = {
+  fromAttribute: (v) => new Date(v ?? 0),
+  toAttribute: (d) => d.toISOString(),
+};
+const m = new Map() as PropertyValueMap<{ a: number }>;
+new HostOnlyController(new TypedHooks());
+
+export { LitShaped, LightByOverride, TypedHooks, t, names, dateConverter, m };
