@@ -332,6 +332,33 @@
     "svg": {
       "exempt": "deferred: agent-facing (the html tag's SVG-fragment sibling, documented in AGENTS.md and the skill's components reference); no single-concept gallery demo yet"
     },
+    "mathml": {
+      "exempt": "deferred: agent-facing (lit's mathml tag, the html tag's MathML-fragment sibling, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "isServer": {
+      "exempt": "deferred: agent-facing (lit's isServer flag, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "unsafeSVG": {
+      "exempt": "deferred: agent-facing (lit's unsafeSVG, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "unsafeMathML": {
+      "exempt": "deferred: agent-facing (lit's unsafeMathML, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "when": {
+      "exempt": "deferred: agent-facing (lit's when helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "choose": {
+      "exempt": "deferred: agent-facing (lit's choose helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "map": {
+      "exempt": "deferred: agent-facing (lit's map generator helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "join": {
+      "exempt": "deferred: agent-facing (lit's join generator helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "range": {
+      "exempt": "deferred: agent-facing (lit's range generator helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
     "classMap": {
       "demo": "modules/directives/components/directive-demo.ts"
     },

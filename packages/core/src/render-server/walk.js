@@ -175,6 +175,14 @@ export class Walker {
       for (const v of value) await this.value(v);
       return;
     }
+    // Any other iterable renders like an array, as in lit: a generator from
+    // `map()` / `join()` / `range()`, a Set, a Map's values. A string is
+    // iterable too and was handled above, and every directive marker is a
+    // plain object with no iterator, so none of them reaches this branch.
+    if (typeof value === 'object' && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
+      for (const v of /** @type {Iterable<unknown>} */ (value)) await this.value(v);
+      return;
+    }
     // An unsafeHTML value is raw markup. With expansion on, the components it
     // carries render too (the output rescan used to find them), through the
     // same tokenizer the template went through, so a tag written inside one

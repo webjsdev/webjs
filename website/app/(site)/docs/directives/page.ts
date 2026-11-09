@@ -5,14 +5,16 @@ export const metadata = { title: 'Directives | WebJs' };
 export default function Directives() {
   return html`
     <h1>Directives</h1>
-    <p>WebJs ships the lit-html directives under their Lit names and with Lit's behaviour, so code written from Lit muscle memory works as written. That includes the attribute helpers <code>classMap</code>, <code>styleMap</code>, and <code>ifDefined</code>, and the <code>nothing</code> / <code>noChange</code> sentinels. Only <code>when</code> / <code>choose</code> / <code>map</code> / <code>join</code> / <code>range</code> are left to plain JavaScript (see below). The implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
+    <p>WebJs ships the lit-html directives under their Lit names and with Lit's behaviour, so code written from Lit muscle memory works as written. That includes the attribute helpers <code>classMap</code>, <code>styleMap</code>, and <code>ifDefined</code>, the <code>nothing</code> / <code>noChange</code> sentinels, the <code>when</code> / <code>choose</code> / <code>map</code> / <code>join</code> / <code>range</code> helpers, and static expressions from <code>@webjsdev/core/static-html</code>. The implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server/walk.js</code>, <code>render-client/parts.js</code>). Lit's import paths map one to one: <code>lit/directives/*.js</code> is <code>@webjsdev/core/directives</code>, <code>lit/static-html.js</code> is <code>@webjsdev/core/static-html</code>.</p>
 
-    <code-block>import { html, repeat, nothing, noChange } from '@webjsdev/core';
+    <code-block>import { html, svg, mathml, repeat, nothing, noChange, isServer } from '@webjsdev/core';
 import {
-  classMap, styleMap, ifDefined, unsafeHTML, live,
+  classMap, styleMap, ifDefined, unsafeHTML, unsafeSVG, unsafeMathML, live,
   keyed, guard, templateContent, ref, createRef,
   cache, until, asyncAppend, asyncReplace,
-} from '@webjsdev/core/directives';</code-block>
+  when, choose, map, join, range,
+} from '@webjsdev/core/directives';
+import { literal, unsafeStatic, html as staticHtml } from '@webjsdev/core/static-html';</code-block>
 
     <h2>repeat(items, keyFn, templateFn)</h2>
     <p>Keyed list reconciliation. Without it, re-rendering an array destroys and recreates all DOM nodes, losing focus, scroll position, and component state.</p>
@@ -24,10 +26,15 @@ import {
   )}
 &lt;/ul&gt;\`;</code-block>
     <p>Use for any list where items can be added, removed, or reordered and you need to preserve DOM identity (animated lists, forms with inputs, draggable items). For static lists, plain <code>\${items.map(...)}</code> works.</p>
+    <p>Lit's two-argument form, <code>repeat(items, (item, i) =&gt; html\`...\`)</code>, works too. With no key function each item is keyed by its index, so it updates positionally like a plain array; pass a key function whenever DOM identity has to follow the data.</p>
 
     <h2>unsafeHTML(htmlString)</h2>
     <p>Renders a raw HTML string without escaping. The only way to inject pre-built HTML (CMS content, markdown output) into a template.</p>
     <code-block>html\`&lt;article&gt;\${unsafeHTML(markdownToHtml(post.body))}&lt;/article&gt;\`;</code-block>
+
+    <h2>unsafeSVG(svgString) / unsafeMathML(mathString)</h2>
+    <p>The SVG and MathML twins of <code>unsafeHTML</code>. The client parses the string in that namespace, so a <code>&lt;circle&gt;</code> or a <code>&lt;mi&gt;</code> becomes a real SVG or MathML element; the server emits the markup verbatim. Put the hole inside the <code>&lt;svg&gt;</code> or <code>&lt;math&gt;</code> element. The same rule as <code>unsafeHTML</code> applies: never pass user input.</p>
+    <code-block>html\`&lt;svg viewBox="0 0 24 24"&gt;\${unsafeSVG(iconPaths)}&lt;/svg&gt;\`;</code-block>
     <p><strong>Security:</strong> NEVER use with user-supplied input. This is an XSS vector.</p>
 
     <h2>live(value)</h2>
@@ -99,10 +106,38 @@ html\`&lt;img src=\${ifDefined(src)}&gt;\`;</code-block>
     <code-block>html\`&lt;a href=\${url} aria-current=\${active ? 'page' : nothing}&gt;\`;
 html\`\${error ? html\`&lt;p role="alert"&gt;\${error}&lt;/p&gt;\` : nothing}\`;</code-block>
 
-    <h2>Native patterns (no directive needed)</h2>
-    <p>Lit's <code>when</code>, <code>choose</code>, <code>map</code>, <code>join</code>, and <code>range</code> are sugar over plain JavaScript, so WebJs leaves them to the language: a ternary, a <code>switch</code>, and <code>Array</code> methods inside <code>render()</code>.</p>
+    <h2>when / choose / map / join / range</h2>
+    <p>Lit's control-flow helpers, with Lit's signatures. They are plain functions, so they behave the same on the server and the client. <code>when(condition, trueCase, falseCase?)</code> calls the case it picks with the condition value; <code>choose(value, cases, defaultCase?)</code> matches keys with <code>===</code>; <code>map</code>, <code>join</code>, and <code>range</code> return generators.</p>
+    <code-block>html\`
+  \${when(this.user, (u) =&gt; html\`&lt;p&gt;Hi \${u.name}&lt;/p&gt;\`, () =&gt; html\`&lt;a href="/login"&gt;Sign in&lt;/a&gt;\`)}
+  \${choose(this.tab, [
+    ['home', () =&gt; html\`&lt;home-tab&gt;&lt;/home-tab&gt;\`],
+    ['about', () =&gt; html\`&lt;about-tab&gt;&lt;/about-tab&gt;\`],
+  ], () =&gt; html\`&lt;p&gt;Not found&lt;/p&gt;\`)}
+  &lt;ol&gt;\${map(range(3), (i) =&gt; html\`&lt;li&gt;Step \${i + 1}&lt;/li&gt;\`)}&lt;/ol&gt;
+  &lt;p&gt;\${join(this.tags, html\`&lt;span&gt;, &lt;/span&gt;\`)}&lt;/p&gt;
+\`;</code-block>
+    <p>A ternary, a <code>switch</code>, and <code>Array</code> methods work just as well; pick whichever reads better.</p>
 
-    <h3>Conditional rendering</h3>
-    <code-block>html\`\${loggedIn ? html\`&lt;p&gt;Welcome&lt;/p&gt;\` : html\`&lt;a href="/login"&gt;Sign in&lt;/a&gt;\`}\`;</code-block>
+    <h3>Any iterable renders like an array</h3>
+    <p>A child hole accepts any iterable, not only an array: a generator (which is what <code>map</code>, <code>join</code>, and <code>range</code> return), a <code>Set</code>, a <code>Map</code>'s <code>values()</code>. Each item renders in order, exactly as the items of an array do. A string is the one exception: it renders as text, never character by character.</p>
+
+    <h2>svg / mathml template tags</h2>
+    <p>An <code>html</code> template is parsed as HTML on the client, so a fragment built for the inside of an <code>&lt;svg&gt;</code> or <code>&lt;math&gt;</code> element (a <code>&lt;rect&gt;</code> per data point, a <code>&lt;mi&gt;</code> a helper returns) needs the <code>svg</code> or <code>mathml</code> tag from <code>@webjsdev/core</code>. The client then parses it in that namespace. The server renders all three tags alike. A whole <code>&lt;svg&gt;</code> element still belongs in <code>html</code>.</p>
+    <code-block>const bar = (v, i) =&gt; svg\`&lt;rect x=\${i * 10} height=\${v} width="8"&gt;&lt;/rect&gt;\`;
+html\`&lt;svg&gt;\${values.map(bar)}&lt;/svg&gt;\`;</code-block>
+
+    <h2>Static expressions (@webjsdev/core/static-html)</h2>
+    <p>Lit's <code>lit/static-html.js</code> under a WebJs path. A static value is spliced into the template's strings before it renders, so it can stand where an ordinary hole cannot, most often a tag name chosen at runtime. <code>literal</code> takes a template literal whose own holes must be static values; <code>unsafeStatic</code> trusts any string as markup, so never pass user input to it. The merged strings are cached by their text, so the same static shape reuses one template and updates in place.</p>
+    <code-block>import { html, literal, unsafeStatic } from '@webjsdev/core/static-html';
+
+const tag = literal\`my-button\`;
+html\`&lt;\${tag} label="Save"&gt;&lt;/\${tag}&gt;\`;
+html\`&lt;\${unsafeStatic(level)}&gt;Title&lt;/\${unsafeStatic(level)}&gt;\`;</code-block>
+    <p><code>withStatic(tag)</code> wraps any other template tag the same way, and <code>svg</code> / <code>mathml</code> come pre-wrapped.</p>
+
+    <h2>isServer</h2>
+    <p>Lit's flag, from <code>@webjsdev/core</code>: <code>true</code> during SSR on Node or Bun, <code>false</code> in a browser. Use it to guard browser-only work in code that runs on both sides (a constructor, <code>render()</code>, <code>willUpdate()</code>, a controller's <code>hostUpdate()</code>).</p>
+    <code-block>if (!isServer) this.width = window.innerWidth;</code-block>
   `;
 }

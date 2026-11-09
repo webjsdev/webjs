@@ -23,7 +23,8 @@
  * Keep this list in sync with `./index.js` for everything else.
  */
 
-export { html, svg, isTemplate, MARKER } from './src/html.js';
+export { html, svg, mathml, isTemplate, MARKER } from './src/html.js';
+export { isServer } from './src/is-server.js';
 export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
 export { WebComponent, prop } from './src/component.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
@@ -92,7 +93,7 @@ export {
   unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
   templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
   until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
-  watch, isWatch,
+  watch, isWatch, unsafeSVG, unsafeMathML, when, choose, map, join, range,
 } from './src/directives.js';
 
 // Context Protocol, also available via '@webjsdev/core/context'

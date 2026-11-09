@@ -266,12 +266,14 @@ export function compile(tr) {
   }
 
   const templateEl = document.createElement('template');
-  if (tr.svg) {
-    // An svg`` fragment is parsed inside an <svg> wrapper so its elements
-    // land in the SVG namespace, then the wrapper is unwrapped BEFORE the
-    // slot and path walks, so every recorded path is relative to the
-    // fragment's own root, as it is for an html`` template (lit does the same).
-    templateEl.innerHTML = `<svg>${html}</svg>`;
+  if (tr.svg || tr.mathml) {
+    // An svg`` (or mathml``) fragment is parsed inside an <svg> (or <math>)
+    // wrapper so its elements land in that namespace, then the wrapper is
+    // unwrapped BEFORE the slot and path walks, so every recorded path is
+    // relative to the fragment's own root, as it is for an html`` template
+    // (lit does the same).
+    const wrapTag = tr.svg ? 'svg' : 'math';
+    templateEl.innerHTML = `<${wrapTag}>${html}</${wrapTag}>`;
     const wrapper = /** @type {Element} */ (templateEl.content.firstChild);
     wrapper.replaceWith(...wrapper.childNodes);
   } else {

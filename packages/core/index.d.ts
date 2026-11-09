@@ -74,7 +74,8 @@ export type {
   NonSerializable,
 } from './src/serializable.d.ts';
 
-export { html, svg, isTemplate, MARKER } from './src/html.js';
+export { html, svg, mathml, isTemplate, MARKER } from './src/html.js';
+export { isServer } from './src/is-server.js';
 // The `html\`\`` return type. A JSDoc typedef in html.js used across the
 // component / route / testing type surfaces; re-exported so an app or the
 // docs/website can annotate a value as `TemplateResult` (#772).
@@ -104,7 +105,7 @@ export {
   unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
   templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
   until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
-  watch, isWatch,
+  watch, isWatch, unsafeSVG, unsafeMathML, when, choose, map, join, range,
 } from './src/directives.js';
 export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent, ContextProviderEvent, ContextRoot } from './src/context.js';
 export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';

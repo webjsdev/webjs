@@ -560,7 +560,15 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     teardownChild(part);
     const htmlStr = String(/** @type any */ (value).value ?? '');
     const template = document.createElement('template');
-    template.innerHTML = htmlStr;
+    // unsafeSVG / unsafeMathML: parse inside the namespace's root element so
+    // the nodes are SVG / MathML elements, then lift them out of the wrapper.
+    const ns = /** @type any */ (value).ns;
+    const wrapTag = ns === 'svg' ? 'svg' : ns === 'mathml' ? 'math' : null;
+    template.innerHTML = wrapTag ? `<${wrapTag}>${htmlStr}</${wrapTag}>` : htmlStr;
+    if (wrapTag) {
+      const wrapper = /** @type {Element} */ (template.content.firstChild);
+      wrapper.replaceWith(...wrapper.childNodes);
+    }
     const nodes = [...template.content.childNodes];
     const frag = document.createDocumentFragment();
     for (const n of nodes) frag.appendChild(n);
@@ -698,6 +706,15 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   // flipping one item's binding rebuilt the WHOLE list and detached every
   // node, which cancels a native drag mid-gesture. Use `repeat()` for keyed
   // reordering.
+  //
+  // Any other iterable (a generator from `map()` / `join()` / `range()`, a
+  // Set) renders exactly like an array, as in lit, so it is drained into one
+  // first. A string never reaches here as an iterable (it is checked by
+  // `typeof`), and directive markers are plain objects with no iterator.
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)
+      && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
+    value = Array.from(/** @type {Iterable<unknown>} */ (value));
+  }
   if (Array.isArray(value)) {
     if (part.child && /** @type any */ (part.child).kind === 'array') {
       reconcileArray(part, value, reconcileFormActionsCb);

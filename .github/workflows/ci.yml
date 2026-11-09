@@ -332,6 +332,11 @@ jobs:
       # dev frame all name the WebJs fix on the Bun path too.
       - name: WebJs decorator detection on Bun
         run: bun test/bun/decorator-detection.mjs
+      # The lit directive surface (iterables in a child hole, the two-argument
+      # repeat, when / choose / map / join / range, unsafeSVG, the mathml tag,
+      # static-html) renders the same on the Bun SSR path.
+      - name: WebJs lit directive parity on Bun
+        run: bun test/bun/lit-directives.mjs
       # Reverse-proxy forwarded headers on Bun (#1090): the node shell corrects
       # the request url via urlFromRequest before building its Request, but the
       # Bun shell handed Bun.serve's request straight through, so behind a

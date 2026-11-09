@@ -3,13 +3,18 @@
 // exported, so it cannot be named, and no consumer constructs one by hand.
 export interface RepeatDirective<T> {
   items: T[];
-  keyFn: (item: T, i: number) => string | number;
+  keyFn: (item: T, i: number) => unknown;
   templateFn: (item: T, i: number) => unknown;
 }
 
 export function repeat<T>(
   items: Iterable<T>,
-  keyFn: (item: T, i: number) => string | number,
+  keyFn: (item: T, i: number) => unknown,
+  templateFn: (item: T, i: number) => unknown,
+): RepeatDirective<T>;
+/** lit's two-argument form: no key function, so each item is keyed by its index. */
+export function repeat<T>(
+  items: Iterable<T>,
   templateFn: (item: T, i: number) => unknown,
 ): RepeatDirective<T>;
 export function isRepeat(x: unknown): x is RepeatDirective<unknown>;

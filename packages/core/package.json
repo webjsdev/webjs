@@ -60,6 +60,10 @@
       "types": "./src/signal.d.ts",
       "default": "./src/signal.js"
     },
+    "./static-html": {
+      "types": "./src/static-html.d.ts",
+      "default": "./src/static-html.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
