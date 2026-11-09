@@ -162,8 +162,9 @@ routing and Lit components, with the differences below.
   `'use server'` at the top, their exports are callable from components and
   bindable as `<form action=${fn}>`. A failed form action re-renders the page
   with its result on `actionData`.
-- `cookies()`, `headers()` and `revalidatePath()` come from `@webjsdev/server`.
-  Files in `public/` are served from the site root.
+- `cookies()`, `headers()` and `revalidatePath()` come from `@webjsdev/server`,
+  and so does `createAuth()`, which is Auth.js's API. Files in `public/` are
+  served from the site root.
 - Never import `lit`, `next` or `react`.
 
 After each edit run `npx webjs check` and `npx webjs status`. For an exact

@@ -38,6 +38,10 @@ test('the table maps each foreign package to a WebJs replacement', () => {
   assert.match(foreignImport('next/link').fix, /<a href/);
   assert.match(foreignImport('next/image').fix, /<img/);
   assert.match(foreignImport('next').fix, /import type/);
+  // next-auth names the auth fix, not the generic `next` one it would otherwise match.
+  assert.match(foreignImport('next-auth').fix, /createAuth/);
+  assert.match(foreignImport('next-auth/providers/credentials').fix, /Credentials\(\{ authorize \}\)/);
+  assert.doesNotMatch(foreignImport('next-auth').fix, /import type/);
   assert.equal(foreignImport('react').framework, 'React');
   assert.equal(foreignImport('react-dom/client').framework, 'React');
   assert.match(foreignImport('lit').fix, /WebComponent/);

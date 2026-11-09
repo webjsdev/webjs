@@ -22,8 +22,9 @@ routing and Lit components, with the differences below.
   `'use server'` at the top, their exports are callable from components and
   bindable as `<form action=${fn}>`. A failed form action re-renders the page
   with its result on `actionData`.
-- `cookies()`, `headers()` and `revalidatePath()` come from `@webjsdev/server`.
-  Files in `public/` are served from the site root.
+- `cookies()`, `headers()` and `revalidatePath()` come from `@webjsdev/server`,
+  and so does `createAuth()`, which is Auth.js's API. Files in `public/` are
+  served from the site root.
 - Never import `lit`, `next` or `react`.
 
 After each edit run `npx webjs check` and `npx webjs status`. For an exact
@@ -35,9 +36,9 @@ Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
 or an in-memory array.
 
 For UI, add components from the WebJs UI kit (shadcn's components and API as
-web components) rather than writing them: `npx webjsdev ui add button card
+web components) rather than writing them: `npx webjs ui add button card
 dialog` copies each into `components/ui/` for you to edit, and
-`npx webjsdev ui list` shows what exists.
+`npx webjs ui list` shows what exists.
 
 `npx webjs help` lists every CLI command (`routes`, `doctor`, `db`, `ui`,
 `typecheck`, ...). The `webjs` MCP server in `.claude.json` (`npx @webjsdev/mcp`)

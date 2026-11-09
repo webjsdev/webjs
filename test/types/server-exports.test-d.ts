@@ -17,6 +17,7 @@ import {
   cors,
   cache,
   createAuth,
+  Credentials,
   rateLimit,
   sitemap,
   sitemapIndex,
@@ -88,6 +89,10 @@ async function invalidate() {
 
 // Auth factory.
 const authInst = createAuth({ secret: 's', providers: [] });
+// The credentials provider takes Auth.js's authorize contract.
+Credentials({ authorize: async (creds) => (creds.email ? { id: '1' } : null) });
+// @ts-expect-error a credentials provider needs an authorize function.
+Credentials({});
 
 // Session class.
 function useSession(s: Session) {
