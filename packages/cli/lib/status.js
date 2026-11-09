@@ -211,7 +211,7 @@ export async function runStatus(opts) {
 
   const failingPaths = results.filter((r) => r.status === null || r.status >= (named.has(r.path) ? namedFailStatus : 500));
   const ok = body.errors.length === 0 && failingPaths.length === 0 && body.ready === 'ok';
-  return finish({ ok, url: base, settled: true, ready: body.ready, rebuilds: body.rebuilds, paths: results, errors: body.errors }, ok ? 0 : 1);
+  return finish({ ok, url: base, settled: true, ready: body.ready, rebuilds: body.rebuilds, paths: results, errors: body.errors, warnings: body.warnings || [] }, ok ? 0 : 1);
 
   /**
    * A file under the app directory, printed relative to it.
@@ -247,6 +247,11 @@ export async function runStatus(opts) {
         if (e.hint) out(`    hint: ${e.hint}`);
         if (e.codeFrame) out(String(e.codeFrame).split('\n').map((l) => '    ' + l).join('\n'));
       }
+    }
+    // Warnings never fail the exit: the code is legal, it just never runs in a browser.
+    if (report.warnings && report.warnings.length) {
+      out(`${report.warnings.length} warning${report.warnings.length === 1 ? '' : 's'}:`);
+      for (const w of report.warnings) out(`  [${w.kind}] ${relative(w.file)}: ${w.message}`);
     }
     return code;
   }

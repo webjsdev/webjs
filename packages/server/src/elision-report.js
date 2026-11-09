@@ -44,7 +44,7 @@ import { buildModuleGraph } from './module-graph.js';
 import { scanComponents, findOrphanComponents } from './component-scanner.js';
 import { buildRouteTable } from './router.js';
 import { analyzeElision, routeModuleBrowserHints } from './component-elision.js';
-import { routeFrontiers, routeModuleKinds } from './route-frontier.js';
+import { routeFrontiers, routeModuleKinds, leadsToComponent } from './route-frontier.js';
 
 /**
  * @typedef {'own'|'observed'|'closure'|'render'|'import'|'unreadable'} ElisionEvidence
@@ -126,26 +126,7 @@ export async function analyzeAppElision(appDir) {
   const frontiers = routeFrontiers([...routeFiles], moduleGraph,
     new Set(components.map((c) => c.file)), new Set([...elidableComponents, ...routeFiles]));
   const componentFileSet = new Set(components.map((c) => c.file));
-  // A side-effect import of a barrel that leads to a component is how a route
-  // module registers components, and the boot loads those in its place.
-  /** @type {Map<string, boolean>} */
-  const carries = new Map();
-  const carriesComponent = (/** @type {string} */ abs) => {
-    if (carries.has(abs)) return /** @type {boolean} */ (carries.get(abs));
-    const seen = new Set([abs]);
-    const work = [abs];
-    let found = false;
-    while (work.length && !found) {
-      for (const dep of moduleGraph.get(/** @type {string} */ (work.pop())) || []) {
-        if (seen.has(dep) || /\.server\.m?[jt]s$/.test(dep)) continue;
-        if (componentFileSet.has(dep)) { found = true; break; }
-        seen.add(dep);
-        work.push(dep);
-      }
-    }
-    carries.set(abs, found);
-    return found;
-  };
+  const carriesComponent = leadsToComponent(moduleGraph, componentFileSet);
   /** @type {ElisionRouteModuleRow[]} */
   const routeRows = [];
   for (const [f, kind] of kinds) {

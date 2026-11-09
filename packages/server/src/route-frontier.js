@@ -118,3 +118,34 @@ export function routeTableFiles(routeTable) {
   if (routeTable.globalError) files.add(routeTable.globalError);
   return files;
 }
+
+/**
+ * A memoized "does this module lead to a component" test over the static
+ * graph, stopping at `.server` files. A side-effect import of a barrel of
+ * component imports is how a route module registers components, and the boot
+ * already loads those in its place, so route-module hints skip it.
+ * @param {Map<string, Set<string>>} moduleGraph
+ * @param {Set<string>} componentFiles
+ * @returns {(abs: string) => boolean}
+ */
+export function leadsToComponent(moduleGraph, componentFiles) {
+  /** @type {Map<string, boolean>} */
+  const memo = new Map();
+  return (abs) => {
+    const hit = memo.get(abs);
+    if (hit !== undefined) return hit;
+    const seen = new Set([abs]);
+    const work = [abs];
+    let found = false;
+    while (work.length && !found) {
+      for (const dep of moduleGraph.get(/** @type {string} */ (work.pop())) || []) {
+        if (seen.has(dep) || SERVER_FILE_RE.test(dep)) continue;
+        if (componentFiles.has(dep)) { found = true; break; }
+        seen.add(dep);
+        work.push(dep);
+      }
+    }
+    memo.set(abs, found);
+    return found;
+  };
+}

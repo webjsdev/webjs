@@ -70,6 +70,27 @@ test('a healthy app settles and exits 0, listing each requested path', async () 
   assert.ok(lines.some((l) => /GET \/  200/.test(l)));
 });
 
+test('browser code in a page is a warning, not a failure: the page runs only on the server (#1686)', async () => {
+  const appDir = mkdtempSync(join(tmpRoot, 'app-'));
+  mkdirSync(join(appDir, 'app'), { recursive: true });
+  writeFileSync(join(appDir, 'app', 'page.ts'),
+    `import { html } from ${CORE};\nconst w = typeof window !== 'undefined' ? window.innerWidth : 0;\nexport default () => html\`<p>\${w}</p>\`;\n`);
+  const app = await createRequestHandler({ appDir, dev: true, logger: SILENT });
+  const lines = [];
+  const opts = { port: 3999, graceMs: 0, timeoutMs: 5000, cwd: appDir, fetch: (url, init) => app.handle(new Request(url, init)), out: (s) => lines.push(s), err: () => {} };
+  assert.equal(await runStatus({ ...opts, paths: ['/'] }), 0, 'a warning never fails the run');
+  const out = lines.join('\n');
+  assert.match(out, /1 warning:/);
+  assert.match(out, /\[route-browser-code\] app[\\/]page\.ts: `window` is used/);
+
+  lines.length = 0;
+  await runStatus({ ...opts, paths: ['/'], json: true });
+  const report = JSON.parse(lines.join('\n'));
+  assert.equal(report.ok, true);
+  assert.equal(report.warnings.length, 1);
+  assert.equal(report.warnings[0].kind, 'route-browser-code');
+});
+
 test('a broken page is reported with its file and exits 1, in human and JSON form', async () => {
   const restore = quiet();
   try {

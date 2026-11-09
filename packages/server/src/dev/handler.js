@@ -41,8 +41,8 @@ import { browserEntryFiles } from '../browser-entries.js';
 import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport, bareImports, dynamicBareImports } from '../module-graph.js';
 import { foreignImportProblems, registerForeignImportGuard } from '../foreign-imports.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
-import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
-import { routeFrontiers, collectBootRouteModules, routeTableFiles } from '../route-frontier.js';
+import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles, routeModuleBrowserHints } from '../component-elision.js';
+import { routeFrontiers, collectBootRouteModules, routeTableFiles, leadsToComponent } from '../route-frontier.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
@@ -559,6 +559,8 @@ export async function createRequestHandler(opts) {
     routeFrontiers: new Map(),
     /** @type {Set<string>} */
     routeModuleFiles: new Set(),
+    /** @type {Array<{ file: string, message: string }>} dev-only route-module hints (#1686) */
+    routeHints: [],
     // `static lazy` component files -> their tags (#1524): a side-effect import
     // of one is served as a lazy-loader registration, and the preload walks
     // skip it. Independent of the elision switch.
@@ -784,6 +786,23 @@ export async function createRequestHandler(opts) {
               state.routeFrontiers = routeFrontiers(routeFiles, state.moduleGraph,
                 new Set(components.map((c) => c.file)),
                 new Set([...state.elidableComponents, ...state.routeModuleFiles]));
+            }
+            // Dev only: code in a route module that looks meant for the browser
+            // but runs only on the server (#1686), reported by `webjs status` as
+            // warnings so an agent sees it in the loop it already runs.
+            if (dev) {
+              const componentFileSet = new Set(components.map((c) => c.file));
+              const carriesComponent = leadsToComponent(state.moduleGraph, componentFileSet);
+              /** @type {Array<{ file: string, message: string }>} */
+              const hints = [];
+              for (const f of collectBootRouteModules(state.routeTable)) {
+                let src;
+                try { src = await readFile(f, 'utf8'); } catch { continue; }
+                for (const message of routeModuleBrowserHints(src, {
+                  file: f, appDir, isComponent: (abs) => componentFileSet.has(abs), carriesComponent,
+                })) hints.push({ file: f, message });
+              }
+              state.routeHints = hints;
             }
             state.lazyComponentFiles = lazyComponentFiles(components, state.elidableComponents);
             // A lazy component some module imports WITH bindings loads eagerly
@@ -1201,6 +1220,9 @@ export async function createRequestHandler(opts) {
       seq: reload ? reload.seq : null,
       rebuilds,
       errors,
+      // Advisory, never a failure: code in a page, layout or boundary that
+      // looks meant for the browser but runs only on the server (#1686).
+      warnings: state.routeHints.map((h) => ({ kind: 'route-browser-code', file: h.file, message: h.message })),
     };
     return Response.json(body, { headers: { 'cache-control': 'no-store' } });
   }
