@@ -95,8 +95,13 @@ export const REACTIVE_IMPORTS = new Set([
   'Directive',
   'AsyncDirective',
   // `ContextRoot` buffers context requests until a late provider upgrades,
-  // which only happens in the browser.
+  // and `ContextProviderEvent` hands subscribers to a nearer provider; both
+  // only happen in the browser.
   'ContextRoot',
+  'ContextProviderEvent',
+  // Lit's `SignalWatcher` mixin (an identity mixin here, watching is built
+  // in): a component that names it reacts to signals after upgrade.
+  'SignalWatcher',
 ]);
 
 /**
