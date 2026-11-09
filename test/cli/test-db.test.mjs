@@ -41,6 +41,11 @@ test('wantsTestDatabase: a SQLite app with migrations, unless the shell sets DAT
     assert.equal(wantsTestDatabase(sqlite, { WEBJS_TEST_DB: '0' }), false, 'opt-out');
     assert.equal(wantsTestDatabase(pg, {}), false, 'Postgres needs a real test database');
     assert.equal(wantsTestDatabase(fresh, {}), false, 'no migrations yet');
+    // Bun loads .env before any code runs, so the scaffold's own dev url arrives
+    // in process.env. That is the app's file talking, not the shell.
+    writeFileSync(join(sqlite, '.env'), 'DATABASE_URL=file:./db/dev.db\n');
+    assert.equal(wantsTestDatabase(sqlite, { DATABASE_URL: 'file:./db/dev.db' }), true, 'the .env url is not a shell choice');
+    assert.equal(wantsTestDatabase(sqlite, { DATABASE_URL: 'file:/tmp/ci.db' }), false, 'a different url still wins');
   } finally {
     for (const d of [sqlite, pg, fresh]) rmSync(d, { recursive: true, force: true });
   }

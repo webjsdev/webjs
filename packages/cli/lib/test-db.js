@@ -16,6 +16,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { loadEnvFiles } from './env-files.js';
 
 /**
  * Whether `webjs test` should give the server tests their own database.
@@ -24,7 +25,8 @@ import { spawnSync } from 'node:child_process';
  * @returns {boolean}
  */
 export function wantsTestDatabase(cwd, env) {
-  if (env.WEBJS_TEST_DB === '0' || env.DATABASE_URL) return false;
+  if (env.WEBJS_TEST_DB === '0') return false;
+  if (env.DATABASE_URL && !declaredInEnvFiles(cwd, env.DATABASE_URL)) return false;
   const config = ['drizzle.config.ts', 'drizzle.config.js', 'drizzle.config.mjs']
     .map((f) => join(cwd, f)).find((f) => existsSync(f));
   if (!config) return false;
@@ -35,6 +37,26 @@ export function wantsTestDatabase(cwd, env) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Whether `url` is the `DATABASE_URL` one of the app's own env files declares.
+ * Bun loads `.env` into `process.env` before any code runs, so on Bun the dev
+ * database from the scaffold's `.env` arrived looking like a value the shell
+ * set, and the test database stood aside for it. Only a url the env files do
+ * not declare is the shell's choice.
+ * @param {string} cwd
+ * @param {string} url
+ * @returns {boolean}
+ */
+function declaredInEnvFiles(cwd, url) {
+  for (const mode of ['development', 'test', 'production']) {
+    /** @type {Record<string, string | undefined>} */
+    const fromFiles = {};
+    loadEnvFiles(cwd, mode, fromFiles);
+    if (fromFiles.DATABASE_URL === url) return true;
+  }
+  return false;
 }
 
 /**
