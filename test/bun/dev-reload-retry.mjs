@@ -64,7 +64,15 @@ try {
   assert.match(frame, /(^|\n)retry: 300(\n|$)/, `SSE hello lacked the retry hint on ${runtime}: ${JSON.stringify(frame)}`);
   assert.match(frame, /event: hello/, `SSE hello frame missing on ${runtime}: ${JSON.stringify(frame)}`);
 
-  console.log(`OK  dev SSE carries the retry: 300 reconnect hint on ${runtime} (#893)`);
+  // The client side of the same restart (#1689): the served reload client waits
+  // on the readiness probe for as long as a restart takes and never reloads
+  // into a server that is not up. It must parse as a classic script.
+  const client = await (await fetch(`${BASE}/__webjs/reload.js`)).text();
+  assert.match(client, /var __webjsWhenReady = createReadyProbe\(/, `the reload client gates on the readiness probe on ${runtime}`);
+  assert.doesNotMatch(client, /tries > 100/, `and the probe no longer gives up on ${runtime}`);
+  assert.doesNotThrow(() => new Function(client), `the served reload client parses on ${runtime}`);
+
+  console.log(`OK  dev SSE carries the retry: 300 reconnect hint, and the reload client waits out a restart, on ${runtime} (#893, #1689)`);
 } finally {
   if (child && child.pid) {
     try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch {} }

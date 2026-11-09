@@ -427,6 +427,11 @@ const DEV_STYLES_SRC = readFileSync(new URL('../dev-styles.js', import.meta.url)
 const DEV_HOT_CLIENT_SRC = readFileSync(new URL('../dev-hot-client.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
 
+// The readiness probe every reload waits on (#893, #1689), same shared-source
+// rule.
+const DEV_READY_PROBE_SRC = readFileSync(new URL('../dev-ready-probe.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 // The embed host's reload hold (#1532), same shared-source rule.
 const DEV_RELOAD_HOLD_SRC = readFileSync(new URL('../dev-reload-hold.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
@@ -493,6 +498,7 @@ ${DEV_OVERLAY_SRC}
 ${RELOAD_WORKER_SRC}
 ${DEV_STYLES_SRC}
 ${DEV_RELOAD_HOLD_SRC}
+${DEV_READY_PROBE_SRC}
 // A framing host holds reloads while its agent builds (#1532): the embed bridge
 // sets __webjsEmbedHold, every signal below is kept (strongest verdict wins),
 // and releasing the hold applies that one reload, or none if nothing changed.
@@ -507,24 +513,15 @@ function __webjsApplyError(data) {
 // frame that arrived before the URL advanced goes up once it does. The gate
 // itself lives inside renderDevOverlay, so __webjsApplyError needs no change.
 installDevOverlayNavSync();
-// Never reload INTO a server that is still restarting (Node's node --watch
-// briefly kills the process on an edit), which would paint a style-less,
-// half-rendered page (#893). Probe the lightweight /__webjs/version endpoint
-// until it answers, THEN reload. Under an in-process reload the server is up,
-// so the first probe passes and the reload is instant; under a restart the
-// probes fail until the fresh server is listening, so the old page stays put
-// until the new one is ready. Bounded, so a genuinely-dead server still
-// reloads (and shows the browser's own error) rather than hanging forever.
-function __webjsWhenReady(then) {
-  var tries = 0;
-  function attempt() {
-    fetch(${versionUrl}, { cache: 'no-store' }).then(function (r) {
-      if (r && r.ok) then(); else again();
-    }).catch(again);
-  }
-  function again() { if (++tries > 100) location.reload(); else setTimeout(attempt, 100); }
-  attempt();
-}
+// Never reload INTO a server that is still restarting (a restart file's edit,
+// a crash), which would paint a style-less, half-rendered page (#893). Probe
+// the lightweight /__webjs/version endpoint until it answers, THEN apply.
+// Under an in-process reload the server is up, so the first probe passes and
+// the apply is instant; under a restart the old page stays put until the new
+// server is ready, however long that takes (#1689: it used to give up after
+// about 10 seconds and reload into the browser's error page). One probe loop
+// at a time, so a burst of signals during a restart joins it.
+var __webjsWhenReady = createReadyProbe(function (u, o) { return fetch(u, o); }, ${versionUrl});
 // A relay message's verdict as an object (#1689). A SharedWorker another tab
 // started before an upgrade can still be alive and posts the bare verdict name,
 // so a string becomes { v }, and anything unreadable is a full reload.
