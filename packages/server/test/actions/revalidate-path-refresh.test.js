@@ -86,3 +86,22 @@ test('refreshCovers: exact page, layout subtree, and route patterns', () => {
   assert.equal(refreshCovers({ path: '/docs/[...rest]', layout: false }, '/docs/a/b/c'), true);
   assert.equal(refreshCovers({ path: '/other', layout: false }, '/posts'), false);
 });
+
+test('under webjs.basePath the reported path is the public one the browser compares', async () => {
+  const { setBasePath } = await import('../../src/importmap.js');
+  const { revalidatePath } = await import('../../src/html-cache.js');
+  await setBasePath('/app');
+  try {
+    const header = await withRequest(new Request('http://x/app/posts'), async () => {
+      await revalidatePath('/posts');
+      await revalidatePath('https://x/app/blog');
+      return refreshHeaderValue();
+    });
+    const [bare, absolute] = parseRefreshHeader(header);
+    assert.equal(bare.path, '/app/posts', 'a bare app-relative path gains the base path');
+    assert.equal(refreshCovers(bare, '/app/posts'), true, 'so the page on screen is refreshed');
+    assert.equal(absolute.path, '/app/blog', 'an absolute url is already public and is not prefixed twice');
+  } finally {
+    await setBasePath('');
+  }
+});

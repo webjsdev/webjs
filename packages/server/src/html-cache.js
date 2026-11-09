@@ -28,7 +28,7 @@ import { getStore } from './cache.js';
 import { STREAM_MARKER } from './conditional-get.js';
 import { createHash } from 'node:crypto';
 import { publishedBuildId, basePath } from './importmap.js';
-import { stripBasePath } from './base-path.js';
+import { stripBasePath, withBasePath } from './base-path.js';
 import { dynamicAccessed, getRequest, recordRevalidatedPath } from './context.js';
 import { shared } from './process-shared.js';
 
@@ -294,8 +294,13 @@ export async function revalidatePath(path, type) {
   if (typeof path !== 'string' || !path) return;
   const layout = type === 'layout';
   {
+    // The browser compares the reported path with location.pathname, which
+    // carries webjs.basePath. An absolute url is already the public form; a
+    // bare path is app-relative (what the caller writes), so the base path is
+    // put back for the report.
     let pathname = path;
     if (/^https?:\/\//i.test(path)) { try { pathname = new URL(path).pathname; } catch { /* keep */ } }
+    else pathname = withBasePath(pathname, basePath());
     recordRevalidatedPath(pathname.split('?')[0] || '/', layout);
   }
   if (layout || path.includes('[')) {
