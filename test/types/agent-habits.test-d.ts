@@ -4,7 +4,7 @@
 // casts. The rule from now on: an eval typecheck failure caused by a framework
 // type adds a block here, beside the fix that made it compile.
 import { getRequest, getSession } from '@webjsdev/server';
-import type { Session } from '@webjsdev/server';
+import type { ActionResult, AuthInstance, Session } from '@webjsdev/server';
 import type { PageProps } from '@webjsdev/core';
 
 // getSession() reads the request in scope, the way cookies() and headers() do.
@@ -25,4 +25,20 @@ export function fieldErrorHabits({ actionData }: PageProps<'/rooms/[id]'>): stri
   const errors: Record<string, string> = actionData?.fieldErrors ?? {};
   const values = actionData?.values ?? {};
   return (errors.day ?? '') + (values.day ?? '');
+}
+
+// Auth.js's signIn redirects by throwing, so an action returns it as is, and
+// redirect: false (in the options or in the data) yields the target url.
+// (Replay r3-before-roomly3: a sign-up action.)
+export async function signInHabits(
+  signIn: AuthInstance['signIn'],
+  signOut: AuthInstance['signOut'],
+  form: FormData,
+): Promise<ActionResult | Response> {
+  const url: string = await signIn('credentials', form, { redirect: false });
+  const url2: string = await signIn('credentials', { email: 'a@b.c', redirect: false });
+  const out: string = await signOut({ redirect: false });
+  void [url, url2, out];
+  if (form.has('x')) return signOut({ redirectTo: '/' });
+  return signIn('credentials', { email: 'a@b.c' }, { redirectTo: '/rooms' });
 }

@@ -1173,16 +1173,34 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
    * middleware) it sets the session cookie on the response and throws a
    * redirect, so `await signIn('credentials', formData)` in a form action signs
    * in and navigates; a credentials failure throws {@link CredentialsSignin}.
-   * `{ redirect: false }` returns the target url instead of throwing. With no
-   * request in scope it returns the Response the `/api/auth/*` routes send.
+   * `{ redirect: false }` (in the options or, as Auth.js accepts it, in the
+   * data) returns the target url instead of throwing. With no request in scope
+   * it returns the Response the `/api/auth/*` routes send. The redirecting
+   * form is typed `Promise<Response>`, so `return signIn(...)` fits an action
+   * that returns `ActionResult | Response`.
    */
-  signIn: (
-    provider: string,
-    data?: FormData | Record<string, unknown>,
-    opts?: { redirectTo?: string; redirect?: boolean; req?: Request },
-  ) => Promise<Response | string>;
+  signIn: {
+    (
+      provider: string,
+      data: (FormData | Record<string, unknown>) | undefined,
+      opts: { redirectTo?: string; redirect: false; req?: Request },
+    ): Promise<string>;
+    (
+      provider: string,
+      data: Record<string, unknown> & { redirect: false },
+      opts?: { redirectTo?: string; req?: Request },
+    ): Promise<string>;
+    (
+      provider: string,
+      data?: FormData | Record<string, unknown>,
+      opts?: { redirectTo?: string; redirect?: true; req?: Request },
+    ): Promise<Response>;
+  };
   /** Auth.js v5's `signOut`: clears the session and throws a redirect inside a request. */
-  signOut: (opts?: { redirectTo?: string; redirect?: boolean; req?: Request }) => Promise<Response | string>;
+  signOut: {
+    (opts: { redirectTo?: string; redirect: false; req?: Request }): Promise<string>;
+    (opts?: { redirectTo?: string; redirect?: true; req?: Request }): Promise<Response>;
+  };
   handlers: { GET: (req: Request) => Promise<Response>; POST: (req: Request) => Promise<Response> };
 }
 
