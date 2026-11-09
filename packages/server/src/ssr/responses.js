@@ -83,7 +83,22 @@ export function htmlResponse(html, status, req, url, metadata) {
   // which is what keeps the router's partial responses cheap (#1140).
   // See conditional-get.js.
   headers.set(BUFFERED_MARKER, '1');
-  return new Response(html, { status, headers });
+  return new Response(noindexErrorPage(html, status), { status, headers });
+}
+
+/**
+ * A 404, 403 or 401 page is not something to index, so, as Next.js does for
+ * every not-found page (#1686), it carries `<meta name="robots"
+ * content="noindex">` unless the app set robots metadata itself. Inserted
+ * before `</head>`, so a boundary inside the layouts and a `global-not-found`
+ * that writes its own document are covered alike.
+ * @param {string} html @param {number} status
+ */
+export function noindexErrorPage(html, status) {
+  if (status !== 404 && status !== 403 && status !== 401) return html;
+  if (typeof html !== 'string' || /<meta\s[^>]*name=["']?robots/i.test(html)) return html;
+  const at = html.indexOf('</head>');
+  return at < 0 ? html : html.slice(0, at) + '<meta name="robots" content="noindex">' + html.slice(at);
 }
 
 /**
