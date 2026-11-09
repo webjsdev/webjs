@@ -57,6 +57,11 @@ export const RULES = [
       'A custom-element tag name must be registered exactly once across the app. Two `Class.register(\'tag\')` / `customElements.define(\'tag\', …)` calls for the SAME tag resolve INCONSISTENTLY at runtime: SSR overwrites the registry (last registration wins) while the browser keeps the first native upgrade, so the rendered element and the webjs registry disagree. Rename one tag.',
   },
   {
+    name: 'no-conflicting-routes',
+    description:
+      'Two files must not resolve to one URL: two pages (often in different route groups, `app/(marketing)/page.ts` beside `app/(app)/page.ts`, or `[id]` beside `[slug]` at one position), or a `page` and a `route` handler at the same path. Only one can ever be served, and Next.js refuses both at build time.',
+  },
+  {
     name: 'no-signal-field-assignment',
     description:
       'A field a WebComponent class creates with `signal(` / `computed(` (a class-field initializer like `readonly #open = signal(false)`, or `this.open = signal(false)` in the constructor) is written through `.set()`, never assigned. `this.open = true` replaces the signal object: the component stays subscribed to the old signal, nothing re-renders, and the next `this.open.get()` throws. Fix: `this.open.set(true)`. Declare signal fields `readonly` in TypeScript so the compiler catches it too; this rule covers plain `.js` and a forgotten `readonly`, for writes inside the declaring class.',

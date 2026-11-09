@@ -265,6 +265,14 @@ export default function FilesPage({ params }: { params: { path: string[] } }) {
       This is useful when you want different layouts or middleware for different sections
       of your site without affecting the URL structure.
     </p>
+    <p>
+      Because a group is not in the URL, two groups must not define the same path:
+      <code>app/(marketing)/page.ts</code> and <code>app/(app)/page.ts</code> both serve
+      <code>/</code>, and only one of them can ever run. The same holds for a page and a
+      <code>route.ts</code> at one path, and for two param names at one dynamic position
+      (<code>[id]</code> beside <code>[slug]</code>). Next.js refuses all three at build time;
+      <code>webjs check</code> refuses them with the <code>no-conflicting-routes</code> rule.
+    </p>
 
     <!-- ===== PRIVATE FOLDERS ===== -->
     <h2>Private Folders (<code>_private</code>)</h2>
