@@ -52,6 +52,23 @@ test('the four rules are listed', () => {
   }
 });
 
+test("no-use-client-in-route-module: 'use client' in a page or layout is refused with the component translation", async () => {
+  const v = await hits({
+    'app/page.ts': `'use client';\n${PAGE()}`,
+    'app/layout.ts': `// a layout\n"use client"\nimport { html } from '@webjsdev/core';\nexport default ({ children }) => html\`<main>\${children}</main>\`;\n`,
+  }, 'no-use-client-in-route-module');
+  assert.deepEqual(v.map((x) => x.file).sort(), [join('app', 'layout.ts'), join('app', 'page.ts')]);
+  assert.match(v[0].fix, /component/);
+});
+
+test("no-use-client-in-route-module: 'use client' in a component, or in prose, is fine", async () => {
+  const v = await hits({
+    'components/counter.ts': `'use client';\n${COMPONENT('Counter', 'x-counter')}`,
+    'app/page.ts': PAGE("import '../components/counter.ts';\nconst note = \"never write 'use client' here\";\nvoid note;", '<x-counter></x-counter>'),
+  }, 'no-use-client-in-route-module');
+  assert.deepEqual(v, []);
+});
+
 test('no-component-in-route-module: a component class in a page is flagged', async () => {
   const v = await hits({
     'app/page.ts': `import { WebComponent, html } from '@webjsdev/core';

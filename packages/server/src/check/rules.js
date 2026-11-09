@@ -122,6 +122,11 @@ export const RULES = [
       'Flags `<form action=${someAction}>` bound to a `\'use server\'` action whose file declares `export const method = \'GET\'` (#488). A GET action is a READ: it is CSRF-exempt and rides its arguments in the url, while a form submission is a CSRF-checked POST carrying a body, so the two contracts contradict each other and the submission is answered with a 405 at runtime. The rule reads the imported action\'s own file, so it only fires when the binding really does resolve to a GET-declared action. Fix by dropping the `method` export (an action with no `method` is a POST, which is what a form wants) or by binding a different action; if the form really is a read, use a plain `<form method="get" action="/search">` with no bound action.',
   },
   {
+    name: 'no-use-client-in-route-module',
+    description:
+      "Flags a `'use client'` directive at the top of a page, layout or boundary, the Next.js way to make a page interactive. In WebJs a route module is always a server component and the client part is a component, so the directive does nothing there. Move the interactive part into a component (`components/my-widget.ts`, Lit's APIs) and render its tag from the page. A `'use client'` in a component file is left alone, since a component already runs on the client.",
+  },
+  {
     name: 'no-component-in-route-module',
     description:
       'Flags a component class defined in a page, layout or boundary file. A route module runs only on the server and never loads in the browser (#1686), so the element renders its server markup and never upgrades. Move the class into its own file (`components/my-widget.ts`) and import it. Route-ness comes from the route table, so a helper that happens to be called `page.ts` outside `app/` is not a route module.',

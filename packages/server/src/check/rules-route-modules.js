@@ -22,6 +22,8 @@ import { EVENT_BINDING_RE } from '../component-elision.js';
  */
 
 const BUILTINS = new Set(builtinModules);
+/** A `'use client'` directive in a module's prologue (comments and blank lines may precede it). */
+const USE_CLIENT_RE = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*(['"])use client\1\s*;?/;
 const IMPORT_RE = /(?:^|[;\n])\s*(?:import|export)\s+(type\s+)?(?:[^'"`;]*?\s+from\s+)?['"]__STR_(\d+)__['"]/g;
 
 /**
@@ -55,6 +57,19 @@ export function checkRouteModuleBoundaries(appDir, files, violations, ctx) {
   const { routeFiles, componentFiles, moduleGraph, shipped } = ctx;
   for (const { abs, rel, content } of files) {
     if (routeFiles.has(abs)) {
+      // --- no-use-client-in-route-module ---
+      // The Next.js way to make a page interactive. In WebJs the client part
+      // is a component (Lit's APIs), so the directive maps to one message
+      // rather than a page model neither habit predicts. In a component file
+      // the directive is true already and is left alone.
+      if (USE_CLIENT_RE.test(content)) {
+        violations.push({
+          rule: 'no-use-client-in-route-module',
+          file: rel,
+          message: "`'use client'` marks this page, layout or boundary as client code, the Next.js way. In WebJs a route module is always a server component and the client part of a page is a component, so the directive does nothing here.",
+          fix: "Move the interactive part into a component in its own file (`components/my-widget.ts`, a `WebComponent` using Lit's APIs: reactive properties, `@click`, the lifecycle), render its tag from this page, and drop `'use client'`. Pass server data in as properties.",
+        });
+      }
       // --- no-component-in-route-module ---
       if (componentFiles.has(abs)) {
         violations.push({
