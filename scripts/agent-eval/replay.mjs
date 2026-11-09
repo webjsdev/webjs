@@ -57,7 +57,7 @@ export function verifyPassed(kind, out) {
 
 /**
  * An absolute path an agent wrote, mapped to the app-relative path. Agents
- * sometimes worked in a git worktree inside the app (`.wt-build/`,
+ * sometimes worked in a git worktree inside the app (`.wt-<x>/`,
  * `.worktrees/<x>/`, `.claude/worktrees/<x>/`), which folds back onto the app.
  * @param {string} abs @param {string} appDir
  * @returns {string|null}
@@ -66,7 +66,7 @@ export function appRelative(abs, appDir) {
   const root = appDir.replace(/[\\/]+$/, '') + '/';
   if (!abs.startsWith(root)) return null;
   let rel = abs.slice(root.length);
-  rel = rel.replace(/^(?:\.wt-build|\.worktrees\/[^/]+|\.claude\/worktrees\/[^/]+|\.wt\/[^/]+)\//, '');
+  rel = rel.replace(/^(?:\.wt-[^/]+|\.worktrees\/[^/]+|\.claude\/worktrees\/[^/]+|\.wt\/[^/]+)\//, '');
   if (rel.startsWith('node_modules/') || rel.startsWith('.git/')) return null;
   return rel;
 }
@@ -197,7 +197,7 @@ export function replayBuild(build, opts = {}) {
     const ranUiAdd = ops.some((o) => o.type === 'cmd' && /\bui\s+add\b/.test(o.cmd));
     const ranDbGenerate = ops.some((o) => o.type === 'cmd' && /db[: ]generate/.test(o.cmd));
     const appPathRe = new RegExp(appDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
-      '(?:/(?:\\.wt-build|\\.worktrees/[^/\\s]+|\\.claude/worktrees/[^/\\s]+|\\.wt/[^/\\s]+))?', 'g');
+      '(?:/(?:\\.wt-[^/\\s]+|\\.worktrees/[^/\\s]+|\\.claude/worktrees/[^/\\s]+|\\.wt/[^/\\s]+))?', 'g');
     result.shell = 0;
     for (const op of ops) {
       if (op.type === 'cmd') continue;
