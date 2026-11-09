@@ -12,7 +12,7 @@ import {
   HTML_CACHE_MARKER,
 } from '../html-cache.js';
 import { requestedFrameId, extractFrameSubtree } from '../frame-render.js';
-import { makeThenable } from '../thenable-params.js';
+import { makeThenable, searchParamsRecord } from '../thenable-params.js';
 import { buildDocumentParts, wrapInDocument, layoutSegmentPath, pageSegmentPath, boundarySegmentPath, layoutsForBoundary, regionRouteKey, wrapWithChildrenMarker } from './document.js';
 import { escapeHtml } from './escape.js';
 import {
@@ -737,7 +737,7 @@ function boundaryModuleUrls(boundaryFile, wrapLayouts, opts) {
 function boundaryCtx(params, url, actionData) {
   return {
     params: makeThenable(params || {}),
-    searchParams: makeThenable(url ? Object.fromEntries(url.searchParams.entries()) : {}),
+    searchParams: makeThenable(url ? searchParamsRecord(url.searchParams) : {}),
     url: url ? url.toString() : '',
     actionData,
   };
@@ -1024,7 +1024,7 @@ export async function ssrPage(route, params, url, opts) {
     // `params.id` still works, `await params` also works (Next 15/16 parity).
     // The `then` is non-enumerable so spread / JSON / Object.keys are unchanged.
     params: makeThenable(params),
-    searchParams: makeThenable(Object.fromEntries(url.searchParams.entries())),
+    searchParams: makeThenable(searchParamsRecord(url.searchParams)),
     url: url.toString(),
     // Populated only when this render is the re-render after a failed page
     // `action` submission (#244). The page function and every layout receive

@@ -5,7 +5,7 @@ import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from '
 import { getBodyLimits, refreshHeaderValue } from './context.js';
 import { readFlash, encodeFlash, flashSetCookie } from './action-flash.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
-import { makeThenable } from './thenable-params.js';
+import { makeThenable, searchParamsRecord } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
 import { verifyOrigin } from './csrf.js';
 import { actionMethod, actionConfigFn, actionMiddleware, resolveTags, RESERVED_CONFIG } from './action-config.js';
@@ -576,7 +576,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     args = [v.value];
   }
 
-  const searchParams = Object.fromEntries(url.searchParams.entries());
+  const searchParams = searchParamsRecord(url.searchParams);
   // Next.js's `useActionState` contract: an action declaring TWO parameters is
   // called `(prevState, formData)`, prevState being what this same action
   // returned last time (carried by the signed flash cookie; undefined on the

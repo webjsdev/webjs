@@ -70,7 +70,7 @@ import { html } from '@webjsdev/core';
 
 type Ctx = {
   params: { slug: string };
-  searchParams: Record&lt;string, string&gt;;
+  searchParams: Record&lt;string, string | string[]&gt;;
   url: string;
 };
 
@@ -87,7 +87,7 @@ export default async function BlogPost({ params, searchParams, url }: Ctx) {
 
     <ul>
       <li><strong><code>params</code></strong>: the dynamic route segments (e.g. <code>{ slug: "hello-world" }</code>). Readable synchronously (<code>params.slug</code>) AND awaitable (<code>const { slug } = await params</code>, the Next 15/16 pattern). Both work.</li>
-      <li><strong><code>searchParams</code></strong>: the query-string key/value pairs (e.g. <code>{ page: "2" }</code>). Also sync-readable and awaitable.</li>
+      <li><strong><code>searchParams</code></strong>: the query-string key/value pairs (e.g. <code>{ page: "2" }</code>), with a key that repeats as an array of every value, as in Next.js (<code>?tag=a&amp;tag=b</code> gives <code>{ tag: ["a", "b"] }</code>). Also sync-readable and awaitable.</li>
       <li><strong><code>url</code></strong>: the full request URL as a string.</li>
     </ul>
 

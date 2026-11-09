@@ -125,11 +125,9 @@ export type Awaitable<T> = T & PromiseLike<T>;
  * packages/server/src/ssr.js builds: `{ params, searchParams, url,
  * actionData }`.
  *
- * `searchParams` is typed `Record<string, string | string[]>` to match the
- * established page-context convention, even though the runtime builds it with
- * `Object.fromEntries(url.searchParams.entries())` (so a repeated key is
- * last-wins `string`, never an array). The wider type keeps a future
- * multi-value reader source-compatible.
+ * `searchParams` is `Record<string, string | string[]>`, as in Next.js: a key
+ * that repeats in the query (`?tag=a&tag=b`) is an array of every value, in
+ * order, and any other key is its string.
  *
  * `params` / `searchParams` are `Awaitable<T>` (#848): synchronously readable
  * (`params.id`) AND `await`-able (`const { id } = await params`) for Next

@@ -40,3 +40,23 @@ export function makeThenable(obj) {
   });
   return obj;
 }
+
+/**
+ * A page's `searchParams` the Next.js way (#1686): each key maps to its value,
+ * and a key that repeats (`?tag=a&tag=b`) maps to every value in order, as an
+ * array. `Object.fromEntries` kept only the last one, so a multi-select filter
+ * read one choice.
+ * @param {URLSearchParams} params
+ * @returns {Record<string, string | string[]>}
+ */
+export function searchParamsRecord(params) {
+  /** @type {Record<string, string | string[]>} */
+  const out = {};
+  for (const [k, v] of params) {
+    const prev = out[k];
+    if (prev === undefined) out[k] = v;
+    else if (Array.isArray(prev)) prev.push(v);
+    else out[k] = [prev, v];
+  }
+  return out;
+}
