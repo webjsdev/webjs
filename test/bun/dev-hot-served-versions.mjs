@@ -124,6 +124,12 @@ try {
   assert.ok(versioned, `the boundary's import of the edited helper carries ?t= on ${runtime}\n${boundary}`);
   const helper = await served(`/components/label.ts?t=${versioned[1]}`);
   assert.match(helper || '', /'two'/, `the versioned helper URL serves the edit on ${runtime}`);
+  // A fresh document names the bumped component by that same url in its boot
+  // script and preload hint, so it loads one instance, not a bare one beside
+  // the versioned one its importers reach (review of #1689).
+  const doc = await served('/');
+  assert.ok(doc && doc.includes(`import "${verdict.modules[0]}";`), `the boot import carries the version on ${runtime}\n${doc}`);
+  assert.ok(!doc.includes('"/components/counter.ts"'), `no bare reference to the bumped component is left on ${runtime}`);
 
   console.log(`OK  webjs dev versions the served import of an edited browser module on ${runtime} (#1689)`);
 } finally {

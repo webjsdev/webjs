@@ -47,7 +47,7 @@ import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBa
 import { stripBasePath, withBasePath } from '../base-path.js';
 import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
-import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl, setDevModuleVersions } from '../asset-hash.js';
 import { bumpBuildEpoch } from '../build-epoch.js';
 import { hintedBootModules } from '../ssr/shipped-modules.js';
 import { createRetryBackoff } from './vendor-retry.js';
@@ -603,6 +603,10 @@ export async function createRequestHandler(opts) {
   // the most recently booted one, which is the same scope the asset-url
   // provider already has.
   setFormActionResolver((fn) => (state.actionIndex ? resolveActionIdentity(state.actionIndex, fn) : null));
+  // The boot script, the modulepreload hints and the lazy-loader map name a
+  // bumped module with the same `?t=` its importers' rewritten specifiers
+  // carry (#1689), so a fresh document holds one instance of it, not two.
+  setDevModuleVersions(dev ? (abs) => state.browserVersions.versionOf(abs) : null);
 
   /**
    * Report a dev error (#264): build a frame and push it to the open tab via

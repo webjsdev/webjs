@@ -5,7 +5,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -137,4 +137,36 @@ test('handler serves an importer of an edited shipped module with ?t=', async ()
   const helper = await app.handle(new Request('http://x/components/label.ts?t=1'));
   assert.equal(helper.status, 200, 'the versioned URL is servable');
   assert.match(await helper.text(), /'two'/);
+});
+
+// Review of #1689: a fresh document named an edited module by its bare url in
+// the boot script and the modulepreload hints, while every served importer
+// said `?t=<n>`, so the page loaded it twice (two instances, two evaluations).
+// Every reference to one module in a document must agree.
+test('after an edit the boot script and preload hints name a bumped module with its ?t=', async () => {
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'x', type: 'module' }),
+    'app/page.ts': [
+      `import { html } from '@webjsdev/core';`,
+      `import '../components/counter.ts';`,
+      `export default () => html\`<x-counter></x-counter>\`;`,
+    ].join('\n'),
+    'components/counter.ts': [
+      `import { WebComponent, html } from '@webjsdev/core';`,
+      `class XCounter extends WebComponent() { render() { return html\`<button @click=\${() => 1}>c</button>\`; } }`,
+      `XCounter.register('x-counter');`,
+    ].join('\n'),
+  });
+  // `@webjsdev/core` resolves through the repo's node_modules during SSR.
+  symlinkSync(join(process.cwd(), 'node_modules'), join(appDir, 'node_modules'), 'dir');
+  const app = await createRequestHandler({ appDir, dev: true });
+  const before = await (await app.handle(new Request('http://x/'))).text();
+  assert.match(before, /import "\/components\/counter\.ts";/, 'before any edit the boot import is bare');
+  const counter = join(appDir, 'components/counter.ts');
+  writeFileSync(counter, readFileSync(counter, 'utf8').replace('>c<', '>d<'));
+  await app.rebuild({ v: 'reload', by: 'components/counter.ts', why: 'ships-to-browser' }, { changed: [counter] });
+  const after = await (await app.handle(new Request('http://x/'))).text();
+  assert.match(after, /import "\/components\/counter\.ts\?t=1";/, 'the boot import carries the version');
+  assert.doesNotMatch(after, /"\/components\/counter\.ts"/, 'no bare reference to the module is left');
+  assert.match(after, /<link rel="modulepreload" href="\/components\/counter\.ts\?t=1"/, 'and so does its preload hint');
 });
