@@ -421,6 +421,12 @@ const RELOAD_WORKER_SRC = readFileSync(new URL('../dev-reload-worker.js', import
 const DEV_STYLES_SRC = readFileSync(new URL('../dev-styles.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
 
+// The component hot swap (#1689), same shared-source rule. It installs the
+// template interner and the class patcher core reads, so the reload client
+// must evaluate before the page's boot script (`ssr/head.js` orders them).
+const DEV_HOT_CLIENT_SRC = readFileSync(new URL('../dev-hot-client.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 // The embed host's reload hold (#1532), same shared-source rule.
 const DEV_RELOAD_HOLD_SRC = readFileSync(new URL('../dev-reload-hold.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
@@ -481,6 +487,8 @@ export function reloadClientJs(bp) {
   const workerUrl = JSON.stringify(withBasePath('/__webjs/reload-worker.js', bp));
   const versionUrl = JSON.stringify(withBasePath('/__webjs/version', bp));
   return `// webjs dev reload client
+${DEV_HOT_CLIENT_SRC}
+var __webjsHot = installHotClient(globalThis);
 ${DEV_OVERLAY_SRC}
 ${RELOAD_WORKER_SRC}
 ${DEV_STYLES_SRC}
@@ -528,12 +536,16 @@ function __webjsVerdictOf(v) {
 // layout edit never changes browser-bound JS, so the server's re-render is the
 // complete truth and the client router can swap it in place: scroll and (for a
 // page edit) the hydrated state of components outside the changed region
-// survive. Anything else, including every signal the server could not classify,
-// is the full reload this always was. A \`component\` or \`css\` verdict (#1689)
+// survive. A \`component\` verdict (#1689) re-imports the versioned component
+// modules it lists, which patch the registered classes in place, so the live
+// elements keep their state. Anything else, including every signal the server
+// could not classify, is the full reload this always was. A \`css\` verdict
 // also reloads until this client learns to apply it in place.
 function __webjsApplyReload(verdict) {
   if (__webjsHold.offer(verdict)) return;
   __webjsWhenReady(function () {
+    var mods = verdict.modules || [];
+    if (verdict.v !== 'reload' && mods.length) { __webjsApplyHot(verdict, mods); return; }
     // Runtime feature detection, never an assumption. The refresh entry is
     // published by enableClientRouter and removed by disableClientRouter, so its
     // ABSENCE covers both no-router cases at once: an app that opted out with
@@ -574,8 +586,39 @@ function __webjsApplyReload(verdict) {
       }).then(null, function () { location.reload(); });
       return;
     }
+    // Say why when the server gave a reason (#1689: a component edit the hot
+    // swap refused names its guard, such as constructor-changed).
+    if (verdict.v === 'reload' && verdict.why) console.info('[webjs] full reload: ' + verdict.why + (verdict.by ? ' (' + verdict.by + ')' : ''));
     location.reload();
   });
+}
+// Apply a verdict that carries component modules (#1689): load the rebuilt
+// stylesheets, re-import the modules (each re-define patches its registered
+// class and re-renders the live elements), then re-render the page for a
+// \`page\` / \`shell\` verdict in the same batch, then swap the sheets. A
+// refused swap (a guard the hot client checks, a module that fails to load)
+// reloads and says why.
+function __webjsApplyHot(verdict, mods) {
+  var refresh = globalThis.__webjsRefreshPage;
+  var mode = verdict.v;
+  var by = verdict.by ? ' (' + verdict.by + ')' : '';
+  function reload(why) {
+    console.info('[webjs] full reload: ' + why + by);
+    location.reload();
+  }
+  if ((mode === 'page' || mode === 'shell') && typeof refresh !== 'function') { reload('no-client-router'); return; }
+  dismissDevOverlay();
+  preloadStyles().then(function (styles) {
+    return __webjsHot.applyModules(mods).then(function (r) {
+      if (!r.ok) { reload(r.why); return; }
+      var after = mode === 'page' || mode === 'shell' ? refresh(mode) : Promise.resolve(true);
+      return after.then(function (ok) {
+        if (!ok) { reload('refresh-failed'); return; }
+        styles.commit();
+        console.info('[webjs] hot-swapped ' + (r.tags.length ? r.tags.map(function (t) { return '<' + t + '>'; }).join(', ') : 'nothing') + by);
+      });
+    });
+  }).then(null, function (e) { reload(String((e && e.message) || e)); });
 }
 function __webjsDirectEvents() {
   // No SharedWorker (Chrome for Android has none) or its construction threw (a

@@ -1,9 +1,10 @@
 /**
  * Cross-runtime proof of the dev server's browser module versions (#1689):
  * start a supervised `webjs dev` under WHICHEVER runtime runs this file, edit a
- * helper a shipping component imports, and assert the component's SERVED source
- * now imports the helper as `./label.ts?t=<n>`, and that the versioned URL
- * serves the edited helper. Run under both:
+ * helper a shipping component imports, and assert the reload frame is a
+ * `component` hot swap naming the component's versioned URL, that the module
+ * served at that URL imports the helper as `./label.ts?t=<n>`, and that the
+ * versioned URL serves the edited helper. Run under both:
  *
  *   node test/bun/dev-hot-served-versions.mjs
  *   bun  test/bun/dev-hot-served-versions.mjs
@@ -41,6 +42,29 @@ async function until(fn, { timeoutMs, stepMs = 150 }) {
     try { const v = await fn(); if (v) return v; } catch { /* keep polling */ }
     if (Date.now() > deadline) return null;
     await sleep(stepMs);
+  }
+}
+
+/** Resolve with the raw `data:` line of the first `reload` frame, else null. */
+async function reloadFrame(timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE}/__webjs/events`, { headers: { accept: 'text/event-stream' }, signal: ctrl.signal });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return null;
+      buf += dec.decode(value, { stream: true });
+      const m = /event: reload\ndata: (.*)\n/.exec(buf);
+      if (m) return m[1];
+    }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -84,12 +108,20 @@ try {
   assert.match(first, /from '\.\/label\.ts';/, `before any edit the helper import is bare on ${runtime}`);
   await sleep(300);
 
+  const frame = reloadFrame(15_000);
+  await sleep(300); // let the SSE stream connect before the edit
   writeFileSync(labelFile, "export const label: string = 'two';\n");
-  const versioned = await until(async () => {
-    const src = await served('/components/counter.ts');
-    return src && /from '\.\/label\.ts\?t=(\d+)';/.exec(src);
-  }, { timeoutMs: 20_000 });
-  assert.ok(versioned, `the component's import of the edited helper never carried ?t= on ${runtime}\n--- server log ---\n${log}`);
+  const data = await frame;
+  assert.ok(data, `no reload frame after editing the helper on ${runtime}\n--- server log ---\n${log}`);
+  const verdict = JSON.parse(data);
+  // The helper is imported only by the component, so the edit hot-swaps it,
+  // and the frame names the versioned component module the tab re-imports.
+  assert.equal(verdict.v, 'component', `a helper edit under a component hot-swaps on ${runtime}, got ${data}`);
+  assert.equal(verdict.modules.length, 1, `one boundary module on ${runtime}`);
+  assert.match(verdict.modules[0], /^\/components\/counter\.ts\?t=\d+$/);
+  const boundary = await served(verdict.modules[0]);
+  const versioned = boundary && /from '\.\/label\.ts\?t=(\d+)';/.exec(boundary);
+  assert.ok(versioned, `the boundary's import of the edited helper carries ?t= on ${runtime}\n${boundary}`);
   const helper = await served(`/components/label.ts?t=${versioned[1]}`);
   assert.match(helper || '', /'two'/, `the versioned helper URL serves the edit on ${runtime}`);
 

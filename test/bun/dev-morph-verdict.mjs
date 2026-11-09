@@ -151,9 +151,11 @@ Counter.register('my-counter');
   assert.deepEqual(parseReloadFrame(JSON.stringify(page)), { v: 'page', by: 'app/page.ts', why: 'page-module', modules: [], css: false },
     `the relay reads the page frame into the full verdict object on ${runtime}`);
 
-  // The counterfactual direction: a component edit must stay a full reload,
-  // because `customElements.define` is once-per-tag and a morph would apply new
-  // markup wired to the old class.
+  // The counterfactual direction: a component edit is never a morph, because
+  // `customElements.define` is once-per-tag and a morph would apply new markup
+  // wired to the old class. Since #1689 it is a `component` hot swap: the tab
+  // re-imports the versioned module the frame names and patches the registered
+  // class in place.
   const comp = await verdictForEdit('components/counter.ts', `
 import { WebComponent, html } from '@webjsdev/core';
 class Counter extends WebComponent({ count: Number }) {
@@ -162,8 +164,26 @@ class Counter extends WebComponent({ count: Number }) {
 }
 Counter.register('my-counter');
 `);
-  assert.equal(comp.v, 'reload', `a component edit reloads on ${runtime}, got ${JSON.stringify(comp)}\n--- server log ---\n${log}`);
-  assert.equal(comp.why, 'ships-to-browser', `and for the reachability reason on ${runtime}`);
+  assert.equal(comp.v, 'component', `a component edit hot-swaps on ${runtime}, got ${JSON.stringify(comp)}\n--- server log ---\n${log}`);
+  assert.equal(comp.why, 'hot-swap', `for the hot-swap reason on ${runtime}`);
+  assert.equal(comp.by, 'components/counter.ts', `naming the edited file on ${runtime}`);
+  assert.deepEqual(comp.modules, ['/components/counter.ts?t=1'], `listing the versioned module to re-import on ${runtime}`);
+  assert.deepEqual(parseReloadFrame(JSON.stringify(comp)), { v: 'component', by: 'components/counter.ts', why: 'hot-swap', modules: ['/components/counter.ts?t=1'], css: false },
+    `the relay reads the component frame into the full verdict object on ${runtime}`);
+
+  // And an edit the registered class cannot take stays a full reload with its
+  // reason (#1689): the native registry keeps constructing with the old
+  // constructor.
+  const ctor = await verdictForEdit('components/counter.ts', `
+import { WebComponent, html } from '@webjsdev/core';
+class Counter extends WebComponent({ count: Number }) {
+  constructor() { super(); this.count = 10; }
+  render() { return html\`<button @click=\${() => { this.count += 2; }}>\${this.count}</button>\`; }
+}
+Counter.register('my-counter');
+`);
+  assert.equal(ctor.v, 'reload', `a constructor edit reloads on ${runtime}, got ${JSON.stringify(ctor)}`);
+  assert.equal(ctor.why, 'constructor-changed', `naming the reason on ${runtime}`);
 
   console.log(`OK  the dev reload frame carries the change verdict on ${runtime} (#1398)`);
 } finally {

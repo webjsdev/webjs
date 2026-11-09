@@ -16,6 +16,8 @@ import { generateRouteTypes } from '../route-types.js';
 import { setClientRouterEnabled, setMetadataIconRoutes } from '../ssr.js';
 import {
   buildActionIndex,
+  isServerFile,
+  hasUseServerDirective,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
 import { installEsmHotHooks, bumpModuleVersions } from './esm-hot-hooks.js';
@@ -23,8 +25,10 @@ import { createBrowserVersions } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
 import { readRegenerateRules, isRegenerateOutputPath } from '../dev-regenerate.js';
-import { classifyChangedPath } from '../dev-classify.js';
-import { ensureStripper } from '../ts-strip.js';
+import { classifyChangedPath, mergeVerdicts } from '../dev-classify.js';
+import { ensureStripper, stripTypeScript } from '../ts-strip.js';
+import { hotSignature, findHotBoundaries } from '../dev-hot-classify.js';
+import { toUrlPath } from '../ssr/preloads.js';
 import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
@@ -37,7 +41,7 @@ import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPi
 import { browserEntryFiles } from '../browser-entries.js';
 import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
-import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
+import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles, hasModuleScopeSideEffect } from '../component-elision.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
@@ -550,6 +554,12 @@ export async function createRequestHandler(opts) {
     // files and their importers, and the served source of every app module
     // versions its imports of them. Never cleared, so a version only grows.
     browserVersions: createBrowserVersions(),
+    // The hot-swap signature (`dev-hot-classify.js`) of each shipped component
+    // file as the open tabs hold it (#1689): set from disk at the first
+    // analysis, then from every edit's source, since a tab applies every
+    // verdict. Never cleared.
+    /** @type {Map<string, import('../dev-hot-classify.js').HotSignature>} */
+    hotSignatures: new Map(),
     // Transformed-source cache (stripped TS + applied elision). Per-handler,
     // NOT module-global: the cached bytes bake in THIS handler's elision
     // verdict, so two handlers for the same app with different elision
@@ -741,6 +751,13 @@ export async function createRequestHandler(opts) {
               state.graphFiles = seenFilesFor(state.moduleGraph);
               state.pageFiles = new Set((state.routeTable.pages || []).map((p) => p.file).filter(Boolean));
               state.componentFiles = new Set(components.map((c) => c.file));
+              // The hot-swap baseline of every shipped component the tabs
+              // have not had a signature recorded for yet (#1689).
+              await Promise.all([...state.componentFiles].map(async (f) => {
+                if (!state.shippedFiles.has(f) || state.hotSignatures.has(f)) return;
+                const sig = await readHotSignature(f);
+                if (sig) state.hotSignatures.set(f, sig);
+              }));
             }
             // Fold the elision verdict into app-module content hashes (#243): an
             // app module's served body is elision-transformed, so a verdict flip
@@ -1037,8 +1054,13 @@ export async function createRequestHandler(opts) {
     if (dev && changed.length) bumpModuleVersions(changed);
     // The browser's versions walk the PREVIOUS analysis, which is what the open
     // tabs hold. Captured before anything below resets it.
-    const prev = { graph: state.moduleGraph, shipped: state.shippedFiles, components: state.componentFiles };
+    const prev = {
+      graph: state.moduleGraph, shipped: state.shippedFiles, components: state.componentFiles,
+      graphFiles: state.graphFiles, pageFiles: state.pageFiles, entries: state.browserEntryFiles,
+    };
     if (dev && changed.length && prev.graph) state.browserVersions.bump(changed, prev.graph, prev.shipped);
+    // A component edit the tab can apply by re-importing its module (#1689).
+    if (dev && notify) verdict = await hotVerdict(verdict, changed, prev);
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
@@ -1103,6 +1125,96 @@ export async function createRequestHandler(opts) {
     // runs on both boundary tiers and swaps in the changed boot script, which
     // executes and registers the new component.
     if (notify) opts.onReload?.(verdict || { v: 'reload', by: '', why: 'no-verdict' });
+  }
+
+  /**
+   * The hot-swap signature of a file on disk, or null when it cannot be read
+   * or stripped.
+   * @param {string} file
+   */
+  async function readHotSignature(file) {
+    try {
+      const src = await readFile(file, 'utf8');
+      return hotSignature(/\.m?tsx?$/.test(file) ? await stripTypeScript(src) : src);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Turn a reload the edit of shipped browser modules caused into a
+   * `component` hot swap when every edited module reaches a component boundary
+   * the tab can re-import (`dev-hot-classify.js`), or into a reload that names
+   * the precise reason it cannot (#1689). Each changed path is classified again
+   * against the PREVIOUS analysis, because the merged verdict keeps only the
+   * strongest file's reason. Fails safe: any surprise returns the verdict as
+   * it came.
+   * @param {import('../dev-classify.js').ReloadVerdict | undefined} verdict
+   * @param {string[]} changed
+   * @param {{ graph: any, shipped: Set<string>, components: Set<string>, graphFiles: Set<string>, pageFiles: Set<string>, entries: Set<string> }} prev
+   * @returns {Promise<import('../dev-classify.js').ReloadVerdict | undefined>}
+   */
+  async function hotVerdict(verdict, changed, prev) {
+    if (!verdict || verdict.v !== 'reload' || !changed.length || !prev.graph || !analysisEverDone) return verdict;
+    /** @type {Map<string, import('../dev-hot-classify.js').HotSignature | null>} */
+    const sigs = new Map();
+    const signatureOf = async (/** @type {string} */ f) => {
+      if (!sigs.has(f)) sigs.set(f, await readHotSignature(f));
+      return sigs.get(f) || null;
+    };
+    try {
+      const ctx = { appDir, shippedFiles: prev.shipped, graphFiles: prev.graphFiles, pageFiles: prev.pageFiles, analysisReady: true, sep };
+      const perFile = changed.map((f) => classifyChangedPath(f, ctx));
+      const reloads = perFile.filter((v) => v.v === 'reload');
+      if (!reloads.length || reloads.some((v) => v.why !== 'ships-to-browser')) return verdict;
+      /** @type {Map<string, Set<string>>} */
+      const importers = new Map();
+      for (const edges of [prev.graph, dynamicEdges(prev.graph)]) {
+        for (const [from, tos] of edges) {
+          if (!prev.shipped.has(from)) continue;
+          for (const to of tos) {
+            if (!importers.has(to)) importers.set(to, new Set());
+            /** @type {Set<string>} */ (importers.get(to)).add(from);
+          }
+        }
+      }
+      const res = await findHotBoundaries(changed.filter((_, i) => perFile[i].v === 'reload'), {
+        shipped: prev.shipped,
+        componentFiles: prev.components,
+        routeFiles: new Set([...prev.entries].filter((f) => !prev.components.has(f))),
+        importersOf: (f) => importers.get(f) || [],
+        signatureOf,
+        baselineOf: (f) => state.hotSignatures.get(f),
+        sideEffectOf: async (f) => {
+          try {
+            // The browser gets an action's RPC stub, never its source.
+            if (isServerFile(f)) return !(await hasUseServerDirective(f));
+            const src = await readFile(f, 'utf8');
+            return hasModuleScopeSideEffect(/\.m?tsx?$/.test(f) ? await stripTypeScript(src) : src);
+          } catch {
+            return true;
+          }
+        },
+        rel: (f) => relative(appDir, f).split(sep).join('/'),
+      });
+      if (!res.ok) return { v: 'reload', by: res.by, why: res.why };
+      const bp = basePath();
+      const modules = res.boundaries.map((b) => withBasePath(toUrlPath(b, appDir), bp) + '?t=' + state.browserVersions.versionOf(b));
+      /** @type {import('../dev-classify.js').ReloadVerdict} */
+      const hot = { v: 'component', by: reloads[0].by, why: 'hot-swap', modules };
+      return /** @type {import('../dev-classify.js').ReloadVerdict} */ (perFile.filter((v) => v.v !== 'reload').reduce((a, b) => mergeVerdicts(a, b), hot));
+    } catch {
+      return verdict;
+    } finally {
+      // The tab applies every verdict, a reload included, so from now on it
+      // holds each changed component's new source.
+      for (const f of changed) {
+        if (!prev.components.has(f)) continue;
+        const sig = await signatureOf(f);
+        if (sig) state.hotSignatures.set(f, sig);
+        else state.hotSignatures.delete(f);
+      }
+    }
   }
 
   /**

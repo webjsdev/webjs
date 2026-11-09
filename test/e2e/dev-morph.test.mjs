@@ -1,5 +1,6 @@
 /**
- * End-to-end test for the in-place dev refresh (#1398).
+ * End-to-end test for the in-place dev refresh (#1398) and the component hot
+ * swap (#1689).
  *
  * The acceptance criteria are browser facts and nothing below the browser can
  * stand in for them. Whether a page RELOADED is not observable from the DOM, so
@@ -14,14 +15,12 @@
  * classifies it, the frame carries the verdict, the relay coalesces it, and the
  * tab applies it.
  *
- * `__WEBJS_DEV_CHILD: '1'` is load-bearing, and a future reader should not
- * assume this covers `webjs dev` as users run it on Node. It keeps the server
- * in the spawned process instead of re-execing it under the `node --watch`
- * supervisor. That in-process path is the only one that can morph at all: a
- * `node --watch` restart replaces the process, so nothing survives to classify
- * the change and the browser learns of the edit only through a changed boot id,
- * which is unconditionally a full reload. On Bun the same in-process shape is
- * what `bun --hot` gives users by default.
+ * The server runs under the real `webjs dev` supervisor, as users run it. On
+ * Node the supervised child re-evaluates an edited server module in place
+ * through its module resolve hook (#1689), so the supervisor restarts it only
+ * for a restart file and every edit below reaches the tab as a classified
+ * verdict from the same process. On Bun the same in-process shape is what
+ * `bun --hot` gives users by default.
  *
  * This is the first e2e that WRITES to a staged app file. It writes into the
  * temp copy `stageApp()` made, never into the repo.
@@ -70,7 +69,7 @@ function startDev(dir, port) {
   return new Promise((res, rej) => {
     const child = spawn(process.execPath, [cli, 'dev', '--port', String(port)], {
       cwd: dir,
-      env: { ...process.env, __WEBJS_DEV_CHILD: '1', NODE_ENV: 'development' },
+      env: { ...process.env, NODE_ENV: 'development' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let started = false;
@@ -99,7 +98,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 const RELOAD_SETTLE_MS = 4500;
 
-describe('E2E: a dev page or layout edit refreshes in place (#1398)', {
+describe('E2E: a dev page, layout, server module or component edit applies in place (#1398, #1689)', {
   skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1 to run E2E tests',
 }, () => {
   let browser, child, dir, base;
@@ -130,13 +129,54 @@ describe('E2E: a dev page or layout edit refreshes in place (#1398)', {
   async function open() {
     const page = await browser.newPage();
     const cssRequests = [];
+    const consoleLines = [];
     page.on('request', (r) => { if (r.url().includes('/public/app.css')) cssRequests.push(r.url()); });
+    // Kept across a reload, so a line the outgoing document logged is seen.
+    page.on('console', (m) => consoleLines.push(m.text()));
     await page.goto(base + '/', { waitUntil: 'networkidle2' });
     await page.waitForFunction(() => !!customElements.get('morph-counter'), { timeout: 10000 });
     await page.waitForSelector('#bump');
     page.cssRequests = cssRequests;
+    page.consoleLines = consoleLines;
     return page;
   }
+
+  /** The dev process boot id the page was rendered by. */
+  async function bootId() {
+    const body = await (await fetch(base + '/')).text();
+    const meta = /<meta name="webjs-dev-reload" content="([^"]*)"/.exec(body);
+    return meta ? JSON.parse(meta[1].replace(/&quot;|&#34;/g, '"')).boot : null;
+  }
+
+  // Runs first, while the page still renders `msg` and `hits` (#1689).
+  test('a SERVER module edit refreshes in place from the same process, untouched module state kept', async () => {
+    const page = await open();
+    try {
+      await page.click('#bump');
+      const before = await page.evaluate(() => ({
+        token: window.__docToken,
+        hits: Number(document.querySelector('#hits').textContent),
+      }));
+      const bootBefore = await bootId();
+      assert.ok(bootBefore, 'the page carries the dev boot id');
+
+      writeFileSync(join(dir, 'lib/msg.server.ts'), "export const msg: string = 'MSG_B';\n");
+      await page.waitForFunction(
+        () => document.querySelector('#msg')?.textContent === 'MSG_B',
+        { timeout: RELOAD_SETTLE_MS + 3000 },
+      );
+      const after = await page.evaluate(() => ({
+        token: window.__docToken,
+        hits: Number(document.querySelector('#hits').textContent),
+      }));
+      assert.equal(after.token, before.token, 'the document never loaded again');
+      assert.equal(await bootId(), bootBefore, 'the SAME dev process rendered the edit (a new boot id is a restart)');
+      assert.ok(after.hits > before.hits,
+        `an untouched module kept its instance: hits went ${before.hits} -> ${after.hits}, a restart starts over at 1`);
+    } finally {
+      await page.close();
+    }
+  });
 
   test('a PAGE edit updates in place: no reload, scroll kept, component state kept', async () => {
     const page = await open();
@@ -244,40 +284,82 @@ export default function RootLayout({ children }: LayoutProps) {
     }
   });
 
-  // THE counterfactual, in the direction that matters most. If component edits
-  // ever started morphing, the page would keep the OLD class wired to fresh
-  // markup, and `customElements.define` being once-per-tag means there is no
-  // recovery from that short of a reload.
-  test('a COMPONENT edit still triggers a real full reload', async () => {
+  // A component edit is never a morph: the page would keep the OLD class wired to
+  // fresh markup. Since #1689 it hot-swaps instead, re-importing the versioned
+  // module, which patches the registered class in place. So the instance, its
+  // count and the document all survive, and the NEW behaviour is live.
+  test('a COMPONENT edit hot-swaps: no reload, state kept, new behaviour active', async () => {
     const page = await open();
     try {
-      const before = await page.evaluate(() => window.__docToken);
-      assert.ok(before, 'the document stamped a load token');
+      await page.click('#bump');
+      const before = await page.evaluate(() => ({
+        token: window.__docToken,
+        count: document.querySelector('#bump').textContent.trim(),
+      }));
+      assert.ok(before.token, 'the document stamped a load token');
+      assert.equal(before.count, 'count 1');
+      const bootBefore = await bootId();
 
       writeFileSync(join(dir, 'components/counter.ts'), `
 import { WebComponent, html, prop } from '@webjsdev/core';
 class MorphCounter extends WebComponent({ count: prop(Number) }) {
   constructor() { super(); this.count = 0; }
   render() {
-    return html\`<button id="bump" @click=\${() => { this.count += 2; }}>count \${this.count}</button>\`;
+    return html\`<button id="bump" @click=\${() => { this.count += 2; }}>clicks \${this.count}</button>\`;
+  }
+}
+MorphCounter.register('morph-counter');
+`);
+      await page.waitForFunction(
+        () => document.querySelector('#bump')?.textContent.trim() === 'clicks 1',
+        { timeout: RELOAD_SETTLE_MS + 3000 },
+      );
+      assert.equal(await page.evaluate(() => window.__docToken), before.token, 'the document never loaded again');
+      assert.equal(await bootId(), bootBefore, 'and the dev process was not restarted');
+      await page.click('#bump');
+      assert.equal(
+        await page.evaluate(() => document.querySelector('#bump').textContent.trim()),
+        'clicks 3',
+        'the kept instance runs the NEW handler, which counts by two',
+      );
+      assert.ok(page.consoleLines.some((l) => l.includes('[webjs] hot-swapped <morph-counter>')),
+        `the tab says what it swapped (saw: ${page.consoleLines.join(' | ')})`);
+    } finally {
+      await page.close();
+    }
+  });
+
+  // The counterfactual: an edit the registered class cannot take (the native
+  // registry keeps constructing with the old constructor) is a real reload,
+  // and the tab says why.
+  test('a component CONSTRUCTOR edit reloads and names the reason', async () => {
+    const page = await open();
+    try {
+      const before = await page.evaluate(() => window.__docToken);
+      writeFileSync(join(dir, 'components/counter.ts'), `
+import { WebComponent, html, prop } from '@webjsdev/core';
+class MorphCounter extends WebComponent({ count: prop(Number) }) {
+  constructor() { super(); this.count = 10; }
+  render() {
+    return html\`<button id="bump" @click=\${() => { this.count += 2; }}>clicks \${this.count}</button>\`;
   }
 }
 MorphCounter.register('morph-counter');
 `);
       // A real reload replaces the global scope, so the token is re-minted.
-      // Nothing an in-place refresh does can produce that.
       await page.waitForFunction(
         (t) => window.__docToken && window.__docToken !== t,
         { timeout: RELOAD_SETTLE_MS + 3000 },
         before,
       );
       await page.waitForSelector('#bump');
-      await page.click('#bump');
       assert.equal(
         await page.evaluate(() => document.querySelector('#bump').textContent.trim()),
-        'count 2',
-        'and the reloaded page is running the NEW component class, which counts by two',
+        'clicks 10',
+        'the reloaded page constructs with the NEW constructor',
       );
+      assert.ok(page.consoleLines.some((l) => l.includes('[webjs] full reload: constructor-changed (components/counter.ts)')),
+        `the tab named the reason (saw: ${page.consoleLines.join(' | ')})`);
     } finally {
       await page.close();
     }

@@ -1,3 +1,5 @@
+import { hotStrings } from './hot.js';
+
 /**
  * Tagged template literal producing a {@link TemplateResult}.
  *
@@ -11,7 +13,7 @@
  * @returns {TemplateResult}
  */
 export function html(strings, ...values) {
-  return { _$webjs: 'template', strings, values };
+  return { _$webjs: 'template', strings: hotStrings(strings, 0), values };
 }
 
 /**
@@ -32,7 +34,7 @@ export function html(strings, ...values) {
  * @returns {TemplateResult}
  */
 export function svg(strings, ...values) {
-  return { _$webjs: 'template', strings, values, svg: true };
+  return { _$webjs: 'template', strings: hotStrings(strings, 1), values, svg: true };
 }
 
 /**
