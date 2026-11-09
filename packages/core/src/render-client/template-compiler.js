@@ -2,6 +2,7 @@ import { MARKER } from '../html.js';
 import { BINDING_PREFIXES, isBindingPrefix } from '../binding-prefixes.js';
 import { isSubmitterReflectedProp } from '../form-action.js';
 import { LIGHT_SLOT_ATTR } from '../slot.js';
+import { assertNoJsxIsms } from '../jsx-guard.js';
 
 /** @type {WeakMap<TemplateStringsArray | string[], { templateEl: HTMLTemplateElement, parts: PartDescriptor[], formActions: FormActionRecord[] | null }>} */
 export const templateCache = new WeakMap();
@@ -48,6 +49,8 @@ export function compile(tr) {
   const { strings } = tr;
   let cached = templateCache.get(strings);
   if (cached) return cached;
+  // `className=`, `htmlFor=`, `<Link>`: JSX that HTML silently ignores.
+  assertNoJsxIsms(strings);
 
   /** @type {PartDescriptor[]} */
   const parts = [];

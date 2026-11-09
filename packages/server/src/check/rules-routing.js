@@ -11,6 +11,38 @@ import {
 } from './helpers.js';
 import { buildRouteTable } from '../router.js';
 import { validateAppLayout } from '../app-layout.js';
+import { findJsxIsm } from '@webjsdev/core/server';
+import { htmlTemplateStrings } from '../dev-source-locations.js';
+
+/**
+ * Rule: `no-jsx-attributes`.
+ *
+ * `className=`, `htmlFor=`, or a capitalised component tag (`<Link>`) in an
+ * `html` template: JSX that HTML silently ignores. Both renderers refuse it
+ * when the template first compiles; this reports it ahead of time, with the
+ * line the template starts on.
+ *
+ * @param {ScannedFile[]} files
+ * @param {import('./rules.js').Violation[]} violations
+ */
+export function checkNoJsxAttributes(files, violations) {
+  for (const { rel, content } of files) {
+    for (const t of htmlTemplateStrings(content)) {
+      const ism = findJsxIsm(t.strings);
+      if (!ism) continue;
+      violations.push({
+        rule: 'no-jsx-attributes',
+        file: rel,
+        message: ism.kind === 'attr'
+          ? `The html template at line ${t.line} uses \`${ism.name}=\`, a JSX spelling HTML reads as an unknown attribute, so it does nothing (the render throws).`
+          : `The html template at line ${t.line} uses \`<${ism.name}>\`, a JSX component HTML lowercases into an unknown element (the render throws).`,
+        fix: ism.kind === 'attr'
+          ? `Write \`${ism.name === 'className' ? 'class' : 'for'}=\` instead.`
+          : `Render the custom element's registered tag (with a hyphen, such as \`<my-${ism.name.toLowerCase()}>\`), or a plain element such as \`<a href>\` for a link.`,
+      });
+    }
+  }
+}
 
 /**
  * Rules fed by the route table: `no-page-route-conflict` and the other file

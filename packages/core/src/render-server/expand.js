@@ -169,10 +169,12 @@ export async function finishComponent(w, frame, children) {
 async function renderOwnTemplate(w, frame, children) {
   const owner = w.owner;
   w.owner = frame.isShadow ? null : { tag: frame.tag, partition: partitionChildren(children, frame.segments), consumed: null };
+  w.componentDepth = (w.componentDepth || 0) + 1;
   try {
     return await w.capture(() => w.value(frame.tpl));
   } finally {
     w.owner = owner;
+    w.componentDepth -= 1;
   }
 }
 
@@ -236,7 +238,8 @@ async function errorState(w, frame) {
     let errTpl;
     if (instance && typeof instance.renderError === 'function') errTpl = instance.renderError(err);
     if (errTpl === undefined) errTpl = defaultSSRErrorTemplate(tag, err, w.dev);
-    errorInner = await w.capture(() => w.value(errTpl));
+    w.componentDepth = (w.componentDepth || 0) + 1;
+    try { errorInner = await w.capture(() => w.value(errTpl)); } finally { w.componentDepth -= 1; }
   } catch (renderErrorThrew) {
     console.error(`[webjs] renderError() for <${tag}> also threw:`, renderErrorThrew);
     errorInner = '';

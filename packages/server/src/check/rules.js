@@ -112,6 +112,11 @@ export const RULES = [
       'Flags an import of `next` / `next/*`, `react` / `react-dom`, `lit` / `lit-html` / `lit-element` / `lit/*`, `@lit/*` or `@lit-labs/*`, in any form (named, default, namespace, `import type`, side-effect, `export ... from`, or a string-literal dynamic `import()`). WebJs never aliases or loads those packages: a Next import fails to resolve, and a Lit import quietly loads a second component runtime from the CDN. The violation names the exact `@webjsdev/*` replacement (for example `next/navigation` -> `redirect` / `notFound` from `@webjsdev/core`, `lit` -> `WebComponent` / `html` / `css` from `@webjsdev/core`, `@lit/context` -> `@webjsdev/core/context`). `react` / `react-dom` stay allowed inside a `*.server.*` module (an email renderer, say), which never reaches the browser. The same refusal runs at load time: the dev overlay and production readiness name the import, and a server import is rewritten to the same fix.',
   },
   {
+    name: 'no-jsx-attributes',
+    description:
+      'Flags JSX written into an `html` template: a `className=` or `htmlFor=` attribute (HTML reads them as unknown `classname` / `htmlfor` attributes, so the class never applies and the label never targets its control) and a capitalised component tag such as `<Link>` or `<Button>` (HTML lowercases it into an unknown element that renders nothing). Both renderers throw on these when the template first compiles; the rule reports them ahead of time. Write `class=` / `for=`, and render a custom element by its registered hyphenated tag (or a plain `<a href>` for a link). Text in the template (`&lt;Link&gt;`, a `className` mentioned in prose), comments, and script / style bodies are never flagged.',
+  },
+  {
     name: 'no-page-route-conflict',
     description:
       'A `page.{js,ts}` and a `route.{js,ts}` must not answer the same URL (including through a route group, `app/(a)/x/page.ts` beside `app/x/route.ts`). Next.js refuses this at build time; WebJs refuses to boot in production and answers every dev request with the problem, because the route handler would shadow the page and it could never render. Move the route handler to its own folder (`app/api/...`) or delete the page.',

@@ -83,6 +83,8 @@ export class Walker {
     this.defer = 0;
     /** @type {any} */
     this.tagState = null;
+    /** How many component templates (render / renderError) are being walked. */
+    this.componentDepth = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -410,7 +412,10 @@ export class Walker {
     const name = /** @type string */ (op.name);
     const tag = /** @type string */ (op.tag);
     if (op.kind === 'event') {
-      // An event listener is client-only behaviour, dropped at SSR.
+      // An event listener is client-only behaviour, dropped at SSR. Outside
+      // any component template it can never run either: a page or layout
+      // never hydrates. Dev makes that a render error naming the fix.
+      if (this.dev && this.componentDepth === 0) throw new Error(pageBindingError(true, name, tag));
       return;
     }
     if (op.kind === 'prop') {
@@ -424,6 +429,9 @@ export class Walker {
         return;
       }
       if (!tag.includes('-')) {
+        if (this.dev && this.componentDepth === 0 && !isReflectedFormProp(name, tag)) {
+          throw new Error(pageBindingError(false, name, tag));
+        }
         // A native element's `.prop` is dropped at SSR. It still refuses a
         // function where the property is a REFLECTED IDL attribute (`.action`
         // on a form, `.formAction` on a button or input), and records the
@@ -795,4 +803,30 @@ export async function streamValue(value, ctx, controller) {
   const w = new Walker(ctx, { expand: false, controller });
   await w.value(value);
   w.flush();
+}
+
+/**
+ * A form-shape property the dedicated form guards judge (and refuse with a
+ * more specific message), so the page-binding error leaves it to them.
+ * @param {string} name
+ * @param {string} tag
+ */
+function isReflectedFormProp(name, tag) {
+  return /^(?:action|method|enctype|encoding|form(?:action|method|enctype))$/i.test(name)
+    && /^(?:form|button|input)$/.test(tag);
+}
+
+/**
+ * The dev error for an `@event` or native `.prop` binding in a template no
+ * component renders (a page or layout, which never hydrates).
+ * @param {boolean} isEvent an `@event` listener (else a `.prop` binding)
+ * @param {string} name
+ * @param {string} tag
+ */
+function pageBindingError(isEvent, name, tag) {
+  const what = isEvent ? `an \`@${name}\` event listener` : `a \`.${name}\` property binding`;
+  return `webjs: ${what} on <${tag}> in a page or layout template. Pages and layouts render only on the server and never hydrate, so it is dropped and never runs. `
+    + `Move the interactive markup into a WebComponent and render its tag from the page (its render() hydrates in the browser)`
+    + (!isEvent ? ', or write a plain attribute (\`' + name.toLowerCase() + '=${value}\`) when the value only needs to reach the HTML' : '')
+    + '. This check runs in dev only. See https://webjs.dev/docs/troubleshooting#binding-in-page-template';
 }

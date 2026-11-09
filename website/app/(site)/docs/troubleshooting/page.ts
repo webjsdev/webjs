@@ -172,6 +172,21 @@ export default function Troubleshooting() {
       <li><code>react</code> components become a <code>WebComponent</code> class. A <code>*.server.ts</code> module may still use <code>react</code> or <code>react-dom</code> (an email renderer, for example), since it never reaches the browser.</li>
     </ul>
 
+    <h2 id="jsx-in-html-template">A render error naming <code>className=</code>, <code>htmlFor=</code>, or a tag like <code>&lt;Link&gt;</code> (<code>no-jsx-attributes</code>)</h2>
+    <p><strong>Symptom:</strong> a page or component throws <code>className= in an html template is JSX, not HTML</code> (or names <code>htmlFor=</code>, or a capitalised tag such as <code>&lt;Link&gt;</code>), and <code>webjs check</code> reports <code>no-jsx-attributes</code>.</p>
+    <p><strong>Cause:</strong> an <code>html</code> template is HTML, not JSX. HTML reads <code>className</code> and <code>htmlFor</code> as unknown attributes, so the class never applies and the label never targets its control, and it lowercases <code>&lt;Link&gt;</code> into an unknown element that renders nothing. Both renderers refuse these when the template first compiles instead of rendering a silently wrong page.</p>
+    <p><strong>Fix:</strong> write <code>class=</code> and <code>for=</code>. Render a custom element by its registered, hyphenated tag (<code>&lt;my-button&gt;</code>), and a link as a plain <code>&lt;a href&gt;</code>, which the client router already enhances.</p>
+
+    <h2 id="function-in-on-attribute">A render error saying a function was interpolated into <code>onclick</code></h2>
+    <p><strong>Symptom:</strong> a render throws <code>a function was interpolated into the onClick attribute</code>.</p>
+    <p><strong>Cause:</strong> <code>onClick=\${handler}</code> is React's spelling. In an <code>html</code> template an attribute is a string, so the function's source would be written into the HTML as an inline handler that runs in the global scope without its closure, and would ship the code to every visitor.</p>
+    <p><strong>Fix:</strong> bind the event with <code>@click=\${handler}</code> inside a <code>WebComponent</code>'s <code>render()</code>. A string handler (<code>onclick="go()"</code>) is plain HTML and is left alone.</p>
+
+    <h2 id="binding-in-page-template">A dev render error about an <code>@event</code> or <code>.prop</code> in a page or layout</h2>
+    <p><strong>Symptom:</strong> in development a page answers 500 with <code>an @click event listener on &lt;button&gt; in a page or layout template</code> (or a <code>.value</code> property binding).</p>
+    <p><strong>Cause:</strong> pages and layouts render only on the server and never hydrate, so an event listener or a native-element property binding written in their template is dropped and never runs. In production it would silently do nothing; development makes it an error so you notice.</p>
+    <p><strong>Fix:</strong> move the interactive markup into a component and render its tag from the page. The component's <code>render()</code> runs in the browser, where <code>@click</code> works. For a value that only needs to reach the HTML, write a plain attribute (<code>value=\${x}</code>). A <code>.prop</code> on a custom element in a page is fine: it is serialized for the component to read when it hydrates.</p>
+
     <h2 id="still-stuck">Still stuck</h2>
     <p>The framework source is in <code>node_modules/@webjsdev/</code> with no build step, so what you read is what runs. Grep the relevant file (the SSR pipeline in <code>@webjsdev/server/src/ssr.js</code>, client hydration in <code>@webjsdev/core/src/render-client.js</code>, the convention rules in <code>@webjsdev/server/src/check.js</code>). Run <code>webjs check</code> to surface most of the issues above before they reach the browser, and run <code>webjs check --rules</code> to read what each rule enforces.</p>
   `;

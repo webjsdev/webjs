@@ -142,13 +142,32 @@ export function annotateSourceLocations(source, file) {
 }
 
 /**
+ * The static strings of every `html` template in `src`, with the 1-based line
+ * each template starts on, for a check rule that inspects template markup
+ * (`no-jsx-attributes`). The strings are the raw source text between holes.
+ * Returns [] when the source cannot be lexed.
+ *
+ * @param {string} src
+ * @returns {{ strings: string[], line: number }[]}
+ */
+export function htmlTemplateStrings(src) {
+  if (typeof src !== 'string' || !src.includes('html')) return [];
+  /** @type {{ strings: string[], line: number }[]} */
+  const templates = [];
+  try { collectInserts(src, '', templates); } catch { return []; }
+  return templates;
+}
+
+/**
  * Lex `src` and return `[offset, text]` insertions, in ascending order.
  *
  * @param {string} src
  * @param {string} file
+ * @param {{ strings: string[], line: number }[]} [templates] when given,
+ *   each `html` template's static strings are collected here
  * @returns {Array<[number, string]>}
  */
-function collectInserts(src, file) {
+function collectInserts(src, file, templates) {
   /** @type {Array<[number, string]>} */
   const inserts = [];
   const n = src.length;
@@ -184,13 +203,19 @@ function collectInserts(src, file) {
       const c = src[i];
       if (c === '\\') {
         // An escape is static text the html machine sees as an opaque char.
+        if (html && html.record) html.record.strings[html.record.strings.length - 1] += src.slice(i, i + 2);
         if (html) html.feed(src, i, line);
         if (src[i + 1] === '\n') line++;
         i += 2;
         continue;
       }
       if (c === '`') { i++; return 'end'; }
-      if (c === '$' && src[i + 1] === '{') { i += 2; return 'hole'; }
+      if (c === '$' && src[i + 1] === '{') {
+        i += 2;
+        if (html && html.record) html.record.strings.push('');
+        return 'hole';
+      }
+      if (html && html.record) html.record.strings[html.record.strings.length - 1] += c;
       if (html) {
         const ins = html.feed(src, i, line);
         if (ins !== -1) inserts.push([ins, ` data-webjs-src="${file}:${line}"`]);
@@ -208,6 +233,10 @@ function collectInserts(src, file) {
   const enterTemplate = (isHtml) => {
     i++; // the backtick
     const html = isHtml ? new HtmlState() : null;
+    if (html && templates) {
+      html.record = { strings: [''], line };
+      templates.push(html.record);
+    }
     const r = scanTemplateText(html);
     if (r === 'hole') { stack.push({ kind: 'tpl', html }); prev = 'punct'; }
     else prev = 'str';
@@ -320,6 +349,8 @@ function collectInserts(src, file) {
  */
 class HtmlState {
   constructor() {
+    /** @type {{ strings: string[], line: number } | null} the template's static strings, when collected */
+    this.record = null;
     /** @type {'text' | 'tag' | 'dq' | 'sq' | 'comment' | 'raw'} */
     this.mode = 'text';
     /** Tag name of the tag being read (lowercased), '' for a close / bang tag. */

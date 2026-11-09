@@ -17,6 +17,7 @@ import {
   checkNoServerEnvInComponents,
   checkShellInNonRootLayout,
   checkAppLayout,
+  checkNoJsxAttributes,
 } from './rules-routing.js';
 import {
   checkErasableTypescriptOnly,
@@ -109,6 +110,7 @@ export async function checkConventions(appDir) {
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
   checkNoForeignFrameworkImport(files, violations);
+  checkNoJsxAttributes(files, violations);
   await checkAppLayout(appDir, violations);
 
   return violations;

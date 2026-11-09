@@ -1541,3 +1541,34 @@ test('no-page-route-conflict: a page and a route at different URLs are fine', as
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+/* -------------------- no-jsx-attributes -------------------- */
+
+test('no-jsx-attributes: flags className=, htmlFor= and a capitalised tag in an html template', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\nexport default () => html`<div className=\"a\"><label htmlFor=${'x'}>x</label><Link href=\"/\">a</Link></div>`;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-jsx-attributes');
+    assert.equal(v.length, 1, 'one violation per template (the first React-ism)');
+    assert.match(v[0].message, /className/);
+    assert.match(v[0].fix, /class=/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-jsx-attributes: prose, strings, comments and escaped samples are not flagged', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      "const s = '<div className=\"x\">';\n" +
+      "// html`<Link className=\"y\">`\n" +
+      "export default () => html`<p>React writes &lt;div className=\"x\"&gt; and &lt;Link&gt;.</p><code-block>\\${'<'}Link></code-block>`;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-jsx-attributes');
+    assert.equal(v.length, 0, JSON.stringify(v));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
