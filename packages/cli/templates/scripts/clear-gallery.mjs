@@ -5,9 +5,9 @@
 // app/features/, the app/examples/todo app, their modules/, and example
 // metadata routes) so an agent can learn the idioms from real, running code.
 // The gallery is reference, NOT part of your product. Learn from the demos
-// relevant to your task first (the skill at .agents/skills/webjs/ teaches the
-// same patterns and SURVIVES this reset, so nothing is lost), then run this
-// once to shed the gallery, then grow the app in place.
+// relevant to your task first (the docs at https://webjs.dev/docs teach the
+// same patterns), then run this once to shed the gallery, then grow the app in
+// place.
 //
 // It strips the app down to a TRULY BAREBONES blank slate: it removes the
 // gallery routes + modules + demo metadata routes, the gallery's example design
@@ -19,8 +19,8 @@
 // page bare, so a full-screen block page fills the window), drops the gallery's
 // monospaced faces from the theme so the type falls back to the system sans,
 // and drops the demo `todos` table plus the auth card's `passwordHash` column
-// from the schema. It KEEPS the buildable base: the agent skill
-// (.agents/skills/webjs/), the reset root layout, the theme in
+// from the schema. It KEEPS the buildable base: AGENTS.md, the reset root
+// layout, the theme in
 // styles/globals.css (which `webjs ui init --preset <code>` replaces), anything
 // `webjs ui add` put in components/ui/, the database wiring, the example
 // `users` table, and `lib/utils/cn.ts` (the `webjs ui add` prerequisite).
@@ -28,9 +28,9 @@
 // Why strip so much: the demos, the design system, and the example component /
 // tests are all EXAMPLES to learn FROM, not a base to inherit. Leaving them
 // nudges the implementing agent to lean on the scaffold's choices instead of
-// building the app's own. The DURABLE knowledge is the pattern itself, which
-// lives in the skill (.agents/skills/webjs/, re-read every session): learn it
-// from the gallery here, then after this reset build your own (run
+// building the app's own. The DURABLE knowledge is the pattern itself (the
+// brief in AGENTS.md plus https://webjs.dev/docs): learn it from the gallery
+// here, then after this reset build your own (run
 // `webjs ui add <name>` for UI primitives, cn.ts is kept for it) themed to your
 // app. It is a one-time reset: if the gallery is already gone (no app/features/)
 // it does nothing, so a rerun never clobbers an app you built.
@@ -157,7 +157,7 @@ for (const f of ['db/dev.db', 'db/dev.db-shm', 'db/dev.db-wal']) rm(f);
 // children before test/ so it reads as empty.
 for (const d of ['app/api', 'test/unit', 'test/e2e', 'test']) if (pruneEmpty(d)) removed++;
 
-console.log(`Gallery cleared (${removed} paths removed). The agent skill and your database wiring are kept. Pick a look with \`npx webjsdev ui init --preset <code>\` (from webjs.dev/ui/create), then add components with \`npx webjsdev ui add <name>\` (see .agents/skills/webjs/references/styling.md).`);
+console.log(`Gallery cleared (${removed} paths removed). AGENTS.md and your database wiring are kept. Pick a look with \`npx webjsdev ui init --preset <code>\` (from webjs.dev/ui/create), then add components with \`npx webjsdev ui add <name>\`.`);
 console.log('Next: regenerate the database (db:generate then db:migrate), then start the dev server and build your app in app/ and modules/.');
 
 function MINIMAL_PAGE() {
@@ -173,7 +173,7 @@ export default function Home() {
       <h1 class="text-4xl font-bold tracking-tight m-0">Your app</h1>
       <p class="text-base leading-relaxed m-0 opacity-70">
         The gallery is cleared. This is <code class="text-[0.9em]">app/page.ts</code>. Build your
-        app from here. The guide is <code class="text-[0.9em]">.agents/skills/webjs/SKILL.md</code>.
+        app from here. The brief is <code class="text-[0.9em]">AGENTS.md</code>.
       </p>
       <nav class="flex items-center gap-5 text-sm opacity-70">
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hover:opacity-100 transition-opacity no-underline">Docs</a>
@@ -197,8 +197,7 @@ import type { LayoutProps } from '@webjsdev/core';
  * window. It paints with the theme tokens in styles/globals.css, the block
  * \`npx webjsdev ui init --preset <code>\` replaces, so a preset from
  * webjs.dev/ui/create repaints the app. Grow it in place (a header, nav,
- * footer) as the app needs; .agents/skills/webjs/references/styling.md covers
- * the patterns.
+ * footer) as the app needs.
  */
 
 // The favicon is app/icon.svg (and the manifest app/manifest.webmanifest): the

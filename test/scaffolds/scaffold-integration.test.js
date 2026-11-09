@@ -86,20 +86,22 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'package.json')));
     assert.ok(existsSync(join(appDir, 'tsconfig.json')));
 
-    // Single cross-agent source (AGENTS.md + the one skill + the .agents workflow
-    // rules), CONVENTIONS.md, CLAUDE.md bridge, and Claude protective hooks.
-    for (const f of ['AGENTS.md', '.agents/skills/webjs/SKILL.md', '.agents/rules/workflow.md', 'CLAUDE.md', 'CONVENTIONS.md', '.claude/settings.json', '.editorconfig']) {
+    // Single cross-agent source (AGENTS.md carrying the brief + the .agents
+    // workflow rules), the CLAUDE.md bridge, and Claude protective hooks.
+    for (const f of ['AGENTS.md', '.agents/rules/workflow.md', 'CLAUDE.md', '.claude/settings.json', '.editorconfig']) {
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
     // Per-agent files and design-distinctness ceremony removed.
-    for (const f of ['GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review']) {
+    // CONVENTIONS.md was dropped: the brief in AGENTS.md
+    // plus Lit and Next.js muscle memory is the whole agent doc set.
+    for (const f of ['GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review', 'CONVENTIONS.md']) {
       assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the scaffold`);
     }
-    // Thin bridges (pointers to AGENTS.md / the skill).
-    for (const f of ['CLAUDE.md', 'CONVENTIONS.md']) {
+    // Thin bridge (a pointer to AGENTS.md).
+    for (const f of ['CLAUDE.md']) {
       const src = readFileSync(join(appDir, f), 'utf8');
       assert.ok(src.length < 2200, `${f} is a thin bridge, not a full rule duplicate`);
-      assert.match(src, /AGENTS\.md|\.agents\/skills\/webjs/, `${f} points at AGENTS.md or the skill`);
+      assert.match(src, /AGENTS\.md/, `${f} points at AGENTS.md`);
     }
 
     // #271: the opt-in progressive-enhancement service worker + its offline
@@ -741,7 +743,7 @@ test('scaffoldApp: template placeholder substitution in copied files', async () 
     const appDir = join(cwd, 'PlaceholderTest');
 
     // Walk a few template-copied files and verify {{APP_NAME}} was replaced.
-    const filesToCheck = ['AGENTS.md', 'CONVENTIONS.md', 'CLAUDE.md'];
+    const filesToCheck = ['AGENTS.md', 'CLAUDE.md'];
     for (const f of filesToCheck) {
       const p = join(appDir, f);
       if (!existsSync(p)) continue;
@@ -839,9 +841,9 @@ test('scaffoldApp --db postgres: an already-lowercase name is unchanged', async 
 // AGENTS.md carries a template-SPECIFIC build playbook (#1076): the full-stack
 // scaffold teaches the UI playbook (design tokens, the UI kit, an MPA), the api
 // scaffold teaches the backend playbook (route handlers, endpoint security), and
-// neither ships guidance that does not match what it generated. Both front-load
-// the same required meta-rules and drop the opt-out phrasing that let smaller
-// models under-gather context.
+// neither ships guidance that does not match what it generated. Both open with
+// the same brief and drop the opt-out phrasing that let smaller models
+// under-gather context.
 test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async () => {
   const cwd = await tempCwd();
   const restore = muteConsole();
@@ -858,9 +860,9 @@ test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async
 
     // Shared, required meta-rules on BOTH templates.
     for (const [label, md] of [['full-stack', fs], ['api', api]]) {
-      assert.match(md, /Gather context BEFORE you build \(required\)/, `${label}: required context-gathering`);
-      assert.match(md, /Read the framework source for exact contracts/, `${label}: source-reading step`);
-      assert.match(md, /Never reach for `any`/, `${label}: no-any strict typing`);
+      assert.match(md, /## The WebJs brief/, `${label}: opens with the brief`);
+      assert.match(md, /node_modules\/@webjsdev\/\*/, `${label}: source-reading pointer`);
+      assert.match(md, /never reach for `any`/i, `${label}: no-any strict typing`);
       assert.match(md, /npm run check/, `${label}: verification includes the check script`);
       // No opt-out / permission-to-skip phrasing (the #1076 regression to
       // prevent; "only when a task needs" is the historical wording).
@@ -869,12 +871,12 @@ test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async
     }
 
     // Full-stack teaches the UI playbook; the api template must NOT.
-    assert.match(fs, /light-dark\(LIGHT, DARK\)/, 'full-stack: design-token mandate');
-    assert.match(fs, /Tier 2, custom elements/, 'full-stack: UI kit tier-2 discovery');
-    assert.match(fs, /multi-page app \(MPA\)/, 'full-stack: MPA structure');
+    assert.match(fs, /Theme with tokens/, 'full-stack: design-token mandate');
+    assert.match(fs, /Use the UI kit/, 'full-stack: UI kit discovery');
+    assert.match(fs, /Build real routes/, 'full-stack: MPA structure');
     assert.match(fs, /position: fixed/, 'full-stack: fixed navbar');
     assert.match(fs, /npx webjs regenerate/, 'full-stack: the recorded Tailwind build in the pipeline (#1672)');
-    for (const uiOnly of [/light-dark/, /Tier 2/, /ui add/, /css:build/, /regenerate/, /position: fixed/]) {
+    for (const uiOnly of [/Theme with tokens/, /Use the UI kit/, /ui add/, /css:build/, /regenerate/, /position: fixed/]) {
       assert.doesNotMatch(api, uiOnly, `api: no UI-only guidance (${uiOnly})`);
     }
 
@@ -885,22 +887,22 @@ test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async
     assert.match(api, /Secure every endpoint/, 'api: endpoint security section');
     assert.doesNotMatch(fs, /Build a backend API/, 'full-stack: no backend-API heading');
 
-    // The component guidance (WebComponent, reactive props) is UI-only, so it
-    // lives in the full-stack playbook, never in the api AGENTS.md.
-    assert.match(fs, /Build components for interactivity/, 'full-stack: component guidance');
-    assert.doesNotMatch(api, /Build components for interactivity|WebComponent/,
-      'api: no component/reactive-props guidance');
+    // The component guidance is UI-only, so it lives in the full-stack
+    // playbook, never in the api playbook (the shared brief names the base
+    // class for both, since the brief is template-neutral).
+    assert.match(fs, /Put interactivity in components/, 'full-stack: component guidance');
+    assert.doesNotMatch(api, /Put interactivity in components/,
+      'api: no component guidance');
 
-    // The sibling agent-doc surfaces (CONVENTIONS.md, .agents/rules/workflow.md)
-    // ship into BOTH apps, so they must be template-neutral: no opt-out phrasing,
-    // and they must acknowledge the api showcase rather than only the UI gallery.
-    const apiConv = readFileSync(join(cwd, 'api-app', 'CONVENTIONS.md'), 'utf8');
+    // The sibling agent-doc surface (.agents/rules/workflow.md) ships into BOTH
+    // apps, so it must be template-neutral: no opt-out phrasing, and it must
+    // acknowledge the api showcase rather than only the UI gallery.
     const apiFlow = readFileSync(join(cwd, 'api-app', '.agents/rules/workflow.md'), 'utf8');
-    for (const [label, md] of [['CONVENTIONS.md', apiConv], ['workflow.md', apiFlow]]) {
+    for (const [label, md] of [['workflow.md', apiFlow]]) {
       assert.doesNotMatch(md, /only while exploring|do not have to read|only (if|when) a task needs/i,
         `api ${label}: no opt-out phrasing`);
     }
-    for (const [label, md] of [['CONVENTIONS.md', apiConv], ['workflow.md', apiFlow]]) {
+    for (const [label, md] of [['workflow.md', apiFlow]]) {
       assert.match(md, /app\/api\/features/, `api ${label}: acknowledges the api showcase`);
     }
   } finally {

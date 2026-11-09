@@ -6,7 +6,7 @@
  *   - modules/ skeleton
  *   - components/ with a theme toggle
  *   - test/unit/ and test/e2e/ with example tests
- *   - CONVENTIONS.md, AGENTS.md, CLAUDE.md
+ *   - AGENTS.md, CLAUDE.md
  *   - package.json with WebJs deps + test scripts
  *   - tsconfig.json for editor support
  */
@@ -767,13 +767,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     exclude: ['node_modules', '.webjs/vendor', 'db/migrations'],
   }, null, 2) + '\n');
 
-  // --- Templates (AGENTS.md, CONVENTIONS.md, CLAUDE.md, test files, Claude hooks) ---
+  // --- Templates (AGENTS.md, CLAUDE.md, test files, Claude hooks) ---
 
   const templateFiles = [
-    // Single cross-agent source: AGENTS.md points at .agents/skills/webjs/; the
-    // .agents/rules workflow rules and the Claude enforcement hooks back it up.
+    // Single cross-agent source: AGENTS.md carries the brief; the .agents/rules
+    // workflow rules and the Claude enforcement hooks back it up.
     'AGENTS.md',
-    'CONVENTIONS.md',
     '.agents/rules/workflow.md',
     'CLAUDE.md',
     // Claude Code config + the protective enforcement hooks (no design ceremony).
@@ -818,7 +817,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // rewrites; the three infra files get their file-specific transform. On Node,
   // every file is copied byte-identical (the map is empty).
   const PROSE_REWRITE = new Set([
-    'AGENTS.md', 'CLAUDE.md', 'CONVENTIONS.md',
+    'AGENTS.md', 'CLAUDE.md',
     '.agents/rules/workflow.md',
     'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
     // Comments that name a command (#1527): `npm run ci` in the hook, the
@@ -1337,8 +1336,8 @@ export type ActionResult<T> =
     // Progressive-enhancement service worker (#271): ship the opt-in offline
     // primitive (the worker + its offline fallback) into the UI scaffold
     // (this block is api-excluded since api has no UI).
-    // Dormant until the app registers it (see the skill's references/service-worker.md);
-    // it never changes the JS-disabled baseline.
+    // Dormant until the app registers it (the opt-in snippet is in sw.js's own
+    // header); it never changes the JS-disabled baseline.
     for (const swFile of ['sw.js', 'offline.html']) {
       const swSrc = join(TEMPLATES, 'public', swFile);
       if (existsSync(swSrc)) await cp(swSrc, join(publicDir, swFile));
@@ -1474,13 +1473,12 @@ import '#components/theme-toggle.ts';
 
 // The favicon and manifest are app/icon.svg and app/manifest.webmanifest: the
 // framework links them into <head> itself, so nothing is declared here. Replace
-// the placeholder icon with this app's own (see the skill's routing-and-pages
-// reference, "App icon").
+// the placeholder icon with this app's own.
 
 // LayoutProps types every layout argument (children, params, searchParams,
 // url) from the framework, so children is a TemplateResult rather than an
 // untyped value. Derive types like this everywhere instead of widening to
-// unknown; see .agents/skills/webjs/references/typescript.md.
+// unknown.
 export default function RootLayout({ children }: LayoutProps) {
   // Read the in-flight request's CSP nonce so the theme-detection inline script
   // passes strict CSP. Returns '' when no CSP nonce is set.
@@ -1760,7 +1758,7 @@ ThemeToggle.register('theme-toggle');
 
   // --- Print success ---
 
-  const guide = 'AGENTS.md, .agents/skills/webjs/   ← the agent guide';
+  const guide = 'AGENTS.md                     ← the agent brief';
   if (isApi) {
     console.log(`  ${name}/
     app/api/{health,users}/route.ts
@@ -1779,8 +1777,8 @@ ThemeToggle.register('theme-toggle');
 `);
   }
   console.log(`For AI agents, read this before editing:
-  • Read AGENTS.md, then .agents/skills/webjs/SKILL.md. The skill is the guide
-    to building a WebJs app and routes to focused references on demand.
+  • Read AGENTS.md. Its brief is the whole difference from Next.js routing
+    and Lit components; run 'npx webjs check' after each edit.
   • This scaffold is a minimal starting point, not a demo to prune. Grow the app
     in place: add routes under app/, components under components/, and features
     under modules/<feature>/, and keep server-only code behind .server.ts.

@@ -1,10 +1,8 @@
 # Workspace workflow rules: WebJs app
 
-You are working on a WebJs app (AI-first, no-build, web-components-first). This
-file is the WORKFLOW contract (git, tests, review). For HOW to build (routing,
-components, actions, styling, the framework API), read
-`.agents/skills/webjs/SKILL.md`, which routes to focused references on demand.
-Read `AGENTS.md` first. Full hosted docs are at https://webjs.dev/docs.
+You are working on a WebJs app. This file is the WORKFLOW contract (git, tests,
+review). How to build is the brief in `AGENTS.md`; read that first. The human
+docs are at https://webjs.dev/docs.
 
 ## Grow the app in place (non-negotiable)
 
@@ -12,8 +10,8 @@ Study the shipped showcase (a full-stack app's UI gallery under
 `app/features/` and `app/examples/todo`, the api template's
 `app/api/features/`), run `npm run gallery:clear`, then grow the app in place
 under `app/`, `components/`, and `modules/<feature>/`. `AGENTS.md` carries the
-build order, the data rule (the wired-up Drizzle database, never JSON files),
-and the browser check for a UI app.
+build order and the data rule (the wired-up Drizzle database, never JSON
+files).
 
 ## Before starting ANY work
 

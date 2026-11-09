@@ -1,59 +1,43 @@
 # AGENTS.md for {{APP_NAME}}
 
-This is a WebJs app: AI-first, web-components-first, buildless, and
-progressively enhanced. Read this whole file before you edit anything, then
-follow it. The steps here are required, not optional.
+## The WebJs brief
 
-## Gather context BEFORE you build (required)
+WebJs is a no-build full-stack framework. Write it the way you write Next.js
+routing and Lit components, with the differences below.
 
-WebJs is its own framework. It is not React, Next, or Lit, so writing code from
-that muscle memory produces broken WebJs code. Before you write or change
-anything, gather context from these sources. Do not skip a step to save time.
-This is what separates a working app from a broken one.
+- Routing follows the Next.js App Router: `app/page.ts`, `layout.ts`,
+  `route.ts`, `middleware.ts`, `[param]`, `[...slug]`, `(group)`,
+  `loading.ts`, `error.ts`, `not-found.ts`, `metadata` and
+  `generateMetadata`, and server actions.
+- Components use Lit's APIs (`html`, `css`, reactive properties through
+  `static properties` plus `declare` or the `WebComponent({ ... })` factory,
+  the lifecycle, directives, context, task), imported from `@webjsdev/core`
+  and its `/directives`, `/context`, `/task` and `/signals` subpaths. The base
+  class is `WebComponent`. Register with `Class.register('my-tag')` or
+  `customElements.define`.
+- Components render light DOM by default and `<slot>` works there too.
+  `static shadow = true` opts into shadow DOM.
+- TypeScript must be erasable, so no decorators and no enums.
+- Server-only code and server actions live in `*.server.ts` files. With
+  `'use server'` at the top, their exports are callable from components and
+  bindable as `<form action=${fn}>`. A failed form action re-renders the page
+  with its result on `actionData`.
+- `cookies()`, `headers()` and `revalidatePath()` come from `@webjsdev/server`.
+  Files in `public/` are served from the site root.
+- Never import `lit`, `next` or `react`.
 
-1. **Read the skill.** Start with `.agents/skills/webjs/SKILL.md`, then load the
-   `references/*.md` files it routes to for the surface you are touching. The
-   skill is the guide to building a WebJs app: it helps you choose the right
-   layer, reach for the right export, and avoid the mistakes Next.js or Lit
-   habits cause. Reading it is never wasted work: it survives the
-   gallery-clearing step in the playbook below.
-2. **Study the shipped examples, then build on a clean slate.** The template
-   playbook below says what ships and the exact order to follow. The workflow
-   rules (git, tests, review) are in `.agents/rules/workflow.md`; follow them
-   too.
-3. **Read the framework source for exact contracts.** WebJs is 100% buildless
-   native ES modules, so the source you run IS the source you read. For one
-   export's signature and doc comment run `npx webjs source <Export>` (for
-   example `npx webjs source createAuth`); it reads the installed package and
-   prints the declaration, not the file. When you need the behaviour behind a
-   signature, open the package source under `node_modules/@webjsdev/*` directly
-   (each package ships its own `AGENTS.md`). The full hosted docs are at
-   https://webjs.dev/docs.
+After each edit run `npx webjs check` and `npx webjs status`. For an exact
+contract read the framework source in `node_modules/@webjsdev/*` (there is no
+build, so it is the code that runs) or run `npx webjs source <Export>`. The
+human docs are at https://webjs.dev/docs.
+
+Git, tests and review rules are in `.agents/rules/workflow.md`. Follow them too.
 
 {{PLAYBOOK}}
 
-## Type everything (all templates)
+## Types and data (all templates)
 
-Derive the type at every boundary from its source. Never reach for `any`, and
-never `unknown` where a real type exists. The rule is step 8 of the skill's "Default
-Workflow"; the forms to reach for:
-
-- A database row: `typeof table.$inferSelect` (`$inferInsert` for a write),
-  carried into a shipping component with `import type`.
-- An action's input: a named `interface`. Its result: `ActionResult<T>`.
-- Routing files: `PageProps<'/blog/[slug]'>`, `LayoutProps`,
-  `RouteHandlerContext`. `npx webjsdev types` writes the typed `Route` union.
-- A reactive property: `prop<Student>(Object)`, `prop<Tag[]>(Array)`.
-
-The full ladder, with an end-to-end example, is
-`.agents/skills/webjs/references/typescript.md`.
-
-Keep server-only code (database drivers, secrets, `node:*` builtins) in
-`.server.ts` modules. The two kinds (with and without `'use server'`) are the
-skill's "Core WebJs Rules" 1 and 2.
-
-## Data (all templates)
-
-Use the wired-up database (Drizzle) for every piece of data the app stores;
-the playbook above has the modeling step. Never store app data in a JSON file,
-an in-memory array, or localStorage.
+Derive every type from its source and never reach for `any`: a database row
+from `typeof table.$inferSelect`, an action's result from `ActionResult<T>`, a
+page's props from `PageProps<'/blog/[slug]'>`. Keep app data in the wired-up
+Drizzle database, never in a JSON file, an in-memory array, or localStorage.

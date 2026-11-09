@@ -5,13 +5,12 @@
 // app/api/features/, their modules, an env.ts example, and a starter test) so an
 // agent can learn the backend idioms from real, running code. It is the api
 // counterpart of the UI gallery's `gallery:clear`. Learn from the demos relevant
-// to your task first (the skill at .agents/skills/webjs/ teaches the same
-// patterns and SURVIVES this reset), then run this once to shed the showcase, then
-// grow the api in place.
+// to your task first (https://webjs.dev/docs teaches the same patterns), then run
+// this once to shed the showcase, then grow the api in place.
 //
 // It removes the showcase routes + modules + the env.ts example + the widgets
 // test, and resets the root app/route.ts to list only the kept baseline endpoints
-// (/api/health, /api/users). It KEEPS the agent skill, middleware.ts (CORS), the
+// (/api/health, /api/users). It KEEPS AGENTS.md, middleware.ts (CORS), the
 // health + users endpoints, modules/users, the database wiring, and the users
 // example test. It is a one-time reset: if the showcase is already gone (no
 // app/api/features/) it does nothing, so a rerun never clobbers an app you built.
@@ -51,5 +50,5 @@ if (existsSync(routePath)) {
   writeFileSync(routePath, s);
 }
 
-console.log(`Backend-features showcase cleared (${removed} paths removed). The agent skill, your database wiring, and the health + users endpoints are kept.`);
+console.log(`Backend-features showcase cleared (${removed} paths removed). AGENTS.md, your database wiring, and the health + users endpoints are kept.`);
 console.log('Next: build your api in app/api/ and modules/, keeping server-only code behind .server.ts.');
