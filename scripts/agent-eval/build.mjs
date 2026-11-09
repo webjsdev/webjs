@@ -142,7 +142,10 @@ async function oneBuild({ spec, specName, index, out, framework, model, label, t
     '--permission-mode', 'bypassPermissions', '--setting-sources', 'project,local',
     '--strict-mcp-config', '--mcp-config', join(app, '.claude.json'), '--no-session-persistence'];
   const started = Date.now();
-  await new Promise((done) => {
+  // --no-agent: scaffold, link and grade the untouched app, calling no model
+  // (checks the runner's layout for free).
+  if (process.argv.includes('--no-agent')) writeFileSync(transcript, '');
+  else await new Promise((done) => {
     const child = spawn('claude', args, { cwd: app, env, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.pipe(createWriteStream(transcript));
     child.stderr.pipe(createWriteStream(join(parent, 'stderr.log')));
@@ -181,8 +184,32 @@ function linkNodeModules(framework, app) {
     if (name !== '@webjsdev') { symlinkSync(join(src, name), join(dst, name)); continue; }
     mkdirSync(join(dst, name));
     for (const pkg of readdirSync(join(src, name))) {
-      if (!WORKSPACE_APPS.has(pkg)) symlinkSync(join(src, name, pkg), join(dst, name, pkg));
+      if (WORKSPACE_APPS.has(pkg)) continue;
+      linkPublished(join(src, name, pkg), join(dst, name, pkg));
     }
+  }
+}
+
+/**
+ * A framework package as npm would install it: its `package.json` and the
+ * entries its `files` list publishes (plus its own nested `node_modules`), each
+ * linked, never the contributor files beside them. A checkout carries
+ * `AGENTS.md`, `CLAUDE.md` and `test/` in every package, and Claude Code loads
+ * a CLAUDE.md from a directory the agent works in, so a whole-directory link
+ * handed the agent a 2,000-line contributor guide no real install has.
+ * @param {string} pkgDir @param {string} dst
+ */
+function linkPublished(pkgDir, dst) {
+  let files = null;
+  try { files = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).files; } catch { /* no manifest */ }
+  if (!Array.isArray(files)) { symlinkSync(pkgDir, dst); return; }
+  mkdirSync(dst);
+  for (const entry of ['package.json', 'node_modules', ...files]) {
+    const from = join(pkgDir, entry.replace(/\/$/, ''));
+    const to = join(dst, entry.replace(/\/$/, ''));
+    if (!existsSync(from) || existsSync(to)) continue;
+    mkdirSync(dirname(to), { recursive: true });
+    symlinkSync(from, to);
   }
 }
 
