@@ -35,6 +35,7 @@ import { toUrlPath } from '../ssr/preloads.js';
 import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
 import { devImport } from '../dev-import.js';
+import { versionImportSpecifiers } from './specifier-versions.js';
 import { runMetadataRoute } from '../metadata-routes.js';
 
 /**
@@ -332,6 +333,9 @@ export async function handleCore(req, ctx) {
         // Dev source locations (#1499): annotate the served module's `html`
         // templates exactly as the SSR load hook annotates the server's copy.
         sourceLocations: state.sourceLocations === true,
+        // Browser module versions (#1689): an import of a module a dev edit
+        // bumped is served with `?t=<n>`, so a hot re-import loads it fresh.
+        versionOf: dev && state.browserVersions ? (f) => state.browserVersions.versionOf(f) : undefined,
       };
       // A `?v=<hash>` app-module request is content-addressed -> immutable
       // (#243); an un-fingerprinted request keeps the 1h fallback.
@@ -753,14 +757,19 @@ export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
  *
  * @param {string} code
  * @param {string} abs
- * @param {{ moduleGraph: any, lazyComponentFiles?: Map<string, string[]>, appDir: string }} opts
+ * @param {{ moduleGraph: any, lazyComponentFiles?: Map<string, string[]>, appDir: string, versionOf?: (abs: string) => number }} opts
  * @returns {string}
  */
 function deferLazyImports(code, abs, opts) {
-  if (!opts.lazyComponentFiles || opts.lazyComponentFiles.size === 0) return code;
-  const bp = basePath();
-  const urlFor = (file) => withAssetHash(withBasePath(toUrlPath(file, opts.appDir), bp), bp);
-  return deferLazyImportsFromSource(code, abs, opts.moduleGraph, opts.lazyComponentFiles, resolveImport, opts.appDir, urlFor);
+  if (opts.lazyComponentFiles && opts.lazyComponentFiles.size > 0) {
+    const bp = basePath();
+    const urlFor = (file) => withAssetHash(withBasePath(toUrlPath(file, opts.appDir), bp), bp);
+    code = deferLazyImportsFromSource(code, abs, opts.moduleGraph, opts.lazyComponentFiles, resolveImport, opts.appDir, urlFor);
+  }
+  // Dev browser module versions (#1689), LAST: elision and lazy deferral match
+  // the specifiers as written, so they must see them unversioned.
+  if (opts.versionOf) code = versionImportSpecifiers(code, abs, opts.appDir, opts.versionOf);
+  return code;
 }
 
 /**

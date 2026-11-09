@@ -19,6 +19,7 @@ import {
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
 import { installEsmHotHooks, bumpModuleVersions } from './esm-hot-hooks.js';
+import { createBrowserVersions } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
 import { readRegenerateRules, isRegenerateOutputPath } from '../dev-regenerate.js';
@@ -542,6 +543,13 @@ export async function createRequestHandler(opts) {
     graphFiles: new Set(),
     /** @type {Set<string>} */
     pageFiles: new Set(),
+    // Component files from the scan, for the hot-swap boundary walk (#1689).
+    /** @type {Set<string>} */
+    componentFiles: new Set(),
+    // Browser module versions (#1689): a rebuild bumps the edited shipped
+    // files and their importers, and the served source of every app module
+    // versions its imports of them. Never cleared, so a version only grows.
+    browserVersions: createBrowserVersions(),
     // Transformed-source cache (stripped TS + applied elision). Per-handler,
     // NOT module-global: the cached bytes bake in THIS handler's elision
     // verdict, so two handlers for the same app with different elision
@@ -732,6 +740,7 @@ export async function createRequestHandler(opts) {
               state.shippedFiles = reachableFromEntries(state.moduleGraph, shippedEntries, appDir);
               state.graphFiles = seenFilesFor(state.moduleGraph);
               state.pageFiles = new Set((state.routeTable.pages || []).map((p) => p.file).filter(Boolean));
+              state.componentFiles = new Set(components.map((c) => c.file));
             }
             // Fold the elision verdict into app-module content hashes (#243): an
             // app module's served body is elision-transformed, so a verdict flip
@@ -1026,6 +1035,10 @@ export async function createRequestHandler(opts) {
     // import from here on, the re-warm included, gets the new instances. A
     // no-op where the resolve hook is not installed.
     if (dev && changed.length) bumpModuleVersions(changed);
+    // The browser's versions walk the PREVIOUS analysis, which is what the open
+    // tabs hold. Captured before anything below resets it.
+    const prev = { graph: state.moduleGraph, shipped: state.shippedFiles, components: state.componentFiles };
+    if (dev && changed.length && prev.graph) state.browserVersions.bump(changed, prev.graph, prev.shipped);
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
