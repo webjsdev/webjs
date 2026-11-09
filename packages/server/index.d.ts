@@ -631,8 +631,13 @@ export declare function regenerateStatus(
 // context.js (per-request context helpers)
 // ---------------------------------------------------------------------------
 
+/**
+ * The in-flight request's headers, read-only as Next.js's `ReadonlyHeaders`:
+ * `set`, `append` and `delete` throw at runtime and are absent from the type.
+ */
+export type ReadonlyHeaders = Omit<Headers, 'set' | 'append' | 'delete'>;
 /** Read-only headers for the in-flight request. Throws outside a request scope. */
-export declare function headers(): Headers;
+export declare function headers(): ReadonlyHeaders;
 /** A cookie as read from the request. */
 export interface RequestCookie { name: string; value: string }
 /** A cookie to write (Next's `ResponseCookie`; `maxAge` in seconds, `path` defaults to `/`). */

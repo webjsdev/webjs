@@ -87,6 +87,10 @@ export async function handlerContextHabit(req: Request, ctx: RouteHandlerContext
 export async function requestHabits() {
   const ua = getRequest()?.headers.get('user-agent') ?? '';
   const fromHeaders = (await headers()).get('accept') ?? headers().get('accept');
+  // headers() is read-only, as Next's is: a write is a type error, not a runtime surprise.
+  // @ts-expect-error set is not on ReadonlyHeaders
+  headers().set('x-a', '1');
+  for (const [k] of headers()) void k;
   const theme: string = cookies().get('theme')?.value ?? 'light';
   const app = await createRequestHandler({ appDir: '.', dev: true });
   const res = await testRequest(app.handle, '/');
