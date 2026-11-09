@@ -23,11 +23,36 @@ import { dynamicEdges, expandImportAlias, importSpecifierRanges, resolveImport }
 
 /**
  * @typedef {{
- *   bump: (changed: Iterable<string>, graph: Map<string, Set<string>> | null, shipped: Set<string>) => Set<string>,
+ *   bump: (changed: Iterable<string>, importers: Map<string, Set<string>> | null, shipped: Set<string>) => Set<string>,
  *   versionOf: (abs: string) => number,
  *   clear: () => void,
  * }} BrowserVersions
  */
+
+/**
+ * Who imports whom among the modules the browser holds: for each module, the
+ * shipped modules that import it statically or through a string-literal
+ * dynamic import. One walk of the graph per rebuild, shared by the version
+ * bump and the hot-swap boundary walk (`hotVerdict` in `handler.js`).
+ * @param {Map<string, Set<string>>} graph
+ * @param {Set<string>} shipped
+ * @returns {Map<string, Set<string>>}
+ */
+export function shippedImporters(graph, shipped) {
+  /** @type {Map<string, Set<string>>} */
+  const importers = new Map();
+  for (const edges of [graph, dynamicEdges(graph)]) {
+    for (const [from, tos] of edges) {
+      if (!shipped.has(from)) continue;
+      for (const to of tos) {
+        let set = importers.get(to);
+        if (!set) importers.set(to, (set = new Set()));
+        set.add(from);
+      }
+    }
+  }
+  return importers;
+}
 
 /** @returns {BrowserVersions} */
 export function createBrowserVersions() {
@@ -36,27 +61,13 @@ export function createBrowserVersions() {
   let next = 0;
   return {
     // Give each changed file the browser holds and every shipped module that
-    // imports it (statically or through a string-literal dynamic import) ONE
-    // new version. A changed file outside `shipped` is skipped, since the
-    // browser holds no instance of it. Returns the files that moved.
-    bump(changed, graph, shipped) {
+    // imports it (`shippedImporters`) ONE new version. A changed file outside
+    // `shipped` is skipped, since the browser holds no instance of it. Returns
+    // the files that moved.
+    bump(changed, importers, shipped) {
       /** @type {Set<string>} */
       const reached = new Set();
-      if (!graph) return reached;
-      /** @type {Map<string, Set<string>>} */
-      const importers = new Map();
-      const addEdges = (/** @type {Map<string, Set<string>>} */ edges) => {
-        for (const [from, tos] of edges) {
-          if (!shipped.has(from)) continue;
-          for (const to of tos) {
-            let set = importers.get(to);
-            if (!set) importers.set(to, (set = new Set()));
-            set.add(from);
-          }
-        }
-      };
-      addEdges(graph);
-      addEdges(dynamicEdges(graph));
+      if (!importers) return reached;
       const stack = [];
       for (const f of changed) if (shipped.has(f)) stack.push(f);
       while (stack.length) {

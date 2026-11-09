@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, symlinkSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { createBrowserVersions, versionImportSpecifiers } from '../../src/dev/specifier-versions.js';
+import { createBrowserVersions, shippedImporters, versionImportSpecifiers } from '../../src/dev/specifier-versions.js';
 import { importSpecifierRanges } from '../../src/module-graph.js';
 import { createRequestHandler } from '../../src/dev.js';
 
@@ -102,15 +102,17 @@ test('bump reaches transitive importers inside shipped only, one number per bump
   ]);
   const shipped = new Set(['/app/page.ts', '/app/comp.ts', '/app/util.ts', '/app/other.ts']);
   const v = createBrowserVersions();
-  const moved = v.bump(['/app/util.ts'], graph, shipped);
+  const importers = shippedImporters(graph, shipped);
+  assert.deepEqual([...importers.get('/app/util.ts')].sort(), ['/app/comp.ts', '/app/other.ts'], 'an unshipped importer is left out');
+  const moved = v.bump(['/app/util.ts'], importers, shipped);
   assert.deepEqual([...moved].sort(), ['/app/comp.ts', '/app/other.ts', '/app/page.ts', '/app/util.ts']);
   assert.equal(v.versionOf('/app/util.ts'), 1);
   assert.equal(v.versionOf('/app/page.ts'), 1);
   assert.equal(v.versionOf('/app/server.ts'), 0, 'a module outside shipped is never versioned');
-  v.bump(['/app/comp.ts'], graph, shipped);
+  v.bump(['/app/comp.ts'], importers, shipped);
   assert.equal(v.versionOf('/app/comp.ts'), 2);
   assert.equal(v.versionOf('/app/util.ts'), 1, 'a file below the edit keeps its version');
-  assert.equal(v.bump(['/app/server.ts'], graph, shipped).size, 0, 'an unshipped edit bumps nothing');
+  assert.equal(v.bump(['/app/server.ts'], importers, shipped).size, 0, 'an unshipped edit bumps nothing');
   assert.equal(v.bump(['/app/util.ts'], null, shipped).size, 0, 'no graph yet bumps nothing');
 });
 

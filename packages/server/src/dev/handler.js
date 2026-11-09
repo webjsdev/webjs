@@ -21,7 +21,7 @@ import {
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
 import { installEsmHotHooks, installBunModuleVersions, isServedModule, bumpModuleVersions, movedServedModules, diskStamp, isCommonJsModule } from './esm-hot-hooks.js';
-import { createBrowserVersions } from './specifier-versions.js';
+import { createBrowserVersions, shippedImporters } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
 import { readRegenerateRules, isRegenerateOutputPath } from '../dev-regenerate.js';
@@ -1116,8 +1116,10 @@ export async function createRequestHandler(opts) {
     const prev = {
       graph: state.moduleGraph, shipped: state.shippedFiles, components: state.componentFiles,
       graphFiles: state.graphFiles, pageFiles: state.pageFiles, entries: state.browserEntryFiles,
+      // Walked once here for both the version bump and the hot-swap walk.
+      importers: dev && changed.length && state.moduleGraph ? shippedImporters(state.moduleGraph, state.shippedFiles) : null,
     };
-    if (dev && changed.length && prev.graph) state.browserVersions.bump(changed, prev.graph, prev.shipped);
+    if (prev.importers) state.browserVersions.bump(changed, prev.importers, prev.shipped);
     // A component edit the tab can apply by re-importing its module (#1689).
     if (dev && notify) verdict = await hotVerdict(verdict, changed, prev);
     // Invalidate the analysis BEFORE anything below can throw (#1689). The
@@ -1237,11 +1239,12 @@ export async function createRequestHandler(opts) {
    * it came.
    * @param {import('../dev-classify.js').ReloadVerdict | undefined} verdict
    * @param {string[]} changed
-   * @param {{ graph: any, shipped: Set<string>, components: Set<string>, graphFiles: Set<string>, pageFiles: Set<string>, entries: Set<string> }} prev
+   * @param {{ graph: any, shipped: Set<string>, components: Set<string>, graphFiles: Set<string>, pageFiles: Set<string>, entries: Set<string>, importers: Map<string, Set<string>> | null }} prev
    * @returns {Promise<import('../dev-classify.js').ReloadVerdict | undefined>}
    */
   async function hotVerdict(verdict, changed, prev) {
-    if (!verdict || verdict.v !== 'reload' || !changed.length || !prev.graph || !analysisEverDone) return verdict;
+    if (!verdict || verdict.v !== 'reload' || !changed.length || !prev.importers || !analysisEverDone) return verdict;
+    const importers = prev.importers;
     /** @type {Map<string, import('../dev-hot-classify.js').HotSignature | null>} */
     const sigs = new Map();
     const signatureOf = async (/** @type {string} */ f) => {
@@ -1253,17 +1256,6 @@ export async function createRequestHandler(opts) {
       const perFile = changed.map((f) => classifyChangedPath(f, ctx));
       const reloads = perFile.filter((v) => v.v === 'reload');
       if (!reloads.length || reloads.some((v) => v.why !== 'ships-to-browser')) return verdict;
-      /** @type {Map<string, Set<string>>} */
-      const importers = new Map();
-      for (const edges of [prev.graph, dynamicEdges(prev.graph)]) {
-        for (const [from, tos] of edges) {
-          if (!prev.shipped.has(from)) continue;
-          for (const to of tos) {
-            if (!importers.has(to)) importers.set(to, new Set());
-            /** @type {Set<string>} */ (importers.get(to)).add(from);
-          }
-        }
-      }
       const res = await findHotBoundaries(changed.filter((_, i) => perFile[i].v === 'reload'), {
         shipped: prev.shipped,
         componentFiles: prev.components,

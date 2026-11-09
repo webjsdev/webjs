@@ -122,6 +122,10 @@ try {
   const boundary = await served(verdict.modules[0]);
   const versioned = boundary && /from '\.\/label\.ts\?t=(\d+)';/.exec(boundary);
   assert.ok(versioned, `the boundary's import of the edited helper carries ?t= on ${runtime}\n${boundary}`);
+  // One importer walk feeds both the version bump and the hot-swap boundary
+  // walk, so the boundary the frame names carries the same number as the
+  // helper it reaches.
+  assert.equal(verdict.modules[0].split('?t=')[1], versioned[1], `one version for the whole bumped chain on ${runtime}`);
   const helper = await served(`/components/label.ts?t=${versioned[1]}`);
   assert.match(helper || '', /'two'/, `the versioned helper URL serves the edit on ${runtime}`);
   // A fresh document names the bumped component by that same url in its boot
