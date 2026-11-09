@@ -621,7 +621,18 @@ function __webjsApplyHot(verdict, mods) {
   var by = verdict.by ? ' (' + verdict.by + ')' : '';
   function reload(why) { __webjsReload({ why: why, by: verdict.by }); }
   if ((mode === 'page' || mode === 'shell') && typeof refresh !== 'function') { reload('no-client-router'); return; }
-  dismissDevOverlay();
+  // A page / shell refresh re-raises an error that still stands (see the
+  // refresh path above), so it may dismiss first. A component-only swap
+  // re-renders nothing on the server, so it takes down only an overlay the
+  // swap settled: the edited file, a re-imported module, or a rebuild error.
+  if (mode === 'page' || mode === 'shell') dismissDevOverlay();
+  else {
+    var bp = ${JSON.stringify(bp || '')};
+    dismissDevOverlayCoveredBy(mods.map(function (u) {
+      var p = String(u).split('?')[0];
+      return bp && p.indexOf(bp + '/') === 0 ? p.slice(bp.length) : p;
+    }).concat(verdict.by ? ['/' + verdict.by] : []));
+  }
   preloadStyles().then(function (styles) {
     return __webjsHot.applyModules(mods).then(function (r) {
       if (!r.ok) { reload(r.why); return; }

@@ -39,6 +39,8 @@ try {
   const client = await (await dev.handle(new Request('http://x/__webjs/reload.js'))).text();
   assert.match(client, /outcome === 'dev-error'/, `the served reload client tells a kept page from an update on ${runtime}`);
   assert.match(client, /the page did not render, so the last good version stays under the error overlay/);
+  // And a component hot swap takes down only an overlay it settled.
+  assert.match(client, /function dismissDevOverlayCoveredBy\(paths\)/, `the served client carries the covered-overlay check on ${runtime}`);
 
   const prod = await createRequestHandler({ appDir: root, dev: false, logger: quiet });
   const prodBad = await prod.handle(new Request('http://x/broken'));

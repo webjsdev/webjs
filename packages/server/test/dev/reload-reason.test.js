@@ -104,3 +104,15 @@ test('the in-place log names a refresh that kept the last good page, and only an
   ]);
   assert.match(js, /refresh\(mode\)\.then\(function \(outcome\) \{[\s\S]*?__webjsLogRefresh\(outcome, mode, verdict\.by\)/, 'the refresh path logs through it');
 });
+
+// Review of #1689: a component-only hot swap re-renders nothing on the server,
+// so it must not take down an overlay about something else (the browser test
+// `test/dev/browser/dev-overlay.test.js` drives the predicate itself).
+test('a component hot swap dismisses only an overlay the swap settled', () => {
+  const js = reloadClientJs('/base');
+  const hot = /function __webjsApplyHot\([\s\S]*?\n\}\n/.exec(js);
+  assert.ok(hot, 'the hot apply ships');
+  assert.match(hot[0], /if \(mode === 'page' \|\| mode === 'shell'\) dismissDevOverlay\(\);\n\s*else \{/, 'only a page / shell refresh dismisses unconditionally');
+  assert.match(hot[0], /dismissDevOverlayCoveredBy\(mods\.map\(/, 'a component swap passes the swapped modules');
+  assert.match(hot[0], /var bp = "\/base";/, 'with the base path stripped from their urls');
+});
