@@ -105,7 +105,7 @@ skill, then `git add` the teaching surface(s) and commit again:
   packages/cli/lib/api-gallery.js         an api backend-showcase endpoint
   packages/cli/lib/{create,saas-template}.js  the generators (home, theme, schema, wiring)
   packages/cli/templates/ (AGENTS.md, .agents/rules/...)  scaffold rules in lockstep
-  test/scaffolds/**                       the scaffold assertions for the above
+  (plus test/scaffolds/** for the assertions; a test alone does not satisfy this gate)
 A feature usually needs a gallery demo (learn by running) and, on the docs
 site, the reference. The webjs-scaffold-sync skill walks every surface
 AND runs the mandatory generate + boot + `webjs check` verification (the

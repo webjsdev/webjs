@@ -288,3 +288,41 @@ test('a POST form that binds no action is recorded against the page, not framewo
     assert.equal(body.errors[0].file, null, 'no file inside the framework');
   } finally { restore(); }
 });
+
+test('a component that fails during SSR is reported while the page still answers 200', async () => {
+  const appDir = makeApp();
+  mkdirSync(join(appDir, 'app/card'), { recursive: true });
+  writeFileSync(join(appDir, 'app/card/page.ts'), [
+    `import { html, WebComponent } from ${CORE};`,
+    'class BadCard extends WebComponent {',
+    "  render() { throw new Error('card exploded'); }",
+    '}',
+    "BadCard.register('bad-card');",
+    'export default () => html`<main><bad-card></bad-card><p>rest of page</p></main>`;',
+    '',
+  ].join('\n'));
+  const restore = quiet();
+  try {
+    const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
+    await app.warmup();
+    const page = await app.handle(new Request('http://x/card'));
+    assert.equal(page.status, 200, 'the failure is isolated to the element');
+    assert.match(await page.text(), /rest of page/);
+
+    const body = await status(app);
+    assert.equal(body.status, 'error', 'an isolated component failure is still a problem to report');
+    const hit = body.errors.find((e) => e.kind === 'component');
+    assert.ok(hit, `a component entry is recorded, got ${JSON.stringify(body.errors)}`);
+    assert.equal(hit.url, '/card');
+    assert.match(hit.message, /<bad-card> failed to render during SSR[\s\S]*card exploded/);
+
+    // A 200 for the url does not clear it (that rule is for `render` entries);
+    // a rebuild does, and the next request would record it anew.
+    await app.handle(new Request('http://x/card'));
+    assert.ok((await status(app)).errors.some((e) => e.kind === 'component'), 'a 200 for the url keeps the entry');
+    await app.rebuild();
+    assert.ok(!(await status(app)).errors.some((e) => e.kind === 'component'), 'a rebuild clears it');
+  } finally {
+    restore();
+  }
+});

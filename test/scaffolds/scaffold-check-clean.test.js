@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { checkConventions } from '@webjsdev/server/check';
+import { createRequestHandler } from '@webjsdev/server';
 import { scaffoldApp } from '../../packages/cli/lib/create.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -39,6 +40,19 @@ for (const template of ['full-stack', 'api']) {
 
       const fresh = await checkConventions(appDir);
       assert.deepEqual(fresh, [], `the generated app has violations:\n${describe(fresh)}`);
+
+      if (template === 'full-stack') {
+        // The brief tells agents to run `webjs status` after each edit, so a
+        // fresh app must report clean there too. Rendering the home page also
+        // renders the gallery's components, and a component that fails during
+        // SSR answers 200 while the dev status records it.
+        const h = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {}, debug() {} } });
+        await h.warmup?.();
+        const home = await h.handle(new Request('http://localhost/'));
+        assert.equal(home.status, 200, 'the home page renders');
+        const st = await (await h.handle(new Request('http://localhost/__webjs/dev/status'))).json();
+        assert.deepEqual(st.errors, [], `the dev status reports problems on a fresh app: ${JSON.stringify(st.errors)}`);
+      }
 
       const script = template === 'api' ? 'clear-api-gallery.mjs' : 'clear-gallery.mjs';
       const clear = join(appDir, 'scripts', script);

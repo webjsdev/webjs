@@ -256,6 +256,9 @@ function reportLightDomStyles(w, tag, Cls) {
   );
 }
 
+/** Key of the hook the server installs to hear about isolated component failures. */
+const COMPONENT_ERROR_HOOK = Symbol.for('webjs.ssr.componentError');
+
 /**
  * Per-component error isolation (#469). The element renders a
  * component-scoped error state in its place (renderError() customises it;
@@ -275,6 +278,13 @@ async function errorState(w, frame) {
     );
   } else {
     console.error(`[webjs] SSR failed for <${tag}>:`, e);
+  }
+  // The page still renders (the failure is isolated to this element), so the
+  // server hears about it only through this hook: @webjsdev/server installs it
+  // and routes it to the current request's dev status.
+  const report = /** @type {any} */ (globalThis)[COMPONENT_ERROR_HOOK];
+  if (typeof report === 'function') {
+    try { report(tag, e); } catch { /* a reporting failure must not affect the render */ }
   }
   const err = e instanceof Error ? e : new Error(String(e));
   let errorInner = '';

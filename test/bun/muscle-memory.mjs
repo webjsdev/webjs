@@ -20,7 +20,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createRequestHandler } from '../../packages/server/src/dev.js';
-import { REFUSED } from '../muscle-memory/refused-cases.mjs';
+import { REFUSED, caseFiles } from '../muscle-memory/refused-cases.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
@@ -78,11 +78,7 @@ const quiet = { info() {}, warn() {}, error() {}, debug() {} };
 for (const c of REFUSED.filter((x) => x.load && !(process.versions.bun && x.serverLoadsOnBun))) {
   const appDir = mkdtempSync(join(tmpdir(), `webjs-bun-refused-${c.id}-`));
   try {
-    const files = {
-      'package.json': JSON.stringify({ name: `refused-${c.id}`, private: true, type: 'module' }),
-      'app/page.ts': `import { html } from '@webjsdev/core';\nimport '../${c.file}';\nexport default function Page() { return html\`<main><${c.tag}></${c.tag}></main>\`; }\n`,
-      [c.file]: c.source,
-    };
+    const files = caseFiles(c);
     for (const [rel, body] of Object.entries(files)) {
       mkdirSync(dirname(join(appDir, rel)), { recursive: true });
       writeFileSync(join(appDir, rel), body);

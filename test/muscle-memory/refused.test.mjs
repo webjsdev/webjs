@@ -13,19 +13,13 @@ import { fileURLToPath } from 'node:url';
 
 import { checkConventions } from '@webjsdev/server/check';
 import { createRequestHandler } from '@webjsdev/server';
-import { REFUSED } from './refused-cases.mjs';
+import { REFUSED, caseFiles } from './refused-cases.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const TSCONFIG = JSON.stringify({ compilerOptions: { strict: true, erasableSyntaxOnly: true, verbatimModuleSyntax: true } });
 
 async function makeApp(c) {
   const appDir = await mkdtemp(join(tmpdir(), `webjs-refused-${c.id}-`));
-  const files = {
-    'package.json': JSON.stringify({ name: `refused-${c.id}`, private: true, type: 'module' }),
-    'tsconfig.json': TSCONFIG,
-    'app/page.ts': `import { html } from '@webjsdev/core';\nimport '../${c.file}';\nexport default function Page() { return html\`<main><${c.tag}></${c.tag}></main>\`; }\n`,
-    [c.file]: c.source,
-  };
+  const files = caseFiles(c);
   for (const [rel, body] of Object.entries(files)) {
     await mkdir(dirname(join(appDir, rel)), { recursive: true });
     await writeFile(join(appDir, rel), body);

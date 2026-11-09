@@ -32,8 +32,10 @@ under `modules/gallery/ui/`, with logic in `modules/`. Build in this order.
 7. **Verify.** `npm run ci` runs every gate in `package.json` `webjs.ci`
    (check, doctor, typecheck, audit, then the test layers), the same list the
    GitHub workflow runs. Boot `npm run dev`, run
-   `npx webjs status /a-route /another` after each edit, and open every changed
-   route in a real browser, since `check` passes even when a layout collapses.
+   `npx webjs status /a-route /another` after each edit (it reports a page that
+   failed to render and a component that failed during SSR, which still answers
+   200 with the element showing its error state), and open every changed route
+   in a real browser, since neither catches a layout that collapses.
 
 ### Commands
 

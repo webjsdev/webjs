@@ -32,7 +32,7 @@ import { applyPendingCookies } from '../cookie-store.js';
 import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
 import { loadEnvFiles, envMode } from '../env-files.js';
 import { buildPublicIndex } from '../public-files.js';
-import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore } from '../context.js';
+import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore, setComponentErrorSink } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
@@ -1227,6 +1227,19 @@ export async function createRequestHandler(opts) {
       // request scope, so `readBody` inside a route handler enforces the same
       // cap the framework's own RPC / form-dispatch body reads do.
       setBodyLimits(state.bodyLimits);
+
+      // A component that throws during SSR renders its error state in place and
+      // the page still answers 200, so in dev it is recorded here, as kind
+      // `component`, for `webjs status` and `/__webjs/dev/status` to report.
+      // A `render` entry would not do: a 200 for the url clears those.
+      if (dev) {
+        setComponentErrorSink((tag, error) => {
+          const message = error && typeof error === 'object' && 'message' in error ? String(/** @type {any} */ (error).message) : String(error);
+          const wrapped = new Error(`<${tag}> failed to render during SSR, so it shows its error state: ${message}`);
+          if (error && typeof error === 'object' && 'stack' in error) wrapped.stack = String(/** @type {any} */ (error).stack);
+          recordDevStatus(wrapped, req, 'component');
+        });
+      }
 
       let pathname = '/';
       try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }

@@ -39,7 +39,7 @@ import { shared } from './process-shared.js';
  * `revalidatedPaths` collects every `revalidatePath()` call made while serving
  * the request, so an RPC action response can tell the browser to refresh them.
  *
- * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[], cookieStore?: CookieStore }} Store
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[], cookieStore?: CookieStore, componentErrorSink?: (tag: string, error: unknown) => void }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -99,6 +99,27 @@ export function setBodyLimits(limits) {
 export function getBodyLimits() {
   return als.getStore()?.bodyLimits ?? null;
 }
+
+/**
+ * Set where the current request's isolated component render failures go. The
+ * dev handler sets one per request so a component that throws during SSR,
+ * which renders its error state in place and leaves the page at 200, still
+ * reaches the dev status `webjs status` reads.
+ *
+ * @param {(tag: string, error: unknown) => void} sink
+ */
+export function setComponentErrorSink(sink) {
+  const store = als.getStore();
+  if (store) store.componentErrorSink = sink;
+}
+
+// The core renderer has no server imports, so it reports an isolated component
+// failure through this process-wide hook, which forwards to the sink of the
+// request being rendered. Outside a request, or with no sink set, it is a no-op.
+globalThis[Symbol.for('webjs.ssr.componentError')] = (tag, error) => {
+  const sink = als.getStore()?.componentErrorSink;
+  if (typeof sink === 'function') sink(tag, error);
+};
 
 /**
  * Set the per-request correlation id on the current store (issue #239). The

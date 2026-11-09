@@ -6,10 +6,12 @@
  * response body plus everything logged).
  *
  * `file` is written under the app beside a page that imports it and renders its
- * `tag`; `load.path` is the URL requested in dev.
+ * `tag`. A case with no `tag` is itself the app shape (a page, a layout, a
+ * route file), so no page is written for it; `extra` adds further files.
+ * `load.path` is the URL requested in dev.
  */
 
-/** @typedef {{ id: string, idiom: string, file: string, tag: string, source: string, rule: string, fix: RegExp, load?: { path: string, match: RegExp }, serverLoadsOnBun?: boolean }} RefusedCase */
+/** @typedef {{ id: string, idiom: string, file: string, tag?: string, source: string, extra?: Record<string, string>, rule: string, fix: RegExp, load?: { path: string, match: RegExp }, serverLoadsOnBun?: boolean }} RefusedCase */
 
 /** @type {RefusedCase[]} */
 export const REFUSED = [
@@ -110,4 +112,221 @@ export const REFUSED = [
     rule: 'shadow-options-need-shadow',
     fix: /static shadow = true/,
   },
+  {
+    id: 'next-navigation',
+    idiom: "importing redirect from 'next/navigation'",
+    file: 'app/page.ts',
+    source: [
+      "import { html } from '@webjsdev/core';",
+      "import { redirect } from 'next/navigation';",
+      'export default function Page() { if (Date.now() < 0) redirect(\'/\'); return html`<main>page</main>`; }',
+      '',
+    ].join('\n'),
+    rule: 'no-foreign-framework-import',
+    fix: /import \{ redirect, permanentRedirect, notFound[^\n]*from '@webjsdev\/core'/,
+    load: { path: '/', match: /\[no-foreign-framework-import\][^\n]*'next\/navigation'[^\n]*from '@webjsdev\/core'/ },
+  },
+  {
+    id: 'react-hooks',
+    idiom: "a component built with React's useState",
+    file: 'components/react-el.ts',
+    tag: 'react-el',
+    source: [
+      "import { useState } from 'react';",
+      "import { WebComponent, html } from '@webjsdev/core';",
+      'export class ReactEl extends WebComponent {',
+      '  render() { void useState; return html`<p>react</p>`; }',
+      '}',
+      "ReactEl.register('react-el');",
+      '',
+    ].join('\n'),
+    rule: 'no-foreign-framework-import',
+    fix: /useState becomes a reactive property or signal\(\)/,
+    load: { path: '/', match: /\[no-foreign-framework-import\][^\n]*'react'[^\n]*useState becomes a reactive property/ },
+  },
+  {
+    id: 'lit-package',
+    idiom: "importing from the lit package",
+    file: 'components/lit-pkg.ts',
+    tag: 'lit-pkg',
+    source: [
+      "import { LitElement, html } from 'lit';",
+      'export class LitPkg extends LitElement {',
+      '  render() { return html`<p>lit</p>`; }',
+      '}',
+      "customElements.define('lit-pkg', LitPkg);",
+      '',
+    ].join('\n'),
+    rule: 'no-foreign-framework-import',
+    fix: /LitElement is WebComponent/,
+    load: { path: '/', match: /\[no-foreign-framework-import\][^\n]*'lit'[^\n]*LitElement is WebComponent/ },
+  },
+  {
+    id: 'jsx-attributes',
+    idiom: 'JSX attribute spellings (className, onClick) in an html template',
+    file: 'components/jsx-el.ts',
+    tag: 'jsx-el',
+    source: [
+      "import { WebComponent, html } from '@webjsdev/core';",
+      'export class JsxEl extends WebComponent {',
+      '  render() { return html`<button className="btn" onClick=${() => {}}>go</button>`; }',
+      '}',
+      "JsxEl.register('jsx-el');",
+      '',
+    ].join('\n'),
+    rule: 'no-jsx-attributes',
+    fix: /Write `class=` instead/,
+    // The failure is isolated to the element, so the page answers 200 and the
+    // dev status carries it as a `component` entry.
+    load: { path: '/', match: /"kind":"component","message":"<jsx-el> failed to render during SSR[^\n]*Write `class=` instead/ },
+  },
+  {
+    id: 'tsx-route',
+    idiom: 'a page written as page.tsx',
+    file: 'app/about/page.tsx',
+    source: "export default function About() { return 'about'; }\n",
+    extra: { 'app/page.ts': ["import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+      '',
+    ].join('\n') },
+    rule: 'no-jsx-route-file',
+    fix: /Rename it to app\/about\/page\.ts/,
+    load: { path: '/', match: /\[no-jsx-route-file\][^\n]*Rename it to app\/about\/page\.ts/ },
+  },
+  {
+    id: 'css-import',
+    idiom: "importing a stylesheet in the root layout (import './globals.css')",
+    file: 'app/layout.ts',
+    source: [
+      "import { html } from '@webjsdev/core';",
+      "import './globals.css';",
+      'export default function RootLayout({ children }: { children: unknown }) { return html`${children}`; }',
+      '',
+    ].join('\n'),
+    extra: {
+      'app/globals.css': 'body { margin: 0; }\n',
+      'app/page.ts': ["import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+        '',
+      ].join('\n'),
+    },
+    rule: 'no-css-import',
+    fix: /<link rel="stylesheet"/,
+    load: { path: '/', match: /\[no-css-import\][^\n]*globals\.css[^\n]*<link rel=/ },
+  },
+  {
+    id: 'inline-use-server',
+    idiom: "an inline 'use server' function inside a page",
+    file: 'app/page.ts',
+    source: [
+      "import { html } from '@webjsdev/core';",
+      'export default function Page() {',
+      '  async function save(data: FormData) {',
+      "    'use server';",
+      '    void data;',
+      '  }',
+      '  return html`<form action=${save}><button>Save</button></form>`;',
+      '}',
+      '',
+    ].join('\n'),
+    rule: 'no-inline-use-server',
+    fix: /Move the function into its own module, e\.g\. modules\/<feature>\/actions\/<name>\.server\.ts/,
+    load: { path: '/', match: /A 'use server' directive inside a function body \(Next\.js's inline action\) is not one/ },
+  },
+  {
+    id: 'next-public-env',
+    idiom: 'reading NEXT_PUBLIC_ env vars in a component',
+    file: 'components/env-el.ts',
+    tag: 'env-el',
+    source: [
+      "import { WebComponent, html } from '@webjsdev/core';",
+      'export class EnvEl extends WebComponent {',
+      '  render() { return html`<button @click=${() => {}}>${process.env.NEXT_PUBLIC_SITE_NAME}</button>`; }',
+      '}',
+      "EnvEl.register('env-el');",
+      '',
+    ].join('\n'),
+    rule: 'no-server-env-in-components',
+    fix: /WEBJS_PUBLIC_/,
+  },
+  {
+    id: 'next-runtime-guard',
+    idiom: "a process.env.NEXT_RUNTIME guard",
+    file: 'instrumentation.ts',
+    source: [
+      'export async function register() {',
+      "  if (process.env.NEXT_RUNTIME === 'nodejs') {",
+      '    // set up tracing',
+      '  }',
+      '}',
+      '',
+    ].join('\n'),
+    extra: { 'app/page.ts': ["import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+      '',
+    ].join('\n') },
+    rule: 'no-next-runtime-guard',
+    // Nothing fails at runtime (the guarded code just never runs), so the check
+    // is the only place this can be refused.
+    fix: /process\.versions\.bun/,
+  },
+  {
+    id: 'page-and-route',
+    idiom: 'a page.ts and a route.ts in one folder',
+    file: 'app/about/route.ts',
+    source: "export async function GET() { return Response.json({ ok: true }); }\n",
+    extra: {
+      'app/about/page.ts': ["import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+        '',
+      ].join('\n'),
+      'app/page.ts': ["import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+        '',
+      ].join('\n'),
+    },
+    rule: 'no-page-route-conflict',
+    fix: /move the route handler to its own folder/,
+    load: { path: '/', match: /\[no-page-route-conflict\][^\n]*both answer \/about/ },
+  },
+  {
+    id: 'public-route-conflict',
+    idiom: 'a public/ file at the same URL as a page',
+    file: 'public/about',
+    source: 'static about\n',
+    extra: {
+      'app/about/page.ts': ["import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+        '',
+      ].join('\n'),
+      'app/page.ts': ["import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+        '',
+      ].join('\n'),
+    },
+    rule: 'no-public-route-conflict',
+    fix: /public files are served at the url root/,
+    load: { path: '/', match: /\[no-public-route-conflict\][^\n]*public\/about is served at \/about/ },
+  },
 ];
+
+/**
+ * The files of the app a case is tested in, keyed by app-relative path: a
+ * minimal app, the case's file, a page that renders its `tag` (when it has
+ * one), and its `extra` files.
+ * @param {RefusedCase} c
+ * @returns {Record<string, string>}
+ */
+export function caseFiles(c) {
+  /** @type {Record<string, string>} */
+  const files = {
+    'package.json': JSON.stringify({ name: `refused-${c.id}`, private: true, type: 'module' }),
+    'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, erasableSyntaxOnly: true, verbatimModuleSyntax: true } }),
+  };
+  if (c.tag) {
+    files['app/page.ts'] = `import { html } from '@webjsdev/core';\nimport '../${c.file}';\nexport default function Page() { return html\`<main><${c.tag}></${c.tag}></main>\`; }\n`;
+  }
+  Object.assign(files, c.extra || {});
+  files[c.file] = c.source;
+  return files;
+}
