@@ -129,7 +129,7 @@ const FEATURE_PATH = /^(?:app|components|modules|lib)\/|^middleware\.[mc]?[jt]s$
  * @param {string} app the app directory, to read a write's path against
  * @returns {boolean}
  */
-export function firstDraftStop(c, state, app) {
+export function firstDraftStop(c, state, app, routesReady = () => true) {
   if (c?.type !== 'tool_use') return false;
   if (c.name === 'Write' || c.name === 'Edit' || c.name === 'MultiEdit') {
     const p = String(c.input?.file_path || '');
@@ -141,7 +141,31 @@ export function firstDraftStop(c, state, app) {
   const cmd = String(c.input?.command || '');
   // A file written from the shell (a heredoc, a tee) counts as feature code too.
   if (/(?:>|\btee\s+)\s*['"]?(?:\.\/)?(?:app|components|modules|lib)\//.test(cmd)) state.wroteFeature = true;
-  return state.wroteFeature && !!verifyKind(cmd);
+  // A check while some named route has no file yet is a checkpoint inside the
+  // draft (the server layer verified before the pages are written), not its end.
+  return state.wroteFeature && !!verifyKind(cmd) && routesReady();
+}
+
+/**
+ * Whether every path a task names has a page or route file under `app/`,
+ * route groups ignored, so a check before then is not the draft's end.
+ * @param {string} app
+ * @param {string[]} paths e.g. ['/signup', '/posts?q=a']
+ * @returns {boolean}
+ */
+export function routesWritten(app, paths) {
+  /** @type {Set<string>} */
+  const routes = new Set();
+  const walk = (dir, segs) => {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.isDirectory()) walk(join(dir, e.name), /^\(.*\)$/.test(e.name) ? segs : [...segs, e.name]);
+      else if (/^(?:page|route)\.[mc]?[jt]s$/.test(e.name)) routes.add('/' + segs.join('/'));
+    }
+  };
+  walk(join(app, 'app'), []);
+  return paths.every((p) => routes.has(p.split('?')[0].replace(/\/$/, '') || '/'));
 }
 
 async function runTask(task, { framework, out, model, label, maxTurns }) {
@@ -172,7 +196,7 @@ async function runTask(task, { framework, out, model, label, maxTurns }) {
         let e; try { e = JSON.parse(line); } catch { continue; }
         if (e.type !== 'assistant') continue;
         for (const c of e.message?.content || []) {
-          if (firstDraftStop(c, stopState, app)) {
+          if (firstDraftStop(c, stopState, app, () => routesWritten(app, task.paths))) {
             stoppedAtVerify = true;
             child.kill('SIGTERM');
           }

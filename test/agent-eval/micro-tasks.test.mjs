@@ -4,8 +4,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
 
-import { TASKS, microPrompt, firstDraftStop } from '../../scripts/agent-eval/micro.mjs';
+import { TASKS, microPrompt, firstDraftStop, routesWritten } from '../../scripts/agent-eval/micro.mjs';
 
 test('every task has a unique id, a prompt and at least one route to probe', () => {
   assert.equal(new Set(TASKS.map((t) => t.id)).size, TASKS.length);
@@ -42,4 +45,26 @@ test('a feature file written from the shell starts the draft too', () => {
   const st = { wroteFeature: false };
   firstDraftStop({ type: 'tool_use', name: 'Bash', input: { command: "cat > app/posts/page.ts <<'EOF'\nx\nEOF" } }, st, '/a');
   assert.equal(st.wroteFeature, true);
+});
+
+// A check while a named route has no file is a checkpoint, not the draft's
+// end: the auth run verified its server layer before writing the pages.
+test('the first draft ends only once every named route has a file', () => {
+  const app = mkdtempSync(join(tmpdir(), 'micro-routes-'));
+  const w = (rel) => { mkdirSync(dirname(join(app, rel)), { recursive: true }); writeFileSync(join(app, rel), ''); };
+  try {
+    w('app/page.ts');
+    assert.equal(routesWritten(app, ['/signup', '/login']), false);
+    w('app/(auth)/signup/page.ts');
+    assert.equal(routesWritten(app, ['/signup', '/login']), false);
+    w('app/(auth)/login/page.ts');
+    w('app/api/products/route.ts');
+    assert.equal(routesWritten(app, ['/signup', '/login', '/', '/api/products?q=a']), true, 'groups ignored, a query dropped');
+    const st = { wroteFeature: true };
+    const check = { type: 'tool_use', name: 'Bash', input: { command: 'npx webjs check' } };
+    assert.equal(firstDraftStop(check, st, app, () => routesWritten(app, ['/dashboard'])), false);
+    assert.equal(firstDraftStop(check, st, app, () => routesWritten(app, ['/login'])), true);
+  } finally {
+    rmSync(app, { recursive: true, force: true });
+  }
 });
