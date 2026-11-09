@@ -610,6 +610,13 @@ async function main() {
       // this a Postgres dev migrate runs with no connection string and fails
       // (sqlite survives via its `?? 'db/dev.db'` config fallback). The watch
       // child / inline server load `.env` again later (idempotent).
+      //
+      // The shell's env is snapshotted FIRST, and the supervised child starts
+      // from the snapshot, not from this process's env (#1689). `.env` is a
+      // restart file, and `process.loadEnvFile` never overrides a variable that
+      // is already set, so a child handed the values loaded here would keep
+      // the OLD ones after an edit to `.env` restarted it.
+      const shellEnv = { ...process.env };
       loadAppEnv(process.cwd());
       await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd());
       const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
@@ -644,7 +651,7 @@ async function main() {
       superviseDevServer({
         cwd: process.cwd(),
         plan,
-        env: { ...process.env, ...plan.env, __WEBJS_DEV_CHILD: '1' },
+        env: { ...shellEnv, ...plan.env, __WEBJS_DEV_CHILD: '1' },
         onExit: (code) => { killTasks(); process.exit(code); },
       });
       break;

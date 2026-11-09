@@ -67,16 +67,26 @@ lib/
   dev-supervisor.js      `webjs dev` reload-supervisor planner (#514, #1521,
                          #1550). PURE `planDevSupervisor({ isBun, argv, noHot,
                          sourceLocations })` returns the spawn decision:
-                         `supervise` with `restartOnChange: true` on Node
-                         (restart the child on a change under `WATCH_DIRS` / the
-                         root `WATCH_FILES`), `supervise` with `bun --hot` and a
-                         `restartFor` filter on Bun (a `*.server.*` edit, with
-                         source locations on any app module edit, and the root
-                         boot hooks `instrumentation.*` / `env.*`), narrowed to
-                         `inPlaceRestartFor` (the boot hooks only) once the
-                         child announces over IPC that it reloads in place
-                         (#1575, `inPlaceRestarts` in `dev-reload.js`), or `inline`
-                         (run in-process) for `--no-hot`.
+                         `supervise` on Node with `restartFor` true for every
+                         change under `WATCH_DIRS` / the root `WATCH_FILES`,
+                         `supervise` with `bun --hot` and a `restartFor` filter
+                         on Bun (a `*.server.*` edit, with source locations on
+                         any app module edit, and the restart files), or
+                         `inline` (run in-process) for `--no-hot`. On BOTH
+                         runtimes the plan narrows to `inPlaceRestartFor` =
+                         `isRestartFile` once the child announces over IPC that
+                         it reloads in place (#1575 for Bun, #1689 for a Node
+                         child with the `@webjsdev/server` module resolve hook;
+                         `inPlaceRestarts` in `dev-reload.js`). `RESTART_FILES`
+                         (#1689) is what only a fresh process can apply:
+                         `instrumentation.*`, `env.*`, `.env`, `package.json`
+                         and every lockfile, all root files and all in
+                         `WATCH_FILES`. The bin snapshots the shell env BEFORE
+                         `loadAppEnv` and spawns the child from the snapshot,
+                         since `process.loadEnvFile` never overrides a set
+                         variable, so a child restarted for a `.env` edit reads
+                         the new values. Tests: `test/dev-supervisor/
+                         dev-env-snapshot.test.js` too.
                          Node no longer runs under `node --watch`, which crashed
                          on an unhandled watcher error and never came back.
                          Tests: `test/dev-supervisor/`
