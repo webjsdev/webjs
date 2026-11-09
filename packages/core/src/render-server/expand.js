@@ -1,4 +1,4 @@
-import { stylesToString, finalizeStyles } from '../css.js';
+import { stylesToString, finalizeStyles, lightDomStylesMessage } from '../css.js';
 import { unsafeHTML } from '../directives.js';
 import { escapeAttr } from '../escape.js';
 import { defaultSSRErrorTemplate, browserMemberHint, isProd } from './errors.js';
@@ -249,11 +249,7 @@ function reportLightDomStyles(w, tag, Cls) {
   const dev = w.dev === undefined ? !isProd() : !!w.dev;
   if (!dev) return;
   REPORTED_LIGHT_STYLES.add(Cls);
-  console.error(
-    `[webjs] <${tag}> declares static styles but renders into light DOM, so the styles are never applied. ` +
-      'Add `static shadow = true` to scope them in a shadow root, or style the light-DOM markup with Tailwind ' +
-      'utilities or a global stylesheet (prefix custom class selectors with the tag name).',
-  );
+  console.error(lightDomStylesMessage(tag));
 }
 
 /** Key of the hook the server installs to hear about isolated component failures. */

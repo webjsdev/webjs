@@ -5,7 +5,7 @@ import {
 } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
-import { adoptStyles, finalizeStyles } from '../css.js';
+import { adoptStyles, finalizeStyles, lightDomStylesMessage } from '../css.js';
 import { register, tagOf } from '../registry.js';
 import { parse as deserializeProp } from '../serialize.js';
 import { Signal } from '../signal.js';
@@ -1979,14 +1979,6 @@ function reportSsrControllerError(host, controller, err) {
  * @param {string | undefined} tag
  * @returns {string}
  */
-function lightDomStylesMessage(tag) {
-  return (
-    `[webjs] <${tag}> declares static styles but renders into light DOM, so the styles are never applied. ` +
-    `Add \`static shadow = true\` to scope them in a shadow root, or style the light-DOM markup with Tailwind ` +
-    `utilities or a global stylesheet (prefix custom class selectors with the tag name).`
-  );
-}
-
 /** @param {string} s */
 function camelCase(s) {
   return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());

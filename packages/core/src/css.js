@@ -169,3 +169,19 @@ export function stylesToString(styles) {
   const text = styles.filter(isCSS).map(styleText);
   return text.length ? `<style>${text.join('\n')}</style>` : '';
 }
+
+/**
+ * The error a light-DOM component with `static styles` gets: the styles are
+ * adopted into a shadow root, and the component has none. One string, used by
+ * the server renderer (logged during SSR) and by the browser element, so the
+ * two cannot drift. Internal: not re-exported from the package.
+ * @param {string} tag
+ * @returns {string}
+ */
+export function lightDomStylesMessage(tag) {
+  return (
+    `[webjs] <${tag}> declares static styles but renders into light DOM, so the styles are never applied. ` +
+    `Add \`static shadow = true\` to scope them in a shadow root, or style the light-DOM markup with Tailwind ` +
+    `utilities or a global stylesheet (prefix custom class selectors with the tag name).`
+  );
+}
