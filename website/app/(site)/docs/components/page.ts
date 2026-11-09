@@ -144,6 +144,16 @@ UserCard.register('user-card');</code-block>
 
     <p>Declare an <strong>array-typed</strong> property with the <code>Array</code> constructor, not <code>Object</code> (<code>tags: prop&lt;string[]&gt;(Array)</code>). The default converter treats both the same (each JSON-encodes the value), so <code>Object</code> does not break anything, but <code>Array</code> states the property's shape correctly. The <code>array-prop-uses-array-type</code> rule in <code>webjs check</code> flags an array-typed generic declared with <code>Object</code>.</p>
 
+    <h3>Every Lit property option</h3>
+    <p>The declaration options behave as in Lit. <code>attribute</code> takes a string (the attribute name, used as written), <code>true</code> (the default name), or <code>false</code> (no attribute). <code>converter</code> takes a <code>{ fromAttribute, toAttribute }</code> object, or a bare function, which is the <code>fromAttribute</code> half while reflection keeps the default serialisation. <code>hasChanged(value, oldValue)</code> decides whether a write schedules an update, and <code>requestUpdate(name, oldValue, options)</code> runs it too, so a manual call with an unchanged value schedules nothing (call <code>requestUpdate()</code> with no arguments to force one).</p>
+    <p>A class that defines its own <code>get</code> / <code>set</code> for a declared property keeps it: the accessor is wrapped, so reads and writes go through your code (a private field included) and each write still records the change, reflects, and re-renders. With <code>noAccessor: true</code> nothing is wrapped and your setter calls <code>this.requestUpdate(name, oldValue)</code> itself.</p>
+    <code-block>class Rating extends WebComponent {
+  static properties = { level: { type: Number, reflect: true } };
+  #level = 0;
+  get level() { return this.#level; }
+  set level(v) { this.#level = Math.max(0, Math.min(5, v)); }   // clamped, still reactive
+}</code-block>
+
     <h3>Lit's static class API</h3>
     <p>The class-level members a Lit author reaches for work with Lit's meaning, over the same merged declarations the accessors and attribute readers use (the factory, <code>static properties</code>, and the parent chain):</p>
     <ul>

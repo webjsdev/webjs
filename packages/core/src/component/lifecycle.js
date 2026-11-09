@@ -1,7 +1,7 @@
 import { render as clientRender } from '../render-client.js';
 import {
-  readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked, declaredProperties,
-  normalizeDecl, addCreatedProperty,
+  readAttributeValue, resolveAttributeProperty, observedAttributeNames, declaredProperties,
+  normalizeDecl, addCreatedProperty, attributeNameFor,
 } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
@@ -138,6 +138,35 @@ const WARNED_LIGHT_STYLES = new WeakSet();
 const DEFAULT_DECLARATION = Object.freeze({ type: String });
 
 /**
+ * The setters WebJs generated, mapped to the author accessor each one wraps
+ * (or `null` for the built-in per-instance storage). A subclass constructed
+ * after its parent finds the parent's generated pair first; this map lets it
+ * wrap the author's accessor underneath instead of mistaking the wrapper for
+ * one.
+ * @type {WeakMap<Function, { get?: () => unknown, set?: (v: unknown) => void } | null>}
+ */
+const GENERATED_SETTERS = new WeakMap();
+
+/**
+ * The nearest author-written accessor for `name` on `Cls`'s prototype chain,
+ * below the WebJs base: what Lit's `getPropertyDescriptor` wraps when a class
+ * declares a reactive property AND defines its own `get` / `set` for it.
+ * Returns null when there is none (the property uses built-in storage).
+ * @param {any} Cls
+ * @param {string} name
+ */
+function authorAccessor(Cls, name) {
+  for (let p = Cls.prototype; p && p !== WebComponentBase.prototype; p = Object.getPrototypeOf(p)) {
+    const d = Object.getOwnPropertyDescriptor(p, name);
+    if (!d) continue;
+    if (d.set && GENERATED_SETTERS.has(d.set)) return GENERATED_SETTERS.get(d.set) ?? null;
+    if (d.get || d.set) return { get: d.get, set: d.set };
+    return null;
+  }
+  return null;
+}
+
+/**
  * Define the getter/setter pair for every declared property on the class's
  * prototype, once, and record the plan the constructor applies per instance
  * (own-value capture and `default`). The descriptor comes from the class's
@@ -151,7 +180,14 @@ function installAccessors(Ctor, props) {
   const plan = [];
   for (const [propName, decl] of Object.entries(props)) {
     const d = normalizeDecl(decl);
-    plan.push({ propName, decl: d });
+    // `noAccessor` (Lit): the author's own accessor stays and calls
+    // `requestUpdate()` itself. A wrapped author accessor owns its storage, so
+    // the constructor neither lifts a pre-upgrade value into it nor applies a
+    // `default` (its private fields may not exist yet); `_activate` lifts a
+    // shadowing own value through the accessor on first connect.
+    const builtIn = !d.noAccessor && authorAccessor(Ctor, propName) === null;
+    plan.push({ propName, decl: d, builtIn });
+    if (d.noAccessor) continue;
     const descriptor = Ctor.getPropertyDescriptor(propName, Symbol(propName), d);
     if (descriptor !== undefined) Object.defineProperty(Ctor.prototype, propName, descriptor);
   }
@@ -362,39 +398,53 @@ class WebComponentBase extends Base {
    * Lit's `getPropertyDescriptor(name, key, options)`: the accessor pair
    * installed on the prototype for one reactive property. Override it to wrap
    * the default (call `super.getPropertyDescriptor(...)` and delegate to its
-   * `get` / `set`); return `undefined` to install no accessor. The default
-   * stores the value per instance, runs `hasChanged`, reflects, and schedules
-   * an update.
+   * `get` / `set`); return `undefined` to install no accessor.
+   *
+   * When the class defines its own `get` / `set` for a declared property, the
+   * default wraps it, as Lit's does: reads go to the author's getter, and a
+   * write calls the author's setter and then `requestUpdate(name, oldValue,
+   * options)`. Otherwise the value is stored per instance. Either way
+   * `requestUpdate` runs `hasChanged`, records the change, reflects, and
+   * schedules the update.
    * @param {string} name
    * @param {symbol} _key
    * @param {PropertyDeclaration} options
    * @returns {PropertyDescriptor | undefined}
    */
   static getPropertyDescriptor(name, _key, options) {
-    const changedCheck = options.hasChanged || defaultHasChanged;
-    return {
-      configurable: true,
-      enumerable: true,
-      get() { return this.__propValues[name]; },
-      set(newVal) {
-        const oldVal = this.__propValues[name];
-        this.__propValues[name] = newVal;
-        if (!changedCheck(newVal, oldVal)) return;
-        // Reflect to attribute if requested (_reflectAttribute skips a prop
-        // with no attribute: `state: true` or `attribute: false`).
-        if (options.reflect) {
-          if (this._connected) {
-            this._reflectAttribute(name, newVal, options);
-          } else {
-            (this.__reflectPending ??= new Set()).add(name);
-          }
-        }
-        // requestUpdate records the (name, oldValue) entry AND schedules a
-        // render. During the update phase the scheduler short-circuits and
-        // the entry folds into the current cycle's changedProperties.
-        this.requestUpdate(name, oldVal);
-      },
-    };
+    const author = authorAccessor(this, name);
+    /** @type {PropertyDescriptor} */
+    let descriptor;
+    if (author) {
+      const { get, set } = author;
+      descriptor = {
+        configurable: true,
+        enumerable: true,
+        get() { return get?.call(this); },
+        set(value) {
+          const oldValue = get?.call(this);
+          set?.call(this, value);
+          this.requestUpdate(name, oldValue, options);
+        },
+      };
+    } else {
+      descriptor = {
+        configurable: true,
+        enumerable: true,
+        get() { return this.__propValues[name]; },
+        set(value) {
+          const oldValue = this.__propValues[name];
+          this.__propValues[name] = value;
+          // requestUpdate runs hasChanged, records the (name, oldValue) entry,
+          // reflects, AND schedules a render. During the update phase the
+          // scheduler short-circuits and the entry folds into the current
+          // cycle's changedProperties.
+          this.requestUpdate(name, oldValue, options);
+        },
+      };
+    }
+    GENERATED_SETTERS.set(/** @type {Function} */ (descriptor.set), author);
+    return descriptor;
   }
 
   /**
@@ -527,7 +577,8 @@ class WebComponentBase extends Base {
     if (plan === undefined) plan = installAccessors(Ctor, props);
 
     for (let i = 0; i < plan.length; i++) {
-      const { propName, decl: d } = plan[i];
+      const { propName, decl: d, builtIn } = plan[i];
+      if (!builtIn) continue;
       // Capture any value set before the accessor could apply (an own data
       // property written on the element before it upgraded). It shadows the
       // prototype accessor, so it is lifted into the backing store.
@@ -562,9 +613,10 @@ class WebComponentBase extends Base {
   _reflectAttribute(propName, value, decl) {
     // A property with no attribute (`state: true` / `attribute: false`) has
     // nothing to reflect to.
-    if (!isAttributeBacked(decl)) return;
-    // A custom `attribute` option wins over the kebab-cased property name.
-    const attrName = decl.attribute || hyphenate(propName);
+    // The attribute name comes from the one rule the readers use, so a prop
+    // reflects to exactly the name it observes.
+    const attrName = attributeNameFor(propName, decl);
+    if (attrName === undefined) return;
     // Guard against re-entrant loops: attributeChangedCallback fires when
     // we call setAttribute, which would call the setter again.
     if (this.__reflectingAttribute) return;
@@ -1089,15 +1141,31 @@ class WebComponentBase extends Base {
   }
 
   /**
-   * Schedule a re-render. Optionally record a property change in
-   * `changedProperties` so hooks can branch on what changed.
+   * Schedule a re-render, Lit's `requestUpdate(name, oldValue, options)`.
+   * With a name, the property's `hasChanged` (from `options`, else its
+   * declaration) compares its current value with `oldValue`: an unchanged
+   * value schedules nothing. A change is recorded in `changedProperties`
+   * and reflected when the property declares `reflect: true`. With no
+   * arguments it always schedules an update.
    *
    * @param {string} [name]      Property name that changed
    * @param {unknown} [oldValue] Previous value of the property
+   * @param {PropertyDeclaration} [options] The property's declaration
    */
-  requestUpdate(name, oldValue) {
-    if (name !== undefined && !this._changedProperties.has(name)) {
-      this._changedProperties.set(name, oldValue);
+  requestUpdate(name, oldValue, options) {
+    if (name !== undefined) {
+      const decl = options ?? /** @type {any} */ (this.constructor).getPropertyOptions(name);
+      const hasChanged = decl.hasChanged || defaultHasChanged;
+      const value = /** @type {any} */ (this)[name];
+      if (!hasChanged(value, oldValue)) return;
+      if (!this._changedProperties.has(name)) this._changedProperties.set(name, oldValue);
+      // Reflect to the attribute if requested (_reflectAttribute skips a prop
+      // with no attribute: `state: true` or `attribute: false`). Disconnected,
+      // it waits for the next update.
+      if (decl.reflect) {
+        if (this._connected) this._reflectAttribute(name, value, decl);
+        else (this.__reflectPending ??= new Set()).add(name);
+      }
     }
     this._scheduleUpdate();
   }
@@ -1855,10 +1923,6 @@ function lightDomStylesMessage(tag) {
   );
 }
 
-/** @param {string} s */
-function hyphenate(s) {
-  return s.replace(/([A-Z])/g, '-$1').toLowerCase();
-}
 /** @param {string} s */
 function camelCase(s) {
   return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());

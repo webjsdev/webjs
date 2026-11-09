@@ -76,6 +76,9 @@ export function isAttributeBacked(decl) {
  * @returns {unknown}
  */
 export function readAttributeValue(def, value) {
+  // Lit's function form: a bare `converter: (value, type) => ...` IS the
+  // `fromAttribute` half, and reflection uses the default serialization.
+  if (typeof def.converter === 'function') return def.converter(value, def.type);
   if (def.converter && def.converter.fromAttribute) {
     // Deliberately UNGUARDED, and deliberately first (#1340). An author who
     // supplies a converter owns the whole read, which is the same rule
@@ -138,6 +141,22 @@ export function readAttributeValue(def, value) {
 /** Kebab-case a property name for its default HTML attribute. @param {string} s */
 function hyphenate(s) {
   return s.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+/**
+ * The attribute a declared property reads and reflects to, Lit's
+ * `attribute` option: a string is used as written, `false` (or
+ * `state: true`) means none, and anything else (absent, or `true`) is the
+ * default name derived from the property name.
+ *
+ * @param {string} propName
+ * @param {{ attribute?: string | boolean, state?: boolean }} decl  normalised declaration
+ * @returns {string | undefined}
+ */
+export function attributeNameFor(propName, decl) {
+  if (!isAttributeBacked(decl)) return undefined;
+  if (typeof decl.attribute === 'string') return decl.attribute;
+  return hyphenate(propName);
 }
 
 /**
@@ -324,10 +343,10 @@ function buildAttributeBackedProps(Cls) {
   const out = [];
   for (const [k, decl] of Object.entries(props)) {
     const d = normalizeDecl(decl);
-    if (!isAttributeBacked(d)) continue;
-    const primary = d.attribute || hyphenate(k);
+    const primary = attributeNameFor(k, d);
+    if (primary === undefined) continue;
     const lower = k.toLowerCase();
-    const alias = !d.attribute && lower !== primary ? lower : undefined;
+    const alias = typeof d.attribute !== 'string' && lower !== primary ? lower : undefined;
     out.push({ propName: k, def: d, primary, alias });
   }
   return out;

@@ -578,9 +578,11 @@ test('default hasChanged treats NaN !== NaN correctly (via strict inequality sem
   C.register('nan-el');
   const el = document.createElement('nan-el');
   document.body.appendChild(el);
+  // Count scheduled updates: the setter always calls requestUpdate (as in
+  // Lit), and requestUpdate runs hasChanged before scheduling anything.
   let updates = 0;
-  const orig = el.requestUpdate.bind(el);
-  el.requestUpdate = () => { updates++; orig(); };
+  const orig = el._scheduleUpdate.bind(el);
+  el._scheduleUpdate = () => { updates++; orig(); };
   el.n = NaN;
   el.n = NaN;   // same NaN, Object.is says no change
   assert.equal(updates, 1);

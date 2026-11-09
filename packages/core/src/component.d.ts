@@ -30,13 +30,24 @@ export interface PropertyDeclaration<T = unknown> {
   reflect?: boolean;
   /** Internal-only: no attribute, no reflection, but still reactive. */
   state?: boolean;
-  /** Rename the attribute, or pass `false` to suppress it entirely. */
-  attribute?: string | false;
-  /** Custom attribute ⇄ property serialisation. Takes precedence over `type`. */
-  converter?: {
-    fromAttribute?: (value: string | null, type?: PropertyConstructor<T>) => T;
-    toAttribute?: (value: T, type?: PropertyConstructor<T>) => string | null;
-  };
+  /** Rename the attribute (a string), keep the default name (`true`), or suppress it (`false`). */
+  attribute?: string | boolean;
+  /**
+   * Custom attribute ⇄ property serialisation. Takes precedence over `type`.
+   * A bare function is the `fromAttribute` half (reflection then uses the
+   * default serialisation), as in Lit.
+   */
+  converter?:
+    | ((value: string | null, type?: PropertyConstructor<T>) => T)
+    | {
+        fromAttribute?: (value: string | null, type?: PropertyConstructor<T>) => T;
+        toAttribute?: (value: T, type?: PropertyConstructor<T>) => string | null;
+      };
+  /**
+   * Install no accessor: the class's own get/set stays and must call
+   * `this.requestUpdate(name, oldValue)` itself (Lit's `noAccessor`).
+   */
+  noAccessor?: boolean;
   /** Custom dirty check. Return `true` to schedule an update. */
   hasChanged?: (newValue: T, oldValue: T) => boolean;
   /** Initial value, or a function called per instance for a fresh object / array. */
@@ -141,7 +152,7 @@ interface WebComponentBase extends HTMLElement {
    * wires every signal the update cycle reads to a re-render automatically;
    * explicit `requestUpdate()` is rarely needed.
    */
-  requestUpdate(name?: string, oldValue?: unknown): void;
+  requestUpdate(name?: PropertyKey, oldValue?: unknown, options?: PropertyDeclaration): void;
   /** A Promise that resolves after the next render commit. */
   readonly updateComplete: Promise<boolean>;
   /** Override point for `updateComplete`. Default returns the internal promise. */
