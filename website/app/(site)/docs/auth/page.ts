@@ -178,6 +178,6 @@ AUTH_GOOGLE_ID=your-google-oauth-client-id
 AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
 AUTH_GITHUB_ID=your-github-oauth-client-id
 AUTH_GITHUB_SECRET=your-github-oauth-client-secret</code-block>
-    <p>Generate a secret: <code>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code></p>
+    <p>Generate a secret: <code>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code>. <code>webjs create</code> writes one into <code>.env</code> for you. As in Auth.js, <code>createAuth</code> reads <code>AUTH_SECRET</code> itself when <code>secret</code> is left out, and <code>secret: process.env.AUTH_SECRET</code> type-checks as is.</p>
   `;
 }

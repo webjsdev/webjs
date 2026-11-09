@@ -231,7 +231,7 @@ export function GitHub(opts = {}) {
  * @typedef {Object} AuthConfig
  * @property {ProviderConfig[]} providers
  * @property {{ strategy?: 'jwt'|'database', maxAge?: number }} [session]
- * @property {string} secret
+ * @property {string} [secret] defaults to `process.env.AUTH_SECRET`, as in Auth.js
  * @property {{ session?: Function, jwt?: Function, signIn?: Function, redirect?: Function }} [callbacks]
  * @property {{ load?: Function, save?: Function, destroy?: Function }} [adapter]
  * @property {{ signIn?: string, signOut?: string, error?: string }} [pages]
@@ -255,8 +255,11 @@ export function GitHub(opts = {}) {
  * }}
  */
 export function createAuth(config) {
-  const { secret } = config;
-  if (!secret) throw new Error('createAuth() needs a `secret` to sign its session: pass secret: process.env.AUTH_SECRET and set AUTH_SECRET in .env (webjs create writes one).');
+  // Auth.js reads AUTH_SECRET when `secret` is left out, so an app can write
+  // createAuth({ providers }) or pass process.env.AUTH_SECRET (string | undefined)
+  // without a cast.
+  const secret = config.secret || process.env.AUTH_SECRET;
+  if (!secret) throw new Error('createAuth() needs a secret to sign its session: set AUTH_SECRET in .env (webjs create writes one), or pass createAuth({ secret }).');
 
   const strategy = config.session?.strategy || 'jwt';
   const maxAge = config.session?.maxAge || DEFAULT_MAX_AGE;

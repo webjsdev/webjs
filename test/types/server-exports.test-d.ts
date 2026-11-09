@@ -104,6 +104,11 @@ void serveStored;
 
 // Auth factory.
 const authInst = createAuth({ secret: 's', providers: [] });
+// Auth.js's spellings: the env value as is (string | undefined, what
+// process.env.AUTH_SECRET is typed), or no secret.
+declare const envSecret: string | undefined;
+void createAuth({ secret: envSecret, providers: [] });
+void createAuth({ providers: [] });
 // The credentials provider takes Auth.js's authorize contract.
 Credentials({ authorize: async (creds) => (creds.email ? { id: '1' } : null) });
 // Annotating the submitted fields' shape, as in Auth.js, compiles too.

@@ -1185,7 +1185,8 @@ export type ResolvedAuthUser = keyof AuthUser extends never
 export interface AuthConfig {
   providers: ProviderConfig[];
   session?: { strategy?: 'jwt' | 'database'; maxAge?: number };
-  secret: string;
+  /** Signs the session. Defaults to `process.env.AUTH_SECRET`, as in Auth.js. */
+  secret?: string | undefined;
   callbacks?: { session?: Function; jwt?: Function; signIn?: Function; redirect?: Function };
   adapter?: { load?: Function; save?: Function; destroy?: Function };
   pages?: { signIn?: string; signOut?: string; error?: string };
@@ -1226,7 +1227,6 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  * ```ts
  * // modules/auth/auth.server.ts
  * export const { auth, signIn, signOut, handlers } = createAuth({
- *   secret: process.env.AUTH_SECRET!,
  *   providers: [Credentials({
  *     async authorize(c: { email: string; password: string }) {
  *       const user = await findUserByEmail(c.email); // your own query
