@@ -626,7 +626,7 @@ export default async function OldSlug({ params }: { params: { slug: string } }) 
     </p>
 
     <p>
-      These server helpers can be called from pages, layouts, and
+      These server helpers can be called from pages, layouts, route handlers, and
       <code>generateMetadata</code> functions, anywhere in the server-side rendering
       chain.
     </p>

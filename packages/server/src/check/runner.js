@@ -13,10 +13,10 @@ import {
   checkNoShadowedNativeMember,
 } from './rules-components.js';
 import {
-  checkNoRedirectInApiRoute,
   checkNoInterpolationInRawTextElement,
   checkNoServerEnvInComponents,
   checkShellInNonRootLayout,
+  checkAppLayout,
 } from './rules-routing.js';
 import {
   checkErasableTypescriptOnly,
@@ -94,7 +94,6 @@ export async function checkConventions(appDir) {
   checkArrayPropUsesArrayType(files, violations);
   checkNoBrowserGlobalsInRender(files, violations);
   checkNoShadowedNativeMember(files, violations);
-  checkNoRedirectInApiRoute(files, violations);
   checkNoInterpolationInRawTextElement(files, violations);
   checkNoServerEnvInComponents(files, violations);
   checkShellInNonRootLayout(files, violations);
@@ -108,6 +107,7 @@ export async function checkConventions(appDir) {
   await checkServerImportInBrowserModule(appDir, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
+  await checkAppLayout(appDir, violations);
 
   return violations;
 }

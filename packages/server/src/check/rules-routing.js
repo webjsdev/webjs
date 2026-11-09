@@ -1,5 +1,5 @@
 /**
- * Routing and template rules: what a route handler may throw, what a non-root
+ * Routing and template rules: what a non-root
  * layout may emit, and which holes a template may carry.
  *
  * Lifted verbatim out of checkConventions, which held all twenty rules inline
@@ -9,82 +9,28 @@
 import {
   isServerActionFile, isComponentFile,
 } from './helpers.js';
+import { buildRouteTable } from '../router.js';
+import { validateAppLayout } from '../app-layout.js';
+
+/**
+ * Rules fed by the route table: `no-page-route-conflict` and the other file
+ * arrangements `validateAppLayout` refuses at boot. The check reports exactly
+ * what boot would refuse, so a clean `webjs check` means a clean boot.
+ *
+ * @param {string} appDir
+ * @param {import('./rules.js').Violation[]} violations
+ */
+export async function checkAppLayout(appDir, violations) {
+  let table;
+  try { table = await buildRouteTable(appDir); } catch { return; }
+  for (const p of validateAppLayout(appDir, table)) violations.push(p);
+}
 
 /**
  * @typedef {import('./rules.js').Violation} Violation
  * @typedef {{ abs: string, rel: string, content: string, scan: string }} ScannedFile
  */
 
-
-/**
- * Rule: `no-redirect-in-api-route`.
- *
- * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
- * @param {Violation[]} violations  accumulator the rule pushes onto
- * @returns {void}
- */
-export function checkNoRedirectInApiRoute(files, violations) {
-  // --- Rule: no-redirect-in-api-route ---
-  // `redirect()` from `@webjsdev/core` throws a control-flow signal designed
-  // for the SSR page renderer. In a `route.ts` API handler it goes uncaught
-  // and produces a 500. API handlers must use `Response.redirect(url, 303)`
-  // instead. Page functions, layouts, and server actions may still use
-  // `redirect()` (caught by the SSR / action pipeline).
-  {
-    const ROUTE_FILE = /(?:^|\/)route\.m?[jt]s$/;
-    for (const { rel, scan } of files) {
-      if (!ROUTE_FILE.test(rel)) continue;
-      // `redirect` reaches the route file in one of two statically-visible ways:
-      //   1. A NAMED import from `@webjsdev/core` (possibly aliased):
-      //      `import { redirect }`, `import { redirect as r }`, `import { …, redirect, … }`.
-      //   2. A NAMESPACE import then a member call:
-      //      `import * as core from '@webjsdev/core'` then `core.redirect(...)`.
-      // The named case flags a bare `redirect(` call; the namespace case flags
-      // `<ns>.redirect(`. `Response.redirect(` and any other `obj.redirect(` are
-      // the standard API and stay fine. A `redirect()` thrown inside a
-      // '`use server`' action the route calls DIRECTLY (an uncaught 500) needs
-      // cross-file analysis and is left to the AST rework (#753).
-      const namedM = /\bimport\s+\{[^}]*\bredirect\b(?:\s+as\s+(\w+))?\s*[^}]*\}\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
-      const nsM = /\bimport\s+\*\s+as\s+(\w+)\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
-      // A file can carry BOTH a named `redirect` import AND a namespace import,
-      // so check every matcher independently (not mutually exclusive): a named
-      // import means a bare `<localName>(`, a namespace import means
-      // `<ns>.redirect(`. The `member` flag distinguishes the two so a bare
-      // named call can screen out `Response.redirect(` / `obj.redirect(`.
-      /** @type {Array<{ re: RegExp, member: boolean }>} */
-      const matchers = [];
-      if (namedM) {
-        const localName = namedM[1] || 'redirect';
-        matchers.push({ re: new RegExp(`(?<!\\.)\\b${localName}\\s*\\(`, 'g'), member: false });
-      }
-      if (nsM) {
-        matchers.push({ re: new RegExp(`\\b${nsM[1]}\\.redirect\\s*\\(`, 'g'), member: true });
-      }
-      let flagged = false;
-      for (const { re, member } of matchers) {
-        if (flagged) break;
-        let m;
-        while ((m = re.exec(scan)) !== null) {
-          if (!member) {
-            // Screen out `Response.redirect(` / `someObj.redirect(` sharing the
-            // local name: a preceding member-access dot means it is not the import.
-            const before = scan.slice(Math.max(0, m.index - 20), m.index);
-            if (/\w\.$/.test(before)) continue;
-          }
-          violations.push({
-            rule: 'no-redirect-in-api-route',
-            file: rel,
-            message:
-              `\`redirect()\` from \`@webjsdev/core\` throws a control-flow signal for the SSR page renderer; in a \`route.ts\` handler it goes uncaught and returns a 500.`,
-            fix: `Use \`Response.redirect(url, 303)\` for external redirects, or return a 3xx Response directly. The \`redirect()\` sentinel is only valid in page functions, layouts, and server actions (where the SSR pipeline catches it).`,
-          });
-          flagged = true; // one violation per file is enough
-          break;
-        }
-      }
-    }
-  }
-}
 
 /**
  * Rule: `no-interpolation-in-raw-text-element`.

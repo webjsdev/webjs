@@ -18,7 +18,21 @@ export default function ApiRoutes() {
       <li><strong>PATCH</strong>: partially update a resource</li>
       <li><strong>DELETE</strong>: remove a resource</li>
     </ul>
-    <p>If a request arrives with a method that has no matching export, WebJs returns <code>405 Method Not Allowed</code> with an <code>Allow</code> header listing the available methods.</p>
+    <p><strong>HEAD</strong> and <strong>OPTIONS</strong> may be exported too. When they are not, WebJs implements them for you, as Next.js does: <code>HEAD</code> runs your <code>GET</code> and sends its status and headers with no body, and <code>OPTIONS</code> answers <code>204</code> with a sorted <code>Allow</code> header. If a request arrives with any other method that has no matching export, WebJs returns <code>405 Method Not Allowed</code> with the same <code>Allow</code> header.</p>
+    <p>A page and a route handler cannot answer the same URL. A <code>page.ts</code> and a <code>route.ts</code> in one folder (or reaching one URL through a route group) is reported by <code>webjs check</code> as <code>no-page-route-conflict</code>, refuses to start in production, and answers every request with the problem in development.</p>
+
+    <h2 id="redirect-and-not-found">redirect() and notFound() in a handler</h2>
+    <p>The navigation helpers from <code>@webjsdev/core</code> work inside a route handler exactly as in Next.js. A thrown <code>redirect(url)</code> answers <code>307</code> with a <code>Location</code> header, <code>permanentRedirect(url)</code> answers <code>308</code>, and an explicit status (<code>redirect(url, 303)</code>) wins. <code>notFound()</code>, <code>forbidden()</code> and <code>unauthorized()</code> answer <code>404</code>, <code>403</code> and <code>401</code> with an empty body. None of them is reported as an error.</p>
+    <code-block>// app/api/posts/[id]/route.ts
+import { notFound, redirect } from '@webjsdev/core';
+
+export async function GET(req: Request, { params }: { params: Promise&lt;{ id: string }&gt; }) {
+  const { id } = await params;
+  const post = await getPost(id);
+  if (!post) notFound();                       // 404
+  if (post.movedTo) redirect(\`/api/posts/\${post.movedTo}\`);  // 307
+  return post;
+}</code-block>
 
     <h2>Handler Signature</h2>
     <p>Every handler receives two arguments:</p>

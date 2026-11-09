@@ -37,6 +37,7 @@ import { findInstrumentationClient } from './instrumentation.js';
  *   globalNotFound: string | null,
  *   metadataRoutes: MetadataRoute[],
  *   instrumentationClient: string | null,
+ *   conflicts: { page: string, route: string, url: string }[],
  *   appDir: string
  * }} RouteTable
  */
@@ -221,7 +222,21 @@ export async function buildRouteTable(appDir) {
   // the entry, which inverted the pin-is-a-superset invariant. Deriving it in
   // the one place that builds the table makes that class of miss impossible.
   const instrumentationClient = await findInstrumentationClient(appDir);
-  return { pages, apis, notFound, notFounds, globalError, globalNotFound, metadataRoutes, instrumentationClient, appDir };
+  // A page and a route handler answering the same URL (Next refuses this as
+  // "Conflicting route and page"). Compared by the compiled pattern, so a
+  // route group (`app/(a)/x/page.ts` beside `app/x/route.ts`) conflicts too.
+  // validateAppLayout turns each into a boot error and a check violation.
+  /** @type {{ page: string, route: string, url: string }[]} */
+  const conflicts = [];
+  const pageBySource = new Map(pages.map((p) => [p.pattern.source, p]));
+  for (const api of apis) {
+    const page = pageBySource.get(api.pattern.source);
+    if (page) {
+      const a = /** @type any */ (api);
+      conflicts.push({ page: page.file, route: api.file, url: '/' + urlSegmentsOf(a.routeDir).join('/') });
+    }
+  }
+  return { pages, apis, notFound, notFounds, globalError, globalNotFound, metadataRoutes, instrumentationClient, conflicts, appDir };
 }
 
 /**

@@ -1,14 +1,28 @@
+import { isRedirect, isNotFound, isForbidden, isUnauthorized } from '@webjsdev/core';
 import { makeThenable } from './thenable-params.js';
 import { devImport } from './dev-import.js';
 
+/** Every method a route module may export (Next's HTTP_METHODS). */
+const HTTP_METHODS = ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'DELETE', 'PATCH'];
+
 /**
  * Dispatch an incoming request to a matched API route.
- * API modules export methods as named async functions: GET, POST, PUT, PATCH, DELETE.
+ * API modules export methods as named async functions: GET, HEAD, OPTIONS,
+ * POST, PUT, PATCH, DELETE.
  *
  * Handlers receive a standard `Request` and return a standard `Response`.
  *
+ * Next.js parity:
+ *   - HEAD and OPTIONS are implemented automatically when the module does not
+ *     export them (a port of Next's `autoImplementMethods`): HEAD runs GET and
+ *     drops the body; OPTIONS answers 204 with a sorted `Allow`.
+ *   - `redirect()` thrown from a handler answers 307 (308 from
+ *     `permanentRedirect()`; an explicit status wins), and `notFound()` /
+ *     `forbidden()` / `unauthorized()` answer 404 / 403 / 401 with no body.
+ *     They are answered HERE, so no caller ever sees them as errors.
+ *
  * @param {import('./router.js').ApiRoute} route
- * @param {Record<string,string>} params
+ * @param {Record<string, string | string[]>} params
  * @param {Request} webRequest
  * @param {boolean} dev
  * @returns {Promise<Response>}
@@ -16,11 +30,20 @@ import { devImport } from './dev-import.js';
 export async function handleApi(route, params, webRequest, dev) {
   const mod = await devImport(route.file, dev);
   const method = webRequest.method.toUpperCase();
-  const handler = mod[method];
+  const implemented = HTTP_METHODS.filter((m) => typeof mod[m] === 'function');
+  let handler = typeof mod[method] === 'function' ? mod[method] : null;
+  let headOnly = false;
+  if (!handler && method === 'HEAD' && typeof mod.GET === 'function') {
+    handler = mod.GET;
+    headOnly = true;
+  }
+  if (!handler && method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: { allow: allowHeader(implemented) } });
+  }
   if (!handler) {
     return new Response(`Method ${method} not allowed`, {
       status: 405,
-      headers: { allow: allowedMethods(mod).join(', ') },
+      headers: { allow: allowHeader(implemented) },
     });
   }
   // Route-handler params are awaitable AND sync-readable (#848, Next parity:
@@ -42,14 +65,39 @@ export async function handleApi(route, params, webRequest, dev) {
         headers: { 'content-type': 'text/plain; charset=utf-8' },
       });
     }
+    const control = controlFlowResponse(e);
+    if (control) return control;
     throw e;
   }
-  if (result instanceof Response) return result;
-  // Convenience: allow returning plain objects as JSON.
-  return Response.json(result);
+  const res = result instanceof Response ? result : Response.json(result);
+  // A synthesized HEAD answers GET's status and headers with no body.
+  return headOnly ? new Response(null, { status: res.status, statusText: res.statusText, headers: res.headers }) : res;
 }
 
-/** @param {Record<string,unknown>} mod */
-function allowedMethods(mod) {
-  return ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].filter((m) => typeof mod[m] === 'function');
+/**
+ * The response Next.js gives a control-flow throw inside a route handler, or
+ * null when `e` is a real error.
+ * @param {unknown} e
+ * @returns {Response | null}
+ */
+export function controlFlowResponse(e) {
+  if (isRedirect(e)) {
+    const r = /** @type any */ (e);
+    return new Response(null, { status: r.status || 307, headers: { location: r.url } });
+  }
+  if (isNotFound(e)) return new Response(null, { status: 404 });
+  if (isForbidden(e)) return new Response(null, { status: 403 });
+  if (isUnauthorized(e)) return new Response(null, { status: 401 });
+  return null;
+}
+
+/**
+ * The `Allow` header Next sends: the implemented methods plus OPTIONS (always
+ * answered) and HEAD (when GET exists), sorted.
+ * @param {string[]} implemented
+ */
+function allowHeader(implemented) {
+  const allow = new Set(['OPTIONS', ...implemented]);
+  if (allow.has('GET')) allow.add('HEAD');
+  return [...allow].sort().join(', ');
 }

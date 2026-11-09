@@ -27,6 +27,7 @@ import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
 import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.js';
+import { validateAppLayout, AppLayoutError } from '../app-layout.js';
 import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
@@ -235,10 +236,13 @@ export async function createRequestHandler(opts) {
     } catch { /* best effort */ }
   }
   const hasOnError = onErrorSinks.length > 0 || typeof onRequestError === 'function';
-  /** Each error object is reported once, under the first (most specific) phase
-   * that reaches it: a route handler's throw is reported as `route` before the
-   * top-level catch sees the same error again. @type {WeakSet<object>} */
-  const reportedErrors = new WeakSet();
+  /** Each error object is reported once PER REQUEST, under the first (most
+   * specific) phase that reaches it: a route handler's throw is reported as
+   * `route` before the top-level catch sees the same error again. Keyed by the
+   * request id rather than held forever, so an error object a module throws
+   * again on every request (a rejected module-scope promise) is reported on
+   * each one. @type {WeakMap<object, string | null>} */
+  const reportedErrors = new WeakMap();
 
   /**
    * Invoke every registered onError sink defensively. The phase is a coarse
@@ -255,8 +259,9 @@ export async function createRequestHandler(opts) {
     recordDevStatus(error, request, phase === 'ssr' ? 'render' : phase);
     if (!hasOnError) return;
     if (error && typeof error === 'object') {
-      if (reportedErrors.has(error)) return;
-      reportedErrors.add(error);
+      const rid = getRequestId();
+      if (reportedErrors.has(error) && reportedErrors.get(error) === rid) return;
+      reportedErrors.set(error, rid);
     }
     // Next.js's instrumentation `onRequestError(error, request, context)`.
     // Fire-and-forget like Next: an awaited reporter never delays the response,
@@ -440,6 +445,14 @@ export async function createRequestHandler(opts) {
   // eagerly: it is a cheap directory scan (no code reads), and routing, Early
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
+  // A file arrangement that can never serve correctly (a page and a route.ts
+  // at one URL, ...) refuses to boot in production, as Next refuses to build.
+  // Dev keeps serving so an edit can fix it: ensureReady re-checks on every
+  // rebuild and answers each request with the problem until then.
+  if (!dev) {
+    const problems = validateAppLayout(appDir, routeTable);
+    if (problems.length) throw new AppLayoutError(problems);
+  }
   // Auto-linked favicons: tell the head builder which icon metadata routes
   // exist, so `app/icon.*` is linked when the app declares no metadata.icons.
   // Bound here rather than threaded through ssrOpts, matching
@@ -689,6 +702,8 @@ export async function createRequestHandler(opts) {
         const now = () => performance.now();
         try {
           if (!analysisDone) {
+            const layoutProblems = validateAppLayout(appDir, state.routeTable);
+            if (layoutProblems.length) throw new AppLayoutError(layoutProblems);
             let m = now();
             state.moduleGraph = await buildModuleGraph(appDir);
             t.graph = now() - m; m = now();
@@ -1201,14 +1216,24 @@ export async function createRequestHandler(opts) {
         // path catches its own errors, but a surprise still must not crash the
         // host). Fire the onError sink (best-effort) and emit a sanitized 500,
         // preserving the prior behavior plus the new APM hook.
-        reportError(e, req, 'handle');
-        logger.error?.('[webjs] request pipeline threw', {
-          requestId: reqId,
-          method: req.method,
-          path: pathname,
-          err: e instanceof Error ? e.stack : String(e),
-        });
-        res = new Response('Server error', { status: 500 });
+        if (dev && e && /** @type {any} */ (e).code === 'WEBJS_APP_LAYOUT') {
+          // A layout problem (see app-layout.js) is the app's to fix, not a
+          // crash: show it on every request and in the overlay until an edit
+          // resolves it.
+          reportDevError(e, { kind: 'rebuild' });
+          res = new Response(`[webjs] ${/** @type {Error} */ (e).message}\n`, {
+            status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' },
+          });
+        } else {
+          reportError(e, req, 'handle');
+          logger.error?.('[webjs] request pipeline threw', {
+            requestId: reqId,
+            method: req.method,
+            path: pathname,
+            err: e instanceof Error ? e.stack : String(e),
+          });
+          res = new Response('Server error', { status: 500 });
+        }
       }
 
       // Merge in the secure-by-default headers plus the per-path config

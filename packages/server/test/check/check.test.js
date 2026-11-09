@@ -903,166 +903,6 @@ test('no-server-env-in-components: does not fire outside components/', async () 
   }
 });
 
-/* -------------------- no-redirect-in-api-route -------------------- */
-
-test('no-redirect-in-api-route: flags `redirect()` in route.ts', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'redirect'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'redirect', 'route.ts'),
-      `import { redirect } from '@webjsdev/core';
-export async function GET() {
-  redirect('https://example.com');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.ok(v, 'expected no-redirect-in-api-route violation');
-    assert.ok(v.message.includes('redirect()'));
-    assert.ok(v.fix.includes('Response.redirect'));
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-redirect-in-api-route: does not flag `Response.redirect()` in route.ts', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'ok'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'ok', 'route.ts'),
-      `export async function GET() {
-  return Response.redirect('https://example.com', 303);
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'Response.redirect() should not be flagged');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-redirect-in-api-route: does not flag `redirect()` in page.ts', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'old-page'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'old-page', 'page.ts'),
-      `import { html, redirect } from '@webjsdev/core';
-export default function OldPage() {
-  redirect('/new-page');
-  return html\`<p>unreachable</p>\`;
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'redirect() in a page is allowed (SSR pipeline catches it)');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-redirect-in-api-route: does not flag `redirect()` in a server action', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'modules', 'auth', 'actions'), { recursive: true });
-    await writeFile(
-      join(appDir, 'modules', 'auth', 'actions', 'login.server.ts'),
-      `'use server';
-import { redirect } from '@webjsdev/core';
-export async function login() {
-  redirect('/dashboard');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'redirect() in a server action is allowed');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-// #809: the rule previously only saw a NAMED `import { redirect }`. A namespace
-// import + member call (`import * as core; core.redirect(...)`) reaches the same
-// uncaught-500 sentinel and must be flagged too.
-test('no-redirect-in-api-route: flags a namespace `core.redirect()` in route.ts (#809)', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'ns'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'ns', 'route.ts'),
-      `import * as core from '@webjsdev/core';
-export async function GET() {
-  core.redirect('https://example.com');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.ok(v, 'a namespace member call core.redirect() in a route must be flagged');
-    assert.ok(v.file.includes('ns/route.ts'), 'names the offending route file');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-// A route can carry BOTH a named and a namespace import and call only the
-// namespace form; the matchers run independently so the uncaught 500 is still
-// caught (a regression guard for the mutually-exclusive-branch hole).
-test('no-redirect-in-api-route: flags namespace `core.redirect()` even when a named import is also present (#809)', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'both'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'both', 'route.ts'),
-      // A NAMED `redirect` import (so namedM is truthy) that is never called
-      // bare, PLUS a namespace import whose `core.redirect()` is the only call.
-      // Under the old mutually-exclusive `else if (nsM)` the named branch won,
-      // found no bare `redirect(`, and missed the 500; the independent matchers
-      // catch it.
-      `import { redirect } from '@webjsdev/core';
-import * as core from '@webjsdev/core';
-export async function GET() {
-  core.redirect('https://example.com');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.ok(v, 'core.redirect() must be flagged even when a named redirect import is also present but never called bare');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-// The counterpart: a namespace import whose `redirect` is never called must NOT
-// be flagged (proves the member-call matcher, not the mere import, drives it).
-test('no-redirect-in-api-route: a namespace import without a redirect call is NOT flagged (#809)', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'ns2'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'ns2', 'route.ts'),
-      `import * as core from '@webjsdev/core';
-export async function GET() {
-  return core.json({ ok: true });
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'a namespace import that never calls redirect must not be flagged');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
 
 test('shell-in-non-root-layout: passes when root layout owns the shell', async () => {
   const appDir = await makeTempApp();
@@ -1661,3 +1501,43 @@ test('no-scaffold-placeholder: a file carrying the old marker token is not flagg
   }
 });
 
+/* -------------------- no-page-route-conflict -------------------- */
+
+test('no-page-route-conflict: flags a page and a route.ts at the same URL', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'page.ts'), `export default () => 'p';\n`);
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'route.ts'), `export function GET() { return new Response('r'); }\n`);
+    const v = (await checkConventions(appDir)).find((v) => v.rule === 'no-page-route-conflict');
+    assert.ok(v, 'expected a no-page-route-conflict violation');
+    assert.equal(v.file, 'app/x/route.ts');
+    assert.match(v.message, /app\/x\/page\.ts/);
+    assert.match(v.fix, /app\/api/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-page-route-conflict: a route group does not hide the conflict', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', '(site)', 'about', 'page.ts'), `export default () => 'p';\n`);
+    await writeFileEnsureDir(join(appDir, 'app', 'about', 'route.ts'), `export function GET() { return new Response('r'); }\n`);
+    const v = (await checkConventions(appDir)).find((v) => v.rule === 'no-page-route-conflict');
+    assert.ok(v);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-page-route-conflict: a page and a route at different URLs are fine', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'page.ts'), `export default () => 'p';\n`);
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'data', 'route.ts'), `export function GET() { return new Response('r'); }\n`);
+    const v = (await checkConventions(appDir)).find((v) => v.rule === 'no-page-route-conflict');
+    assert.equal(v, undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
