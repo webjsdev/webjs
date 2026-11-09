@@ -421,6 +421,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(!pkg.devDependencies['ts-lit-plugin'] && !pkg.dependencies['ts-lit-plugin'], 'scaffold pulls no ts-lit-plugin');
     assert.ok(tsconfig.include.includes('test/**/*'),
       'generated tsconfig type-checks the app test directory (#1299)');
+    assert.ok(tsconfig.include.includes('db/**/*'),
+      'generated tsconfig type-checks the schema and connection on their own (#1686)');
 
     // {{APP_NAME}} placeholder substituted in template files
     const agents = readFileSync(join(appDir, 'AGENTS.md'), 'utf8');

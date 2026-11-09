@@ -688,6 +688,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         { name: '@webjsdev/intellisense' },
       ],
     },
+    // `db/**/*` is in so the schema and the connection are checked on their
+    // own, not only through a file that imports them (#1686: a driver type
+    // change in the connection passed typecheck because nothing included it).
+    //
     // `test/**/*` is in so `webjs typecheck` reads the tests you write, the
     // same way Next / Remix / Astro's generated configs do (#1299). A type
     // error in a test is then a gate failure rather than something a reviewer
@@ -704,10 +708,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'components/**/*',
       'modules/**/*',
       'lib/**/*',
+      'db/**/*',
       'test/**/*',
       'middleware.js',
       'middleware.ts',
       'proxy.ts',
+      'instrumentation.ts',
+      'instrumentation-client.ts',
+      'env.ts',
       '.webjs/routes.d.ts',
     ],
     exclude: ['node_modules', '.webjs/vendor', 'db/migrations'],
