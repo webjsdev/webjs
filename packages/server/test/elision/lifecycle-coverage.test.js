@@ -61,7 +61,20 @@ const CLASSIFICATION = {
   // signal (it executes during SSR regardless of whether the module is
   // elided), so overriding or calling it does not force interactivity.
   performServerUpdate: 'inert',
+  // Lit's render-root factory. Returning `this` (light DOM) or a shadow root
+  // only decides WHERE the template commits; whether the component ships is
+  // already decided by `static shadow` (a ship signal of its own), so the
+  // override alone is not client work.
+  createRenderRoot: 'inert',
+  // Lit's update-scheduling overrides, client-only timing control.
+  scheduleUpdate: 'override-hook',
+  enableUpdating: 'override-hook',
+  // Both an override point and a synchronous flush a caller may invoke.
+  performUpdate: 'override-hook',
 };
+
+/** Methods that are BOTH an override hook and a call signal. */
+const ALSO_CALL = ['performUpdate'];
 
 function publicPrototypeMethods() {
   return Object.getOwnPropertyNames(WebComponent.prototype).filter(
@@ -92,7 +105,7 @@ test('every override-hook is in CLIENT_LIFECYCLE_HOOKS', () => {
 
 test('every call signal is in CLIENT_METHOD_CALLS', () => {
   for (const [name, kind] of Object.entries(CLASSIFICATION)) {
-    if (kind !== 'call') continue;
+    if (kind !== 'call' && !ALSO_CALL.includes(name)) continue;
     assert.ok(
       CLIENT_METHOD_CALLS.includes(name),
       `${name} is a call signal but missing from CLIENT_METHOD_CALLS`,
@@ -121,7 +134,7 @@ test('overriding each override-hook makes the analyser ship the component', () =
 
 test('calling each call signal makes the analyser ship the component', () => {
   for (const [name, kind] of Object.entries(CLASSIFICATION)) {
-    if (kind !== 'call') continue;
+    if (kind !== 'call' && !ALSO_CALL.includes(name)) continue;
     const src = `
       import { WebComponent, html } from '@webjsdev/core';
       class Probe extends WebComponent {
@@ -134,6 +147,37 @@ test('calling each call signal makes the analyser ship the component', () => {
       true,
       `calling ${name} should force interactive`,
     );
+  }
+});
+
+test('overriding createRenderRoot to return this (light DOM) alone does not force shipping', () => {
+  const src = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Plain extends WebComponent {
+      createRenderRoot() { return this; }
+      render() { return html\`<p>plain</p>\`; }
+    }
+    Plain.register('plain-el');
+  `;
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('importing a custom-directive or ContextRoot primitive ships the component', () => {
+  for (const [name, spec] of [
+    ['directive', '@webjsdev/core/directive'],
+    ['Directive', '@webjsdev/core/directive'],
+    ['AsyncDirective', '@webjsdev/core/async-directive'],
+    ['ContextRoot', '@webjsdev/core/context'],
+  ]) {
+    const src = `
+      import { ${name} } from '${spec}';
+      import { WebComponent, html } from '@webjsdev/core';
+      class Probe extends WebComponent {
+        render() { return html\`<p>x</p>\`; }
+      }
+      Probe.register('probe-el');
+    `;
+    assert.equal(analyzeComponentSource(src).interactive, true, `importing ${name} should force interactive`);
   }
 });
 
@@ -182,12 +226,16 @@ test('every client directive is present in REACTIVE_IMPORTS', () => {
   }
 });
 
-test('no REACTIVE_IMPORTS entry is stale (each is a real @webjsdev/core export)', () => {
+test('no REACTIVE_IMPORTS entry is stale (each is a real @webjsdev/core export)', async () => {
+  const directiveMod = await import('../../../core/src/directive.js');
+  const asyncDirectiveMod = await import('../../../core/src/async-directive.js');
   const exported = new Set([
     ...Object.keys(core),
     ...Object.keys(directives),
     ...Object.keys(taskMod),
     ...Object.keys(contextMod),
+    ...Object.keys(directiveMod),
+    ...Object.keys(asyncDirectiveMod),
   ]);
   for (const name of REACTIVE_IMPORTS) {
     assert.ok(exported.has(name), `${name} is in REACTIVE_IMPORTS but no longer exported by core (rename/removal?)`);
