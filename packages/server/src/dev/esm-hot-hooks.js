@@ -220,6 +220,19 @@ export function isVersionedModule(abs) {
   return st.installed && isAppModule(abs, st);
 }
 
+/**
+ * Whether the Bun source plugins have served `abs` in this process, so an edit
+ * to it can be versioned in place. A file never served (a new one above all)
+ * is not: Bun's resolver may still hold a directory listing without it, which
+ * only a registry reset clears.
+ * @param {string} abs
+ * @returns {boolean}
+ */
+export function isServedModule(abs) {
+  const st = state();
+  return !!st.loaded && st.loaded.has(abs);
+}
+
 /** Whether module versions are on in this process (the Node resolve hook, or Bun's source plugins). @returns {boolean} */
 export function hotHooksInstalled() {
   return state().installed;

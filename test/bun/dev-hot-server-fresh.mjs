@@ -141,6 +141,26 @@ try {
   assert.equal(again.tag, 'LM3', `the second edit reached through the 'use server' module on ${runtime}`);
   assert.ok(again.hits > after.hits, `and the counter still survives on ${runtime}`);
 
+  // A module created after boot, imported by a relative path from an edited
+  // page. Nothing served it yet, so on Bun this edit still takes the registry
+  // reset (Bun's resolver may not list the new file), and it must render.
+  writeFileSync(join(dir, 'lib/extra.ts'), "export const extra: string = 'E1';\n");
+  await sleep(200);
+  writeFileSync(join(dir, 'app/page.ts'), [
+    "import { html } from '@webjsdev/core';",
+    "import { msg } from '#lib/msg.ts';",
+    "import { hit } from '../lib/hits.ts';",
+    "import { tag } from '#lib/tag.server.ts';",
+    "import { extra } from '../lib/extra.ts';",
+    'export default async () => html`<main>msg=${msg} hits=${hit()} tag=${await tag()} extra=${extra}</main>`;',
+    '',
+  ].join('\n'));
+  const added = await until(async () => {
+    const res = await fetch(BASE + '/');
+    return res.ok && /extra=E1/.test(await res.text());
+  }, { timeoutMs: 20_000 });
+  assert.ok(added, `a page importing a module created after boot rendered it on ${runtime}\n--- server log ---\n${log}`);
+
   console.log(`OK  webjs dev applied a server module edit in place on ${runtime} (#1689)`);
 } finally {
   if (child && child.pid) {

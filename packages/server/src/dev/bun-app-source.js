@@ -19,7 +19,8 @@
  * (`dev/esm-hot-hooks.js` holds the versions). Bun keys a module by its query,
  * so the edited chain evaluates fresh while every other module keeps its
  * instance and its module-scope state. Only what versions cannot place (a
- * deleted file, the extensionless temp file `sed -i` renames over a module)
+ * new or deleted file, the extensionless temp file `sed -i` renames over a
+ * module)
  * still asks `bun --hot` for a registry reset (`pokeHotSentinel` in
  * `dev/hot-host.js`).
  *

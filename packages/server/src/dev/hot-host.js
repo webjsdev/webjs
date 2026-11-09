@@ -160,10 +160,10 @@ const INERT_ASSET = /\.(?:css|md|mdx|txt|log|map|png|jpe?g|gif|webp|avif|ico|svg
  * plugin), which `bun --hot` never watches.
  *
  * `isRouteOnly` answers whether a module path needs no reset (see
- * `needsRegistryReset` on the request handler): an existing app module, which
- * the module versions re-evaluate in place with its importers (#1689), or a
- * module only the router loads, whose dev re-import is keyed by content. A
- * deleted module still resets. Anything the
+ * `needsRegistryReset` on the request handler): a module the dev plugins
+ * already served, which the module versions re-evaluate in place with its
+ * importers (#1689), or a module only the router loads, whose dev re-import is
+ * keyed by content. A new or deleted module still resets. Anything the
  * dev server cannot place, such as the extensionless temp file `sed -i`
  * renames over the real one, gets the reset, because the event may name the
  * temp file rather than the module it replaced.

@@ -20,7 +20,7 @@ import {
   hasUseServerDirective,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
-import { installEsmHotHooks, installBunModuleVersions, isVersionedModule, bumpModuleVersions } from './esm-hot-hooks.js';
+import { installEsmHotHooks, installBunModuleVersions, isServedModule, bumpModuleVersions } from './esm-hot-hooks.js';
 import { createBrowserVersions } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
@@ -1799,8 +1799,8 @@ export async function createRequestHandler(opts) {
      * (#1575), the `bun --hot` re-run `startServer` pokes for. A module no
      * other app module imports is only ever loaded through `devImport`, whose
      * specifier names the file's content, so its edit is a new specifier and
-     * needs nothing reset, and neither does an existing app module once the Bun
-     * module versions are on (#1689). Otherwise anything imported by another
+     * needs nothing reset, and neither does a module the Bun dev plugins
+     * already served, which the module versions re-evaluate (#1689). Otherwise anything imported by another
      * module, a file the last analysis never saw (a new file may be the target
      * of an import that failed), or any edit before the first analysis does.
      *
@@ -1810,10 +1810,10 @@ export async function createRequestHandler(opts) {
      */
     needsRegistryReset: (filename, root) => {
       const abs = resolve(root || appDir, filename);
-      // On Bun an existing app module is versioned in place (#1689): the
-      // rebuild bumps it and its importers, and the next import evaluates that
-      // chain fresh. A deleted file, or one outside the app root, still resets.
-      if (bunVersions && isVersionedModule(abs) && existsSync(abs)) return false;
+      // On Bun a module the dev plugins already served is versioned in place
+      // (#1689): the rebuild bumps it and its importers, and the next import
+      // evaluates that chain fresh. A new or deleted file still resets.
+      if (bunVersions && isServedModule(abs) && existsSync(abs)) return false;
       if (!analysisEverDone) return true;
       // A new routing file (a page, layout, route handler, boundary) is only
       // ever loaded by the router, and nothing can have tried to import it yet.
