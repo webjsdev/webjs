@@ -752,6 +752,25 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
 
     <p>The tag argument accepts any short-string quote style. <code>register('my-counter')</code>, <code>register("my-counter")</code>, and <code>register(&#96;my-counter&#96;)</code> are all equivalent. The framework's <code>tag-name-has-hyphen</code> lint rule reads the tag through any of them.</p>
 
+    <h2>Hot swap in dev</h2>
+    <p>Under <code>webjs dev</code>, on Node and Bun, saving a component file updates the live page without a reload. A tag can be registered only once per page, so the registered class is never replaced. Instead the tab re-imports the edited module, copies the new class's methods, accessors, statics and styles onto the class the browser registered, and re-renders every live instance. The console logs <code>[webjs] hot-swapped &lt;my-counter&gt; (components/my-counter.ts)</code>.</p>
+    <p>What survives the swap:</p>
+    <ul>
+      <li>the elements themselves, so anything holding a reference to one still holds the live element;</li>
+      <li>every reactive property value and every instance signal, since they live on the element;</li>
+      <li>the DOM of every template part whose text did not change, including what was typed into an input and the components nested inside it;</li>
+      <li>module-scope state in every module you did not edit. Module-scope state in the edited file itself starts over, because that module runs again.</li>
+    </ul>
+    <p>An edit the patched class cannot carry is a full reload instead, and the reloaded page logs <code>[webjs] full reload: &lt;reason&gt; (&lt;file&gt;)</code>:</p>
+    <ul>
+      <li>a changed <code>constructor</code> or instance field initializer (the browser keeps constructing elements with the constructor it registered, and an initializer ran once per element);</li>
+      <li>any <code>#private</code> member in the class;</li>
+      <li>a changed reactive property declaration, <code>observedAttributes</code>, <code>static shadow</code> or <code>static formAssociated</code>;</li>
+      <li>a changed native lifecycle callback such as <code>connectedCallback</code> or <code>attributeChangedCallback</code>, which the browser captured when the tag was defined;</li>
+      <li>a component module that exports anything besides its classes, or an edited helper module that runs code at module scope.</li>
+    </ul>
+    <p>Template, style, method and <code>render()</code> edits all apply in place. There is no hot-reload API to opt into: the swap is automatic in dev, and production runs none of it.</p>
+
     <h2>Server Rendering</h2>
     <p>WebJs components are server-rendered using <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter count="5"&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
 

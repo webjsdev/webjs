@@ -2,19 +2,23 @@
  * Dev-server reload supervisor planning for `webjs dev` (issues #514, #1521).
  *
  * `webjs dev` runs its server in a CHILD process that a supervising parent
- * restarts, so an edit to a transitively-imported module (an action, query,
- * component, util) takes effect without a manual restart. Both runtimes cache
- * ES modules by resolved URL with no public invalidation API, so the dev
- * re-import in `@webjsdev/server`'s `dev.js` relies on a fresh process (Node)
- * or the runtime's own cache invalidation (Bun):
+ * restarts when it must, so an edit to a transitively-imported module (an
+ * action, query, component, util) takes effect without a manual restart. Both
+ * runtimes cache ES modules by resolved URL with no public invalidation API, so
+ * the server needs the runtime's help to re-evaluate an edit in place:
  *
- * - **Node** has no in-place module-cache eviction, so the parent RESTARTS the
- *   child on a change under the watched paths (a fresh ESM cache each time).
- *   This used to be `node --watch`, which dies on the first watcher error it
- *   cannot handle (an EACCES on a temp file another user created, a file that
- *   vanished mid-scan, #1521) and takes the preview down for good. WebJs's own
- *   supervisor (`lib/dev-reload.js`) watches the same paths with every watcher
- *   error handled, and restarts the child faster.
+ * - **Node** gets it from a `module.registerHooks` resolve hook in
+ *   `@webjsdev/server` (`dev/esm-hot-hooks.js`, #1689) that gives an edited
+ *   module and its importers a new URL, so the child re-evaluates them in
+ *   place. The child announces that over IPC once it is up, and from then on
+ *   only a restart file (`RESTART_FILES`) restarts it. Until it announces, or on
+ *   a Node with no `registerHooks`, every change under the watched paths
+ *   restarts it (a fresh ESM cache each time), which is also what brings a
+ *   crashed child back. This used to be `node --watch`, which dies on the first
+ *   watcher error it cannot handle (an EACCES on a temp file another user
+ *   created, a file that vanished mid-scan, #1521) and takes the preview down
+ *   for good. WebJs's own supervisor (`lib/dev-reload.js`) watches the same
+ *   paths with every watcher error handled.
  * - **Bun** runs the child under `bun --hot`, which invalidates loaded modules
  *   on a file change WITHOUT restarting the process (so a page edit can be
  *   refreshed in place, #1398). But `bun --hot` does not watch a file whose
@@ -38,9 +42,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Project directories whose changes restart the dev server on Node. `db` is in
- * the list so a schema edit (a new table or relation) reaches a fresh process
- * on Node, where the edited module is otherwise never evaluated again (#1664).
+ * Project directories the supervisor watches. A change there restarts a Node
+ * child that has not announced in-place reloads, and starts a crashed child on
+ * either runtime. `db` is in the list so a schema edit (a new table or
+ * relation) reaches such a child too (#1664).
  * Only JS / TS source under it counts: `shouldIgnoreRestartPath` in
  * `dev-reload.js` skips every other file there, so a database file and its
  * sidecars, which change on every write, never restart anything.
@@ -48,34 +53,63 @@ import { join } from 'node:path';
 export const WATCH_DIRS = ['app', 'components', 'modules', 'lib', 'actions', 'db'];
 
 /**
- * Every extension the server's root-middleware lookup accepts, in the same
- * order. If these two lists diverge, an app gets a middleware that loads but
- * never restarts the dev server when edited, which is the quiet half of the
- * bug where a `middleware.ts` was loaded by neither.
+ * The app-root files only a fresh process can apply, so an edit to one
+ * restarts the dev server on either runtime even when it reloads everything
+ * else in place:
+ *
+ * - `instrumentation.*` (its `register()`) and `env.*` (the env validation),
+ *   which the server runs ONCE per process (#1575).
+ * - `.env`, loaded once at boot, and `package.json`, whose `webjs.*` keys are
+ *   mostly read once (#1689). The CLI starts the child with the shell's env,
+ *   not one `.env` was already loaded into, so the restarted child reads the
+ *   edited file instead of keeping the old values.
+ * - The lockfiles, since a dependency change means new code under
+ *   `node_modules`, which nothing reloads in place.
  */
-export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', ...bootFiles()];
+export const RESTART_FILES = Object.freeze([
+  ...['instrumentation', 'env'].flatMap((n) => ['ts', 'js', 'mts', 'mjs'].map((x) => `${n}.${x}`)),
+  '.env',
+  'package.json',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'bun.lock',
+  'bun.lockb',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+]);
+
+const RESTART_FILE = /^(?:(?:instrumentation|env)\.m?[jt]s|\.env|package\.json|package-lock\.json|npm-shrinkwrap\.json|bun\.lockb?|pnpm-lock\.yaml|yarn\.lock)$/;
 
 /**
- * The app-root boot hooks the server runs ONCE per process (#1575):
- * `instrumentation.*` (its `register()`) and `env.*` (the env validation). An
- * edit to one restarts the dev server on either runtime, because no in-place
- * reload re-runs them.
- * @returns {string[]}
- */
-function bootFiles() {
-  return ['instrumentation', 'env'].flatMap((n) => ['ts', 'js', 'mts', 'mjs'].map((x) => `${n}.${x}`));
-}
-
-const BOOT_FILE = /^(?:instrumentation|env)\.m?[jt]s$/;
-
-/**
- * Whether a changed (app-relative) path is a boot hook (see `bootFiles`).
+ * Whether a changed (app-relative) path is a restart file (see
+ * `RESTART_FILES`). Root files only: a `package.json` in a subdirectory is not
+ * the app's.
  * @param {string} path
  * @returns {boolean}
  */
-export function isBootFile(path) {
-  return BOOT_FILE.test(path);
+export function isRestartFile(path) {
+  return RESTART_FILE.test(path);
 }
+
+/**
+ * The env var that hands the child the restart-file pattern (#1689). The child's
+ * own watcher sees the same root files, and a frame it sent for one would be a
+ * second reload on top of the restart, so it skips exactly what the supervisor
+ * restarts for. Passed as the regex source rather than restated in
+ * `@webjsdev/server`, which the CLI does not depend on, so the two can never
+ * disagree.
+ */
+export const RESTART_FILES_ENV = '__WEBJS_DEV_RESTART_FILES';
+const RESTART_CHILD_ENV = Object.freeze({ [RESTART_FILES_ENV]: RESTART_FILE.source });
+
+/**
+ * The app-root files the supervisor watches: every extension the server's
+ * root-middleware lookup accepts, in the same order, plus every restart file.
+ * If the middleware list diverges from the server's, an app gets a middleware
+ * that loads but never restarts the dev server when edited, which is the quiet
+ * half of the bug where a `middleware.ts` was loaded by neither.
+ */
+export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', ...RESTART_FILES];
 
 /**
  * Plan how `webjs dev` runs its server.
@@ -103,19 +137,30 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
   if (isBun) {
     // `restartFor` covers a server that cannot reload a plugin-served module in
     // place. A server that can says so over IPC once it is up (#1575), and the
-    // supervisor narrows to `inPlaceRestartFor`: only the boot hooks restart.
+    // supervisor narrows to `inPlaceRestartFor`: only the restart files restart.
     const plugin = bunPluginServed(sourceLocations);
     return {
       mode: 'supervise',
       args: ['--hot', ...argv],
-      env: BUN_CHILD_ENV,
+      env: { ...BUN_CHILD_ENV, ...RESTART_CHILD_ENV },
       restartOnChange: true,
-      restartFor: (p) => plugin(p) || isBootFile(p),
-      inPlaceRestartFor: isBootFile,
+      restartFor: (p) => plugin(p) || isRestartFile(p),
+      inPlaceRestartFor: isRestartFile,
       ...watch,
     };
   }
-  return { mode: 'supervise', args: [...argv], restartOnChange: true, ...watch };
+  // Node: every change restarts a child that has not announced it reloads in
+  // place (an older `@webjsdev/server`, a Node with no `module.registerHooks`).
+  // Once it announces (#1689), only the restart files do.
+  return {
+    mode: 'supervise',
+    args: [...argv],
+    env: RESTART_CHILD_ENV,
+    restartOnChange: true,
+    restartFor: () => true,
+    inPlaceRestartFor: isRestartFile,
+    ...watch,
+  };
 }
 
 /**

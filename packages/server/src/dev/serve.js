@@ -35,6 +35,8 @@ import { toUrlPath } from '../ssr/preloads.js';
 import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
 import { devImport } from '../dev-import.js';
+import { versionImportSpecifiers } from './specifier-versions.js';
+import { devServiceWorkerResponse } from './dev-service-worker.js';
 import { runMetadataRoute } from '../metadata-routes.js';
 
 /**
@@ -160,6 +162,10 @@ export async function tryServeFrameworkStatic(path, method, { coreDir, appDir, d
  */
 export async function tryServePublicAsset(path, ctx) {
   const { appDir, dev, versioned, regenerateRules } = ctx;
+  // Under `webjs dev` the root worker is a kill switch (#1689), whether or not
+  // the app ships one: a caching worker on a dev origin serves the edit before
+  // last, and one a `webjs start` on the same port left behind is cleared too.
+  if (dev && path === '/sw.js') return devServiceWorkerResponse();
   const ROOT_ASSETS = { '/sw.js': '/public/sw.js', '/offline.html': '/public/offline.html' };
   if (!(path.startsWith('/public/') || path === '/favicon.ico' || path in ROOT_ASSETS)) return null;
   const p = path === '/favicon.ico' ? '/public/favicon.ico' : (ROOT_ASSETS[path] || path);
@@ -332,6 +338,9 @@ export async function handleCore(req, ctx) {
         // Dev source locations (#1499): annotate the served module's `html`
         // templates exactly as the SSR load hook annotates the server's copy.
         sourceLocations: state.sourceLocations === true,
+        // Browser module versions (#1689): an import of a module a dev edit
+        // bumped is served with `?t=<n>`, so a hot re-import loads it fresh.
+        versionOf: dev && state.browserVersions ? (f) => state.browserVersions.versionOf(f) : undefined,
       };
       // A `?v=<hash>` app-module request is content-addressed -> immutable
       // (#243); an un-fingerprinted request keeps the 1h fallback.
@@ -478,14 +487,27 @@ export async function handleCore(req, ctx) {
         // still current for the page the user is looking at (the #893 gap the
         // retention exists to close). Dev-only, and skipped for a prefetch,
         // which is not the user's view of anything.
+        //
+        // A render that reported a NEW error for this url is marked
+        // `x-webjs-dev-error: 1` (#1689), so the client router's in-place
+        // refresh leaves the last good page on screen under the overlay
+        // instead of applying the error page, and the fixing edit's refresh
+        // applies in place (Next's posture).
         const handler = dev && !isPrefetch
           ? async () => {
             const before = state.lastDevError;
-            const resp = await ssrPage(page.route, page.params, url, { ...ssrOpts, req });
+            let resp = await ssrPage(page.route, page.params, url, { ...ssrOpts, req });
             if (
               before && state.lastDevError === before
               && before.kind === 'render' && before.url === devErrorUrl
             ) state.lastDevError = null;
+            const after = state.lastDevError;
+            if (after && after !== before && after.kind === 'render' && after.url === devErrorUrl) {
+              try { resp.headers.set('x-webjs-dev-error', '1'); } catch {
+                resp = new Response(resp.body, resp);
+                resp.headers.set('x-webjs-dev-error', '1');
+              }
+            }
             return resp;
           }
           : () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });
@@ -753,14 +775,19 @@ export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
  *
  * @param {string} code
  * @param {string} abs
- * @param {{ moduleGraph: any, lazyComponentFiles?: Map<string, string[]>, appDir: string }} opts
+ * @param {{ moduleGraph: any, lazyComponentFiles?: Map<string, string[]>, appDir: string, versionOf?: (abs: string) => number }} opts
  * @returns {string}
  */
 function deferLazyImports(code, abs, opts) {
-  if (!opts.lazyComponentFiles || opts.lazyComponentFiles.size === 0) return code;
-  const bp = basePath();
-  const urlFor = (file) => withAssetHash(withBasePath(toUrlPath(file, opts.appDir), bp), bp);
-  return deferLazyImportsFromSource(code, abs, opts.moduleGraph, opts.lazyComponentFiles, resolveImport, opts.appDir, urlFor);
+  if (opts.lazyComponentFiles && opts.lazyComponentFiles.size > 0) {
+    const bp = basePath();
+    const urlFor = (file) => withAssetHash(withBasePath(toUrlPath(file, opts.appDir), bp), bp);
+    code = deferLazyImportsFromSource(code, abs, opts.moduleGraph, opts.lazyComponentFiles, resolveImport, opts.appDir, urlFor);
+  }
+  // Dev browser module versions (#1689), LAST: elision and lazy deferral match
+  // the specifiers as written, so they must see them unversioned.
+  if (opts.versionOf) code = versionImportSpecifiers(code, abs, opts.appDir, opts.versionOf);
+  return code;
 }
 
 /**

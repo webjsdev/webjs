@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { strongerVerdict } from '../dev-classify.js';
-import { createWatchIgnore } from './watch-ignore.js';
+import { mergeVerdicts } from '../dev-classify.js';
+import { createWatchIgnore, editorTempTarget } from './watch-ignore.js';
 import { watchTree } from './watch-tree.js';
+import { createPokeState } from './poke-state.js';
 import { relative, resolve } from 'node:path';
 import {
   hotRerunCapable, hotHostKey, getHotHost, setHotHost, deleteHotHost,
-  armHotSentinel, pokeHotSentinel, removeHotSentinel, needsHotReset, announceHotInPlace,
+  armHotSentinel, pokeHotSentinel, removeHotSentinel, needsHotReset, announceHotInPlace, requestSupervisorRestart,
 } from './hot-host.js';
 import { createServer as createHttp1Server } from 'node:http';
 import { createRequestHandler } from './handler.js';
@@ -32,6 +33,29 @@ const SERVER_VERSION = (() => {
  * did not see.
  */
 const POKE_FALLBACK_MS = 1500;
+
+/**
+ * The root files the `webjs dev` supervisor restarts this child for (#1689),
+ * as the pattern the supervisor hands over in `__WEBJS_DEV_RESTART_FILES`, or
+ * null when no supervisor will (`--no-hot`, an embedder, an older CLI). This
+ * watcher sees the same files, and a reload frame it sent for one would reload
+ * the tab a second time on top of the restart, which already reloads it.
+ * @returns {RegExp | null}
+ */
+export function supervisorRestartFile(env = process.env) {
+  if (env.__WEBJS_DEV_CHILD !== '1' || !env.__WEBJS_DEV_RESTART_FILES) return null;
+  try { return new RegExp(env.__WEBJS_DEV_RESTART_FILES); } catch { return null; }
+}
+
+/**
+ * An internal test seam (like `__WEBJS_DEV_CHILD`): how long a `bun --hot`
+ * re-run waits before taking its batch, so `test/bun/dev-late-rerun.mjs` can
+ * land it after the poke fallback every time, the race #1689 fixed. Unset is 0.
+ */
+function rerunDelayMs() {
+  const n = Number(process.env.__WEBJS_RERUN_DELAY_MS || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
 function debounce(fn, ms) {
   let t;
@@ -286,7 +310,9 @@ export async function startServer(opts) {
   // identically on both). Built before the handler so its onReload / onDevError
   // callbacks can fan out through it.
   // A Bun hot host, or a server outside the dev supervisor (`--no-hot`, an
-  // embedder), applies an edit in place; a supervised Node child is restarted.
+  // embedder), applies an edit in place. A supervised Node child does too once
+  // its handler has the module resolve hook (#1689), which is set below; only a
+  // Node without `module.registerHooks` is still restarted.
   const hub = new SseHub({ inPlace: dev && (!!hotKey || process.env.__WEBJS_DEV_CHILD !== '1') });
   // Pages render the stream's state into a meta tag (#1516), so the relay can
   // re-check a page against the server on every reconnect.
@@ -306,13 +332,14 @@ export async function startServer(opts) {
     hub.closeAll();
     throw e;
   }
+  // Node re-evaluates edited app modules in place (#1689), so its frames say so
+  // and the relay waits the short in-place window rather than a restart's.
+  if (app.hotModules) hub.inPlace = true;
 
   /** @type {AbortController | null} */
   let watcherAbort = null;
-  /** The strongest verdict of the edits a poked re-run has yet to apply. */
-  /** @type {import('../dev-classify.js').ReloadVerdict | null} */
-  let pokedVerdict = null;
-  /** @type {any} */ let pokeFallback = null;
+  /** The edits a poked re-run has yet to apply, and the fallback's late re-run (#1689). */
+  const poked = createPokeState({ fallbackMs: POKE_FALLBACK_MS });
   if (dev) {
     // Watch the app tree with Node's built-in `fs.watch` (no external dep):
     // `watchTree` (#1521) watches the root plus each non-ignored top-level dir,
@@ -323,34 +350,32 @@ export async function startServer(opts) {
     // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
     // the SQLite dev DB (db/dev.db) + db/migrations so a file the dev server itself writes never loops.
     // Live-reload classification (#1398). Several files can change inside one
-    // 50ms debounce window (80ms before #1575), so hold the STRONGEST verdict of the window and
-    // hand it to the rebuild. Same rule as the browser relay's cross-batch
-    // accumulation, for the same reason: a window mixing a page edit and a
-    // component edit is a component edit, and taking the last one would morph
-    // fresh markup onto the old component class.
-    /** @type {import('../dev-classify.js').ReloadVerdict | null} */
-    let pendingVerdict = null;
+    // 50ms debounce window (80ms before #1575), so merge the verdicts of the
+    // window and hand the result to the rebuild. Same rule as the browser
+    // relay's cross-batch accumulation, for the same reason: a window mixing a
+    // page edit and a component edit is a component edit, and taking the last
+    // one would morph fresh markup onto the old component class. The window's
+    // changed files ride along (#1689), so the rebuild can version exactly the
+    // modules the edit touched.
+    /** @type {{ verdict: import('../dev-classify.js').ReloadVerdict | null, changed: Set<string> }} */
+    const pending = { verdict: null, changed: new Set() };
     // Under `bun --hot`, a window that changed a module a `Bun.plugin` serves
     // pokes the re-run sentinel instead of rebuilding (#1575): the rebuild has
     // to wait for the registry reset, or the next request would still import
     // the stale module. The re-run (`hotRerun` below) rebuilds with the verdict.
     let pendingPoke = false;
     const rebuild = debounce(() => {
-      const v = pendingVerdict;
-      pendingVerdict = null;
+      const v = pending.verdict;
+      const files = [...pending.changed];
+      pending.verdict = null;
+      pending.changed.clear();
       if (pendingPoke) {
         pendingPoke = false;
-        pokedVerdict = strongerVerdict(pokedVerdict, v);
+        poked.poke(v, files, (pv, pf) => { if (pv) app.rebuild(pv, { changed: pf }); });
         pokeHotSentinel(app.appDir);
-        clearTimeout(pokeFallback);
-        pokeFallback = setTimeout(() => {
-          const pv = pokedVerdict;
-          pokedVerdict = null;
-          if (pv) app.rebuild(pv);
-        }, POKE_FALLBACK_MS);
         return;
       }
-      app.rebuild(v || undefined);
+      app.rebuild(v || undefined, { changed: files });
     }, 50);
     watcherAbort = new AbortController();
     // One warning per unwatchable path (#1521): an EACCES / ENOENT on a single
@@ -363,27 +388,55 @@ export async function startServer(opts) {
       warned.add(key);
       logger.warn(`file watcher skipped ${err && err.path ? err.path : 'a path'} (${err && err.code ? err.code : String(err)})`);
     };
+    let pollFallbackWarned = false;
+    const restartFile = supervisorRestartFile();
     const watchRoot = (root) => {
       // Output nothing serves (`*.log`, coverage/, ...) and the root's
       // `.gitignore` never reload the page: `npm run dev > dev.log` made every
       // log line a reload (watch-ignore.js).
       const unserved = createWatchIgnore(root);
       const close = watchTree(root, {
-        ignore: (rel) => shouldIgnoreWatchPath(rel) || unserved(rel),
+        // An editor temp file renamed over a real file is let through, and
+        // reported below as the file it saved (#1689): Bun's fs.watch names
+        // only the temp file for such a save.
+        ignore: (rel) => shouldIgnoreWatchPath(rel) || (unserved(rel) && !editorTempTarget(rel)),
         onEvent: (filename) => {
+          const target = editorTempTarget(filename);
+          if (target) {
+            if (unserved(target) || !existsSync(resolve(root, target))) return;
+            filename = target;
+          }
           // A regenerate output (#967) is a build product the server itself
           // writes on request; ignoring it stops a spurious rebuild + reload
           // (and a reload -> refetch -> recompile -> reload cycle), same as the
           // db/dev.db carve-out above. `app` exposes the check because `state`
           // lives in createRequestHandler's scope, not here.
           if (app.isRegenerateOutput(filename)) return;
-          pendingVerdict = strongerVerdict(pendingVerdict, app.classifyWatchPath(filename, root));
+          // The supervisor restarts the process for this one, and the restart
+          // is the reload; a frame from here would be a second one (#1689).
+          if (restartFile && root === app.appDir && restartFile.test(filename)) return;
+          // A module the CommonJS loader holds cannot be versioned, so the
+          // edit needs a fresh process (#1689): the supervisor restarts, and
+          // that restart is the reload, so no frame goes out from here.
+          if (restartFile && app.isCommonJsModule(resolve(root, filename))
+            && requestSupervisorRestart(relative(app.appDir, resolve(root, filename)))) return;
+          pending.verdict = mergeVerdicts(pending.verdict, app.classifyWatchPath(filename, root));
+          pending.changed.add(resolve(root, filename));
           if (hotKey && needsHotReset(filename, (f) => !app.needsRegistryReset(f, root))) pendingPoke = true;
           // A status wait (#1664) holds until the rebuild this event schedules.
           app.noteChange?.();
           rebuild();
         },
         onError: onWatchError,
+        // Out of inotify watches (#1689): the directory is polled instead, and
+        // the fix is printed once per process rather than per directory.
+        onFallback: (name, err) => {
+          if (pollFallbackWarned) return;
+          pollFallbackWarned = true;
+          const code = (err && err.code) || 'ENOSPC';
+          const what = name ? `${name}/` : 'the app root';
+          logger.warn(`[webjs] the file watch limit is reached (${code}), so ${what} is watched by polling every 1s. Raise it: sudo sysctl fs.inotify.max_user_watches=524288 (persist it in /etc/sysctl.d/).`);
+        },
       });
       watcherAbort.signal.addEventListener('abort', close, { once: true });
     };
@@ -436,21 +489,27 @@ export async function startServer(opts) {
          * then re-derive the analysis so it re-imports the app's modules (the
          * middleware, the components it primes) from that registry. A re-run a
          * poke asked for carries the verdict of the edits behind it and tells the
-         * browser; any other is silent, since the watcher already sent that
-         * edit's own reload frame.
+         * browser, and so does one that arrives after the poke's fallback
+         * already rebuilt against the old registry (#1689), so the tab picks up
+         * the fresh modules; any other is silent, since the watcher already
+         * sent that edit's own reload frame.
          */
         rerun: async () => {
           await armHotSentinel(app.appDir);
-          const pv = pokedVerdict;
-          pokedVerdict = null;
-          clearTimeout(pokeFallback);
-          await app.rebuild(pv || undefined, { notify: !!pv });
+          if (rerunDelayMs()) await new Promise((r) => setTimeout(r, rerunDelayMs()));
+          const { verdict: pv, changed: pf, notify } = poked.takeForRerun();
+          await app.rebuild(pv || undefined, { notify, changed: pf });
           return owned;
         },
         poke: () => pokeHotSentinel(app.appDir),
       });
       announceHotInPlace();
     }
+    // A Node child with the module resolve hook (#1689) tells the supervisor
+    // the same thing, so an app edit no longer restarts it; only the restart
+    // files (`instrumentation.*`, `env.*`, `.env`, `package.json`, a lockfile)
+    // still do.
+    if (app.hotModules) announceHotInPlace();
     return handle;
   } catch (e) {
     // The listener never came up (a taken port, #1527): stop what was started

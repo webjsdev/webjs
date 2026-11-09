@@ -123,8 +123,9 @@ export default function Page() {
 
 // The counterfactual. If the filename is dropped in the watcher again, or the
 // shipped closure is derived from the wrong set, this frame is identical to the
-// one above and the assertion fails.
-test('a COMPONENT edit rides a `reload` verdict, never a morph', async () => {
+// one above and the assertion fails. Since #1689 a component edit the tab can
+// apply in place is a `component` hot swap naming the module to re-import.
+test('a COMPONENT edit rides a `component` hot-swap verdict, never a morph', async () => {
   const appDir = scaffold();
   const v = await verdictForEdit(appDir, 'components/counter.js', `
 import { WebComponent, html } from '@webjsdev/core';
@@ -134,8 +135,27 @@ class Counter extends WebComponent({ count: Number }) {
 }
 Counter.register('my-counter');
 `);
+  assert.equal(v.v, 'component');
+  assert.equal(v.why, 'hot-swap');
+  assert.equal(v.by, 'components/counter.js');
+  assert.deepEqual(v.modules, ['/components/counter.js?t=1'], 'the versioned module the tab re-imports');
+});
+
+// A component edit the registered class cannot take (#1689) stays a full
+// reload, and the frame says why.
+test('a component CONSTRUCTOR edit rides a `reload` verdict naming the reason', async () => {
+  const appDir = scaffold();
+  const v = await verdictForEdit(appDir, 'components/counter.js', `
+import { WebComponent, html } from '@webjsdev/core';
+class Counter extends WebComponent({ count: Number }) {
+  constructor() { super(); this.count = 10; }
+  render() { return html\`<button @click=\${() => { this.count++; }}>\${this.count}</button>\`; }
+}
+Counter.register('my-counter');
+`);
   assert.equal(v.v, 'reload');
-  assert.equal(v.why, 'ships-to-browser');
+  assert.equal(v.why, 'constructor-changed');
+  assert.equal(v.by, 'components/counter.js');
 });
 
 // THE burst regression. A rebuild invalidates the lazy analysis, and nothing

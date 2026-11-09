@@ -17,7 +17,10 @@ to scaffold and run an app, which pulls this package in as a dependency.
   and it auto-rewrites into a type-safe RPC stub. webjs's built-in serializer on the wire keeps Date/Map/Set/BigInt/TypedArray/Blob/File/FormData/cycles all surviving.
 - **WebSockets**: export `WS` from `route.ts` and it becomes a WebSocket
   endpoint on the same path.
-- **Live reload** for dev.
+- **Dev hot reload** on Node and Bun: a page or layout edit refreshes in
+  place, a component edit hot-swaps the live class (its properties and
+  signals survive), a CSS edit swaps the stylesheet, and every full reload
+  logs why.
 - **Bare-specifier resolution** for npm packages via import maps,
   resolved through jspm.io at runtime (Rails 7 + importmap-rails
   posture). Browser fetches bundles directly from `ga.jspm.io` CDN;

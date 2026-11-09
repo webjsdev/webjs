@@ -52,9 +52,11 @@ import { clearJspmCache } from './vendor/jspm.js';
 import { clearLiveIntegrityCache } from './vendor/resolver.js';
 
 /**
- * Clear the resolved-importmap cache. Called on file-watcher rebuild
- * so newly-added bare imports trigger a fresh api.jspm.io/generate
- * call on the next request to populate the in-memory cache.
+ * Clear the resolved-importmap cache. A dev rebuild calls it only when the
+ * app's `package.json` changed, or when the caller named no changed files
+ * (#1689): the cache is keyed by the sorted install set and the SRI by url, so
+ * a newly-added bare import already misses it, and only a dependency version
+ * change can make a hit stale.
  */
 export function clearVendorCache() {
   clearJspmCache();

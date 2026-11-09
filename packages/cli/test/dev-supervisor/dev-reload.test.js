@@ -308,6 +308,56 @@ test('watchRestartPaths: root files, ignored paths, and a dir created later', ()
   }
 });
 
+// Review of #1689: vim's all-digit write probe is a FILE. A directory named by
+// digits is app source, so the supervisor's walker descends into it and an
+// edit there still restarts (or reloads) like any other.
+test('watchRestartPaths: an all-digit directory is watched, the 4913 probe is not (#1689)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'webjs-restart-watch-'));
+  try {
+    mkdirSync(join(root, 'app/blog/2024'), { recursive: true });
+    assert.equal(shouldIgnoreRestartPath(join('app', 'blog', '2024'), root), false);
+    assert.equal(shouldIgnoreRestartPath(join('app', '4913'), root), true);
+    const { fn, made } = fakeWatch();
+    const changes = [];
+    watchRestartPaths(root, {
+      dirs: ['app'], files: [],
+      ignore: (rel) => shouldIgnoreRestartPath(rel, root),
+      onChange: (p) => changes.push(p), onError: () => {}, watchFn: fn,
+    });
+    const appW = made.find((w) => w.path === join(root, 'app'));
+    if (needsDirWalker()) {
+      const dirW = made.find((w) => w.path === join(root, 'app/blog/2024'));
+      assert.ok(dirW, 'the digit directory is walked');
+      dirW.cb('change', 'page.ts');
+    } else {
+      appW.cb('change', join('blog', '2024', 'page.ts'));
+    }
+    appW.cb('rename', '4913');
+    assert.deepEqual(changes, [join('app', 'blog', '2024', 'page.ts')]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Review of #1689: a child that reloads in place still needs a restart for a
+// module the CommonJS loader holds, which no version reaches. It asks over
+// IPC; the request restarts for that path once, and nothing else changes.
+test('inPlaceRestarts: a child asking for a restart gets one for that path, once', async () => {
+  const { inPlaceRestarts, HOT_IN_PLACE_MESSAGE, HOT_RESTART_MESSAGE } = await import('../../lib/dev-reload.js');
+  const { planDevSupervisor } = await import('../../lib/dev-supervisor.js');
+  const r = inPlaceRestarts(planDevSupervisor({ isBun: false, argv: ['x'], noHot: false }));
+  assert.equal(r.onMessage({ webjs: HOT_IN_PLACE_MESSAGE }), null);
+  assert.equal(r.restartFor('lib/legacy.cjs'), false, 'an in-place child restarts for no app file by itself');
+  assert.equal(r.onMessage({ webjs: HOT_RESTART_MESSAGE, path: 'lib/legacy.cjs' }), 'lib/legacy.cjs', 'the request names its path');
+  assert.equal(r.restartFor('lib/legacy.cjs'), true, 'which then restarts');
+  assert.equal(r.restartFor('lib/legacy.cjs'), false, 'once');
+  assert.equal(r.restartFor('package.json'), true, 'restart files still restart');
+  r.onMessage({ webjs: HOT_RESTART_MESSAGE, path: 'lib/x.cjs' });
+  r.reset();
+  assert.equal(r.restartFor('lib/x.cjs'), true, 'a fresh child that never announced restarts for everything again');
+  assert.equal(r.onMessage({ webjs: HOT_RESTART_MESSAGE }), null, 'a request with no path is ignored');
+});
+
 test('isWatchError matches only errors from a watch syscall', () => {
   assert.equal(isWatchError(Object.assign(new Error('x'), { syscall: 'watch', code: 'EACCES' })), true);
   assert.equal(isWatchError(Object.assign(new Error('x'), { syscall: 'open', code: 'EACCES' })), false);
@@ -352,4 +402,22 @@ test('a db/ source edit restarts on Node, a SQLite write never does (#1664)', as
     'db/data/app.db', 'db/local.db-info', 'db/local.db-client_wal_index', 'db/legacy/connection.js', 'lib/db/x.ts']) {
     assert.equal(shouldIgnoreRestartPath(p), shouldIgnoreWatchPath(p), `the CLI and server agree on ${p}`);
   }
+});
+
+// #1689: an editor's temp file restarts nothing, and the CLI agrees with the
+// server watcher on every one of them and on the source next to them. The
+// corpus is the one `packages/server/test/dev/watch-ignore.test.js` checks.
+test('editor temp files never restart the dev server, and the server agrees (#1689)', async () => {
+  const { shouldIgnoreWatchPath } = await import('../../../server/src/dev/server.js');
+  const { isUnservedOutput } = await import('../../../server/src/dev/watch-ignore.js');
+  const server = (p) => shouldIgnoreWatchPath(p) || isUnservedOutput(p);
+  const temp = [
+    'app/4913', 'app/.#page.ts', 'app/#page.ts#', 'app/page.ts___jb_tmp___', 'app/page.ts___jb_old___',
+    'app/x.tmp', 'app/page.ts.swp', 'app/.page.ts.swo', 'app/page.ts.crswap', 'app/page.ts.kate-swp',
+    'app/.goutputstream-ABC123', 'app/~$doc.ts', 'app/page.ts~',
+  ];
+  const source = ['app/page.ts', 'app/2024/page.ts', 'app/[id]/page.ts', 'app/x.tmpl.ts', 'lib/swap.ts', 'public/v2.css', 'app/#hash.ts', 'components/jb_tmp.ts'];
+  for (const p of temp) assert.equal(shouldIgnoreRestartPath(p), true, p);
+  for (const p of source) assert.equal(shouldIgnoreRestartPath(p), false, p);
+  for (const p of [...temp, ...source]) assert.equal(shouldIgnoreRestartPath(p), server(p), `the CLI and server agree on ${p}`);
 });

@@ -153,7 +153,7 @@ function preloads(html) {
   return [...html.matchAll(/<link rel="modulepreload"[^>]*href="([^"]+)"/g)].map((m) => m[1]);
 }
 function bootOf(html) {
-  const m = html.match(/<script type="module"[^>]*>([\s\S]*?)<\/script>/);
+  const m = html.match(/<script type="module"(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/);
   return m ? m[1] : '';
 }
 

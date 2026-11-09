@@ -6,6 +6,7 @@
 - Why it is progressive-enhancement-safe: the worker registers only from JS, so the JavaScript-disabled baseline is unchanged.
 - How to enable it (the registration snippet in the root layout), what it caches, and the offline fallback.
 - Cache versioning tied to the deploy, updating the worker, and removing it.
+- Why `webjs dev` switches the worker off, and where to test offline behaviour instead.
 
 Read this when you want an offline experience or an asset cache in a WebJs app, or you see `public/sw.js` in a scaffold and want to know what it does. For CSP nonces see `built-ins.md`. For the root layout see `routing-and-pages.md`. For the content-hash `?v=` asset URLs it relies on see `built-ins.md`.
 
@@ -44,7 +45,7 @@ Registered from `/sw.js`, the worker's scope is the site root (`/`), so it sees 
 
   A `public/` asset is the exception, and it matters most here. Its URL is fingerprinted only when you mark it with `asset()` (`href=${asset('/public/app.css')}`, see `built-ins.md`). An un-marked `public/` URL is stable across deploys, so the worker keeps serving the CACHED copy and revalidates in the background, which means the first load after a deploy renders the OLD bytes. Do not rely on the worker's cache version to save you: it is derived from the deploy build id, which is a deploy fingerprint rather than a per-file content hash, so a deploy that only changes a `public/` file need not change it. Mark any `public/` asset whose bytes change with `asset()`.
 
-**Never cached:** non-GET requests (writes), cross-origin requests, the action RPC endpoint (`/__webjs/action/`), and the dev-only `/__webjs/events` (SSE) and `/__webjs/reload.js`. Keeping writes and RPC off the cache means the worker can never serve a stale mutation result or replay a POST, so correctness is unaffected whether the worker is active or not.
+**Never cached:** non-GET requests (writes), cross-origin requests, and every framework path under `/__webjs/` except the core runtime (`/__webjs/core/`) and vendor bundles (`/__webjs/vendor/`). That covers the action RPC endpoint (`/__webjs/action/`), the build probe (`/__webjs/version`), and the dev live-reload stream and client, which must always answer from the server. Keeping writes and RPC off the cache means the worker can never serve a stale mutation result or replay a POST, so correctness is unaffected whether the worker is active or not.
 
 ## The offline fallback page
 
@@ -57,7 +58,13 @@ The cache name is `webjs-<build>`, where `<build>` is the `?v=` query the regist
 1. the page registers `/sw.js?v=<new-build>`, a different worker URL, so the browser fetches and installs the new worker;
 2. the new worker's `activate` deletes every cache whose name is not the current `webjs-<new-build>`, evicting the prior deploy's cache.
 
-So a deploy refreshes the offline cache automatically, with no manual cache busting. Without a `?v=` (a dev registration, say), the cache name is `webjs-dev`.
+So a deploy refreshes the offline cache automatically, with no manual cache busting. Without a `?v=`, the cache name is `webjs-dev`.
+
+## Under `webjs dev` the worker is switched off
+
+A caching worker on a dev origin makes every edit look like it did nothing, because it keeps serving the cached modules and stylesheets. So under `webjs dev` the `/sw.js` url never serves your `public/sw.js` (#1689). It answers with a kill switch instead: a worker that takes over at once, deletes every cache it can see, unregisters itself and claims the open tabs, so the next request goes to the network. It has no `fetch` handler, so it never answers a request even in the moment before it unregisters. It is served `no-store` with `Service-Worker-Allowed: /`, so it replaces a worker registered at the root scope, for example one left behind by a `webjs start` on the same port. The console logs `[webjs] the service worker is off under webjs dev; test offline behaviour with npm run start`.
+
+Your registration snippet needs no dev guard. Test offline behaviour against `npm run start`, which serves your `public/sw.js` unchanged.
 
 ## Updating the worker
 
@@ -75,6 +82,6 @@ Or rely on the worker's own update lifecycle to phase it out.
 
 ## Verifying it
 
-After adding the registration snippet, load the app, then open the browser devtools Application panel and confirm a worker is registered and activated for the origin. To exercise the offline path, visit a page (so it caches), then toggle offline in devtools and reload: a previously visited page should serve from cache, and an unvisited URL should render `public/offline.html`. Confirm the JS-off baseline is unchanged by disabling JavaScript and checking that no worker registers and navigation still works as a plain server-rendered app.
+After adding the registration snippet, run the app with `npm run start` (under `webjs dev` the worker is switched off, see above), load it, then open the browser devtools Application panel and confirm a worker is registered and activated for the origin. To exercise the offline path, visit a page (so it caches), then toggle offline in devtools and reload: a previously visited page should serve from cache, and an unvisited URL should render `public/offline.html`. Confirm the JS-off baseline is unchanged by disabling JavaScript and checking that no worker registers and navigation still works as a plain server-rendered app.
 
 Do not register the worker until the offline experience is something you actually want. Once registered, a worker changes caching for returning visitors: navigations stay network-first (an online visitor gets fresh server HTML), assets are served stale-while-revalidate, and the cached page shell is served only when the visitor is offline, until a new deploy build id evicts the cache.

@@ -33,9 +33,15 @@
  * `activate` deletes every cache that is not the current version. The cache
  * name is derived from that `?v=` below.
  *
- * NEVER cached: non-GET requests, cross-origin requests, the action RPC
- * endpoint (/__webjs/action/), the dev live-reload SSE (/__webjs/events) and
- * dev reload client (/__webjs/reload.js).
+ * NEVER cached: non-GET requests, cross-origin requests, and every framework
+ * path under /__webjs/ except the core runtime (/__webjs/core/) and downloaded
+ * vendor bundles (/__webjs/vendor/). That covers the action RPC endpoint, the
+ * build probe (/__webjs/version), and the dev live-reload stream, client and
+ * worker, which must always answer from the server.
+ *
+ * Under `webjs dev` this file is not served at all: /sw.js answers with a kill
+ * switch that clears the caches and unregisters, so test offline behaviour
+ * with `npm run start`.
  */
 
 const BUILD = new URL(self.location.href).searchParams.get('v') || 'dev';
@@ -62,9 +68,8 @@ self.addEventListener('activate', (event) => {
 
 /** Decide whether a GET request to a same-origin path is a cacheable asset. */
 function isCacheableAsset(pathname) {
-  if (pathname.startsWith('/__webjs/action/')) return false; // RPC, never cache
-  if (pathname === '/__webjs/events' || pathname === '/__webjs/reload.js') return false; // dev
   if (pathname.startsWith('/__webjs/core/') || pathname.startsWith('/__webjs/vendor/')) return true;
+  if (pathname.startsWith('/__webjs/')) return false; // RPC, probes, dev reload: always the server
   return /\.(?:js|mjs|ts|css|woff2?|png|jpe?g|svg|webp|gif|ico|json|map)$/.test(pathname);
 }
 

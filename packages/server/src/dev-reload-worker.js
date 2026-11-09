@@ -67,13 +67,13 @@ export const RELOAD_MAX_HOLD_MS = 5000;
  * component edit is a component edit, and morphing it would leave the old
  * component class running against fresh markup.
  */
-export const VERDICT_STRENGTH = ['reload', 'shell', 'page'];
+export const VERDICT_STRENGTH = ['reload', 'shell', 'page', 'component', 'css'];
 
 /**
  * Resolve an SSE `reload` frame's `data` to a verdict name.
  *
  * ANY failure resolves to `reload`: an absent payload, malformed JSON, a
- * non-object, a `v` outside the three literals, or the legacy bare `data: now`.
+ * non-object, a `v` outside the known names, or the legacy bare `data: now`.
  * That is what makes the wire-format change safe in both directions between a
  * long-running browser tab and a restarted server, since the worst a skew can
  * produce is the full reload that was the behaviour before this existed.
@@ -87,6 +87,32 @@ export function parseVerdict(data) {
     if (o && typeof o === 'object' && VERDICT_STRENGTH.indexOf(o.v) !== -1) return o.v;
   } catch (_) { /* fall through to the fail-safe */ }
   return 'reload';
+}
+
+/**
+ * Resolve an SSE `reload` frame's `data` to the whole verdict the relay posts
+ * to a tab (#1689): `{ v, by, why, modules, css }`, every field always present
+ * so a tab never has to guess. The same fail-safe as `parseVerdict`: anything
+ * it cannot read is `{ v: 'reload', why: 'unreadable-frame' }`, and a field of
+ * the wrong type falls back to its empty value rather than failing the frame.
+ *
+ * @param {string} data
+ * @returns {{ v: string, by: string, why: string, modules: string[], css: boolean }}
+ */
+export function parseReloadFrame(data) {
+  try {
+    const o = JSON.parse(data);
+    if (o && typeof o === 'object' && VERDICT_STRENGTH.indexOf(o.v) !== -1) {
+      return {
+        v: o.v,
+        by: typeof o.by === 'string' ? o.by : '',
+        why: typeof o.why === 'string' ? o.why : '',
+        modules: Array.isArray(o.modules) ? o.modules.filter((m) => typeof m === 'string') : [],
+        css: o.css === true,
+      };
+    }
+  } catch (_) { /* fall through to the fail-safe */ }
+  return { v: 'reload', by: '', why: 'unreadable-frame', modules: [], css: false };
 }
 
 /** First reconnect wait after the stream drops (#1507), doubled per failure. */
@@ -209,8 +235,13 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
   /** @type {any} */ let quietTimer = null;
   /** @type {any} */ let capTimer = null;
 
-  /** @type {string} the strongest verdict seen in the CURRENT batch (#1398) */
-  let batchVerdict = 'page';
+  /**
+   * The CURRENT batch's merged verdict (#1398, #1689): the strongest `v` with
+   * its `by` / `why`, the union of every `modules` list and whether any frame
+   * set `css`. Null between batches.
+   * @type {{ v: string, by: string, why: string, modules: Set<string>, css: boolean } | null}
+   */
+  let batch = null;
   /** Whether the batch reloads every tab, or only the stale ones in `batchPorts` (#1516). */
   let batchAll = false;
   /** @type {Set<any>} tabs whose page fell behind, reloaded on their own */
@@ -221,9 +252,9 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
   function emitReload() {
     if (quietTimer !== null) { timers.clearTimeout(quietTimer); quietTimer = null; }
     if (capTimer !== null) { timers.clearTimeout(capTimer); capTimer = null; }
-    const v = batchVerdict;
-    batchVerdict = 'page';   // a fresh batch starts at the weakest verdict
-    const msg = { type: 'reload', verdict: v };
+    const b = batch || { v: 'reload', by: '', why: 'no-verdict', modules: new Set(), css: false };
+    batch = null;   // a fresh batch starts from nothing
+    const msg = { type: 'reload', verdict: { v: b.v, by: b.by, why: b.why, modules: Array.from(b.modules).sort(), css: b.css } };
     const targets = batchAll ? Array.from(ports.keys()) : Array.from(batchPorts).filter((p) => ports.has(p));
     batchAll = false;
     batchPorts.clear();
@@ -236,6 +267,9 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
     }
   }
 
+  /** The reload a tab gets when its page is behind the server (#1516). */
+  const PAGE_BEHIND = { v: 'reload', by: '', why: 'page-behind' };
+
   /** Strength rank; an unrecognised name ranks strongest, so it can only ever
    * over-reload. @param {string} v */
   function rank(v) {
@@ -244,12 +278,27 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
   }
 
   /**
-   * @param {string} verdict
+   * Fold one signal into the batch: the strongest `v` wins with its `by` /
+   * `why` (the earlier one on a tie), `modules` unions and `css` ORs, the same
+   * rule as `mergeVerdicts` on the server.
+   * @param {{ v: string, by?: string, why?: string, modules?: string[], css?: boolean }} verdict
+   */
+  function mergeIntoBatch(verdict) {
+    const v = VERDICT_STRENGTH[rank(verdict.v)];
+    if (batch === null) batch = { v, by: verdict.by || '', why: verdict.why || '', modules: new Set(), css: false };
+    else if (rank(v) < rank(batch.v)) { batch.v = v; batch.by = verdict.by || ''; batch.why = verdict.why || ''; }
+    if (verdict.modules) for (const m of verdict.modules) batch.modules.add(m);
+    if (verdict.css) batch.css = true;
+  }
+
+  /**
+   * @param {{ v: string, by?: string, why?: string, modules?: string[], css?: boolean }} verdict
    * @param {any} [port]  reload only this tab (its page fell behind); omitted, every tab
+   * @param {boolean} [inPlace]  the signal came from a server that reloads in place
    */
   function requestReload(verdict, port, inPlace) {
     if (port === undefined) batchAll = true; else batchPorts.add(port);
-    if (rank(verdict) < rank(batchVerdict)) batchVerdict = VERDICT_STRENGTH[rank(verdict)];
+    mergeIntoBatch(verdict);
     // One restart signal anywhere in the batch keeps the long window (#1575).
     if (!inPlace) batchRestart = true;
     if (quietTimer !== null) timers.clearTimeout(quietTimer);
@@ -278,7 +327,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
   // Reload every tab whose page is behind what the server reports now (#1516).
   function checkPages() {
     for (const [p, page] of pages) {
-      if (pageIsStale(page, lastBoot, lastSeq)) requestReload('reload', p);
+      if (pageIsStale(page, lastBoot, lastSeq)) requestReload(PAGE_BEHIND, p);
     }
   }
 
@@ -297,7 +346,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
       touch();
       const h = parseHello(e.data);
       if (lastBoot !== null && (h.boot !== lastBoot || (h.seq !== null && lastSeq !== null && h.seq !== lastSeq))) {
-        requestReload('reload');
+        requestReload({ v: 'reload', by: '', why: h.boot !== lastBoot ? 'server-restarted' : 'missed-update' });
       }
       lastBoot = h.boot;
       lastSeq = h.seq;
@@ -308,7 +357,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
       lastError = null;
       const n = reloadSeq(e.data);
       if (n !== null) lastSeq = n;
-      requestReload(parseVerdict(e.data), undefined, frameInPlace(e.data));
+      requestReload(parseReloadFrame(e.data), undefined, frameInPlace(e.data));
     });
     es.addEventListener('webjs-error', (e) => { lastError = e.data; fanout({ type: 'webjs-error', data: e.data }); });
     // The stream dropped (a restarting server, a network blip, a host that
@@ -348,7 +397,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
         // out reload catches up, and again on every hello.
         if (typeof d.boot === 'string') {
           pages.set(port, { boot: d.boot, seq: typeof d.seq === 'number' ? d.seq : null });
-          if (pageIsStale(pages.get(port), lastBoot, lastSeq)) requestReload('reload', port);
+          if (pageIsStale(pages.get(port), lastBoot, lastSeq)) requestReload(PAGE_BEHIND, port);
         }
         return;
       }

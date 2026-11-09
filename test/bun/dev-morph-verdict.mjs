@@ -1,7 +1,9 @@
 /**
- * Cross-runtime dev live-reload VERDICT test (#1398): start `webjs dev` under
- * WHICHEVER runtime runs this file, edit a page and then a component, and
- * assert the SSE `reload` frame carries the right classification on both. Run
+ * Cross-runtime dev live-reload VERDICT test (#1398, #1689): start `webjs dev`
+ * under WHICHEVER runtime runs this file, edit a page and then a component, and
+ * assert the SSE `reload` frame carries the right classification on both
+ * (`page` for the page, `component` for a hot-swappable component edit,
+ * `reload` for a constructor edit the hot swap refuses). Run
  * under both:
  *
  *   node test/bun/dev-morph-verdict.mjs
@@ -15,13 +17,14 @@
  * of thing a transport can chunk or re-frame differently, so the payload is
  * asserted byte-for-byte identical on both.
  *
- * `--no-hot` is load-bearing, and a future reader should not assume this covers
- * `webjs dev` as users run it on Node. It makes `planDevSupervisor` return
- * `{ mode: 'inline' }`, so the server stays in THIS process instead of being
- * re-exec'd under `node --watch`. That in-process path is the only one that can
- * carry a verdict at all: a `node --watch` restart replaces the process, so
- * nothing survives to classify and the browser learns of the edit only through
- * a changed boot id, which is unconditionally a full reload.
+ * `--no-hot` makes `planDevSupervisor` return `{ mode: 'inline' }`, so the
+ * server runs in THIS process and the test reads its frames directly. Since
+ * #1689 the supervised child on Node also survives an edit (the module resolve
+ * hook re-evaluates the edited chain in place), so it carries the same
+ * verdicts; that path is covered by `test/bun/dev-hot-server-fresh.mjs` and the
+ * dev-morph e2e. Only a restart file (`.env`, `package.json`, a lockfile,
+ * `instrumentation.*`, `env.*`) still replaces the process, and the browser
+ * then learns of the edit through a changed boot id, a full reload.
  *
  * A plain assert script (not node:test) so the SAME file runs on both runtimes;
  * it exits non-zero on failure and spawns the real CLI via the current
@@ -33,6 +36,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseReloadFrame } from '../../packages/server/src/dev-reload-worker.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../..');
@@ -124,6 +128,8 @@ class Counter extends WebComponent({ count: Number }) {
 }
 Counter.register('my-counter');
 `);
+  mkdirSync(join(dir, 'public'), { recursive: true });
+  writeFileSync(join(dir, 'public/x.css'), 'body { color: black; }\n');
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: 'morph-verdict', type: 'module', imports: { '#*': './*' },
   }));
@@ -144,10 +150,17 @@ Counter.register('my-counter');
   const page = await verdictForEdit('app/page.ts', "import { html } from '@webjsdev/core';\nimport '../components/counter.ts';\nexport default () => html`<main>B_EDITED<my-counter></my-counter></main>`;\n");
   assert.equal(page.v, 'page', `a page edit is morphable on ${runtime}, got ${JSON.stringify(page)}\n--- server log ---\n${log}`);
   assert.equal(page.by, 'app/page.ts', `the frame names the changed file on ${runtime}`);
+  // The relay reads the frame into the object it posts to a tab (#1689). A page
+  // edit carries no modules and no stylesheet flag, so the tab gets empty ones,
+  // identically on both transports.
+  assert.deepEqual(parseReloadFrame(JSON.stringify(page)), { v: 'page', by: 'app/page.ts', why: 'page-module', modules: [], css: false },
+    `the relay reads the page frame into the full verdict object on ${runtime}`);
 
-  // The counterfactual direction: a component edit must stay a full reload,
-  // because `customElements.define` is once-per-tag and a morph would apply new
-  // markup wired to the old class.
+  // The counterfactual direction: a component edit is never a morph, because
+  // `customElements.define` is once-per-tag and a morph would apply new markup
+  // wired to the old class. Since #1689 it is a `component` hot swap: the tab
+  // re-imports the versioned module the frame names and patches the registered
+  // class in place.
   const comp = await verdictForEdit('components/counter.ts', `
 import { WebComponent, html } from '@webjsdev/core';
 class Counter extends WebComponent({ count: Number }) {
@@ -156,8 +169,34 @@ class Counter extends WebComponent({ count: Number }) {
 }
 Counter.register('my-counter');
 `);
-  assert.equal(comp.v, 'reload', `a component edit reloads on ${runtime}, got ${JSON.stringify(comp)}\n--- server log ---\n${log}`);
-  assert.equal(comp.why, 'ships-to-browser', `and for the reachability reason on ${runtime}`);
+  assert.equal(comp.v, 'component', `a component edit hot-swaps on ${runtime}, got ${JSON.stringify(comp)}\n--- server log ---\n${log}`);
+  assert.equal(comp.why, 'hot-swap', `for the hot-swap reason on ${runtime}`);
+  assert.equal(comp.by, 'components/counter.ts', `naming the edited file on ${runtime}`);
+  assert.deepEqual(comp.modules, ['/components/counter.ts?t=1'], `listing the versioned module to re-import on ${runtime}`);
+  assert.deepEqual(parseReloadFrame(JSON.stringify(comp)), { v: 'component', by: 'components/counter.ts', why: 'hot-swap', modules: ['/components/counter.ts?t=1'], css: false },
+    `the relay reads the component frame into the full verdict object on ${runtime}`);
+
+  // And an edit the registered class cannot take stays a full reload with its
+  // reason (#1689): the native registry keeps constructing with the old
+  // constructor.
+  const ctor = await verdictForEdit('components/counter.ts', `
+import { WebComponent, html } from '@webjsdev/core';
+class Counter extends WebComponent({ count: Number }) {
+  constructor() { super(); this.count = 10; }
+  render() { return html\`<button @click=\${() => { this.count += 2; }}>\${this.count}</button>\`; }
+}
+Counter.register('my-counter');
+`);
+  assert.equal(ctor.v, 'reload', `a constructor edit reloads on ${runtime}, got ${JSON.stringify(ctor)}`);
+  assert.equal(ctor.why, 'constructor-changed', `naming the reason on ${runtime}`);
+
+  // A stylesheet the browser does not hold as a module swaps in place (#1689):
+  // the tab re-requests its sheets, with no reload and no re-render.
+  const css = await verdictForEdit('public/x.css', 'body { color: red; }\n');
+  assert.deepEqual({ v: css.v, by: css.by, why: css.why, css: css.css }, { v: 'css', by: 'public/x.css', why: 'stylesheet', css: true },
+    `a public/ stylesheet edit is a css swap on ${runtime}\n--- server log ---\n${log}`);
+  assert.deepEqual(parseReloadFrame(JSON.stringify(css)), { v: 'css', by: 'public/x.css', why: 'stylesheet', modules: [], css: true },
+    `the relay reads the css frame into the full verdict object on ${runtime}`);
 
   console.log(`OK  the dev reload frame carries the change verdict on ${runtime} (#1398)`);
 } finally {

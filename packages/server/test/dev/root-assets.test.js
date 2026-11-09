@@ -40,7 +40,8 @@ for (const dev of [true, false]) {
     assert.match(res.headers.get('content-type') || '', /javascript/, 'served as JS');
     assert.equal(res.headers.get('service-worker-allowed'), '/',
       '/sw.js opts into the root scope');
-    assert.match(await res.text(), /addEventListener/, 'body is the worker source');
+    // Under dev the root worker is the kill switch (#1689, dev-service-worker.test.js).
+    assert.match(await res.text(), dev ? /switched off/ : /addEventListener/, 'body is the worker source');
   });
 
   test(`/offline.html serves public/offline.html at the site root (dev=${dev})`, async () => {

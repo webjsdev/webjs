@@ -164,3 +164,26 @@ test('failFastOnPortInUse passes a started server through and rethrows other err
   assert.equal(await failFastOnPortInUse(Promise.resolve(handle)), handle);
   await assert.rejects(failFastOnPortInUse(Promise.reject(new Error('boom'))), /boom/);
 });
+
+// #1689: Bun loads the app's `.env` files into process.env before any code
+// runs, so the dev child's "shell env" snapshot held the pre-edit values and a
+// child restarted for a `.env` edit kept them. On Bun those values are dropped.
+import { shellEnvOf } from '../../lib/port.js';
+
+test('shellEnvOf drops the values Bun loaded from the .env files, and only on Bun', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-shell-env-'));
+  try {
+    writeFileSync(join(dir, '.env'), 'GREETING=a\nSHARED=file\n');
+    writeFileSync(join(dir, '.env.development'), 'MODE_VAR=dev\n');
+    writeFileSync(join(dir, '.env.local'), 'LOCAL_VAR=l\n');
+    const env = { PATH: '/bin', GREETING: 'a', SHARED: 'shell', MODE_VAR: 'dev', LOCAL_VAR: 'l' };
+    const bun = shellEnvOf(env, dir, true);
+    assert.deepEqual(bun, { PATH: '/bin', SHARED: 'shell' },
+      'a value the files set is dropped; a shell value that differs from the file is kept');
+    assert.deepEqual(shellEnvOf(env, dir, false), env, 'Node gives the CLI the shell env, so nothing is dropped');
+    assert.notEqual(shellEnvOf(env, dir, false), env, 'a copy, never the live object');
+    assert.deepEqual(shellEnvOf({ A: '1' }, join(dir, 'missing'), true), { A: '1' }, 'no .env files, nothing dropped');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

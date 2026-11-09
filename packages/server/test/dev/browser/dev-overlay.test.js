@@ -16,6 +16,7 @@ import {
   syncDevOverlayToLocation,
   installDevOverlayNavSync,
   markDevOverlayNavStart,
+  dismissDevOverlayCoveredBy,
 } from '../../../src/dev-overlay.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
@@ -337,5 +338,45 @@ suite('dev error overlay URL scope (#1047)', () => {
     document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: HERE } }));
     assert.ok(overlay(), 'no sync runs after uninstall');
     teardown();
+  });
+});
+
+// Review of #1689: a component hot swap re-renders nothing on the server, so
+// nothing re-raises an overlay it took down. It may dismiss only what the swap
+// settled, and the reload client calls this with the swapped modules' paths
+// plus the edited file.
+suite('dev error overlay after a component hot swap (#1689)', () => {
+  const overlay = () => document.querySelector('[data-webjs-error-overlay]');
+  const HERE = location.pathname + location.search;
+  teardown(() => {
+    dismissDevOverlay();
+    document.querySelectorAll('[data-webjs-error-overlay]').forEach((e) => e.remove());
+  });
+
+  test('an unrelated ts-strip overlay stays up', () => {
+    renderDevOverlay({ kind: 'ts-strip', message: 'strip failed', file: '/srv/app/lib/broken.ts' });
+    assert.equal(dismissDevOverlayCoveredBy(['/components/counter.ts', '/components/label.ts']), false);
+    assert.ok(overlay(), 'the still-current error is kept');
+  });
+
+  test('this page\'s render error stays up when the swap is about another file', () => {
+    renderDevOverlay({ kind: 'render', message: 'boom', file: '/srv/app/app/page.ts', url: HERE }, HERE);
+    dismissDevOverlayCoveredBy(['/components/counter.ts']);
+    assert.ok(overlay());
+  });
+
+  test('an overlay about a swapped module or the edited file comes down', () => {
+    renderDevOverlay({ kind: 'ts-strip', message: 'strip failed', file: '/srv/app/components/label.ts' });
+    assert.equal(dismissDevOverlayCoveredBy(['/components/counter.ts', '/components/label.ts']), true);
+    assert.equal(overlay(), null, 'the fixed file\'s overlay goes');
+    renderDevOverlay({ kind: 'render', message: 'boom', file: '/srv/app/components/counter.ts', url: HERE }, HERE);
+    dismissDevOverlayCoveredBy(['/components/counter.ts']);
+    assert.equal(overlay(), null);
+  });
+
+  test('a rebuild overlay comes down, since the rebuild behind the swap succeeded', () => {
+    renderDevOverlay({ kind: 'rebuild', message: 'rebuild failed' });
+    assert.equal(dismissDevOverlayCoveredBy(['/components/counter.ts']), true);
+    assert.equal(overlay(), null);
   });
 });

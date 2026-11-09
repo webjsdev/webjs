@@ -4,7 +4,7 @@ import { registerBunAppSource } from './bun-app-source.js';
 import { evictPoisonedBunTranspilerCache } from '../bun-transpiler-cache.js';
 import { serverRuntime } from '../listener-core.js';
 import { createHash } from 'node:crypto';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 // Server-side `.ts` imports are handled natively by Node 24+'s default
 // type-stripping (`process.features.typescript === 'strip'`) or by Bun. The
@@ -16,13 +16,19 @@ import { generateRouteTypes } from '../route-types.js';
 import { setClientRouterEnabled, setMetadataIconRoutes } from '../ssr.js';
 import {
   buildActionIndex,
+  isServerFile,
+  hasUseServerDirective,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
+import { installEsmHotHooks, installBunModuleVersions, isServedModule, bumpModuleVersions, movedServedModules, diskStamp, isCommonJsModule } from './esm-hot-hooks.js';
+import { createBrowserVersions, shippedImporters } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
 import { readRegenerateRules, isRegenerateOutputPath } from '../dev-regenerate.js';
-import { classifyChangedPath } from '../dev-classify.js';
-import { ensureStripper } from '../ts-strip.js';
+import { classifyChangedPath, mergeVerdicts } from '../dev-classify.js';
+import { ensureStripper, stripTypeScript } from '../ts-strip.js';
+import { hotSignature, findHotBoundaries, primeHotBaselines } from '../dev-hot-classify.js';
+import { toUrlPath } from '../ssr/preloads.js';
 import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
@@ -35,13 +41,13 @@ import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPi
 import { browserEntryFiles } from '../browser-entries.js';
 import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
-import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
+import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles, hasModuleScopeSideEffect } from '../component-elision.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
 import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
-import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl, setDevModuleVersions } from '../asset-hash.js';
 import { bumpBuildEpoch } from '../build-epoch.js';
 import { hintedBootModules } from '../ssr/shipped-modules.js';
 import { createRetryBackoff } from './vendor-retry.js';
@@ -52,7 +58,7 @@ import {
   applyTrailingSlash,
 } from '../redirects.js';
 import { applyConditionalGet } from '../conditional-get.js';
-import { commitHtmlCache, setAppSourceFingerprint } from '../html-cache.js';
+import { commitHtmlCache, revalidateAll, setAppSourceFingerprint } from '../html-cache.js';
 import { buildDevErrorFrame } from '../dev-error.js';
 import { isControlFlowThrow } from '../action-error.js';
 import { createDevStatus } from './dev-status.js';
@@ -354,6 +360,16 @@ export async function createRequestHandler(opts) {
   // `webjs.seed` switch. Action identity (#1155) rides the same hook, and it is
   // what a bound `<form action=${action}>` resolves through, so gating the hook
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
+  //
+  // Before it, in dev on Node, the resolve hook that versions edited app
+  // modules (#1689), so a rebuild re-evaluates an edit and its importers in
+  // this process instead of the supervisor restarting it. Same timing rule: it
+  // has to be in place before the first app module is imported. Module URLs
+  // are realpaths, so a symlinked app dir registers both forms.
+  const hotModules = dev && serverRuntime() === 'node' && installEsmHotHooks(appDir);
+  if (hotModules) {
+    try { const real = realpathSync(appDir); if (real !== appDir) installEsmHotHooks(real); } catch { /* appDir only */ }
+  }
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
@@ -372,10 +388,17 @@ export async function createRequestHandler(opts) {
   }
   // Bun under `bun --hot` serves a replaced file's old source forever (#1575):
   // load app modules through a plugin that reads them fresh. After the
-  // source-locations plugin, so that one wins when it is on.
-  if (dev && serverRuntime() === 'bun') {
+  // source-locations plugin, so that one wins when it is on. The plugins also
+  // stamp the module versions (#1689), Bun's stand-in for the Node resolve
+  // hook, so an edit re-evaluates its chain without a registry reset.
+  const bunVersions = dev && serverRuntime() === 'bun';
+  if (bunVersions) {
     registerBunAppSource(appDir);
-    try { const real = realpathSync(appDir); if (real !== appDir) registerBunAppSource(real); } catch { /* appDir only */ }
+    installBunModuleVersions(appDir);
+    try {
+      const real = realpathSync(appDir);
+      if (real !== appDir) { registerBunAppSource(real); installBunModuleVersions(real); }
+    } catch { /* appDir only */ }
   }
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
@@ -531,6 +554,24 @@ export async function createRequestHandler(opts) {
     graphFiles: new Set(),
     /** @type {Set<string>} */
     pageFiles: new Set(),
+    // Component files from the scan, for the hot-swap boundary walk (#1689).
+    /** @type {Set<string>} */
+    componentFiles: new Set(),
+    // Browser module versions (#1689): a rebuild bumps the edited shipped
+    // files and their importers, and the served source of every app module
+    // versions its imports of them. Never cleared, so a version only grows.
+    browserVersions: createBrowserVersions(),
+    // The hot-swap signature (`dev-hot-classify.js`) of each shipped component
+    // file as the open tabs hold it (#1689): set from disk at the first
+    // analysis, then from every edit's source, since a tab applies every
+    // verdict. Never cleared.
+    /** @type {Map<string, import('../dev-hot-classify.js').HotSignature | Promise<import('../dev-hot-classify.js').HotSignature | null>>} */
+    hotSignatures: new Map(),
+    // The disk stamp of every shipped module as the last analysis found it, on
+    // Bun only (#1689): a rebuild adds each one that moved since to its changed
+    // files, since Bun's `fs.watch` can drop the event (see `missedChanges`).
+    /** @type {Map<string, string>} */
+    shippedStamps: new Map(),
     // Transformed-source cache (stripped TS + applied elision). Per-handler,
     // NOT module-global: the cached bytes bake in THIS handler's elision
     // verdict, so two handlers for the same app with different elision
@@ -562,6 +603,10 @@ export async function createRequestHandler(opts) {
   // the most recently booted one, which is the same scope the asset-url
   // provider already has.
   setFormActionResolver((fn) => (state.actionIndex ? resolveActionIdentity(state.actionIndex, fn) : null));
+  // The boot script, the modulepreload hints and the lazy-loader map name a
+  // bumped module with the same `?t=` its importers' rewritten specifiers
+  // carry (#1689), so a fresh document holds one instance of it, not two.
+  setDevModuleVersions(dev ? (abs) => state.browserVersions.versionOf(abs) : null);
 
   /**
    * Report a dev error (#264): build a frame and push it to the open tab via
@@ -721,6 +766,14 @@ export async function createRequestHandler(opts) {
               state.shippedFiles = reachableFromEntries(state.moduleGraph, shippedEntries, appDir);
               state.graphFiles = seenFilesFor(state.moduleGraph);
               state.pageFiles = new Set((state.routeTable.pages || []).map((p) => p.file).filter(Boolean));
+              state.componentFiles = new Set(components.map((c) => c.file));
+              if (bunVersions) state.shippedStamps = new Map([...state.shippedFiles].map((f) => [f, diskStamp(f)]));
+              // The hot-swap baseline of every shipped component the tabs
+              // have not had a signature recorded for yet (#1689), read in
+              // the background: only a later edit needs it, so the first
+              // request does not wait on it (`hotVerdict` awaits it).
+              primeHotBaselines([...state.componentFiles].filter((f) => state.shippedFiles.has(f)),
+                state.hotSignatures, readHotSignature);
             }
             // Fold the elision verdict into app-module content hashes (#243): an
             // app module's served body is elision-transformed, so a verdict flip
@@ -981,12 +1034,14 @@ export async function createRequestHandler(opts) {
    *   classification of the change that triggered this rebuild (#1398). Absent
    *   (an embedded host calling `rebuild()`, or any caller with no filename to
    *   classify) means a full reload, which is the fail-safe default.
-   * @param {{ notify?: boolean }} [rebuildOpts] `notify: false` re-derives
-   *   without a reload frame (a `bun --hot` registry reset, #1575).
+   * @param {{ notify?: boolean, changed?: string[] }} [rebuildOpts] `notify: false`
+   *   re-derives without a reload frame (a `bun --hot` registry reset, #1575).
+   *   `changed` lists the absolute paths the watcher saw change (#1689); empty
+   *   (an embedder's bare `rebuild()`) means nothing is known to have changed.
    */
-  async function rebuild(verdict, { notify = true } = {}) {
+  async function rebuild(verdict, { notify = true, changed = [] } = {}) {
     devStatus?.rebuildStarted();
-    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify)).then(() => {
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify, changed)).then(() => {
       // The recorded errors described the build this one replaced.
       devStatus?.rebuildFinished();
       devRecorded = new WeakSet();
@@ -1002,12 +1057,77 @@ export async function createRequestHandler(opts) {
   }
 
   /**
+   * The rebuild's verdict and changed files plus every served or shipped module
+   * whose disk stamp moved without the watcher reporting it (Bun only). Each
+   * extra file is classified against the analysis the tabs hold, the same
+   * ladder the watcher applies, and its stamp is updated so it is reported
+   * once. Only modules in the directories of the changed files are checked:
+   * the event Bun drops is a sibling written in the same directory, and a
+   * synchronous stat over every module would block the loop on each save.
+   * @param {import('../dev-classify.js').ReloadVerdict | undefined} verdict
+   * @param {string[]} changed
+   * @returns {{ verdict: import('../dev-classify.js').ReloadVerdict | undefined, changed: string[] }}
+   */
+  function withMissedChanges(verdict, changed) {
+    const seen = new Set(changed);
+    /** @type {Set<string>} */
+    const dirs = new Set();
+    // A reported path may be a directory itself (a folder created or renamed).
+    for (const f of changed) { dirs.add(dirname(f)); dirs.add(f); }
+    /** @type {string[]} */
+    const missed = [];
+    for (const f of movedServedModules(dirs)) if (!seen.has(f)) { seen.add(f); missed.push(f); }
+    for (const [f, stamp] of state.shippedStamps) {
+      if (!dirs.has(dirname(f))) continue;
+      const now = diskStamp(f);
+      if (now === stamp) continue;
+      state.shippedStamps.set(f, now);
+      if (!seen.has(f)) { seen.add(f); missed.push(f); }
+    }
+    for (const f of changed) if (state.shippedStamps.has(f)) state.shippedStamps.set(f, diskStamp(f));
+    if (!missed.length) return { verdict, changed };
+    if (verdict) {
+      const ctx = { appDir, shippedFiles: state.shippedFiles, graphFiles: state.graphFiles, pageFiles: state.pageFiles, analysisReady: analysisEverDone, sep };
+      for (const f of missed) verdict = mergeVerdicts(verdict, classifyChangedPath(f, ctx));
+    }
+    return { verdict, changed: [...changed, ...missed] };
+  }
+
+  /**
    * @param {import('../dev-classify.js').ReloadVerdict} [verdict]
    * @param {boolean} [notify] tell the open tabs (`onReload`). False for the
    *   re-derive a `bun --hot` re-run asks for (#1575), whose edit the watcher
    *   already announced.
+   * @param {string[]} [changed] absolute paths of the files that changed
    */
-  async function doRebuild(verdict, notify = true) {
+  async function doRebuild(verdict, notify = true, changed = []) {
+    // Bun's `fs.watch` (1.3.14) reports only the first of two files written
+    // about a millisecond apart in one directory, so the watcher's list can
+    // be short. Add every module that moved on disk without an event, and
+    // classify it into the verdict the tabs get, BEFORE anything below reads
+    // either, so a missed component edit still swaps or reloads (#1689).
+    if (dev && bunVersions && changed.length) ({ verdict, changed } = withMissedChanges(verdict, changed));
+    // Version the edited modules and their importers FIRST (#1689), so every
+    // import from here on, the re-warm included, gets the new instances. A
+    // no-op where the resolve hook is not installed.
+    if (dev && changed.length) bumpModuleVersions(changed);
+    // The browser's versions walk the PREVIOUS analysis, which is what the open
+    // tabs hold. Captured before anything below resets it.
+    const prev = {
+      graph: state.moduleGraph, shipped: state.shippedFiles, components: state.componentFiles,
+      graphFiles: state.graphFiles, pageFiles: state.pageFiles, entries: state.browserEntryFiles,
+      // Walked once here for both the version bump and the hot-swap walk.
+      importers: dev && changed.length && state.moduleGraph ? shippedImporters(state.moduleGraph, state.shippedFiles) : null,
+    };
+    if (prev.importers) state.browserVersions.bump(changed, prev.importers, prev.shipped);
+    // A component edit the tab can apply by re-importing its module (#1689).
+    if (dev && notify) verdict = await hotVerdict(verdict, changed, prev);
+    // Invalidate the analysis BEFORE anything below can throw (#1689). The
+    // route table scan is the first step that can, and a failure there used to
+    // skip the reset further down, so the next request served the pre-edit
+    // analysis until some later edit rebuilt cleanly. It runs again at the end
+    // in case a request re-warmed against the old route table meanwhile.
+    await invalidateAnalysis();
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
@@ -1017,7 +1137,13 @@ export async function createRequestHandler(opts) {
     // updates `.webjs/routes.d.ts` without a manual `webjs types`. Dev only,
     // best-effort (see emitRouteTypes).
     if (dev) void emitRouteTypes();
-    clearVendorCache();
+    // The resolved vendor map and its SRI are keyed by the sorted install set
+    // and by url, so a new bare import already misses them. Only the app's
+    // package.json (a version bump) can make a hit stale (#1689); clearing on
+    // every edit made an unpinned app re-resolve and re-fetch every bundle's
+    // SRI after each save. A caller that names no files (an embedder's bare
+    // `rebuild()`) keeps the old clear-everything behaviour.
+    if (!changed.length || changed.some((f) => resolve(f) === join(appDir, 'package.json'))) clearVendorCache();
     // A rebuild changes the bare-import set, so a failed resolve's backoff
     // window no longer describes anything; the next request may try at once.
     vendorBackoff.reset();
@@ -1033,21 +1159,9 @@ export async function createRequestHandler(opts) {
     // modules too (#1644); the plain `webjs start` path never gets here.
     clearProdImportCache();
     state.tsCache.clear();
-    // Invalidate the lazy analysis; the next request rebuilds the graph,
-    // component scan, gate, action index, middleware, elision, and vendor map.
-    // Wait out any in-flight build first so it cannot commit stale results
-    // after the reset. A dependency edit can flip an elision verdict without
-    // changing an importer's mtime, hence the state.tsCache.clear above.
-    if (readyInFlight) { try { await readyInFlight; } catch {} }
-    // Bump the vendor generation so a vendor resolve still in flight from the
-    // previous build cannot flip vendorResolved against the fresh state.
-    vendorGen++;
-    analysisDone = false;
-    vendorResolved = false;
-    vendorAttemptedOnce = false;
-    readyDone = false;
-    readyError = null;
-    readinessFn = undefined;
+    // A dependency edit can flip an elision verdict without changing an
+    // importer's mtime, hence the state.tsCache.clear above.
+    await invalidateAnalysis();
     // Refresh the on-request regenerate rules (#967) so a `webjs.dev.regenerate`
     // config edit takes effect without a restart, mirroring the elide/router
     // re-reads above. Dev-only; a no-op array in prod.
@@ -1072,6 +1186,113 @@ export async function createRequestHandler(opts) {
     // runs on both boundary tiers and swaps in the changed boot script, which
     // executes and registers the new component.
     if (notify) opts.onReload?.(verdict || { v: 'reload', by: '', why: 'no-verdict' });
+    // Evict every cached HTML response LAST (#1689), on the silent path too. The
+    // cache key does not change across a rebuild, so a page with
+    // `export const revalidate` otherwise served its pre-edit HTML for the whole
+    // window, and that body carries the old `webjs-dev-reload` meta, which the
+    // reload relay reads as a page that is behind and reloads into again. Last,
+    // so any render that started before it is refused by the commit's
+    // generation check.
+    revalidateAll();
+  }
+
+  /**
+   * Invalidate the lazy analysis; the next request rebuilds the graph,
+   * component scan, gate, action index, middleware, elision, and vendor map.
+   * Waits out any in-flight build first so it cannot commit stale results after
+   * the reset, and bumps the vendor generation so a vendor resolve still in
+   * flight from the previous build cannot flip `vendorResolved` against the
+   * fresh state.
+   */
+  async function invalidateAnalysis() {
+    if (readyInFlight) { try { await readyInFlight; } catch {} }
+    vendorGen++;
+    analysisDone = false;
+    vendorResolved = false;
+    vendorAttemptedOnce = false;
+    readyDone = false;
+    readyError = null;
+    readinessFn = undefined;
+  }
+
+  /**
+   * The hot-swap signature of a file on disk, or null when it cannot be read
+   * or stripped.
+   * @param {string} file
+   */
+  async function readHotSignature(file) {
+    try {
+      const src = await readFile(file, 'utf8');
+      return hotSignature(/\.m?tsx?$/.test(file) ? await stripTypeScript(src) : src);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Turn a reload the edit of shipped browser modules caused into a
+   * `component` hot swap when every edited module reaches a component boundary
+   * the tab can re-import (`dev-hot-classify.js`), or into a reload that names
+   * the precise reason it cannot (#1689). Each changed path is classified again
+   * against the PREVIOUS analysis, because the merged verdict keeps only the
+   * strongest file's reason. Fails safe: any surprise returns the verdict as
+   * it came.
+   * @param {import('../dev-classify.js').ReloadVerdict | undefined} verdict
+   * @param {string[]} changed
+   * @param {{ graph: any, shipped: Set<string>, components: Set<string>, graphFiles: Set<string>, pageFiles: Set<string>, entries: Set<string>, importers: Map<string, Set<string>> | null }} prev
+   * @returns {Promise<import('../dev-classify.js').ReloadVerdict | undefined>}
+   */
+  async function hotVerdict(verdict, changed, prev) {
+    if (!verdict || verdict.v !== 'reload' || !changed.length || !prev.importers || !analysisEverDone) return verdict;
+    const importers = prev.importers;
+    /** @type {Map<string, import('../dev-hot-classify.js').HotSignature | null>} */
+    const sigs = new Map();
+    const signatureOf = async (/** @type {string} */ f) => {
+      if (!sigs.has(f)) sigs.set(f, await readHotSignature(f));
+      return sigs.get(f) || null;
+    };
+    try {
+      const ctx = { appDir, shippedFiles: prev.shipped, graphFiles: prev.graphFiles, pageFiles: prev.pageFiles, analysisReady: true, sep };
+      const perFile = changed.map((f) => classifyChangedPath(f, ctx));
+      const reloads = perFile.filter((v) => v.v === 'reload');
+      if (!reloads.length || reloads.some((v) => v.why !== 'ships-to-browser')) return verdict;
+      const res = await findHotBoundaries(changed.filter((_, i) => perFile[i].v === 'reload'), {
+        shipped: prev.shipped,
+        componentFiles: prev.components,
+        routeFiles: new Set([...prev.entries].filter((f) => !prev.components.has(f))),
+        importersOf: (f) => importers.get(f) || [],
+        signatureOf,
+        baselineOf: (f) => state.hotSignatures.get(f),
+        sideEffectOf: async (f) => {
+          try {
+            // The browser gets an action's RPC stub, never its source.
+            if (isServerFile(f)) return !(await hasUseServerDirective(f));
+            const src = await readFile(f, 'utf8');
+            return hasModuleScopeSideEffect(/\.m?tsx?$/.test(f) ? await stripTypeScript(src) : src);
+          } catch {
+            return true;
+          }
+        },
+        rel: (f) => relative(appDir, f).split(sep).join('/'),
+      });
+      if (!res.ok) return { v: 'reload', by: res.by, why: res.why };
+      const bp = basePath();
+      const modules = res.boundaries.map((b) => withBasePath(toUrlPath(b, appDir), bp) + '?t=' + state.browserVersions.versionOf(b));
+      /** @type {import('../dev-classify.js').ReloadVerdict} */
+      const hot = { v: 'component', by: reloads[0].by, why: 'hot-swap', modules };
+      return /** @type {import('../dev-classify.js').ReloadVerdict} */ (perFile.filter((v) => v.v !== 'reload').reduce((a, b) => mergeVerdicts(a, b), hot));
+    } catch {
+      return verdict;
+    } finally {
+      // The tab applies every verdict, a reload included, so from now on it
+      // holds each changed component's new source.
+      for (const f of changed) {
+        if (!prev.components.has(f)) continue;
+        const sig = await signatureOf(f);
+        if (sig) state.hotSignatures.set(f, sig);
+        else state.hotSignatures.delete(f);
+      }
+    }
   }
 
   /**
@@ -1622,9 +1843,10 @@ export async function createRequestHandler(opts) {
      * (#1575), the `bun --hot` re-run `startServer` pokes for. A module no
      * other app module imports is only ever loaded through `devImport`, whose
      * specifier names the file's content, so its edit is a new specifier and
-     * needs nothing reset. Anything imported by another module, a file the last
-     * analysis never saw (a new file may be the target of an import that
-     * failed), or any edit before the first analysis does.
+     * needs nothing reset, and neither does a module the Bun dev plugins
+     * already served, which the module versions re-evaluate (#1689). Otherwise anything imported by another
+     * module, a file the last analysis never saw (a new file may be the target
+     * of an import that failed), or any edit before the first analysis does.
      *
      * @param {string} filename  relative to `root`
      * @param {string} [root]  the watched root, defaulting to the app dir
@@ -1632,6 +1854,10 @@ export async function createRequestHandler(opts) {
      */
     needsRegistryReset: (filename, root) => {
       const abs = resolve(root || appDir, filename);
+      // On Bun a module the dev plugins already served is versioned in place
+      // (#1689): the rebuild bumps it and its importers, and the next import
+      // evaluates that chain fresh. A new or deleted file still resets.
+      if (bunVersions && isServedModule(abs) && existsSync(abs)) return false;
       if (!analysisEverDone) return true;
       // A new routing file (a page, layout, route handler, boundary) is only
       // ever loaded by the router, and nothing can have tried to import it yet.
@@ -1646,6 +1872,13 @@ export async function createRequestHandler(opts) {
       analysisReady: analysisEverDone,
       sep,
     }),
+    /** Whether this handler re-evaluates edited server modules in place on
+     * Node (#1689), so `startServer` can tell the dev supervisor it need not
+     * restart the process for an app edit. */
+    hotModules: !!hotModules,
+    // Whether an app file is held by the CommonJS loader, which no module
+    // version reaches, so an edit to it needs a restart (#1689). Node only.
+    isCommonJsModule: (abs) => !!hotModules && isCommonJsModule(abs),
     appDir,
     dev,
     logger,

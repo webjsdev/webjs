@@ -159,6 +159,21 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> most check rules are elision-based and do not compile types, so a stale import used to slip past. Dropping the example <code>todos</code> table while another module still imported it is the canonical case.</p>
     <p><strong>Fix:</strong> add the missing export, correct the imported name, or remove the import (and prune any orphaned module). The <code>no-missing-local-import</code> rule now flags a named value import of a symbol a resolvable app-internal module does not export, so it is caught before runtime. It is conservative by design (only app-internal specifiers, only named value imports, and it skips a module whose exports are not fully enumerable), so a re-export barrel and a <code>'use server'</code> action file resolve normally. Type-checking alongside the correctness checker stays the belt-and-suspenders habit.</p>
 
+    <h2>The page did a full reload after an edit</h2>
+    <p><strong>Symptom:</strong> you saved a file under <code>webjs dev</code> and the tab reloaded, losing component state, where you expected an in-place update.</p>
+    <p><strong>Cause:</strong> the edit needed a reload. Most edits apply in place (a page or layout refresh, a component hot swap, a stylesheet swap), but a few cannot: a change to a component's constructor, a <code>#private</code> member, a changed property declaration, a new or deleted file, or a restart file such as <code>.env</code>.</p>
+    <p><strong>Fix:</strong> read the browser console after the reload. Every full reload prints <code>[webjs] full reload: &lt;reason&gt; (&lt;file&gt;)</code> once the new page loads, naming the rule and the file that forced it. See <a href="/docs/runtime">Runtime</a> for what each kind of edit does and <a href="/docs/components">Components</a> for what a hot swap keeps.</p>
+
+    <h2>An edit seems to do nothing in dev</h2>
+    <p><strong>Symptom:</strong> you save a file, the dev server logs the change, but the browser keeps showing the old code.</p>
+    <p><strong>Cause:</strong> usually a service worker left over from running the app with <code>npm run start</code> on the same port, serving cached modules. Under <code>webjs dev</code>, <code>/sw.js</code> answers with a worker that clears every cache and unregisters itself, so the first load after starting the dev server removes it and the console logs <code>[webjs] the service worker is off under webjs dev</code>.</p>
+    <p><strong>Fix:</strong> reload the tab once. If the edit still does not show, check the dev server's output for a rebuild error and the browser console for a <code>full reload</code> line. Test offline behaviour with <code>npm run start</code>.</p>
+
+    <h2>The dev server says the file watch limit is reached</h2>
+    <p><strong>Symptom:</strong> <code>webjs dev</code> prints <code>[webjs] the file watch limit is reached (ENOSPC), so &lt;dir&gt;/ is watched by polling every 1s.</code> (or <code>EMFILE</code>), and edits in that directory land a second or so later than usual.</p>
+    <p><strong>Cause:</strong> the operating system ran out of file watches (on Linux, the inotify limit, which a large <code>node_modules</code> or several editors can use up). Rather than going deaf, the dev server watches the directory that hit the limit by polling it once a second.</p>
+    <p><strong>Fix:</strong> raise the limit with <code>sudo sysctl fs.inotify.max_user_watches=524288</code>, persist it in a file under <code>/etc/sysctl.d/</code>, and restart the dev server.</p>
+
     <h2>Still stuck</h2>
     <p>The framework source is in <code>node_modules/@webjsdev/</code> with no build step, so what you read is what runs. Grep the relevant file (the SSR pipeline in <code>@webjsdev/server/src/ssr.js</code>, client hydration in <code>@webjsdev/core/src/render-client.js</code>, the convention rules in <code>@webjsdev/server/src/check.js</code>). Run <code>webjs check</code> to surface most of the issues above before they reach the browser, and run <code>webjs check --rules</code> to read what each rule enforces.</p>
   `;

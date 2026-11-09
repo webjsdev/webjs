@@ -22,17 +22,28 @@
  * a plain path, so on Bun it falls back to the file URL (no fresh import; the
  * dev supervisor's restart still picks the edit up).
  *
+ * The content query covers the ENTRY only: a module the entry imports is not
+ * re-imported through here. On Node the dev resolve hook (`dev/esm-hot-hooks.js`,
+ * #1689) versions everything below it, adding `webjs-v=<n>` to an edited module
+ * and its importers on top of this query, which is also what carries a
+ * dependency's edit to an entry whose own bytes did not change. Bun has no
+ * resolve hook, so there the dev source plugins stamp the versions below the
+ * entry (`dev/bun-app-source.js`) and this specifier adds the entry's own
+ * `webjs-v=<n>` after the content query.
+ *
  * Outside dev the specifier is the plain file URL, exactly as before.
  */
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { moduleVersion } from './dev/esm-hot-hooks.js';
 
 /**
  * @param {string} file absolute file path
  * @param {boolean} dev whether to cache-bust
- * @param {{ bun?: boolean, version?: (file: string) => string }} [opts] test
- *   seams: the runtime (default: detected) and the content version
+ * @param {{ bun?: boolean, version?: (file: string) => string, moduleVersion?: (file: string) => number }} [opts]
+ *   test seams: the runtime (default: detected), the content version, and the
+ *   Bun module version (#1689)
  * @returns {string}
  */
 export function devImportSpecifier(file, dev, opts = {}) {
@@ -40,7 +51,10 @@ export function devImportSpecifier(file, dev, opts = {}) {
   if (!dev) return url;
   const bun = opts.bun ?? Boolean(typeof process !== 'undefined' && process.versions && process.versions.bun);
   const bust = `?t=${(opts.version ?? contentVersion)(file)}`;
-  if (bun && !/[?#]/.test(file)) return file + bust;
+  if (bun && !/[?#]/.test(file)) {
+    const v = (opts.moduleVersion ?? moduleVersion)(file);
+    return file + bust + (v ? `&webjs-v=${v}` : '');
+  }
   return url + bust;
 }
 

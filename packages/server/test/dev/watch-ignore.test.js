@@ -40,7 +40,7 @@ test('shouldIgnoreWatchPath does NOT ignore real app source (rebuilds still fire
 
 // Unserved output and the app's .gitignore never reload the page: a server's
 // own `npm run dev > dev.log` used to turn every log line into a reload.
-import { isUnservedOutput, parseGitignore, isGitignored } from '../../src/dev/watch-ignore.js';
+import { isUnservedOutput, parseGitignore, isGitignored, editorTempTarget } from '../../src/dev/watch-ignore.js';
 
 test('tool output nothing serves is ignored, source is not', () => {
   for (const p of ['dev.log', 'logs/server.log', 'coverage/lcov.info', '.cache/x', 'test-results/a.png', 'playwright-report/index.html', '.DS_Store', 'app/page.ts.swp']) {
@@ -48,6 +48,37 @@ test('tool output nothing serves is ignored, source is not', () => {
   }
   for (const p of ['app/page.ts', 'modules/x/coverage-chart.ts', 'public/catalog.json', 'logbook.ts']) {
     assert.equal(isUnservedOutput(p), false, p);
+  }
+});
+
+// #1689: an editor's save writes a temp file first, and one that fell through
+// to the classifier was an unknown path, so the whole batch reloaded. The CLI
+// supervisor's copy of the pattern is checked against the same corpus in
+// `packages/cli/test/dev-supervisor/dev-reload.test.js`.
+test('editor temp files are ignored, source next to them is not (#1689)', () => {
+  for (const p of [
+    'app/4913', // vim's write probe
+    'app/.#page.ts', 'app/#page.ts#', // emacs lock and autosave
+    'app/page.ts___jb_tmp___', 'app/page.ts___jb_old___', // JetBrains safe write
+    'app/x.tmp', 'app/page.ts.swp', 'app/.page.ts.swo', 'app/page.ts.crswap', 'app/page.ts.kate-swp',
+    'app/.goutputstream-ABC123', 'app/~$doc.ts', 'app/page.ts~',
+  ]) {
+    assert.equal(isUnservedOutput(p), true, p);
+  }
+  for (const p of ['app/page.ts', 'app/2024/page.ts', 'app/[id]/page.ts', 'app/x.tmpl.ts', 'lib/swap.ts', 'public/v2.css', 'app/#hash.ts', 'components/jb_tmp.ts']) {
+    assert.equal(isUnservedOutput(p), false, p);
+  }
+});
+
+// #1689: Bun's fs.watch reports a temp file renamed over a source file ONLY
+// under the temp name, so the watcher reports the file it saved instead.
+test('a renamed-over editor temp file names the file it saves; the rest name none', () => {
+  assert.equal(editorTempTarget('app/page.ts.tmp'), 'app/page.ts');
+  assert.equal(editorTempTarget('app/page.ts___jb_tmp___'), 'app/page.ts');
+  assert.equal(editorTempTarget('app/page.ts___jb_old___'), 'app/page.ts');
+  assert.equal(editorTempTarget('lib/x.ts.crswap'), 'lib/x.ts');
+  for (const p of ['app/4913', 'app/.#page.ts', 'app/#page.ts#', 'app/page.ts.swp', 'app/page.ts~', '.tmp', 'app/.tmp', 'app/page.ts', '']) {
+    assert.equal(editorTempTarget(p), null, p);
   }
 });
 

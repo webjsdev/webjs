@@ -31,6 +31,18 @@ test('in dev on Bun the query rides the plain path', () => {
   assert.equal(s, '/srv/app/app/page.ts?t=v42');
 });
 
+test('on Bun a bumped entry also carries its module version (#1689)', () => {
+  // Bun has no resolve hook to stamp the entry, and an entry whose own bytes
+  // did not change still has to evaluate fresh when a module below it did.
+  const s = devImportSpecifier(FILE, true, { bun: true, version: () => 'v42', moduleVersion: () => 3 });
+  assert.equal(s, '/srv/app/app/page.ts?t=v42&webjs-v=3');
+  const plain = devImportSpecifier(FILE, true, { bun: true, version: () => 'v42', moduleVersion: () => 0 });
+  assert.equal(plain, '/srv/app/app/page.ts?t=v42');
+  // Node's resolve hook adds it there, so the specifier itself never does.
+  const node = devImportSpecifier(FILE, true, { bun: false, version: () => 'v42', moduleVersion: () => 3 });
+  assert.equal(node, 'file:///srv/app/app/page.ts?t=v42');
+});
+
 test('on Bun a path that already holds ? or # falls back to the file URL', () => {
   for (const f of ['/srv/a?b/page.ts', '/srv/a#b/page.ts']) {
     assert.match(devImportSpecifier(f, true, { bun: true }), /^file:\/\//);

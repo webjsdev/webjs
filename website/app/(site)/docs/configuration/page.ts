@@ -13,7 +13,8 @@ export default function Configuration() {
     <ul>
       <li><code>--port</code>: dev server port. Precedence is <code>--port</code> &gt; <code>PORT</code> (a real env var <em>or</em> a <code>PORT</code> in the app's <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> still wins over the <code>.env</code> value, matching the auto-load's shell-wins-over-file rule.</li>
       <li>File watching via Node's built-in <code>fs.watch</code> (automatic)</li>
-      <li>Live reload via SSE (<code>/__webjs/events</code>)</li>
+      <li>Hot reload over SSE (<code>/__webjs/events</code>): a page or layout edit refreshes in place, a component edit hot-swaps the live class, a stylesheet edit swaps the sheet, on Node and Bun alike (see <a href="/docs/runtime">Runtime</a>)</li>
+      <li>No service worker: <code>/sw.js</code> answers with a worker that clears the caches and unregisters, so a worker left over from <code>npm run start</code> cannot serve stale modules (test offline behaviour with <code>npm run start</code>)</li>
       <li>TypeScript files transformed on the fly</li>
       <li>No cache-busting needed, since an edited module is re-imported on the next request</li>
     </ul>

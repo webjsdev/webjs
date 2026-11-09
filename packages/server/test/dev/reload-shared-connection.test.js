@@ -93,7 +93,7 @@ test('dev serves the reload SharedWorker, and the client uses it with a direct E
   // comparison passes when the guard is gone entirely, which is the one case
   // this assertion exists for.
   const tryAt = fallbackBody.indexOf('try {');
-  const reloadAt = fallbackBody.indexOf('__webjsApplyReload(m.verdict)');
+  const reloadAt = fallbackBody.indexOf('__webjsApplyReload(__webjsVerdictOf(m.verdict))');
   assert.notEqual(tryAt, -1, 'the guard is present at all');
   assert.notEqual(reloadAt, -1, 'the reload call is present at all');
   assert.ok(tryAt < reloadAt, 'the guard opens BEFORE the reload call, not around something else');
@@ -162,21 +162,24 @@ test('the reload client probes the server is up before reloading (no restart fla
   const app = await createRequestHandler({ appDir, dev: true });
   const clientSrc = await (await app.handle(new Request('http://x/__webjs/reload.js'))).text();
 
-  assert.match(clientSrc, /function __webjsWhenReady/, 'reload is gated on a readiness probe');
+  assert.match(clientSrc, /var __webjsWhenReady = createReadyProbe\(/, 'reload is gated on a readiness probe');
   assert.match(clientSrc, /function __webjsApplyReload/, 'and the signal is applied through the verdict branch (#1398)');
-  assert.match(clientSrc, /fetch\(\"\/__webjs\/version\"/, 'the probe hits the lightweight version endpoint');
-  // ONE probe helper with two callers, not a copied loop (#1398). The 100-try
-  // bound and its `location.reload()` exhaustion behaviour are shared, so a
-  // genuinely dead server still shows the browser's own error page.
-  assert.equal(clientSrc.match(/fetch\(\"\/__webjs\/version\"/g).length, 1, 'the readiness loop exists exactly once');
-  assert.match(clientSrc, /if \(\+\+tries > 100\) location\.reload\(\)/, 'the probe is bounded and exhaustion still reloads');
+  const probe = /createReadyProbe\(function \(u, o\) \{ return fetch\(u, o\); \}, "\/__webjs\/version"\)/g;
+  assert.match(clientSrc, probe, 'the probe hits the lightweight version endpoint');
+  // ONE probe with every caller, not a copied loop (#1398). Since #1689 it never
+  // gives up and never reloads by itself (`dev-ready-probe.js`,
+  // `test/dev/ready-probe.test.js`), so a slow restart is waited out instead of
+  // reloading into the browser's own error page.
+  assert.equal(clientSrc.match(probe).length, 1, 'the readiness loop exists exactly once');
+  assert.doesNotMatch(clientSrc, /tries > 100/, 'the probe is no longer bounded');
   // The morph is feature-DETECTED at runtime, never assumed (#1398). The
   // absence of the global covers `webjs.clientRouter: false` AND a page that
   // ships no component at all, and both fall back to a full reload.
   assert.match(clientSrc, /globalThis\.__webjsRefreshPage/, 'the refresh entry is feature-detected on the global');
   assert.match(clientSrc, /typeof refresh === 'function'/, 'and only used when it is actually a function');
-  assert.match(clientSrc, /verdict === 'page' \|\| verdict === 'shell'/, 'only the two morphable verdicts take the refresh path');
-  assert.match(clientSrc, /if \(!ok\) \{ location\.reload\(\); return; \}/, 'a refresh that declines falls back to a full reload');
+  assert.match(clientSrc, /mode === 'page' \|\| mode === 'shell'/, 'only the two morphable verdicts take the refresh path');
+  assert.match(clientSrc, /var mode = verdict\.v;/, 'and the mode is the verdict object\'s v (#1689)');
+  assert.match(clientSrc, /if \(!outcome \|\| outcome === 'failed'\) \{ __webjsReload\(\{ why: 'refresh-failed', by: verdict\.by \}\); return; \}/, 'a refresh that declines falls back to a full reload, naming why (#1689)');
   // A swap never re-requests a stylesheet on its own (mergeHead preserves them
   // per #936, and the dev href carries no content hash), so `webjs.dev.regenerate`
   // would never run and a newly added utility class would have no backing rule.
@@ -192,7 +195,7 @@ test('the reload client probes the server is up before reloading (no restart fla
   // fails again pushes a fresh frame DURING it, and dismissing afterwards would
   // wipe that legitimately-new overlay.
   const dismissAt = clientSrc.indexOf('dismissDevOverlay();');
-  const refreshAt = clientSrc.indexOf('refresh(verdict).then');
+  const refreshAt = clientSrc.indexOf('refresh(mode).then');
   assert.notEqual(dismissAt, -1, 'the refresh path dismisses a live error overlay');
   assert.notEqual(refreshAt, -1, 'and the refresh call is present at all');
   assert.ok(dismissAt < refreshAt, 'the dismiss happens BEFORE the re-render, not after it');
@@ -202,7 +205,9 @@ test('the reload client probes the server is up before reloading (no restart fla
   const preloadAt = clientSrc.indexOf('preloadStyles().then(');
   assert.notEqual(preloadAt, -1, 'an applied refresh preloads the stylesheets');
   assert.ok(preloadAt < refreshAt, 'BEFORE the markup swap, not after it');
-  assert.ok(clientSrc.indexOf('styles.commit();') > refreshAt, 'and commits (drops the old sheets) after the swap');
+  // Searched from the refresh on: the css-only branch (#1689) commits too,
+  // with no re-render at all, and it sits before the refresh branch.
+  assert.ok(clientSrc.indexOf('styles.commit();', refreshAt) > refreshAt, 'and commits (drops the old sheets) after the swap');
   // The verdict parser ships too, so an unparseable frame resolves to reload
   // inside the tab rather than being trusted.
   assert.match(clientSrc, /function parseVerdict/, 'the verdict parser ships in the client fallback');
@@ -210,11 +215,13 @@ test('the reload client probes the server is up before reloading (no restart fla
   // never a bare location.reload() on a reload signal. Since #1397 the fallback
   // reaches it through the shim port the shared relay posts to, which is the
   // same message contract the SharedWorker path consumes.
-  assert.match(clientSrc, /if \(m\.type === 'reload'\) __webjsApplyReload\(m\.verdict\)/, 'both paths gate the reload');
+  assert.match(clientSrc, /if \(m\.type === 'reload'\) __webjsApplyReload\(__webjsVerdictOf\(m\.verdict\)\)/, 'both paths gate the reload');
+  assert.equal(clientSrc.match(/__webjsApplyReload\(__webjsVerdictOf\(m\.verdict\)\)/g).length, 2,
+    'BOTH message paths normalize a legacy string verdict before applying it (#1689)');
   assert.match(clientSrc, /else if \(m\.type === 'webjs-error'\) __webjsApplyError\(m\.data\)/, 'and both route an error frame to the overlay');
   // The boot-id rule (#893) lives in the relay now, in ONE place, rather than
   // being re-implemented in the fallback where the two copies could drift.
-  assert.match(clientSrc, /if \(lastBoot !== null && \(h\.boot !== lastBoot \|\| \(h\.seq !== null && lastSeq !== null && h\.seq !== lastSeq\)\)\) \{\s*requestReload\('reload'\);/, 'only a changed boot id, or a reload missed while paused (#1507), reloads, and it is unconditionally a FULL reload (#1398)');
+  assert.match(clientSrc, /if \(lastBoot !== null && \(h\.boot !== lastBoot \|\| \(h\.seq !== null && lastSeq !== null && h\.seq !== lastSeq\)\)\) \{\s*requestReload\(\{ v: 'reload', by: '', why: h\.boot !== lastBoot \? 'server-restarted' : 'missed-update' \}\);/, 'only a changed boot id, or a reload missed while paused (#1507), reloads, and it is unconditionally a FULL reload (#1398)');
   assert.equal(clientSrc.match(/lastBoot !== null/g).length, 1, 'the boot-id rule exists exactly once');
 });
 
@@ -222,7 +229,7 @@ test('the direct-fallback probe carries the base path under a sub-path deploy (#
   const appDir = makeApp({ basePath: '/app' });
   const app = await createRequestHandler({ appDir, dev: true });
   const clientSrc = await (await app.handle(new Request('http://x/app/__webjs/reload.js'))).text();
-  assert.match(clientSrc, /fetch\(\"\/app\/__webjs\/version\"/, 'the readiness probe is base-path prefixed');
+  assert.match(clientSrc, /createReadyProbe\(function \(u, o\) \{ return fetch\(u, o\); \}, "\/app\/__webjs\/version"\)/, 'the readiness probe is base-path prefixed');
 });
 
 // #1507: webjs.dev.reloadIdle (seconds) reaches both served scripts as idleMs,

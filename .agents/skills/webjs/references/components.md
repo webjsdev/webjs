@@ -12,6 +12,7 @@
 - `Task` for client-only async data, and context (`createContext` / `ContextProvider` / `ContextConsumer`) to avoid attribute drilling
 - The lit-html directive set (`repeat`, `watch`, `live`, `keyed`, `guard`, `cache`, `until`, `unsafeHTML`, `ref`, `asyncAppend` / `asyncReplace`, `templateContent`)
 - Display-only elision (when a component is stripped from the browser)
+- What a dev hot swap keeps, and which edits reload instead
 - Inherited members app code must NOT shadow (`title`, `remove`, `render`, ...)
 
 Read this when you are authoring or reviewing a `WebComponent`. For styling a component (Tailwind, the tag-prefix rule, host sizing) see `styling.md`. For streaming a slow region or programmatic navigation see `client-router-and-streaming.md`. For Lit habits that break WebJs see `muscle-memory-gotchas.md`.
@@ -482,6 +483,30 @@ WEBJS_ELIDE=0 npm run test:e2e
 It exits non-zero on a divergence AND on a corpus where nothing could be compared, so it is safe to put in CI. The ON side is forced on rather than read from your config, so the comparison is a real one even in an app that has elision switched off, and the run reports how many modules elision actually dropped so a trivially-true pass is visible. Dynamic routes are skipped by name (rendering one would mean inventing param values); pass real ones with `--routes`. A route whose two same-side renders already differ is reported as nondeterministic and excluded, since a differential over live data proves nothing.
 
 `webjs doctor` carries the same verdict as a one-line inventory, and warns only on an orphan.
+
+## Hot swap in dev
+
+Under `webjs dev` (Node and Bun), saving a component file updates the live page without a reload (#1689). `customElements.define` is once per tag, so the class the browser registered can never be replaced. Instead the tab re-imports the edited module at a versioned url, copies the new class's methods, accessors, statics and `static styles` onto the REGISTERED class (re-adopting the styles of shadow-DOM instances), and re-renders every live instance. The console logs `[webjs] hot-swapped <my-tag> (<file>)`.
+
+What survives the swap:
+
+- the elements themselves, so anything holding a reference to one still holds the live element;
+- every reactive property value and every instance signal (they live on the instance, which is kept);
+- the DOM of every template part whose TEXT did not change, including what the user typed into an input and the nested components inside it (dev interns template strings by their text, so only an edited template is rebuilt);
+- module-scope state in every module you did NOT edit (a shared signal store, a cache).
+
+Module-scope state in the edited file itself starts over, because that module is evaluated again.
+
+An edit the patched class cannot carry is a full reload instead, and the reloaded page logs `[webjs] full reload: <reason> (<file>)`:
+
+- a changed `constructor` (the browser keeps constructing elements with the one it registered) or a changed instance field initializer (it ran per instance at construction);
+- any `#private` member in the class (a patched method carries a private brand the live instances lack);
+- a changed reactive property declaration or `observedAttributes`, a changed `static shadow` or `static formAssociated`;
+- a changed native lifecycle callback (`connectedCallback`, `disconnectedCallback`, `adoptedCallback`, `attributeChangedCallback`, the form callbacks), since the registry captured those at define time;
+- a component module that exports anything besides its classes, or an edited helper module with a module-scope side effect of its own;
+- an edited module whose importers reach a page or layout that ships whole before they reach a component.
+
+So defaults still belong in the constructor (SSR needs them there), and changing one costs a reload, while template, style, method and `render()` edits apply in place. There is no app-facing HMR API (`import.meta.hot`) to opt into or out of. Production pays one global lookup per `html()` call for the seam and runs none of it.
 
 ## Members app code must not shadow
 

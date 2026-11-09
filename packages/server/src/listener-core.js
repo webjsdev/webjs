@@ -445,9 +445,11 @@ export class SseHub {
    * and an absent or malformed verdict is emitted as `reload` here too, so the
    * fail-safe holds on both ends of the wire and a tab running against a
    * restarted server can never be skewed into a lighter response than the
-   * change deserves.
+   * change deserves. A verdict's `modules` and `css` (#1689) ride the same
+   * payload, and `inPlace` is read here at send time, so a handler that only
+   * learns after construction that it reloads in place still says so.
    *
-   * @param {{ v?: string, by?: string, why?: string } | null} [verdict]
+   * @param {{ v?: string, by?: string, why?: string, modules?: string[], css?: true } | null} [verdict]
    */
   reload(verdict) {
     const v = verdict && typeof verdict.v === 'string' ? verdict : { v: 'reload' };

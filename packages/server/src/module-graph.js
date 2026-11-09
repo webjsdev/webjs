@@ -125,6 +125,54 @@ const EXPORT_FROM_RE = /\bexport\b[^'";`]+?\sfrom\s+['"]([^'"]+)['"]/gd;
 const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/gd;
 
 /**
+ * Every import specifier a module's source names, with its position: static
+ * `import`, `export … from`, then string-literal dynamic `import('…')`, each
+ * group in source order. `start` / `end` delimit the specifier text inside its
+ * quotes in `src`, so a caller can splice it (#1689, the dev server's browser
+ * module versions).
+ *
+ * All three regexes run over the FULLY-BLANKED mask (see `parseFile`), so a
+ * keyword inside a comment, string, template or regex never anchors a match,
+ * and the specifier is read back from the raw source at the group indices.
+ * The static half is exactly what `parseFile` builds the graph from, so the two
+ * can never disagree. The dynamic half differs from the graph's own dynamic
+ * scan in one place: a dynamic import written inside a template `${}` hole is
+ * blanked here and so not listed (the graph scan reads hole code).
+ *
+ * A statement-leading type-only clause is skipped, because the TS stripper
+ * erases it and it never becomes a fetch or a runtime edge (#805):
+ * `import type { X }`, `import type * as X`, `import type Foo`,
+ * `export type { X }`, `export type *`. Two carve-outs keep this from
+ * over-dropping. `import type from '...'` is a VALUE default import whose
+ * binding is named `type`, and a MIXED `import { type A, b }` does not lead
+ * with `type`, so both are kept.
+ *
+ * @param {string} src
+ * @returns {Array<{ start: number, end: number, spec: string, dynamic: boolean }>}
+ */
+export function importSpecifierRanges(src) {
+  const masked = redactStringsAndTemplates(src, true);
+  /** @type {Array<{ start: number, end: number, spec: string, dynamic: boolean }>} */
+  const out = [];
+  for (const re of [IMPORT_RE, EXPORT_FROM_RE, DYNAMIC_IMPORT_RE]) {
+    const dynamic = re === DYNAMIC_IMPORT_RE;
+    for (const m of masked.matchAll(re)) {
+      if (!dynamic) {
+        // m[0] is over the mask, which keeps the binding syntax verbatim.
+        const lead = m[0];
+        const typeOnly =
+          /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
+          (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
+        if (typeOnly) continue;
+      }
+      const [start, end] = /** @type {[number, number]} */ (m.indices?.[1]);
+      out.push({ start, end, spec: src.slice(start, end), dynamic });
+    }
+  }
+  return out;
+}
+
+/**
  * @typedef {Map<string, Set<string>>} ModuleGraph
  * A map of absolute file path → Set of absolute file paths it STATICALLY imports.
  */
@@ -556,7 +604,7 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
   // graph edge to whatever path that string names. Since this caller only
   // checks keyword-in-code-position, blank every literal body so a
   // code-example `import` string never becomes an edge.
-  // Scan for edges over the FULLY-BLANKED mask: every comment / string /
+  // `importSpecifierRanges` scans for edges over the FULLY-BLANKED mask: every comment / string /
   // template / regex body is blanked to spaces (delimiters kept), `${...}`
   // holes stay as code. Reason (#753, found differentially): a stray `import` /
   // `export` word inside a comment, template, OR regex literal must not anchor a
@@ -570,48 +618,23 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
   // left for a per-match position guard to reject. The specifier itself is a
   // string (blanked here), so it is read back from raw `src` via the match's
   // group indices (the `d` flag).
-  const masked = redactStringsAndTemplates(src, true);
   /** @type {string[]} local (relative / aliased) static specifiers */
   const specs = [];
   /** @type {Set<string>} bare npm vendor specifiers imported by this file (#754) */
   const bareDeps = new Set();
-  for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
-    for (const m of masked.matchAll(re)) {
-      // A statement-leading `import type { X }` / `import type * as X` /
-      // `import type Foo` (default type import) / `export type { X }` /
-      // `export type *` is fully erased by the TS stripper, so it never becomes
-      // a browser fetch or a runtime edge. Skip it, so a type-only import of a
-      // `.server.ts` (a common, correct way to share a derived row type) is not
-      // mistaken for a runtime dependency by the gate / elision / the
-      // no-server-import check. Two carve-outs keep this from over-dropping:
-      //   - `import type from '...'` is a VALUE default import whose binding is
-      //     literally named `type` (the stripper keeps it), so `type` directly
-      //     followed by `from` is NOT type-only.
-      //   - a MIXED `import { type A, b }` does NOT lead with `type`, so it is
-      //     kept (its `b` binding is a real runtime edge).
-      // (m[0] here is over the mask, which keeps the binding syntax verbatim.)
-      // #805
-      const lead = m[0];
-      const typeOnly =
-        /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
-        (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
-      if (typeOnly) continue;
-      // The specifier is read from RAW src at the match's captured-group indices
-      // (the group is the blanked string body in the mask; its position is the
-      // real specifier in src).
-      const spec = src.slice(m.indices[1][0], m.indices[1][1]);
-      // Only resolve relative imports + `#`-style subpath aliases (#555)
-      // within the project. A bare npm specifier (dayjs) has no alias match
-      // and is skipped FROM THE GRAPH, but recorded as a vendor edge so SSR
-      // can emit a modulepreload for the reached vendor URL (#754); an aliased
-      // `#lib/x.server.ts` IS followed so the graph / auth gate / elision see
-      // the real path through the alias.
-      if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) {
-        if (isVendorSpecifier(spec)) bareDeps.add(spec);
-        continue;
-      }
-      specs.push(spec);
+  for (const { spec, dynamic: isDynamic } of importSpecifierRanges(src)) {
+    if (isDynamic) continue;
+    // Only resolve relative imports + `#`-style subpath aliases (#555)
+    // within the project. A bare npm specifier (dayjs) has no alias match
+    // and is skipped FROM THE GRAPH, but recorded as a vendor edge so SSR
+    // can emit a modulepreload for the reached vendor URL (#754); an aliased
+    // `#lib/x.server.ts` IS followed so the graph / auth gate / elision see
+    // the real path through the alias.
+    if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) {
+      if (isVendorSpecifier(spec)) bareDeps.add(spec);
+      continue;
     }
+    specs.push(spec);
   }
   // Dynamic `import('…')` with a string-literal specifier (#751): a separate
   // edge class so the gate admits the lazily-loaded module (no 404) without

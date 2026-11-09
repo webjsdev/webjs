@@ -421,6 +421,21 @@ const RELOAD_WORKER_SRC = readFileSync(new URL('../dev-reload-worker.js', import
 const DEV_STYLES_SRC = readFileSync(new URL('../dev-styles.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
 
+// The component hot swap (#1689), same shared-source rule. It installs the
+// template interner and the class patcher core reads, so the reload client
+// must evaluate before the page's boot script (`ssr/head.js` orders them).
+const DEV_HOT_CLIENT_SRC = readFileSync(new URL('../dev-hot-client.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
+// The readiness probe every reload waits on (#893, #1689), same shared-source
+// rule.
+const DEV_READY_PROBE_SRC = readFileSync(new URL('../dev-ready-probe.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
+// Why a full reload happened, printed after it (#1689), same shared-source rule.
+const DEV_RELOAD_REASON_SRC = readFileSync(new URL('../dev-reload-reason.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 // The embed host's reload hold (#1532), same shared-source rule.
 const DEV_RELOAD_HOLD_SRC = readFileSync(new URL('../dev-reload-hold.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
@@ -481,10 +496,20 @@ export function reloadClientJs(bp) {
   const workerUrl = JSON.stringify(withBasePath('/__webjs/reload-worker.js', bp));
   const versionUrl = JSON.stringify(withBasePath('/__webjs/version', bp));
   return `// webjs dev reload client
+${DEV_HOT_CLIENT_SRC}
+var __webjsHot = installHotClient(globalThis);
 ${DEV_OVERLAY_SRC}
 ${RELOAD_WORKER_SRC}
 ${DEV_STYLES_SRC}
 ${DEV_RELOAD_HOLD_SRC}
+${DEV_READY_PROBE_SRC}
+${DEV_RELOAD_REASON_SRC}
+// Every full reload goes through here, so the reloaded page can say why
+// (#1689); the reason a previous page stored is printed once, now.
+function __webjsStore() { try { return globalThis.sessionStorage || null; } catch (_) { return null; } }
+function __webjsInfo(msg) { console.info(msg); }
+function __webjsReload(verdict) { reloadWithReason(verdict, location, __webjsStore(), __webjsInfo); }
+printPendingReason(__webjsStore(), __webjsInfo);
 // A framing host holds reloads while its agent builds (#1532): the embed bridge
 // sets __webjsEmbedHold, every signal below is kept (strongest verdict wins),
 // and releasing the hold applies that one reload, or none if nothing changed.
@@ -499,54 +524,66 @@ function __webjsApplyError(data) {
 // frame that arrived before the URL advanced goes up once it does. The gate
 // itself lives inside renderDevOverlay, so __webjsApplyError needs no change.
 installDevOverlayNavSync();
-// Never reload INTO a server that is still restarting (Node's node --watch
-// briefly kills the process on an edit), which would paint a style-less,
-// half-rendered page (#893). Probe the lightweight /__webjs/version endpoint
-// until it answers, THEN reload. Under an in-process reload the server is up,
-// so the first probe passes and the reload is instant; under a restart the
-// probes fail until the fresh server is listening, so the old page stays put
-// until the new one is ready. Bounded, so a genuinely-dead server still
-// reloads (and shows the browser's own error) rather than hanging forever.
-function __webjsWhenReady(then) {
-  var tries = 0;
-  function attempt() {
-    fetch(${versionUrl}, { cache: 'no-store' }).then(function (r) {
-      if (r && r.ok) then(); else again();
-    }).catch(again);
-  }
-  function again() { if (++tries > 100) location.reload(); else setTimeout(attempt, 100); }
-  attempt();
+// Never reload INTO a server that is still restarting (a restart file's edit,
+// a crash), which would paint a style-less, half-rendered page (#893). Probe
+// the lightweight /__webjs/version endpoint until it answers, THEN apply.
+// Under an in-process reload the server is up, so the first probe passes and
+// the apply is instant; under a restart the old page stays put until the new
+// server is ready, however long that takes (#1689: it used to give up after
+// about 10 seconds and reload into the browser's error page). One probe loop
+// at a time, so a burst of signals during a restart joins it.
+var __webjsWhenReady = createReadyProbe(function (u, o) { return fetch(u, o); }, ${versionUrl});
+// A relay message's verdict as an object (#1689). A SharedWorker another tab
+// started before an upgrade can still be alive and posts the bare verdict name,
+// so a string becomes { v }, and anything unreadable is a full reload.
+function __webjsVerdictOf(v) {
+  if (typeof v === 'string') return { v: v, by: '', why: '', modules: [], css: false };
+  return v && typeof v === 'object' ? v : { v: 'reload', by: '', why: 'unreadable-frame', modules: [], css: false };
 }
 // Apply a reload signal at the lightest correct weight (#1398). A page or
 // layout edit never changes browser-bound JS, so the server's re-render is the
 // complete truth and the client router can swap it in place: scroll and (for a
 // page edit) the hydrated state of components outside the changed region
-// survive. Anything else, including every signal the server could not classify,
-// is the full reload this always was.
+// survive. A \`component\` verdict (#1689) re-imports the versioned component
+// modules it lists, which patch the registered classes in place, so the live
+// elements keep their state. A \`css\` verdict re-requests the stylesheets and
+// swaps them in, with no re-render at all. Anything else, including every signal
+// the server could not classify, is the full reload this always was.
 function __webjsApplyReload(verdict) {
   if (__webjsHold.offer(verdict)) return;
   __webjsWhenReady(function () {
+    var mods = verdict.modules || [];
+    if (verdict.v !== 'reload' && mods.length) { __webjsApplyHot(verdict, mods); return; }
+    if (verdict.v === 'css') {
+      // Every same-origin sheet, not just the edited file, so an @import-ed
+      // partial and a webjs.dev.regenerate output (Tailwind) come out right.
+      // The clone-swap keeps the working sheet when a re-request fails.
+      preloadStyles().then(function (styles) {
+        styles.commit();
+        console.info('[webjs] stylesheets refreshed' + (verdict.by ? ' (' + verdict.by + ')' : ''));
+      }).then(null, function () { __webjsReload({ why: 'styles-failed', by: verdict.by }); });
+      return;
+    }
     // Runtime feature detection, never an assumption. The refresh entry is
     // published by enableClientRouter and removed by disableClientRouter, so its
     // ABSENCE covers both no-router cases at once: an app that opted out with
     // \`webjs.clientRouter: false\`, and a page that ships no component at all so
     // @webjsdev/core never loads in the browser and the module never runs.
     var refresh = globalThis.__webjsRefreshPage;
-    if ((verdict === 'page' || verdict === 'shell') && typeof refresh === 'function') {
-      // Take any error overlay down BEFORE re-rendering. DEFENSIVE, and the
-      // reasoning is worth recording because the obvious scenario for it does
-      // NOT hold. The overlay's own teardown is keyed on the URL CHANGING,
-      // which a same-url refresh never does, so a refresh has no exit for a
-      // live overlay the way a full reload did (it replaced the document).
+    var mode = verdict.v;
+    if ((mode === 'page' || mode === 'shell') && typeof refresh === 'function') {
+      // Take any error overlay down BEFORE re-rendering. The overlay's own
+      // teardown is keyed on the URL CHANGING, which a same-url refresh never
+      // does, so a refresh has no exit for a live overlay the way a full reload
+      // did (it replaced the document).
       //
-      // The scenario that looks like it needs this, a page-render error, is not
-      // reachable: the dev 500 page carries no children boundaries and no
-      // layout, so applying it shares no boundary with the live page and
-      // degrades to a hard navigation, in BOTH directions. Breaking a page
-      // reloads, and so does fixing it, and the reload clears the overlay. What
-      // is left is the narrow case of an UNSCOPED frame (a \`rebuild\` or
-      // \`ts-strip\` failure), which the nav sync deliberately never clears and
-      // which can coexist with a page that still renders and so still refreshes.
+      // A page-render error is the main case (#1689). Its response is marked
+      // \`x-webjs-dev-error\`, so the refresh that hits it leaves the last good
+      // page on screen under the overlay instead of applying the error page,
+      // and the edit that FIXES it refreshes in place, which is when this
+      // takes the overlay down. An UNSCOPED frame (a \`rebuild\` or
+      // \`ts-strip\` failure), which the nav sync deliberately never clears, is
+      // the other.
       //
       // Before rather than after, so the ordering is self-correcting: if this
       // render also fails, the server pushes a fresh frame DURING it and the
@@ -558,15 +595,64 @@ function __webjsApplyReload(verdict) {
       // seconds, and markup swapped in before it lands paints a new class with
       // no rule. The old sheets stay applied until the swap, then go.
       preloadStyles().then(function (styles) {
-        return refresh(verdict).then(function (ok) {
-          if (!ok) { location.reload(); return; }
+        return refresh(mode).then(function (outcome) {
+          if (!outcome || outcome === 'failed') { __webjsReload({ why: 'refresh-failed', by: verdict.by }); return; }
           styles.commit();
+          __webjsLogRefresh(outcome, mode, verdict.by);
         });
-      }).then(null, function () { location.reload(); });
+      }).then(null, function () { __webjsReload({ why: 'refresh-failed', by: verdict.by }); });
       return;
     }
-    location.reload();
+    // The reloaded page says why (#1689): the server's reason (a component
+    // edit the hot swap refused names its guard, such as constructor-changed),
+    // or that this page has no client router to apply a refresh with.
+    __webjsReload(mode === 'page' || mode === 'shell' ? { why: 'no-client-router', by: verdict.by } : verdict);
   });
+}
+// Apply a verdict that carries component modules (#1689): load the rebuilt
+// stylesheets, re-import the modules (each re-define patches its registered
+// class and re-renders the live elements), then re-render the page for a
+// \`page\` / \`shell\` verdict in the same batch, then swap the sheets. A
+// refused swap (a guard the hot client checks, a module that fails to load)
+// reloads and says why.
+function __webjsApplyHot(verdict, mods) {
+  var refresh = globalThis.__webjsRefreshPage;
+  var mode = verdict.v;
+  var by = verdict.by ? ' (' + verdict.by + ')' : '';
+  function reload(why) { __webjsReload({ why: why, by: verdict.by }); }
+  if ((mode === 'page' || mode === 'shell') && typeof refresh !== 'function') { reload('no-client-router'); return; }
+  // A page / shell refresh re-raises an error that still stands (see the
+  // refresh path above), so it may dismiss first. A component-only swap
+  // re-renders nothing on the server, so it takes down only an overlay the
+  // swap settled: the edited file, a re-imported module, or a rebuild error.
+  if (mode === 'page' || mode === 'shell') dismissDevOverlay();
+  else {
+    var bp = ${JSON.stringify(bp || '')};
+    dismissDevOverlayCoveredBy(mods.map(function (u) {
+      var p = String(u).split('?')[0];
+      return bp && p.indexOf(bp + '/') === 0 ? p.slice(bp.length) : p;
+    }).concat(verdict.by ? ['/' + verdict.by] : []));
+  }
+  preloadStyles().then(function (styles) {
+    return __webjsHot.applyModules(mods).then(function (r) {
+      if (!r.ok) { reload(r.why); return; }
+      var after = mode === 'page' || mode === 'shell' ? refresh(mode) : Promise.resolve('applied');
+      return after.then(function (outcome) {
+        if (!outcome || outcome === 'failed') { reload('refresh-failed'); return; }
+        styles.commit();
+        console.info('[webjs] hot-swapped ' + (r.tags.length ? r.tags.map(function (t) { return '<' + t + '>'; }).join(', ') : 'nothing') + by);
+        if (outcome === 'dev-error') __webjsLogRefresh(outcome, mode, verdict.by);
+      });
+    });
+  }).then(null, function (e) { reload(String((e && e.message) || e)); });
+}
+// The one console line an in-place refresh leaves (#1689). A refresh the dev
+// server answered with a render error applied nothing, so it must not claim the
+// page was updated: the last good render is still on screen under the overlay.
+function __webjsLogRefresh(outcome, mode, by) {
+  var file = by ? ' (' + by + ')' : '';
+  if (outcome === 'dev-error') { console.info('[webjs] the page did not render, so the last good version stays under the error overlay' + file); return; }
+  console.info('[webjs] ' + (mode === 'shell' ? 'layout' : 'page') + ' updated in place' + file);
 }
 function __webjsDirectEvents() {
   // No SharedWorker (Chrome for Android has none) or its construction threw (a
@@ -594,7 +680,7 @@ function __webjsDirectEvents() {
     // dev-overlay bug leaves no trace, which would be a new behaviour rather
     // than a restored one.
     try {
-      if (m.type === 'reload') __webjsApplyReload(m.verdict);
+      if (m.type === 'reload') __webjsApplyReload(__webjsVerdictOf(m.verdict));
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     } catch (_) {
       console.error('[webjs] dev reload handler threw', _);
@@ -657,7 +743,7 @@ try {
     const w = new SharedWorker(${workerUrl});
     w.port.onmessage = (e) => {
       const m = e.data || {};
-      if (m.type === 'reload') __webjsApplyReload(m.verdict);
+      if (m.type === 'reload') __webjsApplyReload(__webjsVerdictOf(m.verdict));
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     };
     // The worker's SCRIPT can fail to load where the page itself loaded: a

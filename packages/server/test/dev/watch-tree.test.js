@@ -105,3 +105,32 @@ test('isWatchError matches only errors from a watch syscall', () => {
   assert.equal(isWatchError(new Error('x')), false);
   assert.equal(isWatchError(undefined), false);
 });
+
+// Review of #1689: vim's all-digit write probe is a FILE, so a directory named
+// by digits (`app/blog/2024/`, `app/404/`) is still walked and its edits still
+// reach the rebuild. The ignore filter is the one `server.js` builds.
+test('an all-digit directory is watched, vim\'s 4913 probe file is not (#1689)', async () => {
+  const { createWatchIgnore } = await import('../../src/dev/watch-ignore.js');
+  const root = app();
+  mkdirSync(join(root, 'app/blog/2024'), { recursive: true });
+  const unserved = createWatchIgnore(root);
+  assert.equal(unserved('app/blog/2024'), false, 'a digit directory is source');
+  assert.equal(unserved('app/4913'), true, 'a deleted probe is still ignored');
+  writeFileSync(join(root, 'app/4913'), '');
+  assert.equal(unserved('app/4913'), true, 'a live probe file is ignored');
+  const events = [];
+  const close = watchTree(root, {
+    ignore: (rel) => shouldIgnoreWatchPath(rel) || unserved(rel),
+    onEvent: (p) => events.push(p), onError: () => {},
+  });
+  try {
+    await sleep(50);
+    writeFileSync(join(root, 'app/blog/2024/page.ts'), 'x');
+    writeFileSync(join(root, 'app/4913'), 'probe');
+    assert.ok(await until(() => events.includes(join('app', 'blog', '2024', 'page.ts'))), `edit under a digit dir reported: ${events}`);
+    assert.ok(!events.includes(join('app', '4913')), 'the probe is never reported');
+  } finally {
+    close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -36,11 +36,36 @@ import { pathToFileURL } from 'node:url';
 const HOSTS = Symbol.for('webjs.dev.hotHosts');
 
 /**
- * Sent to the `webjs dev` supervisor over IPC once the hot host is up, so it
- * stops restarting the process for plugin-served edits this server now reloads
- * in place. Mirrors `HOT_IN_PLACE_MESSAGE` in `@webjsdev/cli`'s `dev-reload.js`.
+ * Sent to the `webjs dev` supervisor over IPC once the server is up and able
+ * to reload app edits in place: the Bun hot host (plugin-served edits, #1575),
+ * or a Node server with the module resolve hook (`esm-hot-hooks.js`, #1689).
+ * The supervisor then restarts only for its restart files. Mirrors
+ * `HOT_IN_PLACE_MESSAGE` in `@webjsdev/cli`'s `dev-reload.js`.
  */
 export const HOT_IN_PLACE_MESSAGE = 'hot-reload-in-place';
+
+/**
+ * Sent to the `webjs dev` supervisor to restart this server for an edit it
+ * cannot apply in place (#1689): a module the CommonJS loader holds, which no
+ * version reaches. The restart is the reload. Mirrors `HOT_RESTART_MESSAGE` in
+ * `@webjsdev/cli`'s `dev-reload.js`.
+ */
+export const HOT_RESTART_MESSAGE = 'hot-reload-restart';
+
+/**
+ * Ask the supervisor (when there is one) to restart for `path`, app-relative.
+ * @param {string} path
+ * @returns {boolean} whether the request was sent
+ */
+export function requestSupervisorRestart(path) {
+  try {
+    if (typeof process.send === 'function' && process.connected) {
+      process.send({ webjs: HOT_RESTART_MESSAGE, path });
+      return true;
+    }
+  } catch { /* no supervisor, or it is gone */ }
+  return false;
+}
 
 /** Tell the supervisor (when there is one) that edits reload in place. */
 export function announceHotInPlace() {
@@ -157,9 +182,11 @@ const INERT_ASSET = /\.(?:css|md|mdx|txt|log|map|png|jpe?g|gif|webp|avif|ico|svg
  * plugin, the rest through `dev/bun-app-source.js` or the source-locations
  * plugin), which `bun --hot` never watches.
  *
- * `isRouteOnly` answers whether a module path is one only the router loads
- * (nothing imports it; see `needsRegistryReset` on the request handler): its
- * dev re-import is keyed by content, so it needs no reset. Anything the
+ * `isRouteOnly` answers whether a module path needs no reset (see
+ * `needsRegistryReset` on the request handler): a module the dev plugins
+ * already served, which the module versions re-evaluate in place with its
+ * importers (#1689), or a module only the router loads, whose dev re-import is
+ * keyed by content. A new or deleted module still resets. Anything the
  * dev server cannot place, such as the extensionless temp file `sed -i`
  * renames over the real one, gets the reset, because the event may name the
  * temp file rather than the module it replaced.
