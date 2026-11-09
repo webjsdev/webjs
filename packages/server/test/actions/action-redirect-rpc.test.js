@@ -50,6 +50,13 @@ async function call(dir, file, fn, args = []) {
   return withRequest(req, () => invokeAction(idx, hash, fn, req, () => assert.fail('a redirect is not an error')));
 }
 
+test('a redirect to a non-Latin path is percent-encoded instead of failing the response', async () => {
+  const dir = await scaffold();
+  const res = await call(dir, '/actions/go.server.js', 'go', ['/日本 x?q=é']);
+  assert.equal(res.status, 200, 'a ByteString-unsafe target no longer throws inside the redirect branch');
+  assert.equal(res.headers.get('x-webjs-redirect'), '/%E6%97%A5%E6%9C%AC%20x?q=%C3%A9;push');
+});
+
 test('a redirect from an RPC action is 200 + x-webjs-redirect (push), tags still evicted', async () => {
   const dir = await scaffold();
   const res = await call(dir, '/actions/go.server.js', 'go', ['/done?x=1']);

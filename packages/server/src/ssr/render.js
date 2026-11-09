@@ -1,4 +1,5 @@
 import { renderToString, isNotFound, isRedirect, isForbidden, isUnauthorized } from '@webjsdev/core';
+import { headerSafeLocation } from '../redirect-location.js';
 import { vendorPreloadTargets } from '../importmap.js';
 import {
   componentPreloads, pagePreloadHints, toUrlPath,
@@ -1321,9 +1322,9 @@ export async function ssrPage(route, params, url, opts) {
       // A redirect thrown during a GET page/layout render is a GET-to-GET
       // navigation (an auth bounce, a gate). 302 Found is the conventional
       // code there, so it is the default when the caller did not pick one. An
-      // explicit `redirect(url, status)` overrides it. (Action redirects, a
-      // POST, default to 307 in form-dispatch.js so the method is preserved.)
-      return new Response(null, { status: e.status || 302, headers: { location: e.url } });
+      // explicit `redirect(url, status)` overrides it. (A form action's
+      // redirect, a POST, always answers 303 in form-dispatch.js.)
+      return new Response(null, { status: e.status || 302, headers: { location: headerSafeLocation(e.url) } });
     }
     if (isNotFound(err)) {
       // Nearest not-found.{js,ts} in the page's chain wins (#848 fix: previously

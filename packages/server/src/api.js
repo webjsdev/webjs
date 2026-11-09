@@ -1,4 +1,5 @@
 import { isRedirect, isNotFound, isForbidden, isUnauthorized } from '@webjsdev/core';
+import { headerSafeLocation } from './redirect-location.js';
 import { makeThenable } from './thenable-params.js';
 import { devImport } from './dev-import.js';
 
@@ -83,7 +84,7 @@ export async function handleApi(route, params, webRequest, dev) {
 export function controlFlowResponse(e) {
   if (isRedirect(e)) {
     const r = /** @type any */ (e);
-    return new Response(null, { status: r.status || 307, headers: { location: r.url } });
+    return new Response(null, { status: r.status || 307, headers: { location: headerSafeLocation(r.url) } });
   }
   if (isNotFound(e)) return new Response(null, { status: 404 });
   if (isForbidden(e)) return new Response(null, { status: 403 });

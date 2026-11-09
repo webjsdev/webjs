@@ -1,4 +1,5 @@
 import { isNotFound, isRedirect, isForbidden, isUnauthorized, FORM_ACTION_FIELD } from '@webjsdev/core';
+import { headerSafeLocation } from './redirect-location.js';
 import { ssrPage, ssrNotFound, ssrForbidden, ssrUnauthorized } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
 import { getBodyLimits, refreshHeaderValue } from './context.js';
@@ -573,6 +574,23 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   /** @type {ActionResult | undefined} */
   let result;
   let ranAction = false;
+  // What a COMPLETED action owes the cache and the browser, whichever way it
+  // finished (a returned result or a thrown redirect()): its `invalidates` tags
+  // evicted and reported, and any revalidatePath() reported. A middleware
+  // short-circuit (the action never ran) evicts nothing.
+  const completionHeaders = async () => {
+    /** @type {string[]} */
+    let invalidated = [];
+    if (ranAction) {
+      invalidated = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+      if (invalidated.length) await revalidateTags(invalidated);
+    }
+    /** @type {Record<string, string> | null} */
+    let headers = invalidated.length ? { 'x-webjs-invalidate': invalidated.join(',') } : null;
+    const refresh = refreshHeaderValue();
+    if (refresh) headers = { ...(headers || {}), 'x-webjs-refresh': refresh };
+    return headers;
+  };
   try {
     const middleware = actionMiddleware(mod);
     result = await runWithActionSignal(actionReq.signal, () =>
@@ -599,7 +617,10 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
       // the mutation runs once. A 307 (the old default) re-POSTed the body,
       // identity field included, and ran the action a second time on the
       // target page. An explicit status is ignored here for the same reason.
-      return new Response(null, { status: 303, headers: { location: e.url } });
+      // The action finished its work before throwing (create, then redirect),
+      // so it evicts and reports exactly as a returned result does.
+      const done = await completionHeaders();
+      return new Response(null, { status: 303, headers: { location: headerSafeLocation(e.url), ...done } });
     }
     // `route` and `params` ride along so the boundary renders inside its
     // layouts, exactly as it does on the page-render path (#1298).
@@ -645,20 +666,10 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // after a successful PRG the client learns nothing from it. The redirect's
   // own re-render is server-side and seeds fresh data, so what remains exposed
   // is only a later client refetch of a separately cached GET key.
-  let invalidated = [];
-  if (ranAction) {
-    invalidated = resolveTags(actionConfigFn(mod, 'invalidates'), args);
-    if (invalidated.length) await revalidateTags(invalidated);
-  }
-  /** @type {Record<string, string> | null} */
-  let invalidateHeader = invalidated.length
-    ? { 'x-webjs-invalidate': invalidated.join(',') }
-    : null;
-  // revalidatePath() in the action: the router drops its cached copies of
-  // those paths when it applies an in-place response (the redirect a success
-  // answers with re-renders the target on the server anyway).
-  const refresh = refreshHeaderValue();
-  if (refresh) invalidateHeader = { ...(invalidateHeader || {}), 'x-webjs-refresh': refresh };
+  // revalidatePath() in the action is reported too: the router drops its
+  // cached copies of those paths when it applies an in-place response (the
+  // redirect a success answers with re-renders the target on the server anyway).
+  const invalidateHeader = await completionHeaders();
 
   // An action MAY return a `Response` directly (e.g. a content-negotiated
   // `streamResponse`, #248). Honor it verbatim, so the action owns the status +

@@ -1,4 +1,5 @@
 import { digestHex } from './crypto-utils.js';
+import { headerSafeLocation } from './redirect-location.js';
 import { readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { walk } from './fs-walk.js';
@@ -597,7 +598,7 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     if (isRedirect(e)) {
       const r = /** @type {any} */ (e);
       /** @type {Record<string, string>} */
-      const headers = { 'x-webjs-redirect': `${String(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}` };
+      const headers = { 'x-webjs-redirect': `${headerSafeLocation(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}` };
       if (ranAction && method !== 'GET') {
         const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
         if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
