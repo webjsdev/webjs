@@ -501,7 +501,7 @@ export class Walker {
         // page's own url; the identity is remembered for the `>`. Trailing
         // whitespace goes with the attribute, since every injected attribute
         // carries its own leading space.
-        if (ts) ts.actionId = assertIdentifiableAction(await resolveFormActionId(val), tag);
+        if (ts) ts.actionId = assertIdentifiableAction(await resolveFormActionId(val), tag, val);
         this.buf = this.buf.replace(/\s+$/, '');
       } else {
         // #1207, the submitter binding. The identity replaces the
@@ -512,7 +512,7 @@ export class Walker {
         if (attrs.has('name')) assertSubmitterHasNoName(attrs.get('name') || '', tag, false);
         if (attrs.has('value')) assertSubmitterHasNoValue(tag);
         if (attrs.has('form')) assertSubmitterHasNoFormAttribute(tag);
-        const subId = assertIdentifiableAction(await resolveFormActionId(val), tag);
+        const subId = assertIdentifiableAction(await resolveFormActionId(val), tag, val);
         if (ts) ts.submitterTag = tag;
         this.buf += `name="${FORM_ACTION_FIELD}" value="${escapeAttr(subId)}"`;
       }

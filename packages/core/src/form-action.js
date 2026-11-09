@@ -555,13 +555,28 @@ export function assertNotFunctionReflectedActionProp(val, propName, tag) {
  * looks right and silently posts nowhere, which is the one outcome a
  * progressive-enhancement form must never have, so this throws instead.
  *
+ * A function made with `.bind()` gets its own message: Next.js passes an extra
+ * argument to a form action as `updateUser.bind(null, id)`, and the generic
+ * "not a server action" text (about inline `'use server'`) sent an agent who
+ * wrote that looking in the wrong place.
+ *
  * @param {string | null} id
  * @param {string} [tag]
+ * @param {unknown} [fn] the bound value, to name a `.bind()` result
  * @returns {string} the identity, narrowed
  */
-export function assertIdentifiableAction(id, tag) {
+export function assertIdentifiableAction(id, tag, fn) {
   if (id) return id;
   const attr = tag === 'button' || tag === 'input' ? 'formaction=' : 'action=';
+  if (typeof fn === 'function' && /^bound /.test(fn.name)) {
+    throw new Error(
+      `[webjs] the function in ${attr} on <${tag || 'form'}> was made with .bind(). WebJs does not `
+      + `carry bound arguments through a form submission, so it cannot run it. Bind the action `
+      + `itself and send the value as a field: <input type="hidden" name="id" value=\${id}> `
+      + `inside the form, read as input.id (or formData.get('id')) in the action. `
+      + `See https://webjs.dev/docs/troubleshooting#bound-form-action`,
+    );
+  }
   throw new Error(
     `[webjs] the function in ${attr} on <${tag || 'form'}> is not a server action. `
     + `Only a function imported from a 'use server' *.server.{js,ts} module can be `
@@ -890,7 +905,7 @@ export function reconcileFormAction(form, value, method, enctype, shape) {
     // Not a bound action (a url string, null, or a function the browser stub
     // never stamped). A function that was MEANT as an action still refuses, so
     // a form never silently posts nowhere.
-    if (typeof value === 'function') assertIdentifiableAction(null, form.localName);
+    if (typeof value === 'function') assertIdentifiableAction(null, form.localName, value);
     releaseFormAction(form, method, enctype, shape.propAttrs);
     return;
   }

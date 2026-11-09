@@ -161,6 +161,24 @@ test('an unidentifiable function is refused, never rendered as an inert form', a
   );
 });
 
+test('a .bind() result is refused with the hidden-field fix, not the inline-action text', async () => {
+  // Next passes an extra argument as updateUser.bind(null, id); an agent wrote
+  // that and was told about inline 'use server', which is not what it did.
+  withResolver();
+  const bound = submitFeedback.bind(null, 'slug');
+  await assert.rejects(
+    () => renderToString(html`<form action=${bound}></form>`, { ssr: true }),
+    (err) => /made with \.bind\(\)/.test(err.message)
+      && /type="hidden"/.test(err.message)
+      && !/inline action/.test(err.message),
+  );
+  await assert.rejects(
+    () => renderToString(html`<form action=${submitFeedback}><button formaction=${bound}>Go</button></form>`, { ssr: true }),
+    /made with \.bind\(\)/,
+    'a submitter bound the same way is refused the same way',
+  );
+});
+
 test('a function carrying its own identity resolves with no resolver', async () => {
   // This is the browser stub's path: the generated stub stamps its identity on
   // itself, so it needs no server resolver. Pinning it on the server renderer

@@ -211,7 +211,7 @@ function reconcileSubmitterAction(
   if (!id) {
     // A function that was MEANT as an action still refuses, so a button never
     // silently submits the form's action instead of its own.
-    if (typeof value === 'function') assertIdentifiableAction(null, el.localName);
+    if (typeof value === 'function') assertIdentifiableAction(null, el.localName, value);
     releaseSubmitterAction(el);
     // The submission attributes the framework supplied go with the identity, or
     // a released button keeps a `formmethod` / `formenctype` SSR does not emit
