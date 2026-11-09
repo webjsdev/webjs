@@ -554,9 +554,11 @@ function buildFacade(origUrl, absPath, exports) {
     out += `}\n`;
     // Keep the action's declared arity: a form-bound action declaring
     // `(prevState, formData)` is told apart by `fn.length` (Next's
-    // useActionState contract), and the rest-args wrapper reports 0. A
-    // circular import can leave `__orig` in TDZ here, hence the guard.
-    out += `try { Object.defineProperty(${n}, 'length', { value: (__orig[${k}] && __orig[${k}].length) || 0 }); } catch {}\n`;
+    // useActionState contract), and the rest-args wrapper reports 0. It is a
+    // GETTER, read when the dispatcher asks: a circular import can run this
+    // facade before the real module, while a `const` action is still in TDZ,
+    // and a value captured then would freeze the arity at 0.
+    out += `try { Object.defineProperty(${n}, 'length', { configurable: true, get() { try { return (__orig[${k}] && __orig[${k}].length) || 0; } catch { return 0; } } }); } catch {}\n`;
     out += `__w(${file}, ${k}, ${n});\n`;
   }
   for (const n of exports.valNames) {

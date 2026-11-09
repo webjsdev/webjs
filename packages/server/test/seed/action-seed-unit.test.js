@@ -74,6 +74,30 @@ test('buildSeedFacade memoizes the action wrap behind a HOISTED (var) memo', () 
   assert.doesNotMatch(facade, /let _fn_submitData;/);
 });
 
+test("a facade function reports the real action's arity, read when asked", async () => {
+  // `(prevState, formData)` is told apart by fn.length, and the facade's
+  // rest-args wrapper would report 0. The arity is a getter, so a facade that
+  // runs before its real module (an action still in TDZ) does not freeze it.
+  const src = `'use server';\nexport const save = async (prevState, input) => input;\n`;
+  const facade = buildSeedFacade('file:///app/s.server.js', '/app/s.server.js', src)
+    .replace(/^import \* as __orig from .*$/m, 'const __orig = globalThis.__webjsFakeOrig;')
+    .replace(/^import \{ __actionWrap as __w \} from .*$/m, 'const __w = (_f, _k, o) => o;')
+    .replace(/^export \* from .*$/m, '');
+  globalThis.__webjsFakeOrig = {}; // the real module has not run yet
+  // A temp file rather than a data: URL, which Bun imports with no exports.
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { pathToFileURL } = await import('node:url');
+  const file = join(mkdtempSync(join(tmpdir(), 'webjs-facade-arity-')), 'facade.mjs');
+  writeFileSync(file, facade);
+  const mod = await import(pathToFileURL(file).href);
+  assert.equal(mod.save.length, 0, 'nothing to report while the real export is missing');
+  globalThis.__webjsFakeOrig.save = async (prevState, input) => input;
+  assert.equal(mod.save.length, 2, 'the arity follows the real export once it exists');
+  delete globalThis.__webjsFakeOrig;
+});
+
 test('a memo variable never collides with a real export name', () => {
   // A module exporting both `ping` and `_fn_ping` would emit `var _fn_ping`
   // beside `export function _fn_ping`: a duplicate declaration, i.e. a
