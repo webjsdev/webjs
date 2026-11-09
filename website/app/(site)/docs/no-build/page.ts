@@ -190,11 +190,11 @@ $ webjs vendor update</code-block>
       <tbody>
         <tr><td>TS stripping</td><td>Same: <code>module.stripTypeScriptTypes</code></td><td>Same</td></tr>
         <tr><td>Mtime cache</td><td>Cleared on file change via <code>fs.watch</code></td><td>Persists for process lifetime</td></tr>
-        <tr><td>Vendor resolution</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> on the first request (re-resolved after rebuild). Never at boot.</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> on the first request, once. Never at boot.</td></tr>
+        <tr><td>Vendor resolution</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> on the first request (re-resolved after a <code>package.json</code> edit). Never at boot.</td><td>Reads <code>.webjs/vendor/importmap.json</code> if present; else calls <code>api.jspm.io/generate</code> on the first request, once. Never at boot.</td></tr>
         <tr><td>Cache-Control</td><td><code>no-cache</code></td><td><code>max-age=31536000, immutable</code> for a content-hashed <code>?v=&lt;digest&gt;</code> URL (the form the framework emits) and for <code>--download</code> bundles; <code>max-age=3600</code> for a bare un-fingerprinted request; jspm.io controls headers for direct CDN fetches</td></tr>
         <tr><td>103 Early Hints</td><td>Disabled (stale URL risk)</td><td>Enabled</td></tr>
         <tr><td>Compression</td><td>Off</td><td>Brotli/Gzip negotiated</td></tr>
-        <tr><td>Live reload</td><td>SSE-driven full page reload</td><td>n/a</td></tr>
+        <tr><td>Live reload</td><td>SSE-driven: a page or layout edit refreshes in place, a component edit hot-swaps the live class, a stylesheet edit swaps the sheet, anything else is a full reload that logs why</td><td>n/a</td></tr>
       </tbody>
     </table>
 
@@ -212,7 +212,7 @@ $ webjs vendor update</code-block>
     <ul>
       <li><strong>No <code>webjs build</code> command.</strong> Production performance comes from HTTP/2 multiplex + modulepreload hints, not concatenation. There is no plan to add one.</li>
       <li><strong>No per-route code splitting beyond what the browser already does.</strong> The import graph already loads each module on demand. Modulepreload hints are emitted per-route at SSR time, so the browser fetches exactly the files that route needs.</li>
-      <li><strong>No Vite-grade HMR.</strong> Web components can only be <code>customElements.define</code>'d once per page, so the dev server does a full reload via SSE. Reloads are sub-100ms in practice.</li>
+      <li><strong>No app-facing HMR API.</strong> Dev hot reload needs no <code>import.meta.hot</code> and no bundler runtime. A web component can only be <code>customElements.define</code>'d once per page, so the dev server never re-defines a tag: it re-imports the edited module and patches the class the browser registered, then re-renders the live elements, keeping their properties, signals and unchanged DOM. A page or layout edit re-renders on the server and swaps in place. An edit a patched class cannot carry (a changed constructor, a <code>#private</code> member, a changed property declaration) is a full reload, and the console says why.</li>
     </ul>
     <p>If a large-app performance problem ever materializes, the answer will be tightening the modulepreload graph or adopting per-route importmap scopes natively in the browser. Not reintroducing a build step.</p>
   `;
