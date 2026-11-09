@@ -116,6 +116,34 @@ function grade(app, cli, paths) {
   };
 }
 
+/** Where a feature's own code lives; a write here starts the first draft. */
+const FEATURE_PATH = /^(?:app|components|modules|lib)\/|^middleware\.[mc]?[jt]s$/;
+
+/**
+ * Whether a tool call ends the first draft: a check, typecheck or test run
+ * made AFTER the agent has written feature code. A baseline check before any
+ * (after only a schema edit and a migration, say) used to stop the run with
+ * no page written and grade an empty draft.
+ * @param {any} c a content block of an assistant event
+ * @param {{ wroteFeature: boolean }} state
+ * @param {string} app the app directory, to read a write's path against
+ * @returns {boolean}
+ */
+export function firstDraftStop(c, state, app) {
+  if (c?.type !== 'tool_use') return false;
+  if (c.name === 'Write' || c.name === 'Edit' || c.name === 'MultiEdit') {
+    const p = String(c.input?.file_path || '');
+    const rel = p.startsWith(app + '/') ? p.slice(app.length + 1) : p;
+    if (FEATURE_PATH.test(rel)) state.wroteFeature = true;
+    return false;
+  }
+  if (c.name !== 'Bash') return false;
+  const cmd = String(c.input?.command || '');
+  // A file written from the shell (a heredoc, a tee) counts as feature code too.
+  if (/(?:>|\btee\s+)\s*['"]?(?:\.\/)?(?:app|components|modules|lib)\//.test(cmd)) state.wroteFeature = true;
+  return state.wroteFeature && !!verifyKind(cmd);
+}
+
 async function runTask(task, { framework, out, model, label, maxTurns }) {
   const parent = join(out, `${label}-${task.id}`);
   const app = await prepareApp({ framework, parent, appName: 'site' });
@@ -133,6 +161,7 @@ async function runTask(task, { framework, out, model, label, maxTurns }) {
     // The first draft ends where the agent first checks its work: stop the run
     // the moment it starts a check, typecheck or test, so the files on disk
     // are exactly the draft and no correction turn is paid for.
+    const stopState = { wroteFeature: false };
     let buf = '';
     child.stdout.on('data', (chunk) => {
       buf += chunk;
@@ -143,7 +172,7 @@ async function runTask(task, { framework, out, model, label, maxTurns }) {
         let e; try { e = JSON.parse(line); } catch { continue; }
         if (e.type !== 'assistant') continue;
         for (const c of e.message?.content || []) {
-          if (c?.type === 'tool_use' && c.name === 'Bash' && verifyKind(String(c.input?.command || ''))) {
+          if (firstDraftStop(c, stopState, app)) {
             stoppedAtVerify = true;
             child.kill('SIGTERM');
           }
