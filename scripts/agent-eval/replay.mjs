@@ -45,6 +45,8 @@ export function verifyKind(cmd) {
  * @param {'check'|'typecheck'|'test'} kind @param {string} out
  */
 /** A shell command that changes files: an in-place edit, a move, a copy, a delete, a redirect into a file, or the gallery reset. */
+// `git show REF:path > dest`, the one git command that writes a file.
+const RESTORE_RE = /\bgit show [^:\s]+:("[^"]+"|\S+)\s*>\s*("[^"]+"|\S+)/g;
 const MUTATES_RE = /\bsed\s+-i|\bmv\s|\bcp\s|\brm\s|cat\s*>|\btee\s|>\s*[\w./#-]+\.(?:ts|js|mjs|json|css|md)\b|gallery:clear|clear-gallery/;
 
 export function verifyPassed(kind, out) {
@@ -101,7 +103,7 @@ export function firstDraftOps(transcript, appDir) {
           : (c.content || []).map((x) => (x && x.text) || '').join('\n');
         // A shell command that was refused or failed changed nothing, so
         // replaying it would invent a change the agent never made.
-        if (op.type === 'sh') { op.ran = !c.is_error; continue; }
+        if (op.type === 'sh' || op.type === 'restore') { op.ran = !c.is_error; continue; }
         op.ok = !c.is_error && verifyPassed(op.kind, out);
       }
       continue;
@@ -124,7 +126,18 @@ export function firstDraftOps(transcript, appDir) {
         const cmd = String(inp.command || '');
         const kind = verifyKind(cmd);
         if (kind) { const op = { type: 'verify', kind, cmd, ok: null }; ops.push(op); pendingVerify.set(c.id, op); }
-        else if (MUTATES_RE.test(cmd) && !/^\s*(?:cd\s+\S+\s*&&\s*)?git\b/.test(cmd)) {
+        else if (RESTORE_RE.test(cmd)) {
+          // A file brought back from the scaffold commit (`git show REF:path >
+          // dest`). Every other git command is left out of the replay.
+          RESTORE_RE.lastIndex = 0;
+          for (const m of cmd.matchAll(RESTORE_RE)) {
+            const unq = (x) => x.replace(/^"|"$/g, '').replace(/\\(.)/g, '$1');
+            if (m[2] === '/dev/null') continue;
+            const op = { type: 'restore', from: unq(m[1]), path: unq(m[2]), ran: true };
+            ops.push(op);
+            pendingVerify.set(c.id, op);
+          }
+        } else if (MUTATES_RE.test(cmd) && !/^\s*(?:cd\s+\S+\s*&&\s*)?git\b/.test(cmd)) {
           const op = { type: 'sh', cmd, ran: true };
           ops.push(op);
           pendingVerify.set(c.id, op);
@@ -147,7 +160,7 @@ export function firstDraftOps(transcript, appDir) {
   const kept = (cut === -1 ? ops : ops.slice(0, cut)).filter((o) => {
     if (o.type === 'verify') { if (o.ok === false) afterFailure = true; else if (o.ok === true) afterFailure = false; return false; }
     if (o.type === 'write') { const isNew = !written.has(o.path); written.add(o.path); return isNew || !afterFailure; }
-    if (o.type === 'edit' || o.type === 'sh') return !afterFailure;
+    if (o.type === 'edit' || o.type === 'sh' || o.type === 'restore') return !afterFailure;
     return true;
   });
   const firstVerify = cut === -1 ? null : { kind: ops[cut].kind, cmd: ops[cut].cmd };
@@ -201,6 +214,16 @@ export function replayBuild(build, opts = {}) {
     result.shell = 0;
     for (const op of ops) {
       if (op.type === 'cmd') continue;
+      if (op.type === 'restore') {
+        if (!op.ran) continue;
+        try {
+          const body = execFileSync('git', ['-C', draft, 'show', `${root}:${op.from}`]);
+          mkdirSync(dirname(join(draft, op.path)), { recursive: true });
+          writeFileSync(join(draft, op.path), body);
+          result.writes++;
+        } catch { result.editMisses.push(op.path); }
+        continue;
+      }
       if (op.type === 'sh') {
         if (!op.ran) continue;
         const cmd = op.cmd.replace(appPathRe, draft);
