@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
-import { loadAppEnv, resolvePort, failFastOnPortInUse } from '../lib/port.js';
+import { loadAppEnv, resolvePort, failFastOnPortInUse, recordDevPort, recordedDevPort } from '../lib/port.js';
 import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -332,7 +332,7 @@ const HELP = {
     usage: 'webjs status [path...] [--port N] [--boot] [--json] [--timeout <seconds>]',
     summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. With no dev server on the port it boots the app in-process instead and probes every route that needs no parameter, so no server has to be started or stopped. Use it after each edit instead of sleeping and fetching a page.',
     options: [
-      { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then 8080, the same resolution `webjs dev` uses.' },
+      { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then the port a running `webjs dev` for this app recorded (so `webjs dev --port 8910` is found without repeating it), then 8080.' },
       { flag: '--boot', description: 'Skip the dev server: boot the app in-process with the dev handler. With no paths it probes every page and GET route handler that needs no parameter (an optional catch-all at its parent path), lists the routes it skipped, and fails only on a server error there; a path you name still fails at 400.' },
       { flag: '--json', description: 'Print one JSON document: { ok, url, settled, ready, rebuilds, paths, errors }, each error carrying kind, message, file, line, column and codeFrame.' },
       { flag: '--timeout <seconds>', description: 'How long to wait for the server to settle (default 30). A restarting Node dev server is retried until then.' },
@@ -562,6 +562,7 @@ async function main() {
           process.channel?.unref?.();
           process.on('disconnect', () => process.exit(0));
         }
+        if (!g.__webjsDevPortRecorded) { g.__webjsDevPortRecorded = true; recordDevPort(process.cwd(), port); }
         await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }));
         break;
       }
@@ -602,6 +603,7 @@ async function main() {
         const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
+        recordDevPort(process.cwd(), port);
         await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }), {
           exit: (code) => { killTasks(); process.exit(code); },
         });
@@ -1817,7 +1819,12 @@ Full docs: https://webjs.dev/docs`);
       const timeout = Number(flag(rest, '--timeout')) || 30;
       let basePath = '';
       try { basePath = (await readAppBasePath(process.cwd())) || ''; } catch { /* root mount */ }
-      const port = resolvePort(flag(rest, '--port'));
+      // An explicit --port or PORT wins; otherwise the port a running
+      // `webjs dev` for this app recorded, so a server started on another
+      // port is found without repeating it (#1686).
+      const port = flag(rest, '--port') !== undefined || process.env.PORT
+        ? resolvePort(flag(rest, '--port'))
+        : (recordedDevPort(process.cwd()) ?? resolvePort(undefined));
       // With no dev server answering on the port, boot the app in-process
       // instead of retrying for the whole timeout: the brief tells agents to
       // run `webjs status` after every edit, whether or not a server is up.

@@ -13,6 +13,8 @@
  * one implementation and the logic is unit-testable without spawning a
  * server.
  */
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { loadEnvFiles } from './env-files.js';
 
 /**
@@ -83,5 +85,52 @@ export async function failFastOnPortInUse(started, io = {}) {
       return exit(PORT_IN_USE_EXIT_CODE);
     }
     throw e;
+  }
+}
+
+/**
+ * Where a running `webjs dev` records the port it serves on (#1686), so
+ * `webjs status` finds a server started with `--port 8910` without being told
+ * again. An agent starts the dev server on a port of its choosing and then
+ * runs `webjs status` after each edit; with the 8080 default it booted a
+ * second, in-process copy instead of reporting on the server that was up.
+ */
+const DEV_SERVER_FILE = join('.webjs', 'dev-server.json');
+
+/**
+ * Record this process as the app's dev server on `port`, removed again on
+ * exit. Best effort: a read-only app directory only loses the convenience. A
+ * process killed by a signal skips its exit handler and leaves the record
+ * behind, which `recordedDevPort` ignores once that pid is gone.
+ * @param {string} cwd the app root
+ * @param {number} port
+ */
+export function recordDevPort(cwd, port) {
+  const file = join(cwd, DEV_SERVER_FILE);
+  try {
+    mkdirSync(join(cwd, '.webjs'), { recursive: true });
+    writeFileSync(file, JSON.stringify({ port, pid: process.pid }) + '\n');
+  } catch {
+    return;
+  }
+  process.once('exit', () => {
+    try {
+      if (JSON.parse(readFileSync(file, 'utf8')).pid === process.pid) rmSync(file, { force: true });
+    } catch { /* gone already */ }
+  });
+}
+
+/**
+ * The port a still-running `webjs dev` recorded for this app, or null.
+ * @param {string} cwd
+ * @returns {number | null}
+ */
+export function recordedDevPort(cwd) {
+  try {
+    const { port, pid } = JSON.parse(readFileSync(join(cwd, DEV_SERVER_FILE), 'utf8'));
+    process.kill(pid, 0);
+    return Number.isInteger(port) ? port : null;
+  } catch {
+    return null;
   }
 }
