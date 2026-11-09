@@ -15,6 +15,7 @@ import {
 import {
   checkNoInterpolationInRawTextElement,
   checkNoServerEnvInComponents,
+  checkNoNextRuntimeGuard,
   checkShellInNonRootLayout,
   checkAppLayout,
   checkNoJsxAttributes,
@@ -27,6 +28,7 @@ import {
   checkUseServerNeedsExtension,
   checkUseServerExportsCallable,
   checkOneActionPerConfiguredFile,
+  checkNoInlineUseServer,
 } from './rules-actions.js';
 import {
   checkTagNameHasHyphen,
@@ -97,16 +99,18 @@ export async function checkConventions(appDir) {
   checkNoBrowserGlobalsInRender(files, violations);
   checkNoShadowedNativeMember(files, violations);
   checkNoInterpolationInRawTextElement(files, violations);
-  checkNoServerEnvInComponents(files, violations);
   checkShellInNonRootLayout(files, violations);
   await checkErasableTypescriptOnly(appDir, violations);
   await checkNoNonErasableTypescript(appDir, violations);
   checkUseServerNeedsExtension(files, violations);
   checkUseServerExportsCallable(files, violations);
   checkOneActionPerConfiguredFile(files, violations);
+  checkNoInlineUseServer(files, violations);
   checkTagNameHasHyphen(files, violations);
   await checkNoDuplicateTag(appDir, files, violations);
-  await checkServerImportInBrowserModule(appDir, violations);
+  const shipped = await checkServerImportInBrowserModule(appDir, violations);
+  checkNoServerEnvInComponents(files, violations, shipped);
+  checkNoNextRuntimeGuard(files, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
   checkNoForeignFrameworkImport(files, violations);

@@ -566,8 +566,12 @@ export function assertIdentifiableAction(id, tag) {
     `[webjs] the function in ${attr} on <${tag || 'form'}> is not a server action. `
     + `Only a function imported from a 'use server' *.server.{js,ts} module can be `
     + `bound to a form or a submitter, because the identity the browser submits `
-    + `has to resolve back to something the server can run. Move the handler into `
-    + `a server action and import it, or pass a url string.`,
+    + `has to resolve back to something the server can run. A 'use server' `
+    + `directive inside a function body (Next.js's inline action) is not one: the `
+    + `boundary is a file. Move the function into its own module, e.g. `
+    + `modules/<feature>/actions/<name>.server.ts starting with 'use server', `
+    + `export it and import it here, or pass a url string. `
+    + `See https://webjs.dev/docs/troubleshooting#inline-use-server`,
   );
 }
 

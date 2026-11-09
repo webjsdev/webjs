@@ -10,6 +10,7 @@ import {
   isServerActionFile, isComponentFile,
 } from './helpers.js';
 import { buildRouteTable } from '../router.js';
+import { maskComments } from '../js-scan.js';
 import { validateAppLayout } from '../app-layout.js';
 import { findJsxIsm } from '@webjsdev/core/server';
 import { htmlTemplateStrings } from '../dev-source-locations.js';
@@ -124,34 +125,68 @@ export function checkNoInterpolationInRawTextElement(files, violations) {
  * @param {Violation[]} violations  accumulator the rule pushes onto
  * @returns {void}
  */
-export function checkNoServerEnvInComponents(files, violations) {
+export function checkNoServerEnvInComponents(files, violations, shipped = new Set()) {
   // --- Rule: no-server-env-in-components ---
-  // Catches `process.env.X` reads in component files where X is not a
-  // WEBJS_PUBLIC_* var and not NODE_ENV. The SSR shim only exposes those
-  // two categories to the browser; any other read either leaks a secret
-  // into the SSR'd HTML or reads as undefined after hydration.
-  {
-    for (const { abs, rel, content } of files) {
-      if (!isComponentFile(rel)) continue;
-      if (isServerActionFile(abs, content)) continue;
-
-      const re = /\bprocess\.env\.([A-Z][A-Z0-9_]*)\b/g;
-      const seen = new Set();
-      let m;
-      while ((m = re.exec(content)) !== null) {
-        const name = m[1];
-        if (name.startsWith('WEBJS_PUBLIC_')) continue;
-        if (name === 'NODE_ENV') continue;
-        if (seen.has(name)) continue;
-        seen.add(name);
-        violations.push({
-          rule: 'no-server-env-in-components',
-          file: rel,
-          message: `Component reads process.env.${name}; server-only env vars must not be read in components (would leak into SSR'd HTML and read as undefined after hydration)`,
-          fix: `Either rename to WEBJS_PUBLIC_${name} if the value is intended for the browser, or read process.env.${name} in a page function / server action / middleware and pass a derived value to the component as an attribute.`,
-        });
-      }
+  // Catches `process.env.X` reads in code the BROWSER runs, where X is not a
+  // WEBJS_PUBLIC_* var and not NODE_ENV: every component file, plus every
+  // module the build ships to the browser (a util a component imports). The
+  // browser env shim only exposes those two categories; any other read either
+  // leaks a secret into the SSR'd HTML or reads as undefined after hydration.
+  // A page / layout / boundary function runs on the server only, so its reads
+  // are fine and it is not scanned. Next.js's NEXT_PUBLIC_ prefix gets a
+  // targeted fix, since it is the usual cause.
+  const ROUTE_MODULE = /(?:^|[\\/])(?:page|layout|error|loading|not-found|forbidden|unauthorized|global-error|global-not-found|route|middleware)\.m?[jt]s$/;
+  for (const { abs, rel, content } of files) {
+    if (!isComponentFile(rel) && !shipped.has(abs)) continue;
+    if (/\.server\.m?[jt]s$/.test(rel) || isServerActionFile(abs, content)) continue;
+    if (!isComponentFile(rel) && ROUTE_MODULE.test(rel)) continue;
+    const masked = maskComments(content);
+    const re = /\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+    const seen = new Set();
+    let m;
+    while ((m = re.exec(masked)) !== null) {
+      const name = m[1];
+      if (name.startsWith('WEBJS_PUBLIC_')) continue;
+      if (name === 'NODE_ENV') continue;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const where = isComponentFile(rel) ? 'Component' : 'Browser-shipped module';
+      const nextPublic = name.startsWith('NEXT_PUBLIC_');
+      violations.push({
+        rule: 'no-server-env-in-components',
+        file: rel,
+        message: nextPublic
+          ? `${where} reads process.env.${name}. NEXT_PUBLIC_ is Next.js's browser prefix; WebJs exposes only WEBJS_PUBLIC_* (and NODE_ENV) to the browser, so this reads as undefined there.`
+          : `${where} reads process.env.${name}; server-only env vars must not be read in code the browser runs (it would leak into the SSR'd HTML and read as undefined after hydration)`,
+        fix: nextPublic
+          ? `Rename the variable to WEBJS_PUBLIC_${name.slice('NEXT_PUBLIC_'.length)} in your .env files and here.`
+          : `Either rename to WEBJS_PUBLIC_${name} if the value is intended for the browser, or read process.env.${name} in a page function / server action / middleware and pass a derived value to the component as an attribute.`,
+      });
     }
+  }
+}
+
+/**
+ * Rule: `no-next-runtime-guard`.
+ *
+ * `process.env.NEXT_RUNTIME` is set by Next.js only (to 'nodejs' or 'edge'),
+ * typically as `if (process.env.NEXT_RUNTIME === 'nodejs')` around an
+ * instrumentation `register()`. Under WebJs it is undefined, so the guarded
+ * code silently never runs.
+ *
+ * @param {ScannedFile[]} files
+ * @param {Violation[]} violations
+ */
+export function checkNoNextRuntimeGuard(files, violations) {
+  for (const { rel, content } of files) {
+    const masked = maskComments(content);
+    if (!/\bprocess\.env\.NEXT_RUNTIME\b/.test(masked)) continue;
+    violations.push({
+      rule: 'no-next-runtime-guard',
+      file: rel,
+      message: 'Reads process.env.NEXT_RUNTIME, which only Next.js sets. Under WebJs it is undefined, so code guarded by it (an instrumentation register(), say) silently never runs.',
+      fix: "Drop the guard: WebJs runs instrumentation.ts register() once, on the server only. To tell the runtimes apart use process.versions.bun (Bun) and process.versions.node (Node).",
+    });
   }
 }
 

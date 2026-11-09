@@ -1604,3 +1604,81 @@ test('no-css-import: flags side-effect and default CSS imports with the <link> f
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+/* -------------------- no-inline-use-server -------------------- */
+
+test("no-inline-use-server: flags a 'use server' directive inside a function body", async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      "async function create(fd) {\n  'use server';\n  return fd;\n}\n" +
+      "export default () => html`<form action=${create}></form>`;\n");
+    const v = (await checkConventions(appDir)).find((x) => x.rule === 'no-inline-use-server');
+    assert.ok(v, 'expected no-inline-use-server');
+    assert.match(v.message, /line 2/);
+    assert.match(v.fix, /\.server\.ts/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test("no-inline-use-server: a module-top directive and a commented mention are fine", async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'modules', 'a.server.ts'), "'use server';\nexport async function a() { return 1; }\n");
+    await writeFileEnsureDir(join(appDir, 'lib', 'b.ts'), "// function f() { 'use server'; }\nexport const b = 1;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-inline-use-server');
+    assert.equal(v.length, 0);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test("use-server-needs-extension: a routing file is told to move its actions, not rename", async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'), "'use server';\nexport async function act() {}\nexport default () => '';\n");
+    const v = (await checkConventions(appDir)).find((x) => x.rule === 'use-server-needs-extension');
+    assert.ok(v);
+    assert.doesNotMatch(v.fix, /page\.server\.ts/);
+    assert.match(v.fix, /modules\/<feature>\/actions/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-server-env-in-components (browser-shipped) -------------------- */
+
+test('no-server-env-in-components: NEXT_PUBLIC_ gets the WEBJS_PUBLIC_ fix; a shipped util is covered', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'lib', 'config.ts'), 'export const key = process.env.NEXT_PUBLIC_MAPS_KEY;\n');
+    await writeFileEnsureDir(join(appDir, 'components', 'map-view.ts'),
+      "import { WebComponent, html } from '@webjsdev/core';\nimport { key } from '../lib/config.ts';\n" +
+      "class MapView extends WebComponent({}) { render() { return html`<button @click=${() => key}>m</button>`; } }\nMapView.register('map-view');\n");
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\nimport '../components/map-view.ts';\nexport default () => html`<map-view></map-view>${process.env.DATABASE_URL ? '' : ''}`;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-server-env-in-components');
+    assert.deepEqual(v.map((x) => x.file), ['lib/config.ts'], 'the shipped util is flagged; the page function is not');
+    assert.match(v[0].fix, /WEBJS_PUBLIC_MAPS_KEY/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-next-runtime-guard -------------------- */
+
+test('no-next-runtime-guard: flags process.env.NEXT_RUNTIME', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'instrumentation.ts'),
+      "export async function register() {\n  if (process.env.NEXT_RUNTIME === 'nodejs') await import('./otel.ts');\n}\n");
+    await writeFileEnsureDir(join(appDir, 'lib', 'note.ts'), "// process.env.NEXT_RUNTIME is Next-only\nexport const n = 1;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-next-runtime-guard');
+    assert.deepEqual(v.map((x) => x.file), ['instrumentation.ts']);
+    assert.match(v[0].fix, /process\.versions\.bun/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

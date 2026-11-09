@@ -29,7 +29,17 @@ export const RULES = [
   {
     name: 'no-server-env-in-components',
     description:
-      'Component files (under components/ or modules/*/components/) must not read non-public environment variables. process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser via the SSR shim) or equals NODE_ENV (also defined in the browser). Any other process.env read in a component would leak the server-side value into the SSR\'d HTML, then read as undefined after hydration. Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes.',
+      'Code the browser runs must not read non-public environment variables: every component file (under components/ or modules/*/components/) and every module the build ships to the browser (a util a component imports). process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser by the SSR shim) or equals NODE_ENV. Any other read leaks the server-side value into the SSR\'d HTML, then reads as undefined after hydration. Next.js\'s NEXT_PUBLIC_ prefix gets a targeted fix (rename it to WEBJS_PUBLIC_). Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes. Page, layout and boundary modules are not scanned: their functions run on the server only.',
+  },
+  {
+    name: 'no-next-runtime-guard',
+    description:
+      'Flags `process.env.NEXT_RUNTIME`, which only Next.js sets (to `nodejs` or `edge`). Under WebJs it is undefined, so the usual `if (process.env.NEXT_RUNTIME === \'nodejs\')` guard around an instrumentation `register()` silently never runs. Drop the guard (WebJs runs `register()` once, server-side only), and use `process.versions.bun` / `process.versions.node` to tell the runtimes apart.',
+  },
+  {
+    name: 'no-inline-use-server',
+    description:
+      'Flags a `\'use server\'` directive inside a function body (Next.js\'s inline server action, often written in a page). WebJs\'s server boundary is a FILE: the directive is honoured only at the top of a `*.server.{js,ts}` module, so an inline one is an ordinary string and the function runs wherever it is called, and binding it to a form throws (it has no action identity). Move the function into its own module (`modules/<feature>/actions/<name>.server.ts` starting with `\'use server\'`), export it, and import it.',
   },
   {
     name: 'tag-name-has-hyphen',
