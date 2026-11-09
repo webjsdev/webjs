@@ -19,8 +19,8 @@ import { buttonClass } from '#modules/gallery/ui/button.ts';
 // rule an element out, which is the test to apply: the seeded list needs a
 // direct `<ul> > <li>` child (a wrapper tag would sit between them and break
 // the selector and the list semantics), and the streamed payload is an HTML
-// STRING, which a component cannot produce at all. Where a wrapper IS fine,
-// prefer the component.
+// STRING, which a component cannot produce at all. Display-only markup that
+// needs no browser is cheapest as a fragment anyway: it never ships.
 import { streamRow, streamRowHTML } from '../utils/ui/row.ts';
 
 // Build a <webjs-stream> payload string. It is a plain string (NOT an html``

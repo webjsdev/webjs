@@ -7,8 +7,10 @@
 // tag in the DOM, and neither caller can carry one. The list wants a direct
 // `<ul> > <li>` child, so a wrapper would break that selector and the list
 // semantics; and <webjs-stream> takes its payload as an HTML STRING, which no
-// component can return. That is the test, not bytes: where a wrapper element is
-// harmless, reach for the component instead.
+// component can return. A fragment is also the cheaper choice for display-only
+// markup: it never ships, while a component always does. Reach for a component
+// when the markup needs the browser (state, events), or a `.server.ts` component
+// when a wrapper element is harmless and it should stay on the server.
 //
 // Hence the two shapes below, off one class list, so the streamed row and the
 // seeded rows cannot drift apart. That drift was live: the class list used to

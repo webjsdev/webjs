@@ -41,7 +41,7 @@ export const FEATURE_GROUPS: NavGroup[] = [
   {
     label: 'Client & streaming',
     items: [
-      { href: '/features/client-router', title: 'Client router', blurb: 'Navigate without a full page reload. Automatic the moment a page ships a component, with nothing to import or configure.' },
+      { href: '/features/client-router', title: 'Client router', blurb: 'Navigate without a full page reload. Automatic the moment a page renders a component, with nothing to import or configure.' },
       { href: '/features/view-transitions', title: 'View transitions', blurb: 'Cross-fade a navigation instead of snapping. One opt-in meta, plus a marker for elements that must survive the swap.' },
       { href: '/features/streaming', title: 'Streaming actions', blurb: 'Show tokens or progress as the server produces them. An action returning an async generator, consumed with for await.' },
       { href: '/features/stream', title: 'Stream updates', blurb: 'Change one element after a write, like appending a row or bumping a count, without redrawing the region around it.' },
