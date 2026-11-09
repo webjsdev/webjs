@@ -1822,9 +1822,8 @@ Full docs: https://webjs.dev/docs`);
       // An explicit --port or PORT wins; otherwise the port a running
       // `webjs dev` for this app recorded, so a server started on another
       // port is found without repeating it (#1686).
-      const port = flag(rest, '--port') !== undefined || process.env.PORT
-        ? resolvePort(flag(rest, '--port'))
-        : (recordedDevPort(process.cwd()) ?? resolvePort(undefined));
+      const explicitPort = flag(rest, '--port') !== undefined || !!process.env.PORT;
+      const port = (!explicitPort && recordedDevPort(process.cwd())) || resolvePort(flag(rest, '--port'));
       // With no dev server answering on the port, boot the app in-process
       // instead of retrying for the whole timeout: the brief tells agents to
       // run `webjs status` after every edit, whether or not a server is up.
