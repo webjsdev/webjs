@@ -18,6 +18,7 @@
  *
  * @module directives
  */
+import { nothing, noChange } from './sentinels.js';
 
 // Re-export so the `/directives` subpath surface matches the documented table
 // in both src and dist mode. The implementation stays in repeat.js.
@@ -51,7 +52,24 @@ export { repeat, isRepeat } from './repeat.js';
  * @returns {{ _$webjs: 'unsafe-html', value: string }}
  */
 export function unsafeHTML(htmlString) {
-  return { _$webjs: 'unsafe-html', value: String(htmlString ?? '') };
+  const v = unsafeInput(htmlString, 'unsafeHTML');
+  return typeof v === 'string' ? { _$webjs: 'unsafe-html', value: v } : v;
+}
+
+/**
+ * The value an `unsafe*` directive was given, as Lit takes it (#1686):
+ * `nothing`, `null` or `undefined` render nothing, `noChange` keeps what is
+ * there, and anything else that is not a string throws (it used to be
+ * stringified, so `nothing` rendered as "Symbol(webjs.nothing)").
+ * @param {unknown} v
+ * @param {string} name
+ * @returns {string | typeof nothing | typeof noChange}
+ */
+function unsafeInput(v, name) {
+  if (v == null || v === nothing) return nothing;
+  if (v === noChange) return noChange;
+  if (typeof v !== 'string') throw new Error(`${name}() takes a string of trusted markup, not ${Array.isArray(v) ? 'an array' : typeof v}.`);
+  return v;
 }
 
 /**
@@ -77,7 +95,8 @@ export function isUnsafeHTML(x) {
  * @returns {{ _$webjs: 'unsafe-html', value: string, ns: 'svg' }}
  */
 export function unsafeSVG(svgString) {
-  return { _$webjs: 'unsafe-html', value: String(svgString ?? ''), ns: 'svg' };
+  const v = unsafeInput(svgString, 'unsafeSVG');
+  return typeof v === 'string' ? { _$webjs: 'unsafe-html', value: v, ns: 'svg' } : v;
 }
 
 /**
@@ -89,7 +108,8 @@ export function unsafeSVG(svgString) {
  * @returns {{ _$webjs: 'unsafe-html', value: string, ns: 'mathml' }}
  */
 export function unsafeMathML(mathString) {
-  return { _$webjs: 'unsafe-html', value: String(mathString ?? ''), ns: 'mathml' };
+  const v = unsafeInput(mathString, 'unsafeMathML');
+  return typeof v === 'string' ? { _$webjs: 'unsafe-html', value: v, ns: 'mathml' } : v;
 }
 
 /* ================================================================

@@ -15,6 +15,7 @@ export const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
   isOk: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
   notOk: (v, msg) => { if (v) throw new Error(msg || `Expected falsy, got ${v}`); },
+  oneOf: (v, list, msg) => { if (!list.includes(v)) throw new Error(msg || `Expected one of ${JSON.stringify(list)}, got ${JSON.stringify(v)}`); },
   isTrue: (v, msg) => { if (v !== true) throw new Error(msg || `Expected true, got ${v}`); },
   isFalse: (v, msg) => { if (v !== false) throw new Error(msg || `Expected false, got ${v}`); },
   isNaN: (v, msg) => { if (!Number.isNaN(v)) throw new Error(msg || `Expected NaN, got ${v}`); },

@@ -35,6 +35,7 @@ import { literal, unsafeStatic, html as staticHtml } from '@webjsdev/core/static
     <h2>unsafeHTML(htmlString)</h2>
     <p>Renders a raw HTML string without escaping. The only way to inject pre-built HTML (CMS content, markdown output) into a template.</p>
     <code-block>html\`&lt;article&gt;\${unsafeHTML(markdownToHtml(post.body))}&lt;/article&gt;\`;</code-block>
+    <p>As in Lit, it takes a string: <code>nothing</code>, <code>null</code> or <code>undefined</code> render nothing, <code>noChange</code> keeps what is there, any other value throws, and the same string on a re-render keeps the existing nodes.</p>
 
     <h2>unsafeSVG(svgString) / unsafeMathML(mathString)</h2>
     <p>The SVG and MathML twins of <code>unsafeHTML</code>. The client parses the string in that namespace, so a <code>&lt;circle&gt;</code> or a <code>&lt;mi&gt;</code> becomes a real SVG or MathML element; the server emits the markup verbatim. Put the hole inside the <code>&lt;svg&gt;</code> or <code>&lt;math&gt;</code> element. The same rule as <code>unsafeHTML</code> applies: never pass user input.</p>

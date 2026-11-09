@@ -986,12 +986,17 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
 
   // unsafeHTML directive: inject raw HTML string as DOM nodes.
   if (isUnsafeHTML(value)) {
-    teardownChild(part);
     const htmlStr = String(/** @type any */ (value).value ?? '');
+    const ns = /** @type any */ (value).ns;
+    // Dirty-checked against the markup last committed, as in Lit (#1686): the
+    // same string again keeps the nodes, and anything the page did to them,
+    // rather than re-parsing (each render builds a new directive object).
+    const last = /** @type any */ (part).__unsafeCommitted;
+    if (last && last.str === htmlStr && last.ns === ns && part.child === last.nodes) return;
+    teardownChild(part);
     const template = document.createElement('template');
     // unsafeSVG / unsafeMathML: parse inside the namespace's root element so
     // the nodes are SVG / MathML elements, then lift them out of the wrapper.
-    const ns = /** @type any */ (value).ns;
     const wrapTag = ns === 'svg' ? 'svg' : ns === 'mathml' ? 'math' : null;
     template.innerHTML = wrapTag ? `<${wrapTag}>${htmlStr}</${wrapTag}>` : htmlStr;
     if (wrapTag) {
@@ -1003,6 +1008,7 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     for (const n of nodes) frag.appendChild(n);
     marker.parentNode?.insertBefore(frag, marker);
     part.child = nodes;
+    /** @type any */ (part).__unsafeCommitted = { str: htmlStr, ns, nodes };
     return;
   }
 

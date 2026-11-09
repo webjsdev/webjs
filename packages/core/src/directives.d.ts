@@ -1,3 +1,4 @@
+import type { nothing, noChange } from './sentinels.js';
 export { repeat, isRepeat } from './repeat.js';
 
 export interface UnsafeHTMLDirective {
@@ -65,12 +66,12 @@ export interface WatchDirective<T = unknown> {
   signal: { get(): T; __isSignal: true };
 }
 
-export function unsafeHTML(htmlString: string | null | undefined): UnsafeHTMLDirective;
+export function unsafeHTML(htmlString: string | null | undefined | typeof nothing | typeof noChange): UnsafeHTMLDirective;
 export function isUnsafeHTML(x: unknown): x is UnsafeHTMLDirective;
 /** lit's `unsafeSVG`: trusted SVG markup, parsed in the SVG namespace on the client. */
-export function unsafeSVG(svgString: string | null | undefined): UnsafeHTMLDirective;
+export function unsafeSVG(svgString: string | null | undefined | typeof nothing | typeof noChange): UnsafeHTMLDirective;
 /** lit's `unsafeMathML`: trusted MathML markup, parsed in the MathML namespace on the client. */
-export function unsafeMathML(mathString: string | null | undefined): UnsafeHTMLDirective;
+export function unsafeMathML(mathString: string | null | undefined | typeof nothing | typeof noChange): UnsafeHTMLDirective;
 export function live<T>(value: T): LiveDirective<T>;
 export function isLive(x: unknown): x is LiveDirective;
 export function keyed<T>(key: unknown, template: T): KeyedDirective<T>;
