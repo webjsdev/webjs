@@ -84,3 +84,23 @@ test('the served reload client routes every reload through it and prints the pen
   assert.match(js, /function reload\(why\) \{ __webjsReload\(\{ why: why, by: verdict\.by \}\); \}/, 'and a refused hot swap');
   assert.match(js, /' updated in place'/, 'an in-place refresh says what it did');
 });
+
+// Review of #1689: a refresh the dev server answered with a render error
+// applied nothing, and the client still logged "page updated in place". The
+// served client's logger is run here with a fake console.
+test('the in-place log names a refresh that kept the last good page, and only an applied one as updated', () => {
+  const js = reloadClientJs('');
+  const src = /function __webjsLogRefresh\([\s\S]*?\n\}\n/.exec(js);
+  assert.ok(src, 'the client carries one refresh logger');
+  const logs = [];
+  const log = new Function('console', `${src[0]}; return __webjsLogRefresh;`)({ info: (m) => logs.push(m) });
+  log('applied', 'page', 'app/page.ts');
+  log('applied', 'shell', 'app/layout.ts');
+  log('dev-error', 'page', 'app/page.ts');
+  assert.deepEqual(logs, [
+    '[webjs] page updated in place (app/page.ts)',
+    '[webjs] layout updated in place (app/layout.ts)',
+    '[webjs] the page did not render, so the last good version stays under the error overlay (app/page.ts)',
+  ]);
+  assert.match(js, /refresh\(mode\)\.then\(function \(outcome\) \{[\s\S]*?__webjsLogRefresh\(outcome, mode, verdict\.by\)/, 'the refresh path logs through it');
+});

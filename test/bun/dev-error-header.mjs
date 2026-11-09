@@ -34,6 +34,11 @@ try {
   assert.equal(bad.headers.get('x-webjs-dev-error'), '1', `a dev render error is marked on ${runtime}`);
   const good = await dev.handle(new Request('http://x/'));
   assert.equal(good.headers.get('x-webjs-dev-error'), null, `a good render is not on ${runtime}`);
+  // The reload client the tab reads the header through logs such a refresh as
+  // the last good page staying, never as an update (review of #1689).
+  const client = await (await dev.handle(new Request('http://x/__webjs/reload.js'))).text();
+  assert.match(client, /outcome === 'dev-error'/, `the served reload client tells a kept page from an update on ${runtime}`);
+  assert.match(client, /the page did not render, so the last good version stays under the error overlay/);
 
   const prod = await createRequestHandler({ appDir: root, dev: false, logger: quiet });
   const prodBad = await prod.handle(new Request('http://x/broken'));

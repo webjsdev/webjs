@@ -67,6 +67,26 @@ suite('Client router: a refresh answered by a dev render error keeps the page (#
     }
   });
 
+  // Review of #1689: the dev client logged "page updated in place" for this
+  // refresh, which applied nothing. The global entry names the outcome, so the
+  // client can say the page kept its last good render instead.
+  test('the published entry reports dev-error, and a good render reports applied', async () => {
+    setup();
+    try {
+      assert.equal(await globalThis.__webjsRefreshPage(), 'dev-error', 'a dev render error is its own outcome');
+      await settle();
+      assert.equal(navGuard.hardNavigations.length, 0);
+      delete headers['x-webjs-dev-error'];
+      window.fetch = () => Promise.resolve(new Response(
+        '<!doctype html><html><head></head><body>' + live.replace('GOOD_PAGE', 'NEW_PAGE') + '</body></html>',
+        { status: 200, headers }));
+      assert.equal(await globalThis.__webjsRefreshPage(), 'applied');
+      assert.equal(document.getElementById('wj-deverr-inner').textContent, 'NEW_PAGE');
+    } finally {
+      teardown();
+    }
+  });
+
   // The same response WITHOUT the header is the old behaviour: the error page
   // shares no boundary, so the refresh degrades and reports it did not apply.
   test('without the header the error page degrades to a hard navigation, as before', async () => {

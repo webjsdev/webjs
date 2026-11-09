@@ -296,7 +296,8 @@ suite('Client router: refreshPage re-renders the current url in place (#1398)', 
     try {
       assert.equal(typeof globalThis.__webjsRefreshPage, 'function',
         'enabling the router publishes it');
-      assert.equal(globalThis.__webjsRefreshPage, refreshPage, 'and it is the real entry');
+      assert.equal(globalThis.__webjsRefreshPage.name, 'refreshOutcome',
+        'and it is the outcome entry (refresh-dev-error.test.js drives it)');
     } finally {
       disableClientRouter();
     }

@@ -139,6 +139,12 @@ describe('E2E: a dev render error keeps the page under the overlay and recovers 
       assert.equal(broken.marker, 'PAGE_A', 'the last good page stays under the overlay');
       assert.equal(broken.count, 'count 1', 'and its components keep their state');
       assert.match(broken.overlay, /PAGE_BROKEN/, 'the overlay describes the error');
+      // The console says what the save did: it kept the last good page, and it
+      // never claims the page was updated (review of #1689).
+      assert.ok(consoleLines.some((l) => l.includes('[webjs] the page did not render')),
+        `the kept page is logged (saw: ${consoleLines.join(' | ')})`);
+      assert.ok(!consoleLines.some((l) => l.includes('updated in place')),
+        `a refresh that applied nothing is not logged as an update (saw: ${consoleLines.join(' | ')})`);
 
       // Fix it: the refresh applies in place and the overlay goes.
       writeFileSync(join(dir, 'app/page.ts'), pageSource(''));

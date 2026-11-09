@@ -595,10 +595,10 @@ function __webjsApplyReload(verdict) {
       // seconds, and markup swapped in before it lands paints a new class with
       // no rule. The old sheets stay applied until the swap, then go.
       preloadStyles().then(function (styles) {
-        return refresh(mode).then(function (ok) {
-          if (!ok) { __webjsReload({ why: 'refresh-failed', by: verdict.by }); return; }
+        return refresh(mode).then(function (outcome) {
+          if (!outcome || outcome === 'failed') { __webjsReload({ why: 'refresh-failed', by: verdict.by }); return; }
           styles.commit();
-          console.info('[webjs] ' + (mode === 'shell' ? 'layout' : 'page') + ' updated in place' + (verdict.by ? ' (' + verdict.by + ')' : ''));
+          __webjsLogRefresh(outcome, mode, verdict.by);
         });
       }).then(null, function () { __webjsReload({ why: 'refresh-failed', by: verdict.by }); });
       return;
@@ -625,14 +625,23 @@ function __webjsApplyHot(verdict, mods) {
   preloadStyles().then(function (styles) {
     return __webjsHot.applyModules(mods).then(function (r) {
       if (!r.ok) { reload(r.why); return; }
-      var after = mode === 'page' || mode === 'shell' ? refresh(mode) : Promise.resolve(true);
-      return after.then(function (ok) {
-        if (!ok) { reload('refresh-failed'); return; }
+      var after = mode === 'page' || mode === 'shell' ? refresh(mode) : Promise.resolve('applied');
+      return after.then(function (outcome) {
+        if (!outcome || outcome === 'failed') { reload('refresh-failed'); return; }
         styles.commit();
         console.info('[webjs] hot-swapped ' + (r.tags.length ? r.tags.map(function (t) { return '<' + t + '>'; }).join(', ') : 'nothing') + by);
+        if (outcome === 'dev-error') __webjsLogRefresh(outcome, mode, verdict.by);
       });
     });
   }).then(null, function (e) { reload(String((e && e.message) || e)); });
+}
+// The one console line an in-place refresh leaves (#1689). A refresh the dev
+// server answered with a render error applied nothing, so it must not claim the
+// page was updated: the last good render is still on screen under the overlay.
+function __webjsLogRefresh(outcome, mode, by) {
+  var file = by ? ' (' + by + ')' : '';
+  if (outcome === 'dev-error') { console.info('[webjs] the page did not render, so the last good version stays under the error overlay' + file); return; }
+  console.info('[webjs] ' + (mode === 'shell' ? 'layout' : 'page') + ' updated in place' + file);
 }
 function __webjsDirectEvents() {
   // No SharedWorker (Chrome for Android has none) or its construction threw (a
