@@ -24,6 +24,7 @@ function fakeTimers() {
     clearTimeout(id) { timers.delete(id); },
     fire() { for (const [id, t] of [...timers]) { timers.delete(id); t.fn(); } },
     get size() { return timers.size; },
+    get ms() { return [...timers.values()].at(-1)?.ms; },
   };
 }
 
@@ -77,4 +78,28 @@ test('pokes inside one window merge, and a poke after a fired fallback folds the
   assert.equal(r.notify, true);
   assert.equal(r.verdict.v, 'shell');
   assert.deepEqual(r.changed.sort(), ['/a/app/page.ts', '/a/components/x.ts', '/a/lib/y.ts']);
+});
+
+// Review of #1689: a fired batch whose re-run was genuinely lost must not ride
+// along into a later, unrelated edit. Past its window it is dropped, so the
+// next poke carries only its own verdict and files, and a stray re-run is a
+// silent re-derive.
+test('a fired batch expires after its window and never merges into a later poke', () => {
+  const t = fakeTimers();
+  const s = createPokeState({ ...t, fallbackMs: 1500 });
+  const reload = { v: 'reload', by: 'lib/x.ts', why: 'ships-to-browser' };
+  s.poke(reload, ['/a/lib/x.ts'], () => {});
+  t.fire();
+  assert.equal(t.size, 1, 'the fired batch is held on a timer');
+  assert.equal(t.ms, 3000, 'for twice the fallback');
+  t.fire();
+  assert.equal(t.size, 0);
+  assert.deepEqual(s.takeForRerun(), { verdict: null, changed: [], notify: false }, 'an expired batch is not replayed');
+
+  s.poke(reload, ['/a/lib/x.ts'], () => {});
+  t.fire();
+  t.fire();
+  s.poke(page, ['/a/app/page.ts'], () => {});
+  assert.deepEqual(s.takeForRerun(), { verdict: page, changed: ['/a/app/page.ts'], notify: true },
+    'the later edit keeps its page morph and only its own files');
 });

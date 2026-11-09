@@ -17,16 +17,25 @@ import { mergeVerdicts } from '../dev-classify.js';
  * fresh modules were there. The fallback's batch is therefore kept as `fired`,
  * and a re-run with nothing pending rebuilds and notifies again with it.
  *
+ * `fired` lives only `firedMs` (twice the fallback by default) past the
+ * fallback. A re-run that late is not the one the batch was waiting for: the
+ * reset was genuinely lost, and replaying the batch into a later, unrelated
+ * edit would merge its old verdict in (an old `reload` turning a page morph
+ * into a full reload) and bump its files' versions a second time, dropping
+ * server module state for a chain nobody touched.
+ *
  * @param {{
  *   setTimeout?: (fn: () => void, ms: number) => unknown,
  *   clearTimeout?: (t: unknown) => void,
  *   fallbackMs?: number,
+ *   firedMs?: number,
  * }} [opts]
  */
 export function createPokeState(opts = {}) {
   const set = opts.setTimeout || ((fn, ms) => setTimeout(fn, ms));
   const clear = opts.clearTimeout || ((t) => clearTimeout(/** @type {any} */ (t)));
   const fallbackMs = opts.fallbackMs ?? 1500;
+  const firedMs = opts.firedMs ?? fallbackMs * 2;
   /** @type {import('../dev-classify.js').ReloadVerdict | null} */
   let verdict = null;
   /** @type {Set<string>} */
@@ -35,6 +44,13 @@ export function createPokeState(opts = {}) {
   let fired = null;
   /** @type {unknown} */
   let timer = null;
+  /** @type {unknown} */
+  let firedTimer = null;
+  const dropFired = () => {
+    clear(firedTimer);
+    firedTimer = null;
+    fired = null;
+  };
 
   return {
     /**
@@ -46,12 +62,12 @@ export function createPokeState(opts = {}) {
     poke: function (v, files, onFallback) {
       verdict = mergeVerdicts(verdict, v || null);
       for (const f of files) changed.add(f);
-      // A fresh poke supersedes a batch the fallback already applied: the
+      // A fresh poke inside the fired batch's window supersedes it: the
       // coming re-run carries both, so the browser hears once, at the end.
       if (fired) {
         verdict = mergeVerdicts(fired.verdict, verdict);
         for (const f of fired.changed) changed.add(f);
-        fired = null;
+        dropFired();
       }
       clear(timer);
       timer = set(() => {
@@ -59,7 +75,9 @@ export function createPokeState(opts = {}) {
         const batch = { verdict, changed: [...changed] };
         verdict = null;
         changed = new Set();
+        dropFired();
         fired = batch;
+        firedTimer = set(dropFired, firedMs);
         onFallback(batch.verdict, batch.changed);
       }, fallbackMs);
     },
@@ -78,12 +96,12 @@ export function createPokeState(opts = {}) {
         const out = { verdict, changed: [...changed], notify: !!verdict };
         verdict = null;
         changed = new Set();
-        fired = null;
+        dropFired();
         return out;
       }
       if (fired) {
         const out = { verdict: fired.verdict, changed: fired.changed, notify: !!fired.verdict };
-        fired = null;
+        dropFired();
         return out;
       }
       return { verdict: null, changed: [], notify: false };
