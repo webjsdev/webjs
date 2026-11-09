@@ -33,3 +33,13 @@ human docs are at https://webjs.dev/docs.
 
 Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
 or an in-memory array.
+
+For UI, add components from the WebJs UI kit (shadcn's components and API as
+web components) rather than writing them: `npx webjsdev ui add button card
+dialog` copies each into `components/ui/` for you to edit, and
+`npx webjsdev ui list` shows what exists.
+
+`npx webjs help` lists every CLI command (`routes`, `doctor`, `db`, `ui`,
+`typecheck`, ...). The `webjs` MCP server in `.claude.json` (`npx @webjsdev/mcp`)
+answers the same questions as tools: `list_routes`, `list_actions`,
+`list_components`, `check`, `source` and `ui`.
