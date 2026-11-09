@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer as createNetServer } from 'node:net';
 import { createServer as createHttpServer } from 'node:http';
-import { appendFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -234,15 +234,31 @@ describe('E2E: dev embed bridge (#1498)', {
     await sleep(1500);
     assert.equal(await frame().evaluate(() => window.__mark), 'same-document', 'an empty hold reloads nothing');
 
-    // Held across two component edits (each a full-reload verdict): nothing.
-    // Each adds a non-component export, which the component hot swap refuses
-    // (#1689), so the verdict stays a full reload rather than a hot swap.
+    // A held COMPONENT edit is a hot swap since #1689: release applies it in
+    // the same document, with no reload and so no new 'ready'.
     from = await count();
     await page.evaluate(() => window.send({ type: 'hold', enabled: true }));
     await message((m) => m.type === 'hold' && m.enabled === true, from);
-    appendFileSync(join(dir, 'components/trouble.ts'), '\nexport const held1 = 1;\n');
+    appendFileSync(join(dir, 'components/trouble.ts'), '\n// held component edit\n');
+    await sleep(1500);
+    await page.evaluate(() => window.send({ type: 'hold', enabled: false }));
+    await message((m) => m.type === 'hold' && m.enabled === false, from);
+    await sleep(2000);
+    assert.equal((await page.evaluate(() => window.__msgs)).slice(from).filter((m) => m.type === 'ready').length, 0,
+      'a held component edit applies without a reload');
+    assert.equal(await frame().evaluate(() => window.__mark), 'same-document', 'in the same document');
+    assert.ok(await frame().evaluate(() => !!document.querySelector('#trouble')), 'the component is still there');
+
+    // Held across two edits that each force a full reload: nothing. A new file
+    // under public/ is outside the module graph, so it classifies as an
+    // unknown path (a reload) and restarts nothing.
+    from = await count();
+    await page.evaluate(() => window.send({ type: 'hold', enabled: true }));
+    await message((m) => m.type === 'hold' && m.enabled === true, from);
+    mkdirSync(join(dir, 'public'), { recursive: true });
+    writeFileSync(join(dir, 'public/held-1.txt'), 'held edit 1\n');
     await sleep(400);
-    appendFileSync(join(dir, 'components/trouble.ts'), '\nexport const held2 = 2;\n');
+    writeFileSync(join(dir, 'public/held-2.txt'), 'held edit 2\n');
     await sleep(2500);
     assert.equal(await frame().evaluate(() => window.__mark), 'same-document', 'no reload while held');
     assert.equal((await page.evaluate(() => window.__msgs)).slice(from).filter((m) => m.type === 'ready').length, 0);
