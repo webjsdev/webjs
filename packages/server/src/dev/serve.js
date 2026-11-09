@@ -427,8 +427,7 @@ export async function handleCore(req, ctx) {
         serverFiles: state.actionIndex.fileToHash,
         elidableComponents: state.elidableComponents,
         lazyComponentFiles: state.lazyComponentFiles,
-        inertRouteModules: state.inertRouteModules,
-        importOnlyRouteModules: state.importOnlyRouteModules,
+        routeFrontiers: state.routeFrontiers,
         notFoundFile: state.routeTable.notFound,
         // Root-only boundaries (#848): the app-wide catch-all error page and the
         // unmatched-anywhere 404, rendered by ssr.js when a nested boundary is

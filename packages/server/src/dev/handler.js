@@ -42,6 +42,7 @@ import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableF
 import { foreignImportProblems, registerForeignImportGuard } from '../foreign-imports.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
 import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
+import { routeFrontiers, collectBootRouteModules } from '../route-frontier.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
@@ -554,6 +555,12 @@ export async function createRequestHandler(opts) {
     elidableComponents: new Set(),
     inertRouteModules: new Set(),
     importOnlyRouteModules: new Map(),
+    // Route module -> the component files the boot imports in its place
+    // (#1686). Route modules never ship; see `route-frontier.js`.
+    /** @type {Map<string, string[]>} */
+    routeFrontiers: new Map(),
+    /** @type {Set<string>} */
+    routeModuleFiles: new Set(),
     // `static lazy` component files -> their tags (#1524): a side-effect import
     // of one is served as a lazy-loader registration, and the preload walks
     // skip it. Independent of the elision switch.
@@ -767,6 +774,18 @@ export async function createRequestHandler(opts) {
             state.elidableComponents = r.elidableComponents;
             state.inertRouteModules = r.inertRouteModules;
             state.importOnlyRouteModules = r.importOnlyRouteModules;
+            // Route modules never ship (#1686): each is replaced in the boot by
+            // its component frontier. Computed whether or not elision is on,
+            // since `webjs.elide` only switches display-only COMPONENT elision.
+            // Every route-table file is in the skip set, so a route module is
+            // never emitted or walked through even when another one imports it.
+            {
+              const routeFiles = collectBootRouteModules(state.routeTable);
+              state.routeModuleFiles = new Set(routeFiles);
+              state.routeFrontiers = routeFrontiers(routeFiles, state.moduleGraph,
+                new Set(components.map((c) => c.file)),
+                new Set([...state.elidableComponents, ...state.routeModuleFiles]));
+            }
             state.lazyComponentFiles = lazyComponentFiles(components, state.elidableComponents);
             // A lazy component some module imports WITH bindings loads eagerly
             // anyway, so it keeps its preload hint and its imports as written.
@@ -784,8 +803,7 @@ export async function createRequestHandler(opts) {
             if (dev) {
               const shippedEntries = [...state.browserEntryFiles].filter((f) =>
                 !state.elidableComponents.has(f)
-                && !state.inertRouteModules.has(f)
-                && !state.importOnlyRouteModules.has(f));
+                && !state.routeModuleFiles.has(f));
               state.shippedFiles = reachableFromEntries(state.moduleGraph, shippedEntries, appDir);
               state.graphFiles = seenFilesFor(state.moduleGraph);
               state.pageFiles = new Set((state.routeTable.pages || []).map((p) => p.file).filter(Boolean));
@@ -982,7 +1000,7 @@ export async function createRequestHandler(opts) {
     vendorResolveInFlight = (async () => {
       try {
         const scan = async () => {
-          const skip = new Set([...state.elidableComponents, ...state.inertRouteModules, ...state.importOnlyRouteModules.keys()]);
+          const skip = new Set([...state.elidableComponents, ...state.routeModuleFiles]);
           return reachedBareImports(state.moduleGraph, [...state.browserEntryFiles], appDir, skip);
         };
         const v = await resolveVendorImports(appDir, scan);
@@ -1656,8 +1674,7 @@ export async function createRequestHandler(opts) {
     // on the first warm request.
     const moduleUrls = hintedBootModules(page.route, {
       appDir,
-      inert: state.inertRouteModules,
-      importOnly: state.importOnlyRouteModules,
+      frontiers: state.routeFrontiers,
       lazyFiles: state.lazyComponentFiles,
       instrumentationClient: state.routeTable.instrumentationClient,
     }, basePathValue);

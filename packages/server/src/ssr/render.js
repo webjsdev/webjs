@@ -709,8 +709,7 @@ function reportBoundaryLayoutError(err, opts, cfg = {}) {
  * @param {string | null} boundaryFile  Null for the framework's default body,
  *   which has no module of its own; only the layouts boot then.
  * @param {string[]} wrapLayouts
- * @param {{ appDir: string, inertRouteModules?: Set<string>,
- *   importOnlyRouteModules?: Map<string, string[]>,
+ * @param {{ appDir: string, routeFrontiers?: Map<string, string[]>,
  *   instrumentationClient?: string }} opts
  * @returns {string[]}
  */
@@ -726,8 +725,7 @@ function boundaryModuleUrls(boundaryFile, wrapLayouts, opts) {
   // Nesting order, as on the happy path: the wrapping layouts, then the boundary.
   return assembleBootModules(boundaryFile ? [...wrapLayouts, boundaryFile] : wrapLayouts, {
     appDir: opts.appDir,
-    inert: opts.inertRouteModules,
-    importOnly: opts.importOnlyRouteModules,
+    frontiers: opts.routeFrontiers,
     lazyFiles: undefined,
     instrumentationClient: opts.instrumentationClient,
   }).moduleUrls;
@@ -1191,8 +1189,7 @@ export async function ssrPage(route, params, url, opts) {
     const lazyFiles = opts.lazyComponentFiles;
     const { moduleUrls, frontierLazy } = shippedBootModules(route, {
       appDir: opts.appDir,
-      inert: opts.inertRouteModules,
-      importOnly: opts.importOnlyRouteModules,
+      frontiers: opts.routeFrontiers,
       lazyFiles,
       instrumentationClient: opts.instrumentationClient,
     });

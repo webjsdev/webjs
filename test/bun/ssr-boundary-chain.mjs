@@ -99,7 +99,9 @@ try {
     assert.ok(body.includes('<!--wj:children:/docs:/docs-->'), `/docs keyed open on ${runtime}`);
     assert.ok(body.includes('<!--wj:children:/docs/crash:/docs/crash-->'), `page-region keyed open on ${runtime}`);
     assertPaired(body, '500');
-    assert.ok(/import\s+"[^"]*docs\/error\.ts/.test(body), `the boundary module is booted on ${runtime}`);
+    // Route modules never ship (#1686): neither the boundary nor the page is
+    // booted, only the components they render.
+    assert.ok(!/import\s+"[^"]*docs\/error\.ts/.test(body), `the boundary module is NOT booted on ${runtime}`);
     assert.ok(!/import\s+"[^"]*docs\/crash\/page\.ts/.test(body), `the page module is NOT booted on ${runtime}`);
   }
 

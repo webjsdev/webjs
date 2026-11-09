@@ -8,12 +8,10 @@ import { checkConventions, RULES } from '../../src/check.js';
 
 /**
  * Tests for the `no-server-import-in-browser-module` rule. The rule flags a
- * page / layout / component module that SHIPS to the browser (the build does
- * not elide it) and transitively imports a server-only `.server.{ts,js}`
- * module. The critical correctness property is that it reuses the build's
- * elision verdict, so a display-only page the framework elides is NOT flagged
- * even though it imports the same server module: the difference between "this
- * page ships" and "this page elides" is the whole rule.
+ * component (or `instrumentation-client`) that loads in the browser and
+ * transitively imports a server-only `.server.{ts,js}` module. A route module
+ * (page, layout, boundary) never ships (#1686), so a server import in one is
+ * never flagged, whatever else the route module does.
  */
 
 const RULE = 'no-server-import-in-browser-module';
@@ -108,7 +106,7 @@ export default async function ProjectPage() {
 // it ships whole under the path-aware verdict, #963) -> violation. The page's
 // own client signal forces it to load in the browser, which drags the
 // server-only auth import along: a runtime crash.
-test('non-elided page importing auth AND a component IS flagged', async () => {
+test('a page importing auth, a component and the client router is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
@@ -123,17 +121,7 @@ export default async function ProjectPage() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'project/page.ts');
-    assert.equal(hits.length, 1, 'a non-elided page importing a server module must be flagged exactly once');
-    const v = hits[0];
-    assert.ok(v.file.includes('project/page.ts'), 'names the offending file');
-    assert.ok(v.message.includes('auth.server.ts'), 'names the offending server import');
-    assert.ok(/middleware|use server|layout/i.test(v.fix), 'fix names a concrete remedy');
-    // A page/layout CAN become a dropped carrier again by moving its own
-    // client work into a component (#963), so it additionally gets that
-    // remedy (the boundary kinds do not).
-    assert.ok(/elide/i.test(v.fix) && /own client work/.test(v.fix),
-      'a page is offered the become-a-dropped-carrier remedy');
+    assert.deepEqual(find(violations), [], 'a page never ships, whatever else it imports, so its server import is fine');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -247,30 +235,37 @@ export async function GET() { await auth(); return new Response('ok'); }
 // that imports the server module; eliding logic still has the page shipping
 // because it also registers a component.
 test('indirect server import through a non-server helper IS flagged', async () => {
+  // A shipping component imports a plain helper that imports the server
+  // module; the chain hint shows the indirection.
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'lib/session.ts': `import { auth } from './auth.server.ts';
 export async function currentUser() { return (await auth()).user; }
 `,
-    'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
-    'app/project/page.ts': `import { currentUser } from '../../lib/session.ts';
-import '../../modules/workspace/components/crisp-workspace.ts';
-import '@webjsdev/core/client-router'; // own client work: the page ships whole (#963)
-export default async function ProjectPage() {
-  const u = await currentUser();
-  return \`<crisp-workspace user="\${u}"></crisp-workspace>\`;
+    'components/user-chip.ts': `import { WebComponent } from '@webjsdev/core';
+import { signal } from '@webjsdev/core';
+import { currentUser } from '../lib/session.ts';
+class UserChip extends WebComponent {
+  #u = signal('');
+  async connectedCallback() { super.connectedCallback(); this.#u.set(await currentUser()); }
+  render() { return this.html\`<span>\${this.#u.get()}</span>\`; }
 }
+UserChip.register('user-chip');
+`,
+    'app/page.ts': `import '../components/user-chip.ts';
+export default function Home() { return '<user-chip></user-chip>'; }
 `,
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'project/page.ts');
+    const hits = find(violations, 'user-chip.ts');
     assert.equal(hits.length, 1, 'an indirect server import must still be flagged');
     assert.ok(hits[0].message.includes('auth.server.ts'), 'names the server module reached transitively');
-    // #804: the full chain is printed now, every hop, no `… ->` truncation.
-    assert.match(hits[0].message, /app\/project\/page\.ts -> lib\/session\.ts -> lib\/auth\.server\.ts/,
+    // #804: the full chain is printed, every hop, no truncation.
+    assert.match(hits[0].message, /components\/user-chip\.ts -> lib\/session\.ts -> lib\/auth\.server\.ts/,
       'message shows the full indirection chain');
     assert.ok(!hits[0].message.includes('…'), 'no truncation glyph in the chain');
+    assert.deepEqual(find(violations, 'app/page.ts'), [], 'the page itself is never flagged');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -314,7 +309,7 @@ export default function Home() { return '<user-badge></user-badge>'; }
 // catch. A page+layout-only candidate set would miss it (it did: 0 hits before
 // this). The fixtures pair each boundary with a sibling page so the router
 // attaches it (error/loading attach to a page in the same chain).
-test('an error boundary importing a server module IS flagged', async () => {
+test('an error boundary importing a server module is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'app/page.ts': `export default function Home() { return '<h1>home</h1>'; }\n`,
@@ -327,27 +322,13 @@ export default async function ErrorBoundary() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'error.ts');
-    assert.equal(hits.length, 1, 'an error boundary that ships and imports a server module must be flagged');
-    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
-    assert.ok(/error boundary/.test(hits[0].message), 'identifies it as an error boundary');
-    // An error boundary always ships and is never elided, so the fix must NOT
-    // offer the "register the component in a layout so it elides again" remedy
-    // (that path is impossible for a boundary). It may still state the fact that
-    // it is never elided; what it must not do is suggest making it elide.
-    assert.ok(!/elides again/i.test(hits[0].fix) && !/register that component/i.test(hits[0].fix),
-      'a never-elided boundary must not be offered the elide-via-layout remedy');
-    assert.ok(/middleware/.test(hits[0].fix) && /use server/.test(hits[0].fix),
-      'a boundary fix offers the middleware + use-server remedies');
-    // Grammar: never "a error boundary" (wrong article before a vowel sound).
-    assert.ok(!/\ba error boundary/.test(hits[0].fix) && !/\ba error boundary/.test(hits[0].message),
-      'uses the correct article for "error boundary"');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('a not-found page importing a server module IS flagged', async () => {
+test('a not-found page importing a server module is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'app/page.ts': `export default function Home() { return '<h1>home</h1>'; }\n`,
@@ -360,15 +341,7 @@ export default async function NotFound() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'not-found.ts');
-    assert.equal(hits.length, 1, 'a personalized not-found page that ships and imports a server module must be flagged');
-    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
-    assert.ok(/not-found page/.test(hits[0].message), 'identifies it as a not-found page');
-    // A not-found page always ships and is never elided, so no "elides again".
-    assert.ok(!/elides again/i.test(hits[0].fix) && !/register that component/i.test(hits[0].fix),
-      'a never-elided not-found page must not be offered the elide-via-layout remedy');
-    assert.ok(/middleware/.test(hits[0].fix) && /use server/.test(hits[0].fix),
-      'a not-found fix offers the middleware + use-server remedies');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -380,7 +353,7 @@ export default async function NotFound() {
 // throw-at-load stub taking every sibling registration with it) passes a green
 // `webjs check`. A 403 that greets the signed-in user by name is the natural
 // shape, so this is not a hypothetical import.
-test('a forbidden boundary importing a server module IS flagged (#1298)', async () => {
+test('a forbidden boundary importing a server module is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'app/admin/page.ts': `export default function Admin() { return '<h1>admin</h1>'; }\n`,
@@ -393,16 +366,13 @@ export default async function Forbidden() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'forbidden.ts');
-    assert.equal(hits.length, 1, 'a forbidden boundary that ships and imports a server module must be flagged');
-    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
-    assert.ok(/forbidden boundary/.test(hits[0].message), 'identifies it as a forbidden boundary');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('an unauthorized boundary importing a server module IS flagged (#1298)', async () => {
+test('an unauthorized boundary importing a server module is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'app/private/page.ts': `export default function P() { return '<h1>private</h1>'; }\n`,
@@ -415,15 +385,13 @@ export default async function Unauthorized() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'unauthorized.ts');
-    assert.equal(hits.length, 1, 'an unauthorized boundary that ships and imports a server module must be flagged');
-    assert.ok(/unauthorized boundary/.test(hits[0].message), 'identifies it as an unauthorized boundary');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('a global-not-found page importing a server module IS flagged (#1298)', async () => {
+test('a global-not-found page importing a server module is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'app/page.ts': `export default function Home() { return '<h1>home</h1>'; }\n`,
@@ -436,15 +404,13 @@ export default async function GlobalNotFound() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'global-not-found.ts');
-    assert.equal(hits.length, 1, 'a global-not-found page that ships and imports a server module must be flagged');
-    assert.ok(/global-not-found page/.test(hits[0].message), 'identifies it as a global-not-found page');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-test('a loading boundary importing a server module IS flagged', async () => {
+test('a loading boundary importing a server module is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'app/dashboard/page.ts': `export default function Dash() { return '<h1>dash</h1>'; }\n`,
@@ -457,12 +423,7 @@ export default async function Loading() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'loading.ts');
-    assert.equal(hits.length, 1, 'a loading boundary that ships and imports a server module must be flagged');
-    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the offending server import');
-    assert.ok(/loading boundary/.test(hits[0].message), 'identifies it as a loading boundary');
-    assert.ok(!/elides again/i.test(hits[0].fix) && !/register that component/i.test(hits[0].fix),
-      'a never-elided loading boundary must not be offered the elide-via-layout remedy');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -526,7 +487,7 @@ export default function DocsPage() {
 // The counterpart to the case above: the SAME real server file, imported as a
 // genuine top-level statement (not inside a string) on a shipping page, still
 // flags. This proves the string mask did not over-blank real imports.
-test('a real server import statement on a shipping page IS still flagged', async () => {
+test('a real server import statement on a page with client work is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/db.server.ts': `export const db = { user: { findMany() { return []; } } };\n`,
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
@@ -541,9 +502,7 @@ export default async function DocsPage() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'docs/page.ts');
-    assert.equal(hits.length, 1, 'a real server import statement on a shipping page must still be flagged');
-    assert.ok(hits[0].message.includes('db.server.ts'), 'names the real server import');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -552,7 +511,7 @@ export default async function DocsPage() {
 // With elision disabled (webjs.elide === false), EVERY module ships, so even a
 // display-only page importing a server module is flagged: with elision off the
 // page really does ship its server import. This guards the elide-flag wiring.
-test('with elision disabled, a display-only page importing auth IS flagged', async () => {
+test('with elision disabled, a page importing auth is still NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'package.json': JSON.stringify({ name: 'app', webjs: { elide: false } }),
     'lib/auth.server.ts': AUTH_SERVER,
@@ -565,8 +524,7 @@ export default async function DashboardPage() {
   });
   try {
     const violations = await checkConventions(appDir);
-    assert.equal(find(violations, 'dashboard/page.ts').length, 1,
-      'with elision off, a display-only page that imports a server module ships it and is flagged');
+    assert.deepEqual(find(violations), [], 'elision off ships every component, never a page');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -592,7 +550,7 @@ test('an app with no app/ directory is not analysed', async () => {
 // of an import alias is that it could launder a server import past the boundary
 // (resolveImport historically skipped any non-`.`/`/` specifier). The alias is
 // expanded to the real path inside resolveImport, so the rule sees through it.
-test('a server import via a # alias into a shipping page IS flagged (alias does not launder the boundary)', async () => {
+test('a server import via a # alias into a page is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }),
     'lib/auth.server.ts': AUTH_SERVER,
@@ -608,9 +566,7 @@ export default async function ProjectPage() {
   });
   try {
     const violations = await checkConventions(appDir);
-    const hits = find(violations, 'project/page.ts');
-    assert.equal(hits.length, 1, 'a #-aliased server import into a shipping page must still be flagged');
-    assert.ok(hits[0].message.includes('auth.server.ts'), 'names the real server file behind the alias');
+    assert.deepEqual(find(violations), [], 'route modules never load in the browser (#1686)');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -713,18 +669,18 @@ export default function Home() { return '<todo-list></todo-list>'; }
 // enters via a types-shaped module.
 test('message prints the full import chain and names the types-module fix (#804)', async () => {
   const dir = await makeApp({
-    'app/layout.ts': `import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html\`<div>\${children}</div>\`; }\n`,
-    'app/page.ts': `import { html } from '@webjsdev/core';\nimport '@webjsdev/core/client-router';\nimport './widget.ts';\nimport { thing } from '../modules/todos/types.ts';\nexport default function P() { return html\`<my-widget></my-widget>\${thing}\`; }\n`,
-    'app/widget.ts': INTERACTIVE_COMPONENT.replace('crisp-workspace', 'my-widget').replace('CrispWorkspace', 'MyWidget'),
+    'app/page.ts': `import { html } from '@webjsdev/core';\nimport '../components/my-widget.ts';\nexport default function P() { return html\`<my-widget></my-widget>\`; }\n`,
+    'components/my-widget.ts': INTERACTIVE_COMPONENT.replace('crisp-workspace', 'my-widget').replace('CrispWorkspace', 'MyWidget')
+      .replace("import { signal } from '@webjsdev/core';", "import { signal } from '@webjsdev/core';\nimport { thing } from '../modules/todos/types.ts';\nvoid thing;"),
     'modules/todos/types.ts': `export { thing } from '../../lib/data.server.ts';\n`,
     'lib/data.server.ts': `export const thing = 'x';\n`,
   });
   try {
     const violations = await checkConventions(dir);
-    const v = find(violations, 'app/page.ts')[0];
-    assert.ok(v, 'the shipping page importing a server value via types.ts is flagged');
+    const v = find(violations, 'components/my-widget.ts')[0];
+    assert.ok(v, 'the shipping component importing a server value via types.ts is flagged');
     // full chain: every hop present, no truncation glyph
-    assert.match(v.message, /app\/page\.ts -> modules\/todos\/types\.ts -> lib\/data\.server\.ts/, `full chain, got: ${v.message}`);
+    assert.match(v.message, /components\/my-widget\.ts -> modules\/todos\/types\.ts -> lib\/data\.server\.ts/, `full chain, got: ${v.message}`);
     assert.ok(!v.message.includes('…'), 'no `… ->` truncation in the chain');
     assert.match(v.fix, /types-shaped module/, 'the fix names the types-module relocation');
   } finally {
@@ -732,7 +688,7 @@ test('message prints the full import chain and names the types-module fix (#804)
   }
 });
 
-test('the message names the helper that makes a page ship, not just the page', async () => {
+test('a page whose helper does module-scope client work is NOT flagged (#1686)', async () => {
   // Found by an agent building an app: a page shipped because a plain helper it
   // imported did client work at module scope, and the message blamed the page,
   // so the agent moved the wrong code. The elision verdict knows the blocker, so
@@ -745,9 +701,8 @@ test('the message names the helper that makes a page ship, not just the page', a
     'app/page.ts': "import { html } from '@webjsdev/core';\nimport { label } from '../lib/format.ts';\nimport { listEvents } from '../lib/db.server.ts';\nexport default function P() { return html`<p>${label(new Date())} ${listEvents().length}</p>`; }\n",
   });
   try {
-    const v = find(await checkConventions(dir), 'app/page.ts');
-    assert.equal(v.length, 1, JSON.stringify(v));
-    assert.match(v[0].message, /It ships because lib\/format\.ts .*fix that module, not this page/);
+    const violations = await checkConventions(dir);
+    assert.deepEqual(find(violations), [], 'the page never ships, so neither the helper nor the server import loads');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

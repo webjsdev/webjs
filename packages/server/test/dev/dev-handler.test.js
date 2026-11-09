@@ -113,7 +113,10 @@ test('handle: a transient vendor failure does not block readiness', async () => 
     'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
   });
   const origFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('ECONNREFUSED'); };
@@ -138,7 +141,10 @@ test('handle: a transiently failed vendor resolve is retried per backoff window,
     'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
   });
   const origFetch = globalThis.fetch;
   let jspmAttempts = 0;
@@ -173,7 +179,10 @@ test('handle: one failed vendor attempt widens the backoff window once, however 
     'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
   });
   const origFetch = globalThis.fetch;
   let jspmAttempts = 0;
@@ -217,7 +226,10 @@ test('handle: a malformed pin file falls through to the real deferred resolve', 
     'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
     '.webjs/vendor/importmap.json': '{ not valid json at all',
   });
   const origFetch = globalThis.fetch;
@@ -664,20 +676,26 @@ test('handle: broken middleware.js fails to load → fails CLOSED (500 naming it
 
 /* ------------ routeFor / rebuild ------------ */
 
-test('routeFor: returns module URLs for a known page', async () => {
+test('routeFor: returns the component frontier, never a route module (#1686)', async () => {
+  const comp = (cls, tag) =>
+    `import { WebComponent } from '@webjsdev/core';\nclass ${cls} extends WebComponent {}\n${cls}.register('${tag}');\n`;
   const appDir = makeApp({
     'app/page.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+      `import { html } from ${JSON.stringify(HTML_URL)};\nimport '../components/page-widget.js';\n` +
+      `export default function P() { return html\`<page-widget></page-widget>\`; }\n`,
     'app/layout.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function L({ children }) { return html\`<main>\${children}</main>\`; }\n`,
+      `import { html } from ${JSON.stringify(HTML_URL)};\nimport '../components/nav-widget.js';\n` +
+      `export default function L({ children }) { return html\`<nav-widget></nav-widget><main>\${children}</main>\`; }\n`,
+    'components/page-widget.js': comp('PageWidget', 'page-widget'),
+    'components/nav-widget.js': comp('NavWidget', 'nav-widget'),
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
   });
   const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
   const match = app.routeFor('/');
   assert.ok(match);
-  assert.ok(match.moduleUrls.length >= 2, 'includes page + layout');
-  for (const u of match.moduleUrls) assert.ok(u.startsWith('/'));
+  assert.deepEqual(match.moduleUrls, ['/components/nav-widget.js', '/components/page-widget.js'],
+    'the layout frontier first, then the page frontier, and no route module');
 });
 
 test('routeFor: unknown path returns null', async () => {

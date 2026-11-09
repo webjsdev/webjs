@@ -1,7 +1,8 @@
 /**
  * The shipped-module assembly shared by the SSR boot and the 103 Early Hints
  * (#1644): one function, memoized per route object and build epoch, with the
- * lazy frontier diverted to the lazy loader on BOTH consumers.
+ * lazy frontier diverted to the lazy loader on BOTH consumers. Route modules
+ * never ship (#1686): only their component frontiers do.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,25 +17,29 @@ const hot = `${appDir}/components/hot-button.ts`;
 const lazy = `${appDir}/components/lazy-panel.ts`;
 const route = () => ({ file: page, layouts: [layout] });
 
-test('drops inert modules and splices an import-only module into its component frontier', () => {
+test('each route module is replaced by its component frontier, never shipped itself (#1686)', () => {
   const r = route();
   const out = shippedBootModules(r, {
     appDir,
-    inert: new Set([layout]),
-    importOnly: new Map([[page, [hot, hot]]]),
+    frontiers: new Map([[layout, []], [page, [hot, hot]]]),
     lazyFiles: undefined,
     instrumentationClient: undefined,
   });
-  assert.deepEqual(out.moduleUrls, ['/components/hot-button.ts'], 'layout dropped, page replaced by its frontier, deduped');
+  assert.deepEqual(out.moduleUrls, ['/components/hot-button.ts'], 'no route module, the page frontier deduped');
   assert.deepEqual(out.frontierLazy, {});
+});
+
+test('a route module with no frontier entry emits nothing, never itself', () => {
+  // The pre-warm window: no frontier has been computed yet.
+  const out = shippedBootModules(route(), { appDir, frontiers: undefined, lazyFiles: undefined, instrumentationClient: undefined });
+  assert.deepEqual(out.moduleUrls, []);
 });
 
 test('a lazy frontier component lands in frontierLazy, not moduleUrls, and is not hinted', () => {
   const r = route();
   const deps = {
     appDir,
-    inert: new Set([layout]),
-    importOnly: new Map([[page, [hot, lazy]]]),
+    frontiers: new Map([[page, [hot, lazy]]]),
     lazyFiles: new Map([[lazy, ['lazy-panel']]]),
     instrumentationClient: undefined,
   };
@@ -50,24 +55,32 @@ test('a lazy frontier component lands in frontierLazy, not moduleUrls, and is no
 test('instrumentation-client is imported first, once', () => {
   const r = route();
   const ic = `${appDir}/instrumentation-client.ts`;
-  const out = shippedBootModules(r, { appDir, inert: undefined, importOnly: undefined, lazyFiles: undefined, instrumentationClient: ic });
-  assert.deepEqual(out.moduleUrls, ['/instrumentation-client.ts', '/app/layout.ts', '/app/page.ts']);
+  const out = shippedBootModules(r, { appDir, frontiers: new Map([[page, [hot]]]), lazyFiles: undefined, instrumentationClient: ic });
+  assert.deepEqual(out.moduleUrls, ['/instrumentation-client.ts', '/components/hot-button.ts']);
 });
 
-test('the boot imports in nesting order: outermost layout first, the page last', () => {
+test('the boot imports in nesting order: outer layout frontier first, then loading, then the page', () => {
   // A context provider rendered by a layout must be defined before a consumer
   // the page renders, or the consumer's one-shot context-request on upgrade
   // goes unanswered (found by an agent building an app). Nesting order gives
-  // every ancestor's elements first.
+  // every ancestor's elements first. A loading template renders before the
+  // page streams in, so its components register too.
   const nested = `${appDir}/app/recipes/layout.ts`;
-  const r = { file: `${appDir}/app/recipes/[id]/page.ts`, layouts: [layout, nested] };
-  const out = shippedBootModules(r, { appDir, inert: undefined, importOnly: undefined, lazyFiles: undefined, instrumentationClient: undefined });
-  assert.deepEqual(out.moduleUrls, ['/app/layout.ts', '/app/recipes/layout.ts', '/app/recipes/[id]/page.ts']);
+  const loading = `${appDir}/app/recipes/loading.ts`;
+  const pageFile = `${appDir}/app/recipes/[id]/page.ts`;
+  const c = (n) => `${appDir}/components/${n}.ts`;
+  const r = { file: pageFile, layouts: [layout, nested], loadings: [loading] };
+  const frontiers = new Map([
+    [layout, [c('provider')]], [nested, [c('tabs')]], [loading, [c('spinner')]], [pageFile, [c('consumer')]],
+  ]);
+  const out = shippedBootModules(r, { appDir, frontiers, lazyFiles: undefined, instrumentationClient: undefined });
+  assert.deepEqual(out.moduleUrls,
+    ['/components/provider.ts', '/components/tabs.ts', '/components/spinner.ts', '/components/consumer.ts']);
 });
 
 test('memoized per route object within a build; a bump or a different route recomputes', () => {
   const r = route();
-  const deps = { appDir, inert: undefined, importOnly: undefined, lazyFiles: undefined, instrumentationClient: undefined };
+  const deps = { appDir, frontiers: new Map([[page, [hot]]]), lazyFiles: undefined, instrumentationClient: undefined };
   const a = shippedBootModules(r, deps);
   assert.equal(shippedBootModules(r, deps), a, 'same object within a build');
   assert.equal(hintedBootModules(r, deps, ''), hintedBootModules(r, deps, ''), 'the hint list is memoized too');
@@ -81,13 +94,20 @@ test('memoized per route object within a build; a bump or a different route reco
 test('assembleBootModules is the un-memoized loop the boundary render shares (#1645 review)', () => {
   const ic = `${appDir}/instrumentation-client.ts`;
   const boundary = `${appDir}/app/error.ts`;
-  const deps = { appDir, inert: new Set([layout]), importOnly: new Map([[page, [hot]]]), lazyFiles: new Map([[lazy, ['lazy-panel']]]), instrumentationClient: ic };
-  const a = assembleBootModules([boundary, layout], deps);
-  assert.deepEqual(a.moduleUrls, ['/instrumentation-client.ts', '/app/error.ts'], 'a boundary is pushed as is, the inert layout dropped, instrumentation first');
-  assert.notEqual(assembleBootModules([boundary, layout], deps), a, 'never memoized: a boundary list is built per render');
+  const retry = `${appDir}/components/retry-button.ts`;
+  const deps = {
+    appDir,
+    frontiers: new Map([[layout, [hot]], [boundary, [retry]], [page, [lazy]]]),
+    lazyFiles: undefined,
+    instrumentationClient: ic,
+  };
+  const a = assembleBootModules([layout, boundary], deps);
+  assert.deepEqual(a.moduleUrls, ['/instrumentation-client.ts', '/components/hot-button.ts', '/components/retry-button.ts'],
+    'the layout and boundary frontiers, never the boundary module, instrumentation first');
+  assert.notEqual(assembleBootModules([layout, boundary], deps), a, 'never memoized: a boundary list is built per render');
   // The memoized form is the same loop over the route's own file list.
   const r = route();
-  assert.deepEqual(shippedBootModules(r, deps), assembleBootModules([r.file, ...r.layouts], deps));
+  assert.deepEqual(shippedBootModules(r, deps), assembleBootModules([...r.layouts, r.file], deps));
 });
 
 // A 103 hint that starts module loading (a modulepreload) runs before the

@@ -98,39 +98,40 @@ test('a dropped page does not preload its SSR-only relative-helper app module (#
     "the dropped page's SSR-only relative helper is NOT preloaded (no over-fetch)");
 });
 
-test('a SHIPPED page still preloads its transitive relative-helper app modules (#780 under-fetch guard)', async () => {
+test('a shipping component still preloads its transitive relative-helper app modules (#780 under-fetch guard)', async () => {
   // The under-fetch guard for the roots change: this is what would break if the
   // moduleUrls -> absolute-path round-trip failed to match the graph's node keys
   // and the walk from `shippedRoots` silently dropped a genuinely-shipped dep.
-  // A page that runs code at module load (`Date.now()` at top level) SHIPS, so
-  // `page.js` is a boot module, while its pure relative helper `./fmt.js` does
-  // nothing at load (an arrow body is a declaration, #1567). `fmt.js` and its own helper `./deep.js` are
-  // NOT boot modules; their preloads come ONLY from `deduplicatedPreloads` walking
-  // the transitive closure from `shippedRoots` (the boot-module preload loop
-  // covers `page.js`, not its deps, and `deduplicatedPreloads` excludes
-  // `moduleUrls` via `seen`). So asserting the helper chain IS preloaded actually
-  // exercises the changed walk (a component here would not: an import-only page's
-  // component is preloaded by the separate boot-module loop regardless).
+  // A page never ships (#1686), so the shipped root is the component the page
+  // imports. Its relative helper `./fmt.js` and that helper's `./deep.js` are
+  // NOT boot modules; their preloads come ONLY from `deduplicatedPreloads`
+  // walking the transitive closure from `shippedRoots`.
+  const COMPONENT_URL = pathToFileURL(join(CORE_SRC, 'component.js')).toString();
   const appDir = makeApp({
-    'app/deep.js': `export const deep = (x) => x + 1;\n`,
-    'app/fmt.js': `import { deep } from './deep.js';\nexport const fmt = (x) => deep(x);\n`,
-    'app/page.js':
+    'components/deep.js': `export const deep = (x) => x + 1;\n`,
+    'components/fmt.js': `import { deep } from './deep.js';\nexport const fmt = (x) => deep(x);\n`,
+    'components/x-clock.js':
+      `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import { fmt } from './fmt.js';\n` +
-      `const LOADED_AT = Date.now();\n` +
-      `export default () => html\`<p>\${fmt(LOADED_AT)}</p>\`;\n`,
+      `class XClock extends WebComponent {\n  static interactive = true;\n  render() { return html\`<b>\${fmt(1)}</b>\`; }\n}\n` +
+      `XClock.register('x-clock');\n`,
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `import '../components/x-clock.js';\n` +
+      `export default () => html\`<x-clock></x-clock>\`;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
   const html = await (await app.handle(new Request('http://x/'))).text();
   const hrefs = preloadHrefs(html);
 
-  // Precondition: the page SHIPS (so its helper chain is a walk from a real root).
-  assert.ok(hrefs.some((h) => h.includes('/app/page.js')), 'the page ships (boot module)');
-  // The guard: the walk from shippedRoots reaches the shipped page's direct AND
+  assert.ok(!hrefs.some((h) => h.includes('/app/page.js')), 'the page itself never ships');
+  assert.ok(hrefs.some((h) => h.includes('/components/x-clock.js')), 'the component ships');
+  // The guard: the walk from shippedRoots reaches the component's direct AND
   // transitive relative helpers, so both keep their hint (no under-fetch).
-  assert.ok(hrefs.some((h) => h.includes('/app/fmt.js')),
-    'the shipped page\'s direct relative helper IS preloaded');
-  assert.ok(hrefs.some((h) => h.includes('/app/deep.js')),
-    'the shipped page\'s TRANSITIVE relative helper IS preloaded');
+  assert.ok(hrefs.some((h) => h.includes('/components/fmt.js')),
+    "the component's direct relative helper IS preloaded");
+  assert.ok(hrefs.some((h) => h.includes('/components/deep.js')),
+    "the component's TRANSITIVE relative helper IS preloaded");
 });

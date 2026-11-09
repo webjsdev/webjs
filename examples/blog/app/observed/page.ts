@@ -1,6 +1,5 @@
 import { html } from '@webjsdev/core';
 import '#components/observed-badge.ts';
-import '#components/observe-badge.ts';
 import '#components/ssr-derived-badge.ts';
 import '#components/forced-badge.ts';
 // The same-run NEGATIVE control for the forced-badge probe (#1308): display-only
@@ -15,8 +14,10 @@ export const metadata = {
 };
 
 /**
- * `/observed` renders a display-only `<observed-badge>` AND imports a
- * module that observes its registration via `whenDefined`. The observation
+ * `/observed` renders a display-only `<observed-badge>` AND a shipping
+ * `<forced-badge>` whose module imports one that observes the badge's
+ * registration via `whenDefined` (a page never loads in the browser, so the
+ * observer rides a component). The observation
  * forces the otherwise-elidable badge to ship, so the e2e probe can assert
  * the browser actually downloads `observed-badge.ts`.
  *

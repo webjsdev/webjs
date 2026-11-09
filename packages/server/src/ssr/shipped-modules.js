@@ -2,11 +2,11 @@
  * The boot's shipped-module assembly, shared by the SSR render and the 103
  * Early Hints (#1644).
  *
- * For a matched route the client boot imports the page and its layouts MINUS
- * the inert ones (a module that does no client work, #170), with an
- * IMPORT-ONLY module (#605) replaced by the component frontier it exists to
- * import, and a `static lazy` component in that frontier (#1524) diverted to
- * the lazy loader instead of imported. `ssr/render.js` derived that list per
+ * For a matched route the client boot imports the component FRONTIER of each
+ * of its route modules (layouts, loading templates, the page), never a route
+ * module itself (#1686, `route-frontier.js`), with a `static lazy` component
+ * in that frontier (#1524) diverted to the lazy loader instead of imported.
+ * `ssr/render.js` derived that list per
  * request, and the Node listener's `routeFor` (the 103 Early Hints) carried a
  * second copy of the same loop that had drifted: it knew nothing of lazy
  * files, so a lazy frontier component was early-hinted although the boot
@@ -15,8 +15,8 @@
  * One function now owns the assembly, memoized per ROUTE OBJECT in a WeakMap
  * (the route table is rebuilt per build, so a stale entry dies with its
  * route, and a dynamic route cannot grow the memo the way a pathname key
- * would) and validated against the build epoch (the inert / import-only /
- * lazy sets are per-build inputs). The hinted url list, the same modules
+ * would) and validated against the build epoch (the frontiers and the lazy
+ * set are per-build inputs). The hinted url list, the same modules
  * through `withBasePath` then `withAssetHash`, is memoized beside it so a
  * warm GET costs one WeakMap lookup.
  */
@@ -28,8 +28,7 @@ import { toUrlPath } from './preloads.js';
 /**
  * @typedef {object} ShippedDeps
  * @property {string} appDir
- * @property {Set<string> | undefined} inert  inert page / layout files (never shipped)
- * @property {Map<string, string[]> | undefined} importOnly  import-only module -> the component files emitted in its place
+ * @property {Map<string, string[]> | undefined} frontiers  route module -> the component files the boot imports in its place
  * @property {Map<string, string[]> | undefined} lazyFiles  lazy component file -> its tags
  * @property {string | undefined} instrumentationClient  `instrumentation-client.*`, imported first when present
  */
@@ -47,7 +46,7 @@ const MEMO = new WeakMap();
  * The modules the client boot imports for `route`, plus the lazy frontier it
  * registers instead. Same object back for the same route within a build.
  *
- * @param {{ file: string, layouts: string[] }} route  the matched route (its object identity is the memo key)
+ * @param {{ file: string, layouts: string[], loadings?: string[] }} route  the matched route (its object identity is the memo key)
  * @param {ShippedDeps} deps
  * @returns {ShippedModules}
  */
@@ -58,8 +57,9 @@ export function shippedBootModules(route, deps) {
   // elements are defined before a descendant's. A context provider in a layout
   // then exists when a page component's context request fires on upgrade; with
   // the page first, that one-shot request went unanswered and the consumer
-  // silently got no value.
-  const value = assembleBootModules([...route.layouts, route.file], deps);
+  // silently got no value. A loading template renders before the page streams
+  // in, so a component only it renders must register too.
+  const value = assembleBootModules([...route.layouts, ...(route.loadings || []), route.file], deps);
   MEMO.set(route, { epoch: buildEpoch(), value, hinted: null, hintedBasePath: '' });
   return value;
 }
@@ -77,7 +77,7 @@ export function shippedBootModules(route, deps) {
  * @returns {ShippedModules}
  */
 export function assembleBootModules(files, deps) {
-  const { appDir, inert, importOnly, lazyFiles, instrumentationClient } = deps;
+  const { appDir, frontiers, lazyFiles, instrumentationClient } = deps;
   /** @type {string[]} */
   const moduleUrls = [];
   /** @type {Record<string, string>} */
@@ -89,11 +89,12 @@ export function assembleBootModules(files, deps) {
     if (tags) { for (const t of tags) frontierLazy[t] = u; return; }
     if (!seen.has(u)) { seen.add(u); moduleUrls.push(u); }
   };
+  // A route module never ships: only its component frontier does. A file with
+  // no frontier entry (none computed yet, in the pre-warm window) emits
+  // nothing, never the file itself.
   for (const f of files) {
-    if (inert && inert.has(f)) continue;
-    const emit = importOnly && importOnly.get(f);
+    const emit = frontiers && frontiers.get(f);
     if (emit) emit.forEach(push);
-    else push(f);
   }
   // instrumentation-client.{js,ts} (#848): import it FIRST in the client boot
   // so it runs before app modules (Next's instrumentation-client ordering).
@@ -142,7 +143,7 @@ export function earlyHintLinks(urls) {
  * imports, through `withBasePath` then `withAssetHash`, so the hint warms
  * exactly the url the body requests (#243). Memoized beside the assembly.
  *
- * @param {{ file: string, layouts: string[] }} route
+ * @param {{ file: string, layouts: string[], loadings?: string[] }} route
  * @param {ShippedDeps} deps
  * @param {string} basePath  the normalized `webjs.basePath` (`''` at a root mount)
  * @returns {string[]}

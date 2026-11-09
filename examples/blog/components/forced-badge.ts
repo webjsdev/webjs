@@ -1,4 +1,8 @@
 import { WebComponent, html } from '@webjsdev/core';
+// The observer of observed-badge's registration rides this shipping component:
+// a page never loads in the browser (#1686), so a side-effect import there
+// would never run.
+import './observe-badge.ts';
 
 /**
  * The forced-badge element is purely presentational: static markup, no

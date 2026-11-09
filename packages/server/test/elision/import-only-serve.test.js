@@ -108,7 +108,7 @@ export default () => html\`<x-counter>seed</x-counter><p>static copy</p>\`;`,
   }
 });
 
-test('a layout importing the client router keeps its module in the boot (#605)', async () => {
+test('a layout importing the client router still never ships (#1686)', async () => {
   const dir = makeApp({
     'app/layout.ts': ROUTER_LAYOUT,
     'app/page.ts': `import { html } from '@webjsdev/core';
@@ -121,7 +121,10 @@ export default () => html\`<x-counter></x-counter>\`;`,
     if (app.warmup) await app.warmup();
     const html = await (await app.handle(new Request('http://x/'))).text();
     const boot = bootOf(html);
-    assert.match(boot, /\/app\/layout\.ts/, 'the client-router layout module must ship');
+    // A route module never loads in the browser; the router loads with core,
+    // which any booted component imports. A route that needs browser code with
+    // no component puts it in instrumentation-client.ts.
+    assert.doesNotMatch(boot, /\/app\/layout\.ts/, 'the layout module never ships');
     assert.match(boot, /\/components\/counter\.ts/, 'the component still loads');
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -329,7 +332,7 @@ export default async () => { await auth(); return html\`<x-counter></x-counter>\
     const boot = bootOf(html);
     assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the import-only page module stays dropped on the error path');
     assert.doesNotMatch(boot, /\/components\/counter\.ts/, 'nor its frontier component, whose element the boundary never rendered');
-    assert.match(boot, /\/app\/error\.ts/, 'the boundary module, which DID render, is what boots');
+    assert.doesNotMatch(boot, /\/app\/error\.ts/, 'nor the boundary module: route modules never ship (#1686)');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

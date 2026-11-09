@@ -6,12 +6,13 @@
  * and runner.js calls the rules. Parked in runner.js it made that a cycle.
  */
 import { readFile, stat } from 'node:fs/promises';
-import { join, relative, basename } from 'node:path';
+import { join, relative } from 'node:path';
 import { walk } from '../fs-walk.js';
 import { buildModuleGraph, transitiveDeps } from '../module-graph.js';
 import { scanComponents } from '../component-scanner.js';
 import { buildRouteTable } from '../router.js';
 import { analyzeElision } from '../component-elision.js';
+import { collectBootRouteModules } from '../route-frontier.js';
 import {
   hasUseServerDirective,
 } from './helpers.js';
@@ -139,88 +140,28 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
     return shipped;
   }
 
-  // Page + layout modules that the router treats as route modules, exactly the
-  // set the dev server feeds to analyzeElision (so the inert verdict matches).
-  /** @type {Set<string>} */
-  const routeModuleSet = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) routeModuleSet.add(page.file);
-    for (const f of page.layouts || []) routeModuleSet.add(f);
-  }
-  const routeModules = [...routeModuleSet];
-
-  // error / loading / not-found modules ALSO ship to the browser, but unlike
-  // pages + layouts they are never elided: the dev server's
-  // `computeBrowserBoundFiles` adds them to the browser-bound entry set
-  // unconditionally (only ELIDABLE-COMPONENT imports are ever stripped, and
-  // these modules have no component to strip). So a personalized 404 that does
-  // `await auth()` is a real throw-at-load crash the page+layout-only candidate
-  // set would miss. Collect them here and add them to the candidate set as
-  // always-shipping (no elision verdict to consult).
-  /** @type {Map<string, string>} abs file -> kind */
-  const alwaysShipRouteModules = new Map();
-  for (const page of routeTable.pages || []) {
-    for (const f of page.errors || []) alwaysShipRouteModules.set(f, 'error boundary');
-    for (const f of page.loadings || []) alwaysShipRouteModules.set(f, 'loading boundary');
-    // forbidden / unauthorized joined this set with #1298. They used to render
-    // with an empty boot set, so their modules never reached the browser and
-    // omitting them here was harmless. They now render inside their layout
-    // chain AND ship, so a `forbidden.ts` doing `import { auth } from
-    // '#lib/auth.server.ts'` (a natural thing on a 403: "signed in as X, but
-    // not permitted") is a real throw-at-load crash that takes every sibling
-    // registration in the same module script with it.
-    for (const f of page.forbiddens || []) alwaysShipRouteModules.set(f, 'forbidden boundary');
-    for (const f of page.unauthorizeds || []) alwaysShipRouteModules.set(f, 'unauthorized boundary');
-  }
-  if (routeTable.notFound) alwaysShipRouteModules.set(routeTable.notFound, 'not-found page');
-  if (routeTable.notFounds) {
-    for (const f of routeTable.notFounds.values()) {
-      alwaysShipRouteModules.set(f, 'not-found page');
-    }
-  }
-  // global-not-found ships for the same reason: a thrown notFound() with no
-  // nearer boundary renders it against the matched route, so it wraps and
-  // boots. global-ERROR is deliberately absent: it returns its own document
-  // verbatim with no importmap and no boot script, so nothing of it ever
-  // reaches the browser.
-  if (routeTable.globalNotFound) {
-    alwaysShipRouteModules.set(routeTable.globalNotFound, 'global-not-found page');
-  }
-
-  // The elision flag mirrors `dev.js`: respect `webjs.elide === false` and the
-  // WEBJS_ELIDE override. When elision is OFF, the build ships EVERY component
-  // and route module, so the verdict is "nothing is elidable / inert" and the
-  // rule treats every candidate as shipping (which is correct: with elision
-  // off, a display-only page really does ship its server import too).
+  // What the browser loads (#1686): the components the build does not elide,
+  // plus `instrumentation-client.*`. A route module (page, layout, boundary)
+  // never ships, so a server import in one is fine wherever it sits; only the
+  // component frontier it renders is booted. The elision flag mirrors
+  // `dev.js` (`webjs.elide` / `WEBJS_ELIDE`): with it off every component
+  // ships. A `.server.*` file is never a component (the scanner skips it), so
+  // server-to-server imports are excluded by construction.
   const elideEnabled = await readElideEnabledForCheck(appDir);
-  const { elidableComponents, inertRouteModules, importOnlyRouteModules, shippedRouteModules } = elideEnabled
+  const routeModules = collectBootRouteModules(routeTable);
+  const { elidableComponents } = elideEnabled
     ? await analyzeElision(components, routeModules, moduleGraph, (f) => readFile(f, 'utf8'), appDir)
-    : { elidableComponents: new Set(), inertRouteModules: new Set(), importOnlyRouteModules: new Map(), shippedRouteModules: new Map() };
+    : { elidableComponents: new Set() };
+  const routeFiles = new Set(routeModules);
 
-  // Candidate browser-shipped modules: components that are NOT elided, plus
-  // route modules that are NOT inert and NOT import-only (an import-only
-  // module is dropped from the boot in favour of its component frontier,
-  // #605/#963, so its own imports never load in a browser and a bare
-  // server-only import in it is harmless). A `.server.*` file is never a
-  // component (the scanner skips it) nor a route module the browser loads, so
-  // it cannot enter this set; server-to-server imports are excluded by
-  // construction.
-  /** @type {Map<string, { kind: string }>} relFile is keyed by ABS path */
+  /** @type {Map<string, { kind: string }>} keyed by ABS path */
   const candidates = new Map();
   for (const c of components) {
-    if (!elidableComponents.has(c.file)) candidates.set(c.file, { kind: 'component' });
+    if (routeFiles.has(c.file) || elidableComponents.has(c.file)) continue;
+    candidates.set(c.file, { kind: 'component' });
   }
-  for (const file of routeModules) {
-    if (inertRouteModules.has(file) || importOnlyRouteModules.has(file)) continue;
-    const base = basename(file);
-    const kind = /^layout\./.test(base) ? 'layout' : 'page';
-    candidates.set(file, { kind });
-  }
-  // error / loading / not-found modules always ship (never elided), so they are
-  // candidates unconditionally. A page/layout entry already in `candidates`
-  // wins (it is the more specific kind); these only add files not already seen.
-  for (const [file, kind] of alwaysShipRouteModules) {
-    if (!candidates.has(file)) candidates.set(file, { kind });
+  if (routeTable.instrumentationClient) {
+    candidates.set(routeTable.instrumentationClient, { kind: 'instrumentation-client module' });
   }
 
   // Report at most once per module (a page importing two server modules is one
@@ -270,36 +211,17 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
     const importer = chainFiles.length >= 2 ? chainFiles[chainFiles.length - 2] : null;
     const viaTypesModule = importer && /(^|\/)types(\.m?[jt]s$|\/)/.test(relative(appDir, importer));
 
-    // The "elides again" remedy only applies to a page / layout: since the
-    // path-aware import-only verdict (#963), a page importing a component to
-    // register is dropped from the boot, so a page/layout on this rule ships
-    // because of its OWN client work (or a client-effecting non-component in
-    // its closure); moving that work into a component makes it a dropped
-    // carrier again and the server import never loads. The error / loading /
-    // not-found boundaries always ship and are never elided, so offering
-    // them an "elides again" fix is wrong. Branch the fix text on kind.
-    const canElide = kind === 'page' || kind === 'layout';
     const typesHint = viaTypesModule
       ? `The edge enters via a types-shaped module (${relative(appDir, importer)}); if it re-exports a runtime VALUE from a \`.server.{ts,js}\` file, relocate that to a browser-safe typedef (a plain \`interface\` / JSDoc, or an \`import type\` which the stripper erases) so the type is shared without pinning the module. `
       : '';
-    const fixText = canElide
-      ? `${typesHint}Keep the server call off this browser-shipped ${kind}. Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC; or (3) move this ${kind}'s own client work (the module-scope call, browser-global access, or client-effecting util import that pins it) into a component, so the ${kind} elides again as a dropped carrier and its server import never loads.`
-      : `${typesHint}Keep the server call off this browser-shipped ${kind} (it always ships and is never elided). Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); or (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC.`;
-
-    // Name WHY the page or layout ships, from the same elision verdict. The
-    // cause is often a plain helper it imports (a module-scope Intl formatter,
-    // say), and blaming the page alone sent an agent to fix the wrong file.
-    const why = canElide && shippedRouteModules ? shippedRouteModules.get(file) : undefined;
-    const whyText = !why ? ''
-      : why.blocker
-        ? ` It ships because ${relative(appDir, why.blocker)} ${why.reason}; fix that module, not this ${kind}.`
-        : ` It ships because it ${why.reason}.`;
+    const fixText = `${typesHint}Keep the server call out of this ${kind}. Load the data in the page (pages run only on the server) and pass it in as a property, or move the call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC.`;
+    const whyText = '';
 
     violations.push({
       rule: 'no-server-import-in-browser-module',
       file: relFile,
       message:
-        `This ${kind} ships to the browser (the build does not elide it) but transitively imports the server-only module ${relServer} (${chain}).${whyText} In the browser that import resolves to a stub, so the module crashes at load (the stub throws, or a server-only export such as \`auth\` is missing). \`webjs typecheck\` and the rest of \`webjs check\` pass; only the running ${kind} fails.`,
+        `This ${kind} loads in the browser but transitively imports the server-only module ${relServer} (${chain}).${whyText} In the browser that import resolves to a stub, so the module crashes at load (the stub throws, or a server-only export such as \`auth\` is missing). \`webjs typecheck\` and the rest of \`webjs check\` pass; only the running ${kind} fails.`,
       fix: fixText,
     });
   }

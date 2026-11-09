@@ -301,34 +301,6 @@ export function collectRouteModules(routeTable) {
 }
 
 /**
- * Every route module the client boot could be asked to stand in for: pages,
- * layouts and every boundary kind (error, loading, forbidden, unauthorized,
- * not-found, global-not-found). None of them ships; each is replaced in the
- * boot by its component frontier (`route-frontier.js`). `global-error` is left
- * out: it renders its own document with no boot script.
- *
- * Route-ness comes from the route table, never from a file name (a plain
- * helper may be called `page.ts`).
- *
- * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
- * @returns {string[]}
- */
-export function collectBootRouteModules(routeTable) {
-  /** @type {Set<string>} */
-  const mods = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) mods.add(page.file);
-    for (const key of ['layouts', 'errors', 'loadings', 'notFounds', 'forbiddens', 'unauthorizeds']) {
-      for (const f of /** @type {any} */ (page)[key] || []) mods.add(f);
-    }
-  }
-  if (routeTable.notFound) mods.add(routeTable.notFound);
-  if (routeTable.notFounds) for (const f of routeTable.notFounds.values()) mods.add(f);
-  if (routeTable.globalNotFound) mods.add(routeTable.globalNotFound);
-  return [...mods];
-}
-
-/**
  * List the app's top-level source directory names, for expanding a `#*`
  * catch-all import alias into one browser importmap prefix scope per dir (#555).
  * Excludes infra dirs that are never imported via `#` (node_modules, dotfiles,

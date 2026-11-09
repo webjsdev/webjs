@@ -4,8 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { routeFrontiers } from '../../src/route-frontier.js';
-import { collectBootRouteModules } from '../../src/dev/helpers.js';
+import { routeFrontiers, collectBootRouteModules } from '../../src/route-frontier.js';
 
 /** @param {Record<string, string[]>} edges */
 const graph = (edges) => new Map(Object.entries(edges).map(([k, v]) => [k, new Set(v)]));
@@ -51,13 +50,19 @@ test('a cycle through helpers terminates and emits each component once', () => {
   assert.deepEqual(out.get('/app/page.ts'), ['/c/x.ts']);
 });
 
-test('the route module itself is never part of its own frontier', () => {
-  // A route file that is also scanned as a component (it defines one) must
-  // still not be emitted: route modules never ship.
-  const g = graph({ '/app/page.ts': ['/c/a.ts'], '/c/a.ts': ['/app/page.ts'] });
-  const comps = new Set(['/app/page.ts', '/c/a.ts']);
-  const out = routeFrontiers(['/app/page.ts'], g, comps, new Set());
+test('a route-table file is never emitted or walked through, even when another route imports it', () => {
+  // The caller puts every route-table file in `skip`, so a page importing a
+  // sibling route module (or a route file that also defines a component) can
+  // never pull a route module into the boot.
+  const g = graph({
+    '/app/page.ts': ['/app/other/page.ts', '/c/a.ts'],
+    '/app/other/page.ts': ['/c/behind-route.ts'],
+  });
+  const comps = new Set(['/app/other/page.ts', '/c/a.ts', '/c/behind-route.ts']);
+  const routes = ['/app/page.ts', '/app/other/page.ts'];
+  const out = routeFrontiers(routes, g, comps, new Set(routes));
   assert.deepEqual(out.get('/app/page.ts'), ['/c/a.ts']);
+  assert.deepEqual(out.get('/app/other/page.ts'), ['/c/behind-route.ts']);
 });
 
 test('collectBootRouteModules covers pages, layouts and every boundary kind, never global-error', () => {

@@ -1575,8 +1575,10 @@ test('ssrPage: modulepreload never points at a server-only dep reached THROUGH a
   const serverFiles = new Map([[action, 'hashA']]);
 
   const route = { file: pageFile, layouts: [], errors: [], metadataFiles: [] };
+  // The page never ships (#1686); its frontier (the client module) does.
+  const routeFrontiers = new Map([[pageFile, [clientComp]]]);
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), {
-    dev: false, appDir, moduleGraph, serverFiles,
+    dev: false, appDir, moduleGraph, serverFiles, routeFrontiers,
   });
   const preloads = ((await resp.text()).match(/modulepreload[^>]*href="[^"]*"/g) || []).join('\n');
 
@@ -2036,36 +2038,23 @@ test('boundary: an excluded layout id is never advertised, so the NEXT nav keeps
   assertPaired(body);
 });
 
-test('boundary: the boot script ships the boundary module, not the page module (#1298)', async () => {
-  // The boundary is what rendered, so it is what has to upgrade its custom
-  // elements. The page module never ran, so booting it was always wrong.
+test('boundary: the boot imports the frontier of what rendered, never a route module (#1298, #1686)', async () => {
+  // The boundary is what rendered, so its components are what has to upgrade.
+  // The page never ran, so its frontier stays out. No route module ships.
   const { route, appDir } = crashApp();
-  const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), { dev: false, appDir }));
+  const routeFrontiers = new Map([
+    [join(appDir, 'docs/error.js'), [join(appDir, 'components/retry.js')]],
+    [join(appDir, 'docs/layout.js'), [join(appDir, 'components/thing.js')]],
+    [join(appDir, 'docs/crash/page.js'), [join(appDir, 'components/page-only.js')]],
+  ]);
+  const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), { dev: false, appDir, routeFrontiers }));
   const body = await resp.text();
-  assert.ok(body.includes('"/docs/error.js"'), 'the boundary module is booted');
-  assert.ok(!body.includes('"/docs/crash/page.js"'), 'the page module is not booted');
-});
-
-test('boundary: the #963 inert / import-only substitution still applies to the boot set', async () => {
-  // An import-only layout is replaced by the component URLs it would have
-  // emitted, exactly as on the happy path. Without this an import-only module
-  // with a bare `.server.*` import loads whole and crashes the boundary's boot
-  // on the throw-at-load stub, killing every sibling registration with it.
-  const { route, appDir } = crashApp();
-  const importOnly = new Map([[join(appDir, 'docs/layout.js'), [join(appDir, 'components/thing.js')]]]);
-  const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), {
-    dev: false, appDir, importOnlyRouteModules: importOnly,
-  }));
-  const body = await resp.text();
-  assert.ok(body.includes('"/components/thing.js"'), 'the substitute component URL is booted');
-  assert.ok(!body.includes('"/docs/layout.js"'), 'the import-only layout module itself is not');
-
-  const inert = new Set([join(appDir, 'docs/layout.js')]);
-  const resp2 = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), {
-    dev: false, appDir, inertRouteModules: inert,
-  }));
-  const body2 = await resp2.text();
-  assert.ok(!body2.includes('"/docs/layout.js"'), 'an inert layout is dropped from the boot set');
+  assert.ok(body.includes('"/components/retry.js"'), "the boundary's component is booted");
+  assert.ok(body.includes('"/components/thing.js"'), "the wrapping layout's component is booted");
+  assert.ok(!body.includes('"/components/page-only.js"'), "the page's component is not: the page never rendered");
+  for (const f of ['/docs/error.js', '/docs/layout.js', '/layout.js', '/docs/crash/page.js']) {
+    assert.ok(!body.includes(`"${f}"`), `no route module is booted (${f})`);
+  }
 });
 
 test('boundary: a throwing LAYOUT renders the boundary OUTSIDE it, not the one at its own segment', async () => {
@@ -2157,7 +2146,11 @@ test('boundary: a thrown forbidden() renders inside its layouts and receives a r
     layouts: ['layout.js'],
     forbiddens: ['admin/[org]/forbidden.js'],
   });
-  const resp = await ssrPage(route, { org: 'acme' }, new URL('http://localhost/admin/acme'), { dev: false, appDir });
+  const routeFrontiers = new Map([
+    [join(appDir, 'layout.js'), [join(appDir, 'components/site-nav.js')]],
+    [join(appDir, 'admin/[org]/forbidden.js'), [join(appDir, 'components/ask-access.js')]],
+  ]);
+  const resp = await ssrPage(route, { org: 'acme' }, new URL('http://localhost/admin/acme'), { dev: false, appDir, routeFrontiers });
   assert.equal(resp.status, 403);
   const body = await resp.text();
   assert.ok(body.includes('id="fb"'));
@@ -2165,10 +2158,11 @@ test('boundary: a thrown forbidden() renders inside its layouts and receives a r
   assert.ok(body.includes('id="root-chrome"'), 'the root layout wraps it');
   assert.deepEqual(openSegments(body), ['/', '/admin/[org]']);
   assertPaired(body);
-  // The chain rendered, so its modules must boot. Chrome that paints and never
-  // hydrates is worse than no chrome: its controls look live and are not.
-  assert.ok(body.includes('"/layout.js"'), 'the wrapping layout module boots');
-  assert.ok(body.includes('"/admin/[org]/forbidden.js"'), 'and so does the boundary that rendered');
+  // The chain rendered, so its components must boot. Chrome that paints and
+  // never hydrates is worse than no chrome: its controls look live and are not.
+  assert.ok(body.includes('"/components/site-nav.js"'), "the wrapping layout's component boots");
+  assert.ok(body.includes('"/components/ask-access.js"'), "and so does the boundary's");
+  assert.ok(!body.includes('"/layout.js"') && !body.includes('"/admin/[org]/forbidden.js"'), 'never the route modules');
 });
 
 test('boundary: a 404 for a URL that matched no route stays a bare document', async () => {
@@ -2195,13 +2189,14 @@ test('boundary: instrumentation-client boots FIRST on a boundary page too (#848)
   });
   const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), {
     dev: false, appDir, instrumentationClient: join(appDir, 'instrumentation-client.js'),
+    routeFrontiers: new Map([[join(appDir, 'docs/error.js'), [join(appDir, 'components/retry.js')]]]),
   }));
   const body = await resp.text();
   const boot = body.match(/<script type="module">([\s\S]*?)<\/script>/);
   assert.ok(boot, 'the boundary page has a boot script');
   const imports = [...boot[1].matchAll(/import\s+"([^"]+)"/g)].map((m) => m[1]);
   assert.equal(imports[0], '/instrumentation-client.js', 'and instrumentation is its FIRST import');
-  assert.ok(imports.includes('/docs/error.js'), 'the boundary module still boots');
+  assert.ok(imports.includes('/components/retry.js'), "the boundary's component still boots");
 });
 
 test('boundary: a layout that throws while wrapping a 403 is REPORTED, not swallowed', async () => {
@@ -2688,14 +2683,15 @@ test('boundary: the DEFAULT 403 page renders in its layouts too (no forbidden.ts
     layouts: ['layout.js'],
     forbiddens: [],
   });
-  const resp = await ssrPage(route, {}, new URL('http://localhost/admin'), { dev: false, appDir });
+  const routeFrontiers = new Map([[join(appDir, 'layout.js'), [join(appDir, 'components/site-nav.js')]]]);
+  const resp = await ssrPage(route, {}, new URL('http://localhost/admin'), { dev: false, appDir, routeFrontiers });
   assert.equal(resp.status, 403);
   const body = await resp.text();
   assert.ok(body.includes('403: Forbidden'), 'the default body still renders');
   assert.ok(body.includes('id="root-chrome"'), 'inside the layout chain');
   assert.ok(openSegments(body).length > 0, 'so it carries markers and can soft-swap');
   assertPaired(body);
-  assert.ok(body.includes('"/layout.js"'), 'and the layout that rendered boots');
+  assert.ok(body.includes('"/components/site-nav.js"'), "and the rendered layout's component boots");
 });
 
 test('boundary: the DEFAULT 404 page renders in its layouts too (no not-found.ts)', async () => {

@@ -145,6 +145,8 @@ probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
 - `components/observed-badge.ts` + `components/observe-badge.ts` (rendered
   on `/observed`): a display-only component that WOULD elide, paired with a
   module that observes it via `customElements.whenDefined('observed-badge')`.
+  `forced-badge.ts` imports the observer, because a page never loads in the
+  browser, so a side-effect import in the page itself would never run.
   The observation forces the badge to ship, so the probe asserts its module
   IS downloaded (the cross-module-registration fix, #169). The unobserved
   `build-stamp` is the negative control.

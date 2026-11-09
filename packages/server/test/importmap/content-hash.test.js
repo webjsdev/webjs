@@ -36,7 +36,7 @@ let tmpRoot;
 before(() => { tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-conthash-')); });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
-function makeApp({ basePath, elide } = {}) {
+function makeApp({ basePath, elide, nested } = {}) {
   const appDir = mkdtempSync(join(tmpRoot, 'app-'));
   const webjs = (basePath != null || elide != null)
     ? { ...(basePath != null ? { basePath } : {}), ...(elide != null ? { elide } : {}) }
@@ -55,10 +55,12 @@ function makeApp({ basePath, elide } = {}) {
     'app/widget.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      (nested ? `import { label } from './label.js';\n` : '') +
       `export class XWidget extends WebComponent {\n` +
       `  render() { return html\`<button @click=\${() => 1}>hi</button>\`; }\n` +
       `}\n` +
       `XWidget.register('x-widget');\n`,
+    ...(nested ? { 'app/label.js': `export const label = 'hi';\n` } : {}),
   };
   for (const [rel, body] of Object.entries(files)) {
     const abs = join(appDir, rel);
@@ -351,50 +353,47 @@ test('EARLY-HINTS: routeFor() module urls match the body fingerprinted urls (no 
 /* ---------------- nested relative imports carry the matching ?v (#369) ---------------- */
 
 test('NESTED-IMPORTS: a served module versions its relative imports to the preload ?v (one cache key, no double fetch)', async () => {
-  // page.js does `import './widget.js'`. The browser resolves that relative
-  // specifier against page.js's own (?v-versioned) URL, and a ?v is NOT
-  // inherited across that resolution. Before the #369 fix the served body kept
-  // the bare specifier, so the browser fetched `/app/widget.js` (a different
-  // cache key from the `/app/widget.js?v=hash` modulepreload) -> wasted preload,
-  // double download, 1h cache instead of immutable. The fix rewrites the served
-  // specifier to carry widget.js's own ?v, collapsing both onto one URL.
-  //
-  // This exercises relative-import versioning (#369) on a page that is a BOOT
-  // specifier. With elision on, a page whose only client work is importing a
-  // component is import-only (#605) and the component, not the page, is the boot
-  // module; elision is disabled here to keep the page in the boot and isolate the
-  // #369 mechanism, which runs on any served module regardless of elision.
-  const appDir = makeApp({ elide: false });
+  // widget.js does `import { label } from './label.js'`. The browser resolves
+  // that relative specifier against widget.js's own (?v-versioned) URL, and a
+  // ?v is NOT inherited across that resolution. Before the #369 fix the served
+  // body kept the bare specifier, so the browser fetched `/app/label.js` (a
+  // different cache key from the `/app/label.js?v=hash` modulepreload) ->
+  // wasted preload, double download, 1h cache instead of immutable. The fix
+  // rewrites the served specifier to carry label.js's own ?v, collapsing both
+  // onto one URL. The served module is the booted component: a page never
+  // ships (#1686).
+  const appDir = makeApp({ nested: true });
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
 
   const html = await (await app.handle(new Request('http://x/'))).text();
 
-  // The ?v the modulepreload + boot path advertise for widget.js.
-  const widgetPreload = modulepreloadHrefs(html).find((u) => u.includes('/app/widget.js'));
-  assert.ok(widgetPreload, 'widget.js has a modulepreload href');
-  assert.match(widgetPreload, /^\/app\/widget\.js\?v=[0-9a-f]{6,}$/);
+  // The ?v the modulepreload path advertises for label.js.
+  const labelPreload = modulepreloadHrefs(html).find((u) => u.includes('/app/label.js'));
+  assert.ok(labelPreload, 'label.js has a modulepreload href');
+  assert.match(labelPreload, /^\/app\/label\.js\?v=[0-9a-f]{6,}$/);
 
-  // Fetch the SERVED page.js body (via its versioned boot specifier).
-  const pageUrl = bootImportSpecifiers(html).find((u) => u.startsWith('/app/page.js'));
-  assert.ok(pageUrl, 'page.js is a boot specifier');
-  const pageRes = await app.handle(new Request('http://x' + pageUrl));
-  assert.equal(pageRes.status, 200);
-  const pageBody = await pageRes.text();
+  // Fetch the SERVED widget.js body (via its versioned boot specifier).
+  const widgetUrl = bootImportSpecifiers(html).find((u) => u.startsWith('/app/widget.js'));
+  assert.ok(widgetUrl, 'widget.js is a boot specifier');
+  assert.ok(!bootImportSpecifiers(html).some((u) => u.startsWith('/app/page.js')), 'the page is not');
+  const widgetRes = await app.handle(new Request('http://x' + widgetUrl));
+  assert.equal(widgetRes.status, 200);
+  const widgetBody = await widgetRes.text();
 
-  // The served body's relative import now carries widget.js's ?v.
-  const m = pageBody.match(/import\s+'\.\/widget\.js\?v=([0-9a-f]{6,})'/);
-  assert.ok(m, `served page.js versions its './widget.js' import; body was:\n${pageBody}`);
+  // The served body's relative import now carries label.js's ?v.
+  const m = widgetBody.match(/from\s+'\.\/label\.js\?v=([0-9a-f]{6,})'/);
+  assert.ok(m, `served widget.js versions its './label.js' import; body was:\n${widgetBody}`);
 
-  // Resolve the served specifier against page.js's URL the way the browser does:
-  // it must land on EXACTLY the modulepreload href -> a single cache key.
-  const resolved = new URL('./widget.js?v=' + m[1], 'http://x/app/page.js').pathname + '?v=' + m[1];
-  assert.equal(resolved, widgetPreload, 'served import URL === preload href (deduped, one fetch)');
+  // Resolve the served specifier against widget.js's URL the way the browser
+  // does: it must land on EXACTLY the modulepreload href -> a single cache key.
+  const resolved = new URL('./label.js?v=' + m[1], 'http://x/app/widget.js').pathname + '?v=' + m[1];
+  assert.equal(resolved, labelPreload, 'served import URL === preload href (deduped, one fetch)');
 
   // And that URL serves immutable (the headline cache win).
-  const widgetRes = await app.handle(new Request('http://x' + widgetPreload));
-  assert.equal(widgetRes.status, 200);
-  assert.equal(widgetRes.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  const labelRes = await app.handle(new Request('http://x' + labelPreload));
+  assert.equal(labelRes.status, 200);
+  assert.equal(labelRes.headers.get('cache-control'), 'public, max-age=31536000, immutable');
 });
 
 test('NESTED-IMPORTS: DEV serves the bare relative specifier (no ?v), byte-identical to before', async () => {
