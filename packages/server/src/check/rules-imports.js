@@ -6,7 +6,7 @@
  * in one 900-line function. Each rule keeps its original comment header, its
  * logic, and its position in the run order.
  */
-import { relative } from 'node:path';
+import { relative, dirname, sep } from 'node:path';
 import {
   redactStringsAndTemplates, redactToPlaceholders, classifyActionHole,
 } from '../js-scan.js';
@@ -75,11 +75,21 @@ export function checkNoMissingLocalImport(appDir, files, violations) {
         if (exp == null) continue; // not an app file, or exports not enumerable
         for (const name of names) {
           if (exp.has(name)) continue;
+          // The usual cause is the right name from the wrong module (a UI
+          // helper imported from its sibling's file), so name the app modules
+          // that do export it, spelled the way this import was (#1686).
+          const owners = [];
+          for (const f of files) {
+            if (f.abs !== target && exportsByAbs.get(f.abs)?.has(name)) owners.push(specFor(f.abs, spec, abs, appDir));
+          }
+          const elsewhere = owners.length ? ` \`${name}\` is exported by ${owners.slice(0, 3).map((o) => `\`${o}\``).join(', ')}.` : '';
           violations.push({
             rule: 'no-missing-local-import',
             file: rel,
-            message: `Imports \`${name}\` from \`${spec}\`, but that module does not export \`${name}\`. The binding is undefined at runtime and crashes on first use (often a renamed or removed export, e.g. a dropped schema table).`,
-            fix: `Add \`${name}\` to \`${spec}\`, correct the imported name, or remove the import.`,
+            message: `Imports \`${name}\` from \`${spec}\`, but that module does not export \`${name}\`. The binding is undefined at runtime and crashes on first use (often a renamed or removed export, e.g. a dropped schema table).${elsewhere}`,
+            fix: owners.length
+              ? `Import \`${name}\` from \`${owners[0]}\`.`
+              : `Add \`${name}\` to \`${spec}\`, correct the imported name, or remove the import.`,
           });
         }
       }
@@ -309,4 +319,19 @@ export function checkNoForeignFrameworkImport(files, violations) {
       }
     }
   }
+}
+
+/**
+ * The specifier for an app module, in the style the failing import used: a
+ * `#` path from the app root for a `#` import, else a path relative to the
+ * importer.
+ * @param {string} targetAbs
+ * @param {string} styleSpec
+ * @param {string} importerAbs
+ * @param {string} appDir
+ */
+function specFor(targetAbs, styleSpec, importerAbs, appDir) {
+  if (styleSpec.startsWith('#')) return '#' + relative(appDir, targetAbs).split(sep).join('/');
+  const r = relative(dirname(importerAbs), targetAbs).split(sep).join('/');
+  return r.startsWith('.') ? r : './' + r;
 }

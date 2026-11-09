@@ -179,3 +179,21 @@ test('FP: a named-default import resolves against an export default module', asy
   assert.equal(hits(await checkConventions(dir)).length, 0, 'default is a recognized export');
   await rm(dir, { recursive: true, force: true });
 });
+
+test('names the app module that does export the name, in the import style used (#1686)', async () => {
+  // The micro-eval auth draft imported a UI helper from its sibling's file.
+  const dir = await makeApp({
+    'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }),
+    'components/ui/card.ts': `export function cardClass() { return 'card'; }\n`,
+    'components/ui/button.ts': `export function buttonClass() { return 'btn'; }\n`,
+    'app/dashboard/page.ts': `import { buttonClass } from '#components/ui/card.ts';\nexport default () => buttonClass();\n`,
+    'app/other/page.ts': `import { buttonClass } from '../../components/ui/card.ts';\nexport default () => buttonClass();\n`,
+  });
+  const v = hits(await checkConventions(dir));
+  const aliased = v.find((x) => /dashboard/.test(x.file));
+  const relative = v.find((x) => /other/.test(x.file));
+  assert.match(aliased.message, /`buttonClass` is exported by `#components\/ui\/button\.ts`/);
+  assert.equal(aliased.fix, 'Import `buttonClass` from `#components/ui/button.ts`.');
+  assert.equal(relative.fix, 'Import `buttonClass` from `../../components/ui/button.ts`.');
+  await rm(dir, { recursive: true, force: true });
+});
