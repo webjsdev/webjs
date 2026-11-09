@@ -32,7 +32,7 @@ import { applyPendingCookies } from '../cookie-store.js';
 import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
 import { loadEnvFiles, envMode } from '../env-files.js';
 import { buildPublicIndex } from '../public-files.js';
-import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore, setComponentErrorSink, sealCookies } from '../context.js';
+import { withRequest, setCspNonce, setBodyLimits, setAllowedOrigins, setRequestId, requestId as getRequestId, currentCookieStore, setComponentErrorSink, sealCookies } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
@@ -1231,6 +1231,7 @@ export async function createRequestHandler(opts) {
       // request scope, so `readBody` inside a route handler enforces the same
       // cap the framework's own RPC / form-dispatch body reads do.
       setBodyLimits(state.bodyLimits);
+      setAllowedOrigins(allowedOriginsValue);
 
       // A component that throws during SSR renders its error state in place and
       // the page still answers 200, so in dev it is recorded here, as kind

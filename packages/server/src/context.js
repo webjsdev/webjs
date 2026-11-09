@@ -101,6 +101,22 @@ export function getBodyLimits() {
 }
 
 /**
+ * Set the app's `webjs.allowedOrigins` on the current store, so a check that
+ * runs inside a route handler (the auth routes' origin check, #1686) honours
+ * the same allowlist the action endpoint does.
+ * @param {string[]} origins
+ */
+export function setAllowedOrigins(origins) {
+  const store = als.getStore();
+  if (store) store.allowedOrigins = origins;
+}
+
+/** The app's cross-origin allowlist for this request, or [] outside one. */
+export function getAllowedOrigins() {
+  return als.getStore()?.allowedOrigins ?? [];
+}
+
+/**
  * Set where the current request's isolated component render failures go. The
  * dev handler sets one per request so a component that throws during SSR,
  * which renders its error state in place and leaves the page at 200, still

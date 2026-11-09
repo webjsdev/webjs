@@ -8,7 +8,8 @@
  */
 
 import { getStore } from './cache.js';
-import { getRequest, getBodyLimits, markDynamicAccess, requestCookieStore } from './context.js';
+import { getRequest, getBodyLimits, getAllowedOrigins, markDynamicAccess, requestCookieStore } from './context.js';
+import { verifyOrigin } from './csrf.js';
 import { redirect } from '@webjsdev/core';
 import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 import { devSecret } from './dev-secret.js';
@@ -103,7 +104,11 @@ function parseCookies(header) {
   for (const pair of header.split(';')) {
     const eq = pair.indexOf('=');
     if (eq < 0) continue;
-    out[pair.slice(0, eq).trim()] = decodeURIComponent(pair.slice(eq + 1).trim());
+    // One malformed value (a stray `%`) must not make auth() throw for every
+    // request that carries it, so it is skipped (#1686).
+    try {
+      out[pair.slice(0, eq).trim()] = decodeURIComponent(pair.slice(eq + 1).trim());
+    } catch {}
   }
   return out;
 }
@@ -273,7 +278,27 @@ export function createAuth(config) {
 
   /** @type {Map<string, ProviderConfig>} */
   const providers = new Map();
-  for (const p of config.providers) providers.set(p.id, p);
+  // Auth.js takes a provider called or bare (`providers: [GitHub]`), so a
+  // function is called with no options to get its config (#1686).
+  for (const entry of config.providers) {
+    const p = typeof entry === 'function' ? entry() : entry;
+    providers.set(p.id, p);
+  }
+
+  /**
+   * What the signIn callback decided, Auth.js's rule: a string redirects there
+   * (and does not sign in), any other falsy value denies, truthy allows.
+   * @returns {Promise<Response | null>} the refusal, or null to continue
+   */
+  async function signInRefusal(user, account, extraCookies = []) {
+    if (!cb.signIn) return null;
+    const ok = await cb.signIn({ user, account });
+    if (ok && typeof ok !== 'string') return null;
+    const hdrs = new Headers();
+    hdrs.set('location', typeof ok === 'string' ? (safeRedirectPath(ok) || ok) : (pages.error || '/?error=AccessDenied'));
+    for (const c of extraCookies) hdrs.append('set-cookie', c);
+    return new Response(null, { status: 302, headers: hdrs });
+  }
 
   const dbStore = strategy === 'database' ? (config.adapter || defaultAdapter()) : null;
 
@@ -321,9 +346,34 @@ export function createAuth(config) {
 
   // -- auth() ---------------------------------------------------------------
 
-  async function auth(req) {
-    const r = req || getRequest();
-    return r ? readSession(r) : null;
+  // Auth.js's three shapes (#1686): `auth()` / `auth(req)` reads the session;
+  // `export { auth as middleware }` runs with `(req, next)` and must answer as
+  // middleware, never with the session object; `auth((req) => ...)` wraps a
+  // middleware, which sees the session on `req.auth`. Both middleware shapes
+  // run `callbacks.authorized` first when the app set one.
+  async function guard(req) {
+    const session = await readSession(req);
+    try { /** @type {any} */ (req).auth = session; } catch {}
+    if (!cb.authorized) return null;
+    const verdict = await cb.authorized({ auth: session, request: req });
+    if (verdict instanceof Response) return verdict;
+    if (verdict) return null;
+    const url = new URL(req.url);
+    const target = new URL(pages.signIn || '/api/auth/signin', url.origin);
+    target.searchParams.set('callbackUrl', url.pathname + url.search);
+    return Response.redirect(target.toString(), 302);
+  }
+
+  function auth(arg, next) {
+    if (typeof arg === 'function') {
+      const handler = arg;
+      return async (req, ...rest) => (await guard(req)) ?? handler(req, ...rest);
+    }
+    if (arg instanceof Request && next !== undefined) {
+      return guard(arg).then((res) => res ?? (typeof next === 'function' ? next() : undefined));
+    }
+    const r = arg || getRequest();
+    return r ? readSession(r) : Promise.resolve(null);
   }
 
   // -- signIn() -------------------------------------------------------------
@@ -338,10 +388,8 @@ export function createAuth(config) {
       if (!user) {
         return new Response(null, { status: 302, headers: { location: `${pages.error || pages.signIn || '/'}?error=CredentialsSignin` } });
       }
-      if (cb.signIn) {
-        const ok = await cb.signIn({ user, account: { provider: providerId } });
-        if (ok === false) return new Response(null, { status: 302, headers: { location: pages.error || '/?error=AccessDenied' } });
-      }
+      const refused = await signInRefusal(user, { provider: providerId });
+      if (refused) return refused;
       const cookie = await writeSession(user);
       // `opts.redirectTo` is the app's own server-side choice and is trusted.
       // `data.redirectTo` usually arrives from a submitted form, so it goes
@@ -453,16 +501,11 @@ export function createAuth(config) {
 
     const user = provider.profile ? provider.profile(rawProfile) : rawProfile;
 
-    if (cb.signIn) {
-      const ok = await cb.signIn({ user, account: { provider: provider.id, accessToken } });
-      if (ok === false) {
-        const denied = new Headers();
-        denied.set('location', pages.error || '/?error=AccessDenied');
-        denied.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
-        denied.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
-        return new Response(null, { status: 302, headers: denied });
-      }
-    }
+    const refused = await signInRefusal(user, { provider: provider.id, accessToken }, [
+      clearCookie(cookieName(STATE_COOKIE, secure()), secure()),
+      clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()),
+    ]);
+    if (refused) return refused;
 
     const hdrs = new Headers();
     hdrs.set('location', (await readRedirectCookie(req)) || '/');
@@ -470,6 +513,37 @@ export function createAuth(config) {
     hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
     hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
     return new Response(null, { status: 302, headers: hdrs });
+  }
+
+  // -- Built-in pages ------------------------------------------------------
+
+  /** @param {string} title @param {string} body */
+  function htmlPage(title, body) {
+    return new Response(
+      `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title></head>`
+      + `<body style="font-family:system-ui;max-width:24rem;margin:4rem auto">${body}</body></html>`,
+      { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } },
+    );
+  }
+
+  function signOutPage() {
+    return htmlPage('Sign out', '<h1>Sign out</h1><p>Are you sure you want to sign out?</p>'
+      + '<form method="post" action="/api/auth/signout"><button type="submit">Sign out</button></form>');
+  }
+
+  /** @param {string | null} callbackUrl */
+  function signInPage(callbackUrl) {
+    if (pages.signIn) {
+      const target = new URL(pages.signIn, 'http://x');
+      if (callbackUrl) target.searchParams.set('callbackUrl', callbackUrl);
+      return new Response(null, { status: 302, headers: { location: target.pathname + target.search } });
+    }
+    const back = safeRedirectPath(callbackUrl) || '/';
+    const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const buttons = [...providers.values()].filter((p) => p.type === 'oauth').map((p) =>
+      `<form method="post" action="/api/auth/signin/${esc(p.id)}"><input type="hidden" name="redirectTo" value="${esc(back)}">`
+      + `<button type="submit">Sign in with ${esc(p.name)}</button></form>`).join('');
+    return htmlPage('Sign in', `<h1>Sign in</h1>${buttons || '<p>Set <code>pages.signIn</code> to your sign-in page.</p>'}`);
   }
 
   // -- Route handlers (mount at app/api/auth/[...path]/route.js) ------------
@@ -494,7 +568,10 @@ export function createAuth(config) {
       if (!p || p.type !== 'oauth') return new Response('Unknown OAuth provider', { status: 404 });
       return oauthCallback(req, p);
     }
-    if (seg[0] === 'signout') return signOutFn({ req });
+    // A GET never signs out (#1686): a link prefetch, a crawler or an image
+    // tag would. As in Auth.js it answers a page whose button POSTs.
+    if (seg[0] === 'signout') return pages.signOut ? Response.redirect(new URL(pages.signOut, req.url).toString(), 302) : signOutPage();
+    if (seg[0] === 'signin' && !seg[1]) return signInPage(new URL(req.url).searchParams.get('callbackUrl'));
     if (seg[0] === 'providers') {
       const list = {};
       for (const [id, p] of providers) list[id] = { id: p.id, name: p.name, type: p.type, signinUrl: `/api/auth/signin/${id}` };
@@ -505,6 +582,10 @@ export function createAuth(config) {
 
   async function POST(req) {
     const seg = parseSegments(req);
+    // Sign-in and sign-out change who the visitor is, so a cross-site form
+    // posting here is refused, as the action endpoint refuses one (#1686).
+    const origin = verifyOrigin(req, getAllowedOrigins());
+    if (!origin.ok) return new Response('Forbidden: ' + origin.reason, { status: 403 });
 
     if (seg[0] === 'signin' && seg[1]) {
       const provider = providers.get(seg[1]);

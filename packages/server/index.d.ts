@@ -1150,11 +1150,20 @@ export type ResolvedAuthUser = keyof AuthUser extends never
 
 /** Auth configuration for `createAuth`. */
 export interface AuthConfig {
-  providers: ProviderConfig[];
+  /** A provider config, or the provider function uncalled (`providers: [GitHub]`), as Auth.js accepts. */
+  providers: Array<ProviderConfig | (() => ProviderConfig)>;
   session?: { strategy?: 'jwt' | 'database'; maxAge?: number };
   /** Signs the session. Defaults to `process.env.AUTH_SECRET`, as in Auth.js. */
   secret?: string | undefined;
-  callbacks?: { session?: Function; jwt?: Function; signIn?: Function; redirect?: Function };
+  callbacks?: {
+    session?: Function;
+    jwt?: Function;
+    /** Return true to allow, a url string to redirect there instead, anything else to deny (Auth.js's rule). */
+    signIn?: Function;
+    redirect?: Function;
+    /** Run by `auth` as middleware: true continues, false redirects to sign in, a Response is sent as is. */
+    authorized?: (params: { auth: { user: Record<string, unknown> } | null; request: Request }) => boolean | Response | Promise<boolean | Response>;
+  };
   adapter?: { load?: Function; save?: Function; destroy?: Function };
   pages?: { signIn?: string; signOut?: string; error?: string };
 }
@@ -1167,7 +1176,17 @@ export interface AuthConfig {
  * via `createAuth<MyUser>(...)`.
  */
 export interface AuthInstance<TUser = ResolvedAuthUser> {
-  auth: (req?: Request) => Promise<{ user: TUser } | null>;
+  /**
+   * Auth.js's `auth`, in its three shapes: `auth()` / `auth(req)` reads the
+   * session; `export { auth as middleware }` runs as middleware (it sets
+   * `req.auth` and applies `callbacks.authorized`); `auth((req) => ...)` wraps
+   * a middleware whose `req.auth` holds the session.
+   */
+  auth: {
+    (req?: Request | null): Promise<{ user: TUser } | null>;
+    (req: Request, next: unknown): Promise<Response | undefined>;
+    <R>(handler: (req: Request & { auth: { user: TUser } | null }, ...rest: any[]) => R): (req: Request, ...rest: any[]) => Promise<Response | Awaited<R>>;
+  };
   /**
    * Auth.js v5's `signIn`. Inside a request (a server action, a route handler,
    * middleware) it sets the session cookie on the response and throws a

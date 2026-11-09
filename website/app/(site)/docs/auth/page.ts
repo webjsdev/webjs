@@ -76,7 +76,23 @@ export async function logOut() {
   await signOut({ redirectTo: '/' });
 }</code-block>
     <p><code>signIn</code> and <code>signOut</code> work the way Auth.js v5's do in a Next.js server action. Inside a request they set or clear the session cookie on the response and throw a redirect, which a form-bound action answers with a 303, so the form works with JavaScript off. A credentials sign-in whose <code>authorize</code> returns <code>null</code> throws <code>CredentialsSignin</code>, a subclass of <code>AuthError</code> with <code>type</code> set to <code>'CredentialsSignin'</code>. Catch it to return a message, which re-renders the page with it on <code>actionData</code>. Left uncaught, it redirects to <code>pages.error</code> (or <code>pages.signIn</code>) with <code>?error=CredentialsSignin</code>, as the <code>/api/auth/signin/credentials</code> route does. Pass <code>{ redirect: false }</code> to get the target url back instead of the redirect. Called with no request in scope, from a script, they return the <code>Response</code> the auth routes send.</p>
-    <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the auth demo in the WebJs gallery renders its logout button.</p>
+    <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the auth demo in the WebJs gallery renders its logout button. A <code>GET /api/auth/signout</code> never signs out, as in Auth.js: it answers a page whose button posts (or redirects to <code>pages.signOut</code>), because a link prefetch or a crawler following a GET would otherwise log the visitor out. The auth <code>POST</code> routes also refuse a cross-site request, the same origin check server actions get, with <code>webjs.allowedOrigins</code> honoured.</p>
+
+    <h2>Protect routes with middleware</h2>
+    <p>As in Auth.js, <code>auth</code> is also middleware. Export it from the root <code>middleware.ts</code> and decide who passes in <code>callbacks.authorized</code>: <code>true</code> continues, <code>false</code> redirects to <code>pages.signIn</code> (or <code>/api/auth/signin</code>) with a <code>callbackUrl</code>, and a returned <code>Response</code> is sent as is. Without the callback the middleware only attaches the session as <code>req.auth</code>.</p>
+    <code-block>// middleware.ts
+export { auth as middleware } from '#lib/auth.server.ts';
+
+// lib/auth.server.ts
+createAuth({
+  // ...providers
+  pages: { signIn: '/login' },
+  callbacks: {
+    authorized: ({ auth, request }) =>
+      !!auth || !new URL(request.url).pathname.startsWith('/dashboard'),
+  },
+});</code-block>
+    <p>To run your own logic, wrap it: <code>export default auth((req) =&gt; ...)</code> gives the function <code>req.auth</code>, and returning nothing continues to the page.</p>
 
     <h2>Return to the page the user started from</h2>
     <p>Pass <code>redirectTo</code> and the user lands there after signing in, for OAuth providers as well as credentials. A plain form is enough: the mounted handler reads the field, carries it through the provider round trip in a short-lived signed cookie, and the callback lands on it.</p>
@@ -124,6 +140,7 @@ export default function LoginPage({ searchParams }) {
     },
   },
 });</code-block>
+    <p>The <code>signIn</code> callback follows Auth.js's rule: return <code>true</code> to allow, a url string to send the visitor there without signing them in, and anything else (including nothing) to deny with <code>AccessDenied</code>.</p>
 
     <h2>Type the session</h2>
     <p>By default <code>auth()</code> resolves <code>{ user: Record&lt;string, unknown&gt; }</code>, so reading a custom field your callbacks set (like <code>session.user.id</code>) needs a cast and a typo slips past TypeScript. Opt into a typed <code>user</code> one of two ways.</p>
@@ -160,6 +177,7 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
         <tr><td><code>GitHub()</code></td><td><code>AUTH_GITHUB_ID</code>, <code>AUTH_GITHUB_SECRET</code></td><td>OAuth 2.0 redirect flow</td></tr>
       </tbody>
     </table>
+    <p>As in Auth.js, an OAuth provider can be listed uncalled, <code>providers: [GitHub]</code>, when its credentials come from the environment variables above.</p>
 
     <h2>Session strategies</h2>
     <p><strong>JWT (default):</strong> Session data signed in a cookie. Stateless and scales horizontally without Redis. Cannot be revoked before expiry.</p>
