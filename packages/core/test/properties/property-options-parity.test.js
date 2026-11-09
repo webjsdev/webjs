@@ -85,6 +85,29 @@ test('a subclass of a wrapped class still wraps the author accessor', () => {
   assert.equal(el.name, '<x>');
 });
 
+test('a Boolean attribute is true whenever present, "false" included, with one warning', async () => {
+  const t = tag();
+  class E extends WebComponent {
+    static properties = { open: { type: Boolean } };
+    render() { return html`<p>${String(/** @type {any} */ (this).open)}</p>`; }
+  }
+  E.register(t);
+  /** @type {string[]} */
+  const warnings = [];
+  const orig = console.warn;
+  console.warn = (...a) => { warnings.push(String(a[0])); };
+  try {
+    assert.match(await renderToString(html([`<${t} open="false"></${t}>`])), /<p>true<\/p>/);
+    assert.match(await renderToString(html([`<${t} open="false"></${t}>`])), /<p>true<\/p>/);
+    assert.match(await renderToString(html([`<${t} open=""></${t}>`])), /<p>true<\/p>/);
+    assert.match(await renderToString(html([`<${t}></${t}>`])), /<p>undefined<\/p>/);
+  } finally {
+    console.warn = orig;
+  }
+  const hits = warnings.filter((w) => w.includes('`open` received the attribute value "false"'));
+  assert.equal(hits.length, 1, 'warned once per property');
+});
+
 test('requestUpdate(name, oldValue) runs hasChanged and skips an unchanged value', () => {
   class E extends WebComponent {
     static properties = { n: { type: Number, hasChanged: (a, b) => Math.abs((a ?? 0) - (b ?? 0)) >= 1 } };

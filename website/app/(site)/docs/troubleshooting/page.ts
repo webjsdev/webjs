@@ -104,6 +104,11 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> <code>&lt;style&gt;</code> and <code>&lt;script&gt;</code> are raw-text elements, so the client renderer cannot place a binding inside them and treats the hole as a no-op. The server writes the interpolated text, but the client renders the element empty.</p>
     <p><strong>Fix:</strong> move component CSS into <code>static styles</code> with <code>static shadow = true</code>, or use Tailwind utilities in light DOM. A page or layout never hydrates, so it may interpolate a <code>css</code> result into <code>&lt;style&gt;</code>. The <code>no-interpolation-in-raw-text-element</code> check rule flags the component shape at edit time. See <a href="/docs/styling">Styling</a>.</p>
 
+    <h2 id="boolean-false">A Boolean property is on even though the attribute says <code>"false"</code></h2>
+    <p><strong>Symptom:</strong> <code>&lt;my-dialog open="false"&gt;</code> renders open, and the console warns that the property received the attribute value "false".</p>
+    <p><strong>Cause:</strong> a <code>Boolean</code> property reads its attribute by presence, as HTML boolean attributes and Lit do. Any value, <code>"false"</code> included, means on.</p>
+    <p><strong>Fix:</strong> leave the attribute out, or bind it with <code>?open=\${isOpen}</code>, which writes the attribute only when the value is true. If a component genuinely needs a tri-state or a textual <code>"false"</code>, declare the property <code>String</code> and compare it yourself. See <a href="/docs/components">Components</a>.</p>
+
     <h2>A component's first paint is empty until JavaScript runs</h2>
     <p><strong>Symptom:</strong> a component shows a blank or skeleton state on first load and fills in only after hydration, and with JavaScript disabled it stays empty.</p>
     <p><strong>Cause:</strong> initial data is fetched in <code>connectedCallback</code> or <code>firstUpdated</code>, neither of which runs during SSR, so the server-rendered HTML is empty by design. This breaks progressive enhancement.</p>

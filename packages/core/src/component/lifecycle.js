@@ -1132,7 +1132,7 @@ class WebComponentBase extends Base {
     // precedence and every fallback are shared rather than mirrored (#1340).
     // It takes an already-decoded value, which the DOM has done here and
     // `decodeAttrEntities` does at the SSR call site (#1341).
-    const v = readAttributeValue(def, value);
+    const v = readAttributeValue(def, value, propName);
 
     if (this[propName] !== v) {
       this[propName] = v;

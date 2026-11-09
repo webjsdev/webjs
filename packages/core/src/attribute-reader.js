@@ -73,9 +73,10 @@ export function isAttributeBacked(decl) {
  * applied to the JSON and converter branches alone, which left a `String`-typed
  * prop holding the raw source text at SSR while `getAttribute()` on the client
  * returned the decoded one.
+ * @param {string} [propName] the property being read, named in the Boolean warning
  * @returns {unknown}
  */
-export function readAttributeValue(def, value) {
+export function readAttributeValue(def, value, propName) {
   // Lit's function form: a bare `converter: (value, type) => ...` IS the
   // `fromAttribute` half, and reflection uses the default serialization.
   if (typeof def.converter === 'function') return def.converter(value, def.type);
@@ -112,7 +113,13 @@ export function readAttributeValue(def, value) {
     return def.converter.fromAttribute(value, def.type);
   }
   if (def.type === Number) return value == null ? null : Number(value);
-  if (def.type === Boolean) return value != null && value !== 'false';
+  if (def.type === Boolean) {
+    // A boolean attribute is on whenever it is PRESENT, as in HTML and Lit,
+    // so `open="false"` is true. Say so once per property, since the literal
+    // reads as off to anyone coming from a JSX prop.
+    if (value === 'false') warnFalseBoolean(def, propName);
+    return value != null;
+  }
   if (def.type === Object || def.type === Array) {
     // An attribute that is not parseable JSON yields `null` rather than the raw
     // string (#1253), because a STRING is never a valid value for a property
@@ -136,6 +143,24 @@ export function readAttributeValue(def, value) {
     try { return JSON.parse(value); } catch { return null; }
   }
   return value;
+}
+
+/** Declarations already warned about a literal "false". @type {WeakSet<object>} */
+const WARNED_FALSE = new WeakSet();
+
+/**
+ * @param {object} def
+ * @param {string | undefined} propName
+ */
+function warnFalseBoolean(def, propName) {
+  if (WARNED_FALSE.has(def)) return;
+  WARNED_FALSE.add(def);
+  const name = propName ? `\`${propName}\`` : 'A Boolean property';
+  console.warn(
+    `[webjs] ${name} received the attribute value "false", which is TRUE: a Boolean property is on whenever its ` +
+      `attribute is present, as in HTML and Lit. To turn it off, leave the attribute out, or bind it with ` +
+      `?attr=\${false} in a template.`,
+  );
 }
 
 /** Kebab-case a property name for its default HTML attribute. @param {string} s */
