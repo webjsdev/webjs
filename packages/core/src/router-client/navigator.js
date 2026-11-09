@@ -482,7 +482,11 @@ export async function refreshPage(mode) {
     // superseded this one and owns the page now, and reloading would yank the
     // reader out of it; Turbo drops a refresh that lands mid-navigation for the
     // same reason.
-    if (!res || res.aborted) return true;
+    //
+    // And a `devError` is not one (#1689): the dev server rendered an error for
+    // this page and the overlay shows it. The page stays as it was under the
+    // overlay, and the edit that fixes it refreshes in place.
+    if (!res || res.aborted || res.devError) return true;
     return res.applied;
   } catch (_) {
     return false;

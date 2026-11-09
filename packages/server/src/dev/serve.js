@@ -487,14 +487,27 @@ export async function handleCore(req, ctx) {
         // still current for the page the user is looking at (the #893 gap the
         // retention exists to close). Dev-only, and skipped for a prefetch,
         // which is not the user's view of anything.
+        //
+        // A render that reported a NEW error for this url is marked
+        // `x-webjs-dev-error: 1` (#1689), so the client router's in-place
+        // refresh leaves the last good page on screen under the overlay
+        // instead of applying the error page, and the fixing edit's refresh
+        // applies in place (Next's posture).
         const handler = dev && !isPrefetch
           ? async () => {
             const before = state.lastDevError;
-            const resp = await ssrPage(page.route, page.params, url, { ...ssrOpts, req });
+            let resp = await ssrPage(page.route, page.params, url, { ...ssrOpts, req });
             if (
               before && state.lastDevError === before
               && before.kind === 'render' && before.url === devErrorUrl
             ) state.lastDevError = null;
+            const after = state.lastDevError;
+            if (after && after !== before && after.kind === 'render' && after.url === devErrorUrl) {
+              try { resp.headers.set('x-webjs-dev-error', '1'); } catch {
+                resp = new Response(resp.body, resp);
+                resp.headers.set('x-webjs-dev-error', '1');
+              }
+            }
             return resp;
           }
           : () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });

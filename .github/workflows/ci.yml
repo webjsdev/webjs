@@ -275,10 +275,12 @@ jobs:
       # after the poke fallback must notify the tab again. Bun only.
       # dev-vendor-cache-rebuild rides here too (#1689): a rebuild keeps the
       # vendor cache unless the app's package.json changed.
+      # dev-error-header rides here too (#1689): a dev render error is marked
+      # x-webjs-dev-error through the in-process dev handler.
       # dev-restart-files rides here too (#1689): a .env or package.json edit
       # restarts the server once, and Bun's own .env loading must not hand the
       # restarted child the old values.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll + rebuild-order + late-rerun + vendor-cache-rebuild + restart-files on Bun
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll + rebuild-order + late-rerun + vendor-cache-rebuild + restart-files + error-header on Bun
         run: |
           bun test/bun/dev-hot-server-fresh.mjs
           bun test/bun/dev-hot-served-versions.mjs
@@ -289,6 +291,7 @@ jobs:
           bun test/bun/dev-late-rerun.mjs
           bun test/bun/dev-vendor-cache-rebuild.mjs
           bun test/bun/dev-restart-files.mjs
+          bun test/bun/dev-error-header.mjs
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-watch-error.mjs
           bun test/bun/dev-watch-replaced.mjs
@@ -588,6 +591,13 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/dev-service-worker.test.mjs
+      # A dev render error keeps the last good page under the overlay and the
+      # fix applies in place (#1689): a browser fact, since the overlay, the
+      # in-place refresh and the absence of a navigation are all DOM state.
+      - name: Run dev error-recovery e2e (#1689)
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/dev-error-recovery.test.mjs
       # A cookie-setting form action refreshes the layout (#1557). Only a real
       # server can show it: the action's redirect is followed by fetch, the
       # follow-up GET must re-render the layouts, and the swap must morph the
