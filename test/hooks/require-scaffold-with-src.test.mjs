@@ -31,7 +31,7 @@ function makeRepo() {
   for (const d of [
     'packages/core/src', 'packages/server/src', 'packages/cli/src',
     'packages/cli/lib', 'gallery/app/features/x',
-    'packages/editors/vscode/src', '.agents/skills/webjs/references',
+    'packages/editors/vscode/src', 'packages/mcp/src',
   ]) mkdirSync(join(dir, d), { recursive: true });
   writeFileSync(join(dir, 'packages/core/src/x.js'), 'v1\n');
   writeFileSync(join(dir, 'packages/cli/lib/create.js'), 'gen1\n');
@@ -73,13 +73,13 @@ test('allows a feature-src commit that also stages a gallery demo', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('allows a feature-src commit that also stages the agent skill (the durable teacher)', () => {
-  // The skill at .agents/skills/webjs/ is the only teaching surface that survives
-  // gallery:clear, so a skill update satisfies the gate the same as a gallery demo.
+test('allows a feature-src commit that also stages the brief (it survives gallery:clear)', () => {
+  // The brief's source is pasted into the scaffold AGENTS.md and survives
+  // gallery:clear, so a brief update satisfies the gate the same as a gallery demo.
   const { dir, git } = makeRepo();
   try {
     writeFileSync(join(dir, 'packages/core/src/x.js'), 'v2\n');
-    writeFileSync(join(dir, '.agents/skills/webjs/references/components.md'), '# taught here\n');
+    writeFileSync(join(dir, 'packages/mcp/src/brief.js'), 'export const BRIEF = "taught here";\n');
     git('add', '-A');
     assert.equal(runHook(dir), 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }

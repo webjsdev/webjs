@@ -1,6 +1,6 @@
 ---
 name: webjs-doc-sync
-description: Use this skill whenever a change ships a user-facing or agent-facing surface (a new export, CLI flag, package.json webjs.* config key, html hole prefix, lifecycle hook, convention, or a behaviour change to an already-documented feature) and the docs must be brought in sync, OR when the user asks to find documentation drift / doc gaps / "did we update the docs", audit shipped work for missing docs, or sync the docs surfaces. The skill carries the authoritative map of EVERY doc surface webjs ships and the change-type to surface mapping, so no surface (the docs site, the marketing website, the skill at `.agents/skills/webjs/`, README, AGENTS.md, the scaffold templates' per-agent rule files) is silently skipped.
+description: Use this skill whenever a change ships a user-facing or agent-facing surface (a new export, CLI flag, package.json webjs.* config key, html hole prefix, lifecycle hook, convention, or a behaviour change to an already-documented feature) and the docs must be brought in sync, OR when the user asks to find documentation drift / doc gaps / "did we update the docs", audit shipped work for missing docs, or sync the docs surfaces. The skill carries the authoritative map of EVERY doc surface webjs ships and the change-type to surface mapping, so no surface (the docs site, the marketing website, README, AGENTS.md and its brief, the scaffold templates) is silently skipped.
 when_to_use: |
   Examples that should trigger this skill:
     "we added HTTP verbs for server actions but never updated the docs"
@@ -33,18 +33,23 @@ work for drift and file follow-ups).
 Treat this list as the universe. For any change, decide per surface whether it
 applies, then update or consciously skip each.
 
-1. **`AGENTS.md`** (repo root) plus the skill at **`.agents/skills/webjs/`**
-   (SKILL.md plus its 13 `references/`: `routing-and-pages`, `components`,
-   `data-and-actions`, `auth-and-sessions`, `styling`,
-   `client-router-and-streaming`, `optimistic-ui`, `typescript`, `testing`,
-   `built-ins`, `runtime`, `service-worker`, `muscle-memory-gotchas`).
-   `AGENTS.md` stays lean and points at the matching `references/<x>.md` for the
-   full reference. A new public API goes in BOTH the `AGENTS.md` summary and the
-   relevant `references/` file.
+1. **`AGENTS.md`** (repo root) and the per-package `AGENTS.md` files. These are
+   the CONTRIBUTOR contract (workflow, module maps, invariants), not an app-API
+   reference: there is no agent skill any more, and app authors get the docs
+   site plus **the brief**. The brief lives once in `packages/mcp/src/brief.js`
+   (the MCP `init` tool returns it) and is pasted verbatim under
+   `## The WebJs brief` in the root `AGENTS.md` and
+   `packages/cli/templates/AGENTS.md` (`test/repo-health/brief-parity.test.mjs`
+   holds the three identical). Touch the brief ONLY when a Lit or Next.js habit
+   can no longer produce correct WebJs code and neither the runtime nor
+   `webjs check` can refuse it with the fix in the message.
 2. **`README.md`** (repo root). Update when a headline capability changes (the
    feature list, the quickstart, the runtime/template matrix).
 3. **The docs site: `website/app/(site)/docs/<topic>/page.ts`.** This is the
-   user-facing documentation at webjs.dev/docs. Find the topic page(s) that cover
+   canonical documentation at webjs.dev/docs, for humans and agents alike, and
+   the one surface that stays extensive. A new `webjs check` rule must be named
+   on a page here (ideally the symptom-keyed troubleshooting page), which
+   `test/knowledge/knowledge-coverage.test.js` enforces. Find the topic page(s) that cover
    the area (`server-actions`, `routing`, `components`, `caching`, `configuration`,
    `client-router`, `data-fetching`, ...) and update them. `llms.txt` /
    `llms-full.txt` are generated LIVE from the doc pages (no build step), so they
@@ -55,10 +60,10 @@ applies, then update or consciously skip each.
    auto-generated from conventional PR titles, so NEVER hand-write it; the blog is
    manual.
 5. **The scaffold templates: `packages/cli/templates/`.** Every new app ships
-   these. The scaffold is single-source: `AGENTS.md` (a thin pointer) plus the one
-   cross-agent skill at `.agents/skills/webjs/` (SKILL.md + `references/`) that
-   every tool reads. There are no per-agent rule files to keep in lockstep. A
-   change to how apps are AUTHORED lands in the skill. When the change is to what
+   these. The scaffold is single-source: `AGENTS.md` (the brief plus a build
+   checklist from `templates/partials/`) and `.agents/rules/workflow.md`, read by
+   every tool. There are no per-agent rule files to keep in lockstep. A change
+   to how apps are AUTHORED lands on the docs site. When the change is to what
    `webjs create` GENERATES (a gallery/showcase demo, a template, the generated
    layout/home/theme/schema, a scaffold convention), this surface has more parts
    (the `packages/cli/lib/*` generators, the repo-root `gallery/**` app whose
@@ -68,19 +73,19 @@ applies, then update or consciously skip each.
    **`webjs-scaffold-sync`** skill for those, and treat this doc-sync entry as the
    docs-only slice. The CLI help text in `packages/cli/` is part of this surface
    for a new command or flag.
-6. **Example / dogfood apps** (`examples/blog/CONVENTIONS.md` and friends). Update
-   when a convention the example demonstrates changes.
+6. **Example / dogfood apps** (`examples/blog/AGENTS.md`, `gallery/AGENTS.md`).
+   Update when a convention the example demonstrates changes.
 
 ## Change-type to surface mapping
 
 | Change | Surfaces that MUST be checked |
 |---|---|
-| New / changed public export (`@webjsdev/core` or `/server`), `html` hole prefix, lifecycle hook | AGENTS.md + matching `references/*.md` in the skill + docs site topic page + README if headline |
-| New / changed CLI command or flag | AGENTS.md CLI reference + docs site page + README + the CLI `--help` text in `packages/cli/` |
-| New `package.json` `webjs.*` config key | AGENTS.md configuration section + the skill's `references/built-ins.md` + docs site `configuration` page + `WebjsConfig` type + the JSON Schema |
-| New convention or agent workflow rule | AGENTS.md + repo `CONVENTIONS.md` (if added) + ALL scaffold per-agent rule files in lockstep + the skill's `references/` if relevant |
+| New / changed public export (`@webjsdev/core` or `/server`), `html` hole prefix, lifecycle hook | docs site topic page + README if headline + the package `AGENTS.md` module map |
+| New / changed CLI command or flag | the CLI `--help` text in `packages/cli/` + docs site page + README + the root AGENTS.md command list (a new command only) |
+| New `package.json` `webjs.*` config key | docs site `configuration` page + `WebjsConfig` type + the JSON Schema + `packages/server/AGENTS.md` reader inventory |
+| New convention or agent workflow rule | AGENTS.md + the scaffold `templates/AGENTS.md` / `templates/.agents/rules/workflow.md` + the docs site `conventions` page |
 | Behaviour change to an already-documented feature | EVERY surface that describes the old behaviour (grep the feature's tokens across all surfaces below) |
-| New file convention (`*.server.ts`, a routing file) | AGENTS.md file-conventions + docs site `routing` / relevant page + scaffold templates |
+| New file convention (`*.server.ts`, a routing file) | docs site `routing` / relevant page + scaffold templates + the brief only if Next.js habits no longer cover it |
 | Pure internal (refactor, CI, release, test, perf with no behaviour change) | NONE. Consciously record that no doc surface applies. |
 
 ## Per-change sync procedure
@@ -93,8 +98,8 @@ The surface checks below are independent reads, so run them fanned out: one read
    be) described:
    ```sh
    git grep -n -iE '<token1>|<token2>' -- \
-     AGENTS.md '.agents/skills/webjs/**' README.md 'website/app/(site)/docs/**' \
-     'website/**' 'packages/cli/templates/**' 'examples/**/CONVENTIONS.md'
+     '*AGENTS.md' packages/mcp/src/brief.js README.md 'website/app/(site)/docs/**' \
+     'website/**' 'packages/cli/templates/**'
    ```
 3. For each surface in the mapping that applies, update it. For a behaviour
    CHANGE, every place the OLD behaviour is described must be corrected (the grep

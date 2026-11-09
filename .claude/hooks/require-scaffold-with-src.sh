@@ -37,14 +37,13 @@
 #
 # Satisfying surface: either of the scaffold's TWO primary teaching surfaces.
 # (1) the scaffold itself, packages/cli/templates/** (the template files +
-# per-agent rule files) OR packages/cli/lib/** (the generators); and (2) the
-# agent skill at the repo-root .agents/skills/webjs/** (SKILL.md + references/),
-# which is bundled into every scaffold at prepack and is the DURABLE teacher:
-# `gallery:clear` removes the gallery, so the skill is the only teaching surface
-# that survives, and a feature it does not teach is lost the moment an agent
-# clears the gallery. So a feature-source commit must move the gallery OR the
-# skill (per-surface judgment on whether BOTH are needed is the skill's manual
-# walk + the CI coverage gate).
+# per-agent rule files, including AGENTS.md and its brief) OR
+# packages/cli/lib/** (the generators); and (2) the brief's source,
+# packages/mcp/src/brief.js, pasted verbatim into the scaffold AGENTS.md. The
+# brief survives `gallery:clear`; it changes only when a Lit or Next.js habit
+# stops producing correct WebJs. So a feature-source commit must move the
+# gallery, the generators, or the brief (per-surface judgment on which is the
+# webjs-scaffold-sync skill's manual walk + the CI coverage gate).
 #
 # Allowed (exit 0): commits touching no feature src; commits that stage a
 # scaffold surface alongside the source; and a change that genuinely needs
@@ -81,9 +80,9 @@ if [ -z "$src_touched" ]; then exit 0; fi
 # Any scaffold teaching surface staged in the same commit? Either the scaffold
 # templates/generators, or the canonical repo-root gallery/ app (the gallery is
 # runnable but disposable via gallery:clear, and prepack bundles it into the CLI
-# tarball), OR the agent skill at .agents/skills/webjs/ (the durable teacher
-# bundled into every scaffold, the only surface that survives gallery:clear).
-scaffold_staged=$(printf '%s\n' "$staged" | grep -E '^packages/cli/(templates|lib)/|^gallery/|^\.agents/skills/webjs/' || true)
+# tarball), OR the brief's source (packages/mcp/src/brief.js), which the
+# scaffold AGENTS.md carries and which survives gallery:clear.
+scaffold_staged=$(printf '%s\n' "$staged" | grep -E '^packages/cli/(templates|lib)/|^gallery/|^packages/mcp/src/brief\.js$' || true)
 if [ -n "$scaffold_staged" ]; then exit 0; fi
 
 cat >&2 <<'EOF'
@@ -99,16 +98,16 @@ If this added or changed a WebJs FEATURE an agent should learn from the
 scaffold (a new export/API, an html hole, a lifecycle hook, a server-action
 capability, a config key, a CLI behaviour), invoke the `webjs-scaffold-sync`
 skill, then `git add` the teaching surface(s) and commit again:
-  `.agents/skills/webjs/`                  the DURABLE teacher (SKILL.md + references/),
-                                          survives `gallery:clear` so it MUST teach the feature
+  packages/mcp/src/brief.js               the brief (paste it into templates/AGENTS.md too),
+                                          only when a Lit or Next.js habit stops working
   gallery/                                a UI feature-gallery demo (runnable, disposable).
                                           The canonical root app; prepack bundles it into the CLI
   packages/cli/lib/api-gallery.js         an api backend-showcase endpoint
   packages/cli/lib/{create,saas-template}.js  the generators (home, theme, schema, wiring)
-  packages/cli/templates/ (AGENTS/CONVENTIONS/.cursorrules/...)  scaffold rules in lockstep
+  packages/cli/templates/ (AGENTS.md, .agents/rules/...)  scaffold rules in lockstep
   test/scaffolds/**                       the scaffold assertions for the above
-A feature usually needs BOTH: a gallery demo (learn by running) AND skill
-coverage (the pattern that survives the clear). The skill walks every surface
+A feature usually needs a gallery demo (learn by running) and, on the docs
+site, the reference. The webjs-scaffold-sync skill walks every surface
 AND runs the mandatory generate + boot + `webjs check` verification (the
 generators emit strings, so escaping bugs only show in a freshly generated app).
 
