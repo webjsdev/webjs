@@ -337,6 +337,11 @@ jobs:
       # static-html) renders the same on the Bun SSR path.
       - name: WebJs lit directive parity on Bun
         run: bun test/bun/lit-directives.mjs
+      # A custom directive (directive / async-directive subpaths) resolves to
+      # its render() result in every SSR part, across the source subpath and
+      # the built root bundle.
+      - name: WebJs custom directives on Bun
+        run: bun test/bun/custom-directive.mjs
       # Reverse-proxy forwarded headers on Bun (#1090): the node shell corrects
       # the request url via urlFromRequest before building its Request, but the
       # Bun shell handed Bun.serve's request straight through, so behind a

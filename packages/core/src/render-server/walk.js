@@ -12,6 +12,7 @@ import {
   isSubmitterReflectedProp, FORM_ACTION_FIELD,
 } from '../form-action.js';
 import { isRepeat } from '../repeat.js';
+import { isDirectiveResult, PartType } from '../directive.js';
 import { isSuspense } from '../suspense.js';
 import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from '../directives.js';
 import { stringify } from '../serialize.js';
@@ -165,6 +166,7 @@ export class Walker {
    * @param {unknown} value
    */
   async value(value) {
+    if (isDirectiveResult(value)) value = resolveDirective(value, CHILD_PART);
     if (value == null || value === nothing || value === noChange) return;
     if (typeof (/** @type any */ (value).then) === 'function') {
       return this.value(await value);
@@ -325,6 +327,7 @@ export class Walker {
                       if (piece && typeof piece.then === 'function') piece = await piece;
                       if (isLive(piece)) piece = piece.value;
                     }
+                    if (isDirectiveResult(piece)) piece = resolveDirective(piece, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
                     if (isAttributeMap(piece)) piece = attributeMapText(piece, op.name);
                     assertNotFunctionActionAttr(piece, op.name, op.tag);
                     if (piece === nothing) omitted = true;
@@ -344,6 +347,7 @@ export class Walker {
               }
               // A hole inside a quoted/unquoted value, the `action="${fn}"` and
               // mixed `action="/x/${fn}"` shapes (#1154).
+              if (isDirectiveResult(val)) val = resolveDirective(val, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
               assertNotFunctionActionAttr(val, op.name, op.tag);
               this.buf += escapeAttr(String(val ?? ''));
               break;
@@ -408,6 +412,13 @@ export class Walker {
    * @param {unknown} val
    */
   async attr(op, val) {
+    // A custom directive renders its `render()` result at SSR (lit's server
+    // rule: `update()` needs a DOM). An event part is client-only, so its
+    // directive never runs here.
+    if (isDirectiveResult(val) && op.kind !== 'event') {
+      const type = op.kind === 'prop' ? PartType.PROPERTY : op.kind === 'bool' ? PartType.BOOLEAN_ATTRIBUTE : PartType.ATTRIBUTE;
+      val = resolveDirective(val, { type, name: op.name, tagName: op.tag });
+    }
     if (isAttributeMap(val)) {
       if (op.kind !== 'plain') throw new Error('classMap/styleMap require an attribute binding.');
       val = attributeMapText(val, op.name);
@@ -733,6 +744,28 @@ export class Walker {
 }
 
 const EMPTY = Object.freeze([]);
+
+/** The part info every child-position directive is constructed with. */
+const CHILD_PART = Object.freeze({ type: PartType.CHILD });
+
+/**
+ * Resolve a custom directive result (`directive(C)(...values)`) to the value
+ * it renders, lit's server rule: construct the class with the part info and
+ * call `render(...values)` (never `update()`, which needs a DOM). A directive
+ * that returns another directive resolves in turn. A fresh instance per
+ * render is right here, since an SSR render is one shot.
+ * @param {any} value
+ * @param {{ type: number, name?: string, tagName?: string }} partInfo
+ * @returns {unknown}
+ */
+function resolveDirective(value, partInfo) {
+  for (let depth = 0; isDirectiveResult(value); depth++) {
+    if (depth > 100) throw new Error('[webjs] a custom directive kept returning directives (more than 100 levels deep).');
+    const instance = new value.ctor(partInfo);
+    value = instance.render(...value.values);
+  }
+  return value;
+}
 
 /**
  * #1155: a `.method` / `.enctype` / `.encoding` prop on a form is dropped at

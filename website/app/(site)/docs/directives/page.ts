@@ -136,6 +136,40 @@ html\`&lt;\${tag} label="Save"&gt;&lt;/\${tag}&gt;\`;
 html\`&lt;\${unsafeStatic(level)}&gt;Title&lt;/\${unsafeStatic(level)}&gt;\`;</code-block>
     <p><code>withStatic(tag)</code> wraps any other template tag the same way, and <code>svg</code> / <code>mathml</code> come pre-wrapped.</p>
 
+    <h2>Writing your own directive</h2>
+    <p>Lit's directive authoring API, from <code>@webjsdev/core/directive</code> (Lit's <code>lit/directive.js</code>) and <code>@webjsdev/core/async-directive</code> (Lit's <code>lit/async-directive.js</code>). Subclass <code>Directive</code>, implement <code>render()</code>, and wrap the class with <code>directive()</code>. The constructor receives the part info (<code>type</code> is a <code>PartType</code>; an attribute part also has <code>name</code>, <code>tagName</code>, and, when interpolated, its static <code>strings</code>), so a directive can refuse a position it does not support.</p>
+    <code-block>import { directive, Directive, PartType } from '@webjsdev/core/directive';
+
+class Uppercase extends Directive {
+  constructor(partInfo) {
+    super(partInfo);
+    if (partInfo.type !== PartType.CHILD) throw new Error('uppercase() only works in a child position');
+  }
+  render(text) {
+    return String(text).toUpperCase();
+  }
+}
+export const uppercase = directive(Uppercase);
+
+html\`&lt;p&gt;\${uppercase(name)}&lt;/p&gt;\`;</code-block>
+    <p>The lifecycle is Lit's. One instance lives per part for as long as the same directive class renders there (per piece of an interpolated attribute); a different class or a plain value replaces it. In the browser every render calls <code>update(part, values)</code>, whose default forwards to <code>render(...values)</code>; override it for DOM access (<code>part.element</code> for an element or attribute part, <code>part.parentNode</code> for a child part, <code>part.options.host</code> for the component). On the server only <code>render()</code> runs, since there is no DOM. Whatever comes back renders like any other value, so a directive may return a template, <code>nothing</code>, <code>noChange</code>, or another directive. Inside an array item a directive has no part of its own, so it renders through <code>render()</code> each time.</p>
+    <p>An <code>AsyncDirective</code> can also push a value outside a render with <code>setValue()</code>, and hears <code>disconnected()</code> when its component leaves the document (or its part is torn down) and <code>reconnected()</code> when the component comes back. Release subscriptions in the first and restore them in the second.</p>
+    <code-block>import { AsyncDirective, directive } from '@webjsdev/core/async-directive';
+
+class Clock extends AsyncDirective {
+  render() {
+    this.start();
+    return new Date().toLocaleTimeString();
+  }
+  start() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() =&gt; this.setValue(new Date().toLocaleTimeString()), 1000);
+  }
+  disconnected() { clearInterval(this.timer); }
+  reconnected() { this.start(); }
+}
+export const clock = directive(Clock);</code-block>
+
     <h2>isServer</h2>
     <p>Lit's flag, from <code>@webjsdev/core</code>: <code>true</code> during SSR on Node or Bun, <code>false</code> in a browser. Use it to guard browser-only work in code that runs on both sides (a constructor, <code>render()</code>, <code>willUpdate()</code>, a controller's <code>hostUpdate()</code>).</p>
     <code-block>if (!isServer) this.width = window.innerWidth;</code-block>

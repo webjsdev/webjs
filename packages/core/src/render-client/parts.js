@@ -5,6 +5,7 @@ import {
   assertNotFunctionActionAttr, assertNotFunctionReflectedActionProp, isBoundFormAction,
 } from '../form-action.js';
 import { isRepeat } from '../repeat.js';
+import { isDirectiveResult, PartType } from '../directive.js';
 import {
   isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch
 } from '../directives.js';
@@ -193,6 +194,220 @@ export function bindPart(p, root) {
   throw new Error(`unknown part kind ${/** @type any */(p).kind}`);
 }
 
+/* ================================================================
+ * Custom directives (`@webjsdev/core/directive`, lit's directive API).
+ *
+ * One directive INSTANCE lives per part (per piece of an interpolated
+ * attribute, under its own slot) for as long as the same class renders
+ * there, in a record `{ ctor, inst, child }`. `child` holds the record of a
+ * directive the first one RETURNED, so a directive composing another keeps
+ * both instances. A record is replaced (and an async one disconnected) when a
+ * different class, or a plain value, takes the part over.
+ * ================================================================ */
+
+/** Per-host set of live async-directive records, toggled with the host. */
+const ASYNC_DIRECTIVES = Symbol.for('webjs.asyncDirectives');
+
+/**
+ * The lit-shaped part handed to `Directive#update()`.
+ * @param {any} part
+ * @param {number} [piece] the piece index, for a piece of an interpolated attribute
+ */
+function directivePartFacade(part, piece) {
+  const options = { host: part.__eventHost ?? part.eventHost ?? currentRenderHost };
+  switch (part.kind) {
+    case 'child':
+      return {
+        type: PartType.CHILD,
+        options,
+        get parentNode() { return part.marker.parentNode; },
+        get endNode() { return part.marker; },
+        get startNode() {
+          const c = part.child;
+          const first = c && (c.startNode || (Array.isArray(c) ? c[0] : undefined));
+          return first ? first.previousSibling : part.marker.previousSibling;
+        },
+      };
+    case 'attr':
+    case 'attr-mixed':
+      return {
+        type: PartType.ATTRIBUTE,
+        options,
+        element: part.el,
+        name: part.name,
+        tagName: part.el.localName,
+        strings: part.kind === 'attr-mixed' ? part.statics : undefined,
+        piece,
+      };
+    case 'prop':
+      return { type: PartType.PROPERTY, options, element: part.el, name: part.name, tagName: part.el.localName };
+    case 'bool':
+      return { type: PartType.BOOLEAN_ATTRIBUTE, options, element: part.el, name: part.name, tagName: part.el.localName };
+    case 'event':
+      return { type: PartType.EVENT, options, element: part.el, name: part.name, tagName: part.el.localName };
+    default:
+      return { type: PartType.ELEMENT, options, element: part.el };
+  }
+}
+
+/**
+ * Report a directive record disconnected (async ones run `disconnected()`)
+ * and drop it from its host's registry, with every record it chained to.
+ * @param {any} rec
+ */
+function disconnectDirectiveRecord(rec) {
+  for (let r = rec; r; r = r.child) {
+    r.released = true;
+    if (typeof r.inst._$webjsSetConnected === 'function') {
+      r.inst._$webjsCommit = undefined;
+      try { r.inst._$webjsSetConnected(false); } catch (err) {
+        console.error('[webjs] an async directive\'s disconnected() threw:', err);
+      }
+      r.host?.[ASYNC_DIRECTIVES]?.delete(r);
+    }
+  }
+}
+
+/**
+ * Register an async directive record with its host so it follows the host's
+ * connection. The host gets ONE reactive controller, on its first async
+ * directive, that flips every registered record.
+ * @param {any} host
+ * @param {any} rec
+ */
+function registerAsyncDirective(host, rec) {
+  if (!host || typeof host.addController !== 'function') return;
+  let set = host[ASYNC_DIRECTIVES];
+  if (!set) {
+    const records = (set = host[ASYNC_DIRECTIVES] = new Set());
+    host.addController({
+      hostConnected() { for (const r of [...records]) r.inst._$webjsSetConnected(true); },
+      hostDisconnected() { for (const r of [...records]) r.inst._$webjsSetConnected(false); },
+    });
+  }
+  set.add(rec);
+  rec.host = host;
+}
+
+/**
+ * Resolve a value that may be a custom directive result into what it renders,
+ * keeping the directive instances on `holder[key]` (and their `child` chain).
+ *
+ * @param {any} part
+ * @param {any} holder the object the record lives on (the part, or its piece map)
+ * @param {string | number} key
+ * @param {unknown} value
+ * @param {(v: unknown) => void} commit applies a value `setValue()` pushes
+ * @param {boolean} releaseTop when the value is NOT a directive, whether to
+ *   release a record left from an earlier render (false while a wrapper
+ *   directive such as keyed / guard / cache passes its inner value on)
+ * @param {number} [piece]
+ * @returns {unknown}
+ */
+function resolveDirectiveChain(part, holder, key, value, commit, releaseTop, piece) {
+  if (part.__settingValue) return value;
+  let parent = holder;
+  /** @type {string | number} */
+  let slot = key;
+  let depth = 0;
+  while (isDirectiveResult(value)) {
+    if (++depth > 100) throw new Error('[webjs] a custom directive kept returning directives (more than 100 levels deep).');
+    const d = /** @type {any} */ (value);
+    let rec = parent[slot];
+    if (!rec || rec.ctor !== d.ctor) {
+      if (rec) disconnectDirectiveRecord(rec);
+      const facade = directivePartFacade(part, piece);
+      /** @type {any} */
+      const f = facade;
+      const inst = new d.ctor({ type: f.type, name: f.name, tagName: f.tagName, strings: f.strings });
+      rec = parent[slot] = { ctor: d.ctor, inst, facade, child: undefined, host: undefined, released: false };
+      if (typeof inst._$webjsSetConnected === 'function') {
+        // Record the owning component while its render is on the stack, the
+        // only moment it is knowable, so a `setValue()` commit throw reaches
+        // that component's renderError() (the `watch` rule).
+        if (currentRenderRoot) part.__commitOwner = boundaryOwnerOf(currentRenderRoot);
+        if (part.kind !== 'child') part.__eventHost ??= currentRenderHost;
+        const own = rec;
+        inst._$webjsCommit = (v) => {
+          if (own.released) return;
+          try {
+            commitOutOfBand(part, () => commit(v));
+          } catch (err) {
+            reportOutOfBandCommitError(part, err);
+          }
+        };
+        registerAsyncDirective(part.__eventHost ?? currentRenderHost, rec);
+      }
+    }
+    value = rec.inst.update(rec.facade, d.values);
+    parent = rec;
+    slot = 'child';
+  }
+  if (parent[slot] && (depth > 0 || releaseTop)) {
+    disconnectDirectiveRecord(parent[slot]);
+    parent[slot] = undefined;
+  }
+  return value;
+}
+
+/**
+ * Release every directive record a bound part holds (its own and, for an
+ * interpolated attribute, each piece's), and recurse into a child part's
+ * rendered template so a nested directive is released with the region that
+ * is going away.
+ * @param {any} p
+ */
+function releasePartDirectives(p) {
+  if (p.__directive) { disconnectDirectiveRecord(p.__directive); p.__directive = undefined; }
+  if (p.__pieceDirectives) {
+    for (const k of Object.keys(p.__pieceDirectives)) disconnectDirectiveRecord(p.__pieceDirectives[k]);
+    p.__pieceDirectives = undefined;
+  }
+  if (p.kind === 'child' && p.child) releaseRegionDirectives(p.child);
+}
+
+/**
+ * Release the directives inside a child part's rendered content, whatever
+ * shape it took (a template instance, a repeat map, a positional array).
+ * @param {any} c
+ */
+function releaseRegionDirectives(c) {
+  if (!c) return;
+  if (c.kind === 'repeat') { for (const inst of c.map.values()) releaseInstanceDirectives(inst); return; }
+  if (c.kind === 'array') { for (const item of c.items) if (item.type === 'tpl') releaseInstanceDirectives(item.inst); return; }
+  if ('strings' in c) releaseInstanceDirectives(c);
+}
+
+/**
+ * Release every directive record in a template instance's parts. Exported for
+ * the top-level reconciler, which swaps a component's whole template.
+ * @param {any} inst
+ */
+export function releaseInstanceDirectives(inst) {
+  if (!inst || !inst.bound) return;
+  for (const p of inst.bound) releasePartDirectives(p);
+}
+
+/**
+ * Resolve a directive result with a throwaway instance through `render()`,
+ * the SSR rule, for a position that has no part to keep an instance on.
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function resolveStatelessDirective(value) {
+  for (let depth = 0; isDirectiveResult(value); depth++) {
+    if (depth > 100) throw new Error('[webjs] a custom directive kept returning directives (more than 100 levels deep).');
+    const d = /** @type {any} */ (value);
+    value = new d.ctor({ type: PartType.CHILD }).render(...d.values);
+  }
+  return value;
+}
+
+/** Whether a value only WRAPS another one the part renders (so its directive record must survive). */
+function isWrapperDirective(value) {
+  return isKeyed(value) || isGuard(value) || isCache(value) || isLive(value);
+}
+
 /**
  * @param {BoundPart} part
  * @param {unknown} value
@@ -203,6 +418,19 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
   // in the anchor position must still reach the attr-mixed branch, which
   // resolves each piece on its own. Every other part keeps its value.
   if (value === noChange && part.kind !== 'attr-mixed') return;
+  // A custom directive on an element, attribute, property, boolean or event
+  // part resolves to the value it renders before anything else looks at the
+  // value. A child part resolves in applyChild (around its own directive
+  // state); an interpolated attribute resolves per piece below.
+  if (part.kind !== 'child' && part.kind !== 'attr-mixed' && part.kind !== 'slot' && part.kind !== 'noop'
+      && (/** @type any */ (part).__directive || isDirectiveResult(value))) {
+    value = resolveDirectiveChain(part, part, '__directive', value, (v) => {
+      const p = /** @type any */ (part);
+      p.__settingValue = true;
+      try { applyPart(part, v, undefined, undefined, reconcileFormActionsCb); } finally { p.__settingValue = false; }
+    }, true);
+    if (value === noChange) return;
+  }
   if (isAttributeMap(value)) { applyAttributeMap(part, value); return; }
   part.__mapKind = undefined;
   // Unwrap live() to dirty-check against the live DOM value, not the
@@ -299,6 +527,21 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       const committed = /** @type any */ (part).__pieces ??= [];
       for (let j = 0; j < mp.group.length; j++) {
         let piece = allValues ? allValues[mp.group[j]] : value;
+        // A custom directive in this piece: one instance per piece, its
+        // `setValue()` rewriting just this piece of the attribute.
+        const pieceRecs = /** @type any */ (part).__pieceDirectives;
+        if (isDirectiveResult(piece) || (pieceRecs && pieceRecs[j])) {
+          const holder = (/** @type any */ (part).__pieceDirectives ??= {});
+          const pieceIndex = j;
+          piece = resolveDirectiveChain(part, holder, String(j), piece, (v) => {
+            if (v === noChange) return;
+            if (v === nothing) { part.el.removeAttribute(part.name); return; }
+            committed[pieceIndex] = String(v ?? '');
+            let text = mp.statics[0];
+            for (let k = 0; k < mp.group.length; k++) text += (committed[k] ?? '') + (mp.statics[k + 1] || '');
+            part.el.setAttribute(part.name, text);
+          }, true, j);
+        }
         if (piece === noChange) piece = committed[j] ?? '';
         // Unwrap live() PER PIECE (#1443). The top-of-function unwrap only
         // sees the anchor hole's own value, and every hole inside a QUOTED
@@ -504,6 +747,18 @@ export function applyChild(part, value, reconcileFormActionsCb) {
   // directive handlers recurse via applyChildInner (no re-clear) so
   // their own state survives the recursion.
   if (value === noChange) return;
+  // A custom directive resolves first, so the per-part state of the built-in
+  // directive it may return (until, guard, cache, watch) is judged against
+  // what actually renders here. Its own record is released when a plain
+  // value takes the part over, but kept while a wrapper (keyed / guard /
+  // cache / live) passes an inner value on, since that inner value is
+  // resolved against the same record further down.
+  const partAny = /** @type any */ (part);
+  if (partAny.__directive || isDirectiveResult(value)) {
+    value = resolveDirectiveChain(part, part, '__directive', value,
+      (v) => applyChildInner(part, v, reconcileFormActionsCb), !isWrapperDirective(value));
+    if (value === noChange) return;
+  }
   clearStaleDirectiveState(part, value);
   return applyChildInner(part, value, reconcileFormActionsCb);
 }
@@ -540,6 +795,15 @@ export function applyChildInner(part, value, reconcileFormActionsCb) {
  */
 export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   const marker = part.marker;
+
+  // A custom directive a built-in directive passed on (`keyed(k, mine())`,
+  // `guard(deps, () => mine())`): resolved against the part's record, which
+  // applyChild kept for exactly this.
+  if (isDirectiveResult(value)) {
+    value = resolveDirectiveChain(part, part, '__directive', value,
+      (v) => applyChildInner(part, v, reconcileFormActionsCb), false);
+    if (value === noChange) return;
+  }
 
   // live() in a CHILD position (#1443). applyPart's top-of-function unwrap only
   // sees the hole's own value, so a live() nested inside an ARRAY child arrives
@@ -715,6 +979,12 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
       && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
     value = Array.from(/** @type {Iterable<unknown>} */ (value));
   }
+  if (Array.isArray(value) && value.some(isDirectiveResult)) {
+    // An array item has no part of its own to keep a directive instance on,
+    // so a custom directive there renders statelessly, through `render()`,
+    // exactly as SSR resolves it.
+    value = value.map((v) => resolveStatelessDirective(v));
+  }
   if (Array.isArray(value)) {
     if (part.child && /** @type any */ (part.child).kind === 'array') {
       reconcileArray(part, value, reconcileFormActionsCb);
@@ -746,6 +1016,7 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
         updateInstance(inst, /** @type any */ (value).values, reconcileFormActionsCb);
         return;
       }
+      releaseInstanceDirectives(inst);
       removeBetween(inst.startNode, inst.endNode);
       part.child = undefined;
     } else {
@@ -938,6 +1209,9 @@ export function buildDetached(tr, reconcileFormActionsCb) {
 
 /** @param {TemplateInstance} inst */
 export function disposeInstance(inst) {
+  // Custom directives in the instance (and in the regions its child parts
+  // rendered) are released first; an async one runs its `disconnected()`.
+  releaseInstanceDirectives(inst);
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher, p.handler);
     if (p.kind === 'element') {
