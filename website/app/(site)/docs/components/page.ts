@@ -144,6 +144,21 @@ UserCard.register('user-card');</code-block>
 
     <p>Declare an <strong>array-typed</strong> property with the <code>Array</code> constructor, not <code>Object</code> (<code>tags: prop&lt;string[]&gt;(Array)</code>). The default converter treats both the same (each JSON-encodes the value), so <code>Object</code> does not break anything, but <code>Array</code> states the property's shape correctly. The <code>array-prop-uses-array-type</code> rule in <code>webjs check</code> flags an array-typed generic declared with <code>Object</code>.</p>
 
+    <h3>Lit's static class API</h3>
+    <p>The class-level members a Lit author reaches for work with Lit's meaning, over the same merged declarations the accessors and attribute readers use (the factory, <code>static properties</code>, and the parent chain):</p>
+    <ul>
+      <li><code>static elementProperties</code> is a <code>Map</code> of every declared property, own and inherited, to its normalised declaration.</li>
+      <li><code>static getPropertyOptions(name)</code> returns one declaration, or the default <code>{ type: String }</code>.</li>
+      <li><code>static createProperty(name, options)</code> declares a property from code. Call it at class definition time; once an instance exists the accessors are installed, so a later call throws naming the fix.</li>
+      <li><code>static getPropertyDescriptor(name, key, options)</code> returns the accessor installed for each property. Override it and wrap <code>super.getPropertyDescriptor(...)</code>, or return <code>undefined</code> to install none.</li>
+      <li><code>static addInitializer(fn)</code> runs <code>fn(element)</code> in the constructor of every instance of the class and its subclasses (Lit's hook for controllers that attach themselves).</li>
+      <li><code>static finalize()</code> is idempotent, and <code>register()</code> and <code>observedAttributes</code> call it for you.</li>
+    </ul>
+    <code-block>class Tracked extends WebComponent({ count: Number }) {}
+Tracked.addInitializer((el) =&gt; el.addController(new LoggerController(el)));
+Tracked.createProperty('label', { type: String });
+Tracked.getPropertyOptions('count').type;   // Number</code-block>
+
     <h3>Attribute-to-Property Coercion</h3>
     <p>When an attribute changes on the DOM element, WebJs coerces the string value to the declared type:</p>
 

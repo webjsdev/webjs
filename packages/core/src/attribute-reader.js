@@ -231,13 +231,58 @@ export function declaredProperties(Cls) {
   const parent = Object.getPrototypeOf(Cls);
   const inherited = parent && parent !== Function.prototype ? declaredProperties(parent) : {};
   const own = Object.hasOwn(Cls, 'properties') ? Cls.properties : undefined;
-  const merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
+  const created = CREATED.get(Cls);
+  let merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
+  if (created) merged = { ...merged, ...created };
   DECLARED.set(Cls, merged);
   return merged;
 }
 
 /** @type {WeakMap<Function, Record<string, any>>} */
 const DECLARED = new WeakMap();
+
+/**
+ * Properties added to a class through Lit's `static createProperty(name,
+ * options)`, per class. Merged LAST in `declaredProperties`, so a created
+ * property wins over a same-named `static properties` entry, as it does in Lit
+ * (`createProperty` writes straight into `elementProperties`).
+ * @type {WeakMap<Function, Record<string, any>>}
+ */
+const CREATED = new WeakMap();
+
+/**
+ * Normalise one declaration: the bare-constructor shorthand (`count: Number`)
+ * becomes `{ type: Number }`, an options object is returned as is.
+ * @param {unknown} decl
+ * @returns {Record<string, any>}
+ */
+export function normalizeDecl(decl) {
+  return typeof decl === 'object' && decl !== null ? /** @type {any} */ (decl) : { type: decl };
+}
+
+/**
+ * Record a property created through `static createProperty()` and drop the
+ * class's memoized declarations so the next read includes it.
+ * @param {Function} Cls
+ * @param {string} name
+ * @param {Record<string, any>} decl
+ */
+export function addCreatedProperty(Cls, name, decl) {
+  let own = CREATED.get(Cls);
+  if (!own) CREATED.set(Cls, (own = {}));
+  own[name] = decl;
+  invalidateClass(Cls);
+}
+
+/**
+ * Drop every memo this module keeps for `Cls`, so its declarations are read
+ * again on next use.
+ * @param {Function} Cls
+ */
+export function invalidateClass(Cls) {
+  DECLARED.delete(Cls);
+  BACKED_PROPS.delete(Cls);
+}
 
 /**
  * The attribute-backed props of `Cls` with the names each answers to.
@@ -278,7 +323,7 @@ function buildAttributeBackedProps(Cls) {
   const props = declaredProperties(Cls);
   const out = [];
   for (const [k, decl] of Object.entries(props)) {
-    const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
+    const d = normalizeDecl(decl);
     if (!isAttributeBacked(d)) continue;
     const primary = d.attribute || hyphenate(k);
     const lower = k.toLowerCase();

@@ -110,8 +110,30 @@ interface WebComponentBase extends HTMLElement {
   addController(controller: ReactiveController): void;
   /** Detach a reactive controller. */
   removeController(controller: ReactiveController): void;
-  /** Returns the template for this render. May be async. */
-  render(): TemplateResult | Promise<TemplateResult> | void;
+  /** Returns the template for this render. May be async. The default returns `noChange`. */
+  render(): unknown;
+  /**
+   * The node `render()` commits into: the element itself for light DOM, its
+   * shadow root for `static shadow = true`. Undefined until the element
+   * connects, and at SSR.
+   */
+  renderRoot: HTMLElement | ShadowRoot | DocumentFragment | undefined;
+  /** True once the first update has completed. */
+  readonly hasUpdated: boolean;
+  /** True while an update is queued or running. */
+  readonly isUpdatePending: boolean;
+  /**
+   * Create the render root, once per element. The default returns the element
+   * for light DOM, and for `static shadow = true` attaches the shadow root
+   * with `static shadowRootOptions` and adopts `static styles`.
+   */
+  createRenderRoot(): HTMLElement | ShadowRoot | DocumentFragment;
+  /** Called from the update microtask; override to change when an update runs. */
+  scheduleUpdate(): void | Promise<unknown>;
+  /** Run the pending update now, synchronously. No-op when nothing is pending. */
+  performUpdate(): void;
+  /** Called on connect, right before the first update is queued. */
+  enableUpdating(requestedUpdate: boolean): void;
   /** Decide whether to update. Default returns `true`. */
   shouldUpdate(changedProperties: Map<string, unknown>): boolean;
   /** Pre-render hook. Safe to set properties; folds into current cycle. */
@@ -163,6 +185,8 @@ export type InferProps<S> = {
  */
 interface WebComponentStatics {
   shadow: boolean;
+  /** The `attachShadow()` options, also written onto the server's Declarative Shadow DOM template. */
+  shadowRootOptions: ShadowRootInit;
   hydrate: 'visible' | undefined;
   properties: Record<string, PropertyDeclaration | PropertyConstructor>;
   styles: CSSResult | CSSResult[] | null;
@@ -181,6 +205,22 @@ interface WebComponentStatics {
   interactive?: boolean;
   register(tag: string): void;
   readonly observedAttributes: string[];
+  /** Every declared reactive property, own and inherited, as name to declaration. */
+  readonly elementProperties: Map<PropertyKey, PropertyDeclaration>;
+  /** The declaration for `name`, or the default `{ type: String }`. */
+  getPropertyOptions(name: PropertyKey): PropertyDeclaration;
+  /** Declare a reactive property from code. Must run before the first instance. */
+  createProperty(name: PropertyKey, options?: PropertyDeclaration): void;
+  /**
+   * The accessor installed on the prototype for one reactive property.
+   * Override to wrap `super.getPropertyDescriptor(...)`; return `undefined`
+   * to install none.
+   */
+  getPropertyDescriptor(name: PropertyKey, key: string | symbol, options: PropertyDeclaration): PropertyDescriptor | undefined;
+  /** Prepare the class metadata once. Called for you; idempotent. */
+  finalize(): void;
+  /** Run `initializer(element)` in the constructor of every instance of this class and its subclasses. */
+  addInitializer(initializer: (element: WebComponentBase) => void): void;
 }
 
 export interface WebComponentConstructor extends WebComponentStatics {

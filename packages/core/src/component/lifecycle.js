@@ -1,5 +1,8 @@
 import { render as clientRender } from '../render-client.js';
-import { readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked, declaredProperties } from '../attribute-reader.js';
+import {
+  readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked, declaredProperties,
+  normalizeDecl, addCreatedProperty,
+} from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
 import { isCSS, adoptStyles } from '../css.js';
@@ -119,11 +122,21 @@ const NO_CONTROLLERS = new Set();
  */
 const _accessorPlans = new WeakMap();
 
+/** Classes whose `finalize()` has run. @type {WeakSet<Function>} */
+const FINALIZED = new WeakSet();
+
+/** Per class, the memoized `elementProperties` Map. @type {WeakMap<Function, Map<string, any>>} */
+const ELEMENT_PROPERTIES = new WeakMap();
+
+/** What `getPropertyOptions()` answers for an undeclared name, Lit's default declaration. */
+const DEFAULT_DECLARATION = Object.freeze({ type: String });
+
 /**
  * Define the getter/setter pair for every declared property on the class's
  * prototype, once, and record the plan the constructor applies per instance
- * (own-value capture and `default`). The setter coerces nothing itself (the
- * attribute readers do), runs `hasChanged`, reflects, and schedules an update.
+ * (own-value capture and `default`). The descriptor comes from the class's
+ * `static getPropertyDescriptor()`, Lit's override point, so a subclass can
+ * wrap it.
  * @param {any} Ctor
  * @param {Record<string, unknown>} props
  */
@@ -131,32 +144,10 @@ function installAccessors(Ctor, props) {
   /** @type {{ propName: string, decl: any }[]} */
   const plan = [];
   for (const [propName, decl] of Object.entries(props)) {
-    const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
+    const d = normalizeDecl(decl);
     plan.push({ propName, decl: d });
-    const changedCheck = d.hasChanged || defaultHasChanged;
-    Object.defineProperty(Ctor.prototype, propName, {
-      configurable: true,
-      enumerable: true,
-      get() { return this.__propValues[propName]; },
-      set(newVal) {
-        const oldVal = this.__propValues[propName];
-        this.__propValues[propName] = newVal;
-        if (!changedCheck(newVal, oldVal)) return;
-        // Reflect to attribute if requested (_reflectAttribute skips a prop
-        // with no attribute: `state: true` or `attribute: false`).
-        if (d.reflect) {
-          if (this._connected) {
-            this._reflectAttribute(propName, newVal, d);
-          } else {
-            (this.__reflectPending ??= new Set()).add(propName);
-          }
-        }
-        // requestUpdate records the (name, oldValue) entry AND schedules a
-        // render. During the update phase the scheduler short-circuits and
-        // the entry folds into the current cycle's changedProperties.
-        this.requestUpdate(propName, oldVal);
-      },
-    });
+    const descriptor = Ctor.getPropertyDescriptor(propName, Symbol(propName), d);
+    if (descriptor !== undefined) Object.defineProperty(Ctor.prototype, propName, descriptor);
   }
   _accessorPlans.set(Ctor, plan);
   return plan;
@@ -276,12 +267,127 @@ class WebComponentBase extends Base {
    * @returns {string[]}
    */
   static get observedAttributes() {
+    this.finalize();
     // Derived from the same walk `resolveAttributeProperty` matches against, so
     // every observed name resolves and nothing else does. A camelCase prop with
     // no custom `attribute` is observed under its kebab name AND its lowercased
     // name (lit's default), since the parser turns `quizId=` into `quizid`
     // (#1540).
     return observedAttributeNames(this);
+  }
+
+  /**
+   * Lit's `elementProperties`: every reactive property this class declares,
+   * its own and its superclasses', as a Map of name to normalised
+   * declaration. Built from the same merge the accessors and the attribute
+   * readers use (`static properties`, the factory, `createProperty`).
+   * @type {Map<string, PropertyDeclaration>}
+   */
+  static get elementProperties() {
+    let map = ELEMENT_PROPERTIES.get(this);
+    if (map === undefined) {
+      map = new Map();
+      for (const [name, decl] of Object.entries(declaredProperties(this))) map.set(name, normalizeDecl(decl));
+      ELEMENT_PROPERTIES.set(this, map);
+    }
+    return map;
+  }
+
+  /**
+   * Lit's `getPropertyOptions(name)`: the declaration for `name`, or the
+   * default declaration (`{ type: String }`) when it is not declared.
+   * @param {string} name
+   * @returns {PropertyDeclaration}
+   */
+  static getPropertyOptions(name) {
+    return this.elementProperties.get(name) ?? DEFAULT_DECLARATION;
+  }
+
+  /**
+   * Lit's `createProperty(name, options)`: declare a reactive property from
+   * code instead of `static properties`. It must run before the first
+   * instance is constructed (accessors are installed then, once per class),
+   * which is where Lit calls it from, so a later call throws.
+   * @param {string} name
+   * @param {PropertyDeclaration} [options]
+   */
+  static createProperty(name, options = {}) {
+    if (_accessorPlans.has(this)) {
+      throw new Error(
+        `[webjs] ${this.name || 'A component'}.createProperty('${name}') ran after an instance of the class was constructed. ` +
+          `Declare the property in \`static properties\` (or the WebComponent({ ... }) factory), or call createProperty ` +
+          `at class definition time, before any element is created.`,
+      );
+    }
+    addCreatedProperty(this, name, options);
+    ELEMENT_PROPERTIES.delete(this);
+  }
+
+  /**
+   * Lit's `getPropertyDescriptor(name, key, options)`: the accessor pair
+   * installed on the prototype for one reactive property. Override it to wrap
+   * the default (call `super.getPropertyDescriptor(...)` and delegate to its
+   * `get` / `set`); return `undefined` to install no accessor. The default
+   * stores the value per instance, runs `hasChanged`, reflects, and schedules
+   * an update.
+   * @param {string} name
+   * @param {symbol} _key
+   * @param {PropertyDeclaration} options
+   * @returns {PropertyDescriptor | undefined}
+   */
+  static getPropertyDescriptor(name, _key, options) {
+    const changedCheck = options.hasChanged || defaultHasChanged;
+    return {
+      configurable: true,
+      enumerable: true,
+      get() { return this.__propValues[name]; },
+      set(newVal) {
+        const oldVal = this.__propValues[name];
+        this.__propValues[name] = newVal;
+        if (!changedCheck(newVal, oldVal)) return;
+        // Reflect to attribute if requested (_reflectAttribute skips a prop
+        // with no attribute: `state: true` or `attribute: false`).
+        if (options.reflect) {
+          if (this._connected) {
+            this._reflectAttribute(name, newVal, options);
+          } else {
+            (this.__reflectPending ??= new Set()).add(name);
+          }
+        }
+        // requestUpdate records the (name, oldValue) entry AND schedules a
+        // render. During the update phase the scheduler short-circuits and
+        // the entry folds into the current cycle's changedProperties.
+        this.requestUpdate(name, oldVal);
+      },
+    };
+  }
+
+  /**
+   * Lit's `finalize()`: prepare the class's metadata once. Idempotent and
+   * called for you (from `observedAttributes` and `register()`), so calling it
+   * yourself is never required.
+   */
+  static finalize() {
+    if (FINALIZED.has(this)) return;
+    FINALIZED.add(this);
+    const parent = Object.getPrototypeOf(this);
+    if (parent && typeof parent.finalize === 'function') parent.finalize();
+    void this.elementProperties;
+  }
+
+  /**
+   * Lit's `addInitializer(initializer)`: run `initializer(instance)` in the
+   * constructor of every instance of this class and its subclasses. A
+   * subclass inherits its parent's initializers; one added to a subclass does
+   * not reach the parent.
+   * @param {(element: any) => void} initializer
+   */
+  static addInitializer(initializer) {
+    if (!Object.hasOwn(this, '_initializers')) {
+      const inherited = /** @type {any} */ (Object.getPrototypeOf(this))._initializers;
+      this._initializers = inherited ? [...inherited] : [];
+    }
+    this._initializers.push(initializer);
   }
 
   constructor() {
@@ -352,6 +458,10 @@ class WebComponentBase extends Base {
     // `static properties` and from the `WebComponent({ ... })` factory alike,
     // merged down the class chain by `declaredProperties`.
     this._initializeProperties();
+
+    // Lit's `addInitializer` callbacks, after the properties exist.
+    const initializers = /** @type {any} */ (this.constructor)._initializers;
+    if (initializers) for (const init of initializers) init(this);
   }
 
   /**
