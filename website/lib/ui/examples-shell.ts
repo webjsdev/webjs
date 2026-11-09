@@ -1,4 +1,4 @@
-import { html, asset } from '@webjsdev/core';
+import { html, asset, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { styleLinks } from '#lib/ui/style-links.ts';
@@ -45,7 +45,7 @@ function examplesNav(current: ExampleSlug, theme: string) {
         <a href="/ui" class=${NAV_LINK} data-active="false">Examples</a>
         ${EXAMPLES.map((e) => {
           const active = e.slug === current;
-          return html`<a href=${withTheme(`/ui/examples/${e.slug}`, theme)} data-theme-link class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : null}>${e.name}${e.slug === 'rtl'
+          return html`<a href=${withTheme(`/ui/examples/${e.slug}`, theme)} data-theme-link class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : nothing}>${e.name}${e.slug === 'rtl'
             ? html`<span class="flex size-2 rounded-full bg-blue-500" title="New"></span>`
             : ''}</a>`;
         })}

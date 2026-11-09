@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import {
   cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass,
@@ -98,7 +98,7 @@ export default function MessageScrollerVisibility() {
             </ui-hover-card-trigger>
             <ui-hover-card-content align="center" side="left" side-offset="-28" class="flex w-64 flex-col gap-1 rounded-2xl p-1">
               ${userMessages.map((m) => html`
-                <button type="button" aria-current=${m.id === currentAnchorId ? 'location' : null} class="flex min-h-7 items-center rounded-xl px-2 py-1.5 text-left text-sm transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground aria-current:bg-accent aria-current:text-accent-foreground">
+                <button type="button" aria-current=${m.id === currentAnchorId ? 'location' : nothing} class="flex min-h-7 items-center rounded-xl px-2 py-1.5 text-left text-sm transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground aria-current:bg-accent aria-current:text-accent-foreground">
                   <span class="line-clamp-1 min-w-0">${trimmed(m.text)}</span>
                 </button>
               `)}

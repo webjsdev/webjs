@@ -33,6 +33,8 @@ the same output in all three.
 | `render-client.js` | Barrel re-exporting client-side patcher, hydration, template compilation, and part binding sub-modules (`render-client/template-compiler.js`, `render-client/parts.js`, `render-client/reconciler.js`; `render-client/adopt-slots.js` is the hydration slot adoption, #1666, see invariant 7). The only subsystem that touches `document`. Also discovers and binds light-DOM slot parts |
 | `slot.js` | Light-DOM `<slot>` runtime, full native parity (#1021): `HTMLSlotElement` polyfills (`assignedNodes` / `assignedElements` / `assignedSlot` / `assign`), the ordered `authored` record + derived `assignedByName` (`repartition`), the single writer `applySlotAssignments`, per-instance method interception + the `RENDERING` window (`withRendererWrites`) + two read-only sensors for liveness, the parent-keyed prune rule, the unmatched-name park, first-wins resolution, fallback swap, and the `projectAuthored` router seam |
 | `directives.js` | the lit-html-parity directive set (`unsafeHTML`, `live`, `keyed`, `guard`, `templateContent`, `ref` / `createRef`, `cache`, `until`, `asyncAppend` / `asyncReplace`, `watch`, plus each `is*` guard). `repeat` lives in `repeat.js`. All are re-exported from `index.js` / `index-browser.js` so the bare specifier and the `/directives` subpath (which collapses onto the dist browser bundle) expose the full set |
+| `sentinels.js` | `nothing` and `noChange` (Lit's sentinels, `Symbol.for` keyed so a duplicated module copy still matches). `nothing` clears a child, removes an attribute (the WHOLE attribute when it is one piece of an interpolated value), and assigns `undefined` to a property; `noChange` keeps the last committed value, which on a first render is empty. Both renderers import them, so the SSR and client rules cannot drift |
+| `attribute-directives.js` | `classMap`, `styleMap`, and `ifDefined` with Lit semantics, plus the commit helpers both renderers share (`attributeMapText` for SSR, `applyAttributeMap` for the client, which touches only the tokens the map owns so static and externally added classes / styles survive). Re-exported from `directives.js` and the package root |
 | `repeat.js` | `repeat(items, keyFn, templateFn)` for keyed list reconciliation |
 | `suspense.js` | `Suspense()` page/region-level boundary primitive |
 | `webjs-suspense.js` | The `<webjs-suspense>` component-level streaming boundary element (#471). SSR (`render-server.js`) does the work: the op walk renders the `.fallback` hole at the tag (this element is browser-defined, so no server-side instance exists to receive a `data-webjs-prop-*` binding, and a placeholder has to be in the first flushed bytes; a boundary nested inside a streamed one carries it as `data-webjs-fallback` until its parent's children are expanded at stream time) and, in a streaming context, flushes the fallback as `<webjs-suspense id="sN">` while capturing the children with their components unexpanded and pushing them to `ctx.pending` for out-of-order streaming (concurrent across boundaries via `Promise.all`); without a streaming context the children render inline (blocking). This client element is layout-neutral (`display:contents`) and the registration home for the soft-nav apply; first-load streaming needs no client runtime (the inline swap script `replaceWith`s the boundary element with the resolved children, which then upgrade). Every swap path (the inline script, the boot `__webjsResolve`, and the soft-nav `applyStreamedResolve`) removes the transient wrapper, so a boundary settles to the same DOM however the page was reached. SSR-inert (defined client-side only) |
@@ -306,6 +308,18 @@ edit is invisible and a counterfactual passes vacuously), and run
    `packages/core/test/slots/browser/slot.test.js` (the same component
    asserted in both modes) so the parity claim stays proven.
 
+## Lit JavaScript API compatibility
+
+WebJs keeps `WebComponent({ ... })` for inferred reactive properties, including `state: true` and `attribute: false`. App TypeScript must erase to whitespace; decorators and compiler transforms are unnecessary.
+
+- Function event listeners receive the rendering component as `this`. Arrow and bound functions preserve their JavaScript receiver. Listener objects use `handleEvent()` and support `capture`, `once`, and `passive`.
+- Quoted and unquoted single-expression `@event`, `.property`, and `?boolean` bindings behave identically. Surrounding text or multiple expressions are invalid. Form-action bindings retain their separate contract.
+- Ordinary attribute values stringify booleans; nullish values become empty strings. Use `?disabled=${disabled}` for boolean attributes and `title=${value ?? nothing}` for omission, including inside mixed attributes.
+- Boolean child values render text. Use `${condition ? html`<p>Visible</p>` : nothing}` for conditional content.
+- `nothing` clears children, removes attributes, and assigns `undefined` to properties. `noChange` preserves the previously committed value.
+- `classMap`, `styleMap`, and `ifDefined` are available from `@webjsdev/core/directives`. Map helpers require their matching class/style attribute with one expression; static text around it is supported. They preserve static tokens while removing obsolete dynamic entries.
+- Normal lifecycle timing follows Lit: skipped updates consume their change map; `hasChanged` gates updates without discarding assignments; post-update writes schedule a new cycle; `updateComplete` reports whether another cycle is pending. WebJs retains its component error boundaries and recovery.
+
 ## Tests
 
 Tests for this package live in **`packages/core/test/`**,
@@ -366,15 +380,3 @@ for the browser tests.
 Framework-wide rules and full API reference:
 
 @../../AGENTS.md
-
-## Lit JavaScript API compatibility
-
-WebJs keeps `WebComponent({ ... })` for inferred reactive properties, including `state: true` and `attribute: false`. App TypeScript must erase to whitespace; decorators and compiler transforms are unnecessary.
-
-- Function event listeners receive the rendering component as `this`. Arrow and bound functions preserve their JavaScript receiver. Listener objects use `handleEvent()` and support `capture`, `once`, and `passive`.
-- Quoted and unquoted single-expression `@event`, `.property`, and `?boolean` bindings behave identically. Surrounding text or multiple expressions are invalid. Form-action bindings retain their separate contract.
-- Ordinary attribute values stringify booleans; nullish values become empty strings. Use `?disabled=${disabled}` for boolean attributes and `title=${value ?? nothing}` for omission, including inside mixed attributes.
-- Boolean child values render text. Use `${condition ? html`<p>Visible</p>` : nothing}` for conditional content.
-- `nothing` clears children, removes attributes, and assigns `undefined` to properties. `noChange` preserves the previously committed value.
-- `classMap`, `styleMap`, and `ifDefined` are available from `@webjsdev/core/directives`. Map helpers require their matching class/style attribute with one expression; static text around it is supported. They preserve static tokens while removing obsolete dynamic entries.
-- Normal lifecycle timing follows Lit: skipped updates consume their change map; `hasChanged` gates updates without discarding assignments; post-update writes schedule a new cycle; `updateComplete` reports whether another cycle is pending. WebJs retains its component error boundaries and recovery.

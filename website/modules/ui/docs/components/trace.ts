@@ -160,7 +160,7 @@ export default async function body(toc: TocEntry[]) {
         class=\${traceCollapsibleTriggerClass()}
         @click=\${(e: Event) => { e.preventDefault(); this.chosen.set(!open); }}
       >
-        <span data-slot="trace-line" data-status=\${this.running ? 'running' : null} class=\${traceLineClass()}>…</span>
+        <span data-slot="trace-line" data-status=\${this.running ? 'running' : nothing} class=\${traceLineClass()}>…</span>
       </summary>
       <div data-slot="trace-collapsible-content" class=\${traceCollapsibleContentClass()}>\${this.text}</div>
     </details>\`;

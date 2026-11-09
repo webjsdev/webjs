@@ -70,8 +70,9 @@ has no `ts-lit-plugin` dependency (no loader, no wrapping). The plugin:
    binding-aware attribute completions keyed by prefix (`.` → property
    names, plain / `?` → hyphenated attribute names; `@event` is permissive).
 6. **Diagnostics**: incompatible-type bindings (plain / `.prop` / `@event`
-   callable, code 9001), unquoted `@`/`.`/`?` bindings (invariant 4, code
-   9002), expressionless `.prop` bindings (code 9003), and duplicate
+   callable, code 9001), `@`/`.`/`?` bindings with surrounding text or more than one
+   expression (invariant 4, code 9002; quoted and unquoted single-expression
+   bindings are the same binding, as in Lit), expressionless `.prop` bindings (code 9003), and duplicate
    custom-element tag registrations (code 9004), the live underline on a tag
    registered more than once across the program, matching the
    `no-duplicate-tag` `webjs check` rule that is the CI gate. The 9004 check is program-wide

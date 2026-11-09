@@ -3,7 +3,7 @@
  * home, inbox) under the team switcher. A fragment helper. Ported from
  * shadcn/ui's sidebar-15.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
 import {
   sidebarMenuButtonClass,
@@ -24,7 +24,7 @@ export function navMain({ items }: { items: NavMainItem[] }) {
     <ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
       ${items.map((item) => html`
         <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
-          <a href=${item.url} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${item.isActive ? 'true' : 'false'} aria-current=${item.isActive ? 'page' : null} class=${sidebarMenuButtonClass()}>
+          <a href=${item.url} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${item.isActive ? 'true' : 'false'} aria-current=${item.isActive ? 'page' : nothing} class=${sidebarMenuButtonClass()}>
             ${item.icon()}
             <span>${item.title}</span>
           </a>

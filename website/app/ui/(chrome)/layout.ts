@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import '#components/ui-mode-switcher.ts';
 import '#components/ui-mobile-nav.ts';
@@ -79,7 +79,7 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
           </a>
           <ui-mobile-nav class="flex lg:hidden" label="Toggle Menu">${mobileNavLinks()}</ui-mobile-nav>
           <nav class="hidden items-center gap-0 lg:flex" aria-label="Main">
-            ${HEADER_NAV.map((n) => html`<a class=${ghostSm} href=${n.href} aria-current=${pathname === n.href ? 'page' : null}>${n.title}</a>`)}
+            ${HEADER_NAV.map((n) => html`<a class=${ghostSm} href=${n.href} aria-current=${pathname === n.href ? 'page' : nothing}>${n.title}</a>`)}
           </nav>
           <div class="ml-auto flex items-center gap-2 md:flex-1 md:justify-end">
             ${commandMenu()}

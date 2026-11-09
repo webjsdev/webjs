@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { bubbleClass, bubbleContentClass } from '#modules/ui/components/bubble.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -35,7 +35,7 @@ function ToolRow(part: ToolPart, streaming: boolean) {
     return html`
       <details data-slot="trace-collapsible" ?open=${!streaming && failed} class=${cn(traceCollapsibleClass(), 'group/trace-collapsible')}>
         <summary data-slot="trace-collapsible-trigger" class=${traceCollapsibleTriggerClass()}>
-          <span data-slot="trace-line" data-status=${failed ? 'error' : null} class=${traceLineClass()}>
+          <span data-slot="trace-line" data-status=${failed ? 'error' : nothing} class=${traceLineClass()}>
             <span data-slot="trace-icon" aria-hidden="true" class=${traceIconClass()}>${TerminalIcon()}</span>
             <span data-slot="trace-title" class=${traceTitleClass()}>${failed ? 'Failed to run' : 'Ran'} ${part.command}</span>
           </span>

@@ -5,11 +5,11 @@ export const metadata = { title: 'Directives | WebJs' };
 export default function Directives() {
   return html`
     <h1>Directives</h1>
-    <p>WebJs ships the lit-html directives that have no clean native equivalent, under their familiar lit names, so AI agents writing lit-shaped directive code land on what they expect. The directives that ARE just sugar over plain JavaScript (<code>classMap</code> / <code>styleMap</code> / <code>ifDefined</code> / <code>when</code> / <code>choose</code>) are deliberately not shipped (see below). The implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
+    <p>WebJs ships the lit-html directives under their Lit names and with Lit's behaviour, so code written from Lit muscle memory works as written. That includes the attribute helpers <code>classMap</code>, <code>styleMap</code>, and <code>ifDefined</code>, and the <code>nothing</code> / <code>noChange</code> sentinels. Only <code>when</code> / <code>choose</code> / <code>map</code> / <code>join</code> / <code>range</code> are left to plain JavaScript (see below). The implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
 
-    <code-block>import { html, repeat } from '@webjsdev/core';
+    <code-block>import { html, repeat, nothing, noChange } from '@webjsdev/core';
 import {
-  unsafeHTML, live,
+  classMap, styleMap, ifDefined, unsafeHTML, live,
   keyed, guard, templateContent, ref, createRef,
   cache, until, asyncAppend, asyncReplace,
 } from '@webjsdev/core/directives';</code-block>
@@ -88,17 +88,19 @@ html\`&lt;div&gt;\${templateContent(tpl)}&lt;/div&gt;\`;</code-block>
 html\`&lt;ul&gt;\${asyncAppend(logTail(), (line, i) =&gt; html\`&lt;li&gt;\${i}: \${line}&lt;/li&gt;\`)}&lt;/ul&gt;\`;</code-block>
     <p>On the server, both directives render empty (no iteration on a one-shot render). For page-level streaming, prefer <code>Suspense({ fallback, children })</code>.</p>
 
+    <h2>classMap(classes) / styleMap(styles) / ifDefined(value)</h2>
+    <p>The same helpers as Lit. <code>classMap</code> toggles the classes whose value is truthy and keeps any static classes written beside it; <code>styleMap</code> sets inline style properties (camelCase or <code>--custom</code> names) and drops a nullish one; <code>ifDefined</code> omits the attribute when the value is <code>null</code> or <code>undefined</code>. All three render on the server too, so the first paint carries the classes and styles.</p>
+    <code-block>html\`&lt;div class="card \${classMap({ active: isActive, error: hasError })}"&gt;\`;
+html\`&lt;div style=\${styleMap({ color: c, fontSize: size, '--gap': gap })}&gt;\`;
+html\`&lt;img src=\${ifDefined(src)}&gt;\`;</code-block>
+
+    <h2>nothing / noChange</h2>
+    <p>Lit's sentinels. <code>nothing</code> renders nothing in a child position, removes an attribute (the whole attribute when it is one piece of an interpolated value), and assigns <code>undefined</code> to a property. <code>noChange</code> leaves the last committed value in place. Like Lit, a plain attribute hole renders <code>null</code> and <code>undefined</code> as an EMPTY attribute and a boolean as text, so write <code>attr=\${value ?? nothing}</code> to omit one and <code>?checked=\${on}</code> for a boolean attribute.</p>
+    <code-block>html\`&lt;a href=\${url} aria-current=\${active ? 'page' : nothing}&gt;\`;
+html\`\${error ? html\`&lt;p role="alert"&gt;\${error}&lt;/p&gt;\` : nothing}\`;</code-block>
+
     <h2>Native patterns (no directive needed)</h2>
-    <p>For conditional classes, inline styles, optional attributes, and conditional rendering, lit reaches for the <code>classMap</code> / <code>styleMap</code> / <code>ifDefined</code> / <code>when</code> / <code>choose</code> directives. WebJs deliberately does NOT ship those: native JavaScript inside <code>render()</code> expresses the same thing with no runtime overhead and shows up directly in the template, so it is the framework's preferred form (and what AI agents should emit). The directives WebJs DOES export are the ones with no clean native equivalent, listed above (<code>repeat</code>, <code>unsafeHTML</code>, <code>live</code>, <code>keyed</code>, <code>guard</code>, <code>cache</code>, <code>until</code>, <code>ref</code>, the async directives, <code>watch</code>).</p>
-
-    <h3>Conditional CSS classes</h3>
-    <code-block>html\`&lt;div class=\${[x &amp;&amp; 'active', y &amp;&amp; 'error'].filter(Boolean).join(' ')}&gt;\`;</code-block>
-
-    <h3>Dynamic inline styles</h3>
-    <code-block>html\`&lt;div style=\${\`color:\${c};font-size:\${s}\`}&gt;\`;</code-block>
-
-    <h3>Optional attributes</h3>
-    <code-block>html\`&lt;img src=\${src ?? null}&gt;\`;  // null removes the attribute</code-block>
+    <p>Lit's <code>when</code>, <code>choose</code>, <code>map</code>, <code>join</code>, and <code>range</code> are sugar over plain JavaScript, so WebJs leaves them to the language: a ternary, a <code>switch</code>, and <code>Array</code> methods inside <code>render()</code>.</p>
 
     <h3>Conditional rendering</h3>
     <code-block>html\`\${loggedIn ? html\`&lt;p&gt;Welcome&lt;/p&gt;\` : html\`&lt;a href="/login"&gt;Sign in&lt;/a&gt;\`}\`;</code-block>

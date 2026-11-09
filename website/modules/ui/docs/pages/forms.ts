@@ -52,7 +52,7 @@ export async function submitBugReport(formData: FormData): Promise<ActionResult>
   return { success: true };
 }`;
 
-const PAGE = `import { html } from '@webjsdev/core';
+const PAGE = `import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#components/ui/button.ts';
 import {
@@ -86,7 +86,7 @@ export default function NewBugReport({ actionData }: { actionData?: FormState })
         </div>
         <div data-slot="card-content" class=\${cardContentClass()}>
           <div data-slot="field-group" class=\${fieldGroupClass()}>
-            <div data-slot="field" data-invalid=\${errors.title ? 'true' : null} class=\${fieldClass()}>
+            <div data-slot="field" data-invalid=\${errors.title ? 'true' : nothing} class=\${fieldClass()}>
               <label data-slot="field-label" for="title" class=\${fieldLabelClass()}>Bug Title</label>
               <input
                 data-slot="input"
@@ -95,22 +95,22 @@ export default function NewBugReport({ actionData }: { actionData?: FormState })
                 value=\${values.title ?? ''}
                 placeholder="Login button not working on mobile"
                 autocomplete="off"
-                aria-invalid=\${errors.title ? 'true' : null}
-                aria-describedby=\${errors.title ? 'title-error' : null}
+                aria-invalid=\${errors.title ? 'true' : nothing}
+                aria-describedby=\${errors.title ? 'title-error' : nothing}
                 class=\${inputClass()}
               >
               \${errors.title ? html\`
                 <div role="alert" data-slot="field-error" id="title-error" class=\${fieldErrorClass()}>\${errors.title}</div>
               \` : ''}
             </div>
-            <div data-slot="field" data-invalid=\${errors.description ? 'true' : null} class=\${fieldClass()}>
+            <div data-slot="field" data-invalid=\${errors.description ? 'true' : nothing} class=\${fieldClass()}>
               <label data-slot="field-label" for="description" class=\${fieldLabelClass()}>Description</label>
               <textarea
                 data-slot="textarea"
                 id="description"
                 name="description"
                 rows="6"
-                aria-invalid=\${errors.description ? 'true' : null}
+                aria-invalid=\${errors.description ? 'true' : nothing}
                 aria-describedby=\${errors.description ? 'description-desc description-error' : 'description-desc'}
                 class=\${cn(textareaClass(), 'min-h-24 resize-none')}
               >\${values.description ?? ''}</textarea>
@@ -200,14 +200,14 @@ export default async function body(toc: TocEntry[], ctx: DocPageContext = {}) {
     <p>Here's a basic example of a form using the Field helpers.</p>
     ${codeFigure(`<form action=\${submitBugReport}>
   <div data-slot="field-group" class=\${fieldGroupClass()}>
-    <div data-slot="field" data-invalid=\${errors.title ? 'true' : null} class=\${fieldClass()}>
+    <div data-slot="field" data-invalid=\${errors.title ? 'true' : nothing} class=\${fieldClass()}>
       <label data-slot="field-label" for="title" class=\${fieldLabelClass()}>Bug Title</label>
       <input
         data-slot="input"
         id="title"
         name="title"
         value=\${values.title ?? ''}
-        aria-invalid=\${errors.title ? 'true' : null}
+        aria-invalid=\${errors.title ? 'true' : nothing}
         placeholder="Login button not working on mobile"
         autocomplete="off"
         class=\${inputClass()}
@@ -311,7 +311,7 @@ export default async function body(toc: TocEntry[], ctx: DocPageContext = {}) {
 
     ${heading(toc, 2, 'Displaying Errors')}
     <p>Display errors next to the field with <code>fieldErrorClass()</code>. Make sure to add <code>data-invalid="true"</code> to the field and <code>aria-invalid="true"</code> to the control, and point the control's <code>aria-describedby</code> at the error so a screen reader reads it.</p>
-    ${codeFigure(`<div data-slot="field" data-invalid=\${errors.email ? 'true' : null} class=\${fieldClass()}>
+    ${codeFigure(`<div data-slot="field" data-invalid=\${errors.email ? 'true' : nothing} class=\${fieldClass()}>
   <label data-slot="field-label" for="email" class=\${fieldLabelClass()}>Email</label>
   <input
     data-slot="input"
@@ -319,8 +319,8 @@ export default async function body(toc: TocEntry[], ctx: DocPageContext = {}) {
     name="email"
     type="email"
     value=\${values.email ?? ''}
-    aria-invalid=\${errors.email ? 'true' : null}
-    aria-describedby=\${errors.email ? 'email-error' : null}
+    aria-invalid=\${errors.email ? 'true' : nothing}
+    aria-describedby=\${errors.email ? 'email-error' : nothing}
     class=\${inputClass()}
   >
   \${errors.email ? html\`<div role="alert" data-slot="field-error" id="email-error" class=\${fieldErrorClass()}>\${errors.email}</div>\` : ''}

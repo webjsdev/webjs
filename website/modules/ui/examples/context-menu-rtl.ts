@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { ArrowLeftIcon, ArrowRightIcon, RotateCwIcon } from '#lib/ui/lucide.ts';
 
 const translations = {
@@ -84,11 +84,11 @@ export default function ContextMenuRtl() {
           <span class="hidden pointer-coarse:inline-block">${t.longPress}</span>
         </div>
       </ui-context-menu-trigger>
-      <ui-context-menu-content class="w-48" data-lang=${dir === 'rtl' ? lang : null}>
+      <ui-context-menu-content class="w-48" data-lang=${dir === 'rtl' ? lang : nothing}>
         <ui-context-menu-group>
           <ui-context-menu-sub>
             <ui-context-menu-sub-trigger>${t.navigation}</ui-context-menu-sub-trigger>
-            <ui-context-menu-sub-content class="w-44" data-lang=${dir === 'rtl' ? lang : null}>
+            <ui-context-menu-sub-content class="w-44" data-lang=${dir === 'rtl' ? lang : nothing}>
               <ui-context-menu-group>
                 <ui-context-menu-item>
                   ${ArrowLeftIcon()}
@@ -110,7 +110,7 @@ export default function ContextMenuRtl() {
           </ui-context-menu-sub>
           <ui-context-menu-sub>
             <ui-context-menu-sub-trigger>${t.moreTools}</ui-context-menu-sub-trigger>
-            <ui-context-menu-sub-content class="w-44" data-lang=${dir === 'rtl' ? lang : null}>
+            <ui-context-menu-sub-content class="w-44" data-lang=${dir === 'rtl' ? lang : nothing}>
               <ui-context-menu-group>
                 <ui-context-menu-item>${t.savePage}</ui-context-menu-item>
                 <ui-context-menu-item>${t.createShortcut}</ui-context-menu-item>

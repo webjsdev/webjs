@@ -3,7 +3,7 @@
 ## What This Covers
 
 - The Next.js patterns that LOOK right in WebJs but break, because WebJs borrows Next's file-based routing shape but not its execution model (no RSC, no `'use client'` split): `redirect()` in a route handler, `fetch()` in a page, `<Link>`, `NEXT_PUBLIC_`, `await params`.
-- The Lit patterns that break WebJs SSR, reactivity, or event handling, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: `static properties` / the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, passing a method straight to an `@event` binding, interpolation into `<style>`, reading `assignedNodes()` in `firstUpdated` of a light-DOM component.
+- The Lit patterns that break WebJs SSR, reactivity, or event handling, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: `static properties` / the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, interpolation into `<style>`, reading `assignedNodes()` in `firstUpdated` of a light-DOM component.
 - The WebJs-shaped fix for each, with short code.
 
 Read this when a pattern feels familiar from Next.js or Lit but you are not sure it transfers. For the component runtime see `components.md`; for the routing surface see `routing-and-pages.md`. The one difference underneath everything: pages and layouts render server-only and never hydrate, and the one client boundary is a `WebComponent` custom element.
@@ -174,9 +174,9 @@ html`<form action=${submitFeedback}><input name="email"></form>`;
 html`<form method="post"><input name="email"></form>`;
 ```
 
-A plain attribute hole that resolves to `null` or `undefined` omits the attribute on both renderers (#1573), so `method=${null}` and `?method=${false}` both emit nothing and WebJs supplies `method="post"`. An EMPTY string is different: `method=${''}` renders `method=""`, which cannot submit and is refused.
+A plain attribute hole follows Lit, so `null` and `undefined` render an EMPTY attribute rather than omitting it: `method=${null}` emits `method=""`, which cannot submit and is refused. To leave the attribute out, write what you would write in Lit, `method=${nothing}`, `method=${ifDefined(value)}`, or `?method=${false}`, and WebJs then supplies `method="post"`.
 
-A boolean in a plain hole on an HTML boolean attribute renders like `?attr` (core 0.7.64+, #1579): `<option selected=${i === 0}>` and `<input type="radio" checked=${v.attending !== 'no'}>` mark only the true one. On an older core the server served `selected="false"` / `checked="false"`, which HTML reads as PRESENT, so the LAST option or radio won on first paint. `?selected=${...}` / `?checked=${...}` is correct on every version.
+A boolean in a plain hole stringifies, exactly as in Lit: `<option selected=${i === 0}>` serves `selected="false"` on every other option, which HTML reads as PRESENT, so the LAST option wins. Boolean attributes take the `?` binding, `<option ?selected=${i === 0}>` and `<input type="radio" ?checked=${v.attending !== 'no'}>`.
 
 A string stays a string: `action="/search"` and `action=${'/search'}` are unchanged, which is what a search form (`<form method="get" action="/search">`) and a `route.ts` endpoint both want. Other attributes keep their existing stringify behaviour; only a FUNCTION under `action` / `formaction` is claimed.
 

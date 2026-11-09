@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { bubbleClass, bubbleContentClass } from '#modules/ui/components/bubble.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -57,7 +57,7 @@ export default function PlanDemo() {
               <div data-slot="trace-collapsible-content" class=${traceCollapsibleContentClass()}>
                 <div data-slot="trace" class=${traceClass()}>
                   ${plan.steps.map((step) => html`
-                    <span data-slot="trace-line" data-status=${step.status === 'pending' ? 'pending' : null} class=${traceLineClass()}>
+                    <span data-slot="trace-line" data-status=${step.status === 'pending' ? 'pending' : nothing} class=${traceLineClass()}>
                       <span data-slot="trace-icon" aria-hidden="true" class=${traceIconClass()}>${stepIcon(step.status)}</span>
                       <span data-slot="trace-title" class=${traceTitleClass()}>${step.title}</span>
                     </span>

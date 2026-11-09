@@ -199,7 +199,10 @@ export function bindPart(p, root) {
  * @param {unknown} _prev
  */
 export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb) {
-  if (value === noChange) return;
+  // An interpolated attribute is rebuilt from ALL its pieces, so a `noChange`
+  // in the anchor position must still reach the attr-mixed branch, which
+  // resolves each piece on its own. Every other part keeps its value.
+  if (value === noChange && part.kind !== 'attr-mixed') return;
   if (isAttributeMap(value)) { applyAttributeMap(part, value); return; }
   part.__mapKind = undefined;
   // Unwrap live() to dirty-check against the live DOM value, not the
@@ -290,8 +293,13 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       // Reconstruct the attribute from static pieces + all dynamic values.
       const mp = /** @type {{ statics: string[], group: number[] }} */ (/** @type any */ (part));
       let val = mp.statics[0];
+      // The text each piece last committed. A `noChange` piece reuses it (empty
+      // on the first render, which is what SSR serves), so it never stringifies
+      // the sentinel itself.
+      const committed = /** @type any */ (part).__pieces ??= [];
       for (let j = 0; j < mp.group.length; j++) {
         let piece = allValues ? allValues[mp.group[j]] : value;
+        if (piece === noChange) piece = committed[j] ?? '';
         // Unwrap live() PER PIECE (#1443). The top-of-function unwrap only
         // sees the anchor hole's own value, and every hole inside a QUOTED
         // attribute lands here (single-hole included, the compiler classifies
@@ -303,7 +311,8 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         // #1154: same function guard for each piece of a mixed attribute.
         assertNotFunctionActionAttr(piece, part.name, part.el.localName);
         if (piece === nothing) { part.el.removeAttribute(part.name); return; }
-        val += String(piece ?? '');
+        committed[j] = String(piece ?? '');
+        val += committed[j];
         val += mp.statics[j + 1] || '';
       }
       part.el.setAttribute(part.name, val);
@@ -766,7 +775,11 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
 }
 
 export function updateInstance(inst, values, reconcileFormActionsCb) {
-  values = values.map((value, i) => value === noChange ? (inst.lastValues[i] ?? nothing) : value);
+  // `noChange` keeps whatever this hole last committed, so it maps to the
+  // previous value and the `Object.is` skip below leaves the DOM alone. It must
+  // not fall back to `nothing` when that value was nullish: a hole that rendered
+  // `title=""` from `undefined` keeps its attribute, as in Lit.
+  values = values.map((value, i) => value === noChange ? inst.lastValues[i] : value);
   for (let i = 0; i < values.length; i++) {
     const next = values[i];
     if (Object.is(next, inst.lastValues[i])) continue;

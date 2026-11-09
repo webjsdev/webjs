@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { bubbleClass, bubbleContentClass } from '#modules/ui/components/bubble.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -19,7 +19,7 @@ const answer =
 // is open; once it settles it reads "Thought for 5s". With no text yet it is
 // a plain line, since there is nothing to expand.
 function ReasoningRow(text: string, running: boolean, open: boolean) {
-  const line = html`<span data-slot="trace-line" data-status=${running ? 'running' : null} class=${traceLineClass()}>
+  const line = html`<span data-slot="trace-line" data-status=${running ? 'running' : nothing} class=${traceLineClass()}>
     <span data-slot="trace-title" class=${traceTitleClass()}>${running ? 'Thinking' : 'Thought for 5s'}</span>
   </span>`;
   if (text.length === 0) return line;

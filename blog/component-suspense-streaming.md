@@ -35,7 +35,7 @@ SalesDashboard.register('sales-dashboard');
 
 On the wire, the framework renders everything fast, flushes the first byte with the summary card already filled in, and in the hole where `<slow-analytics>` goes it emits the `.fallback` markup. The browser paints that skeleton at once. The slow component keeps rendering on the server, and when its data resolves WebJs streams the real content down the same response and swaps it in. Shell instantly, skeleton where the slow panel will be, then the panel.
 
-Watch the dot on `.fallback`. It is a property hole, so it must be unquoted. Write `.fallback=${html`...`}`, never `.fallback="${...}"`. The leading dot is what tells WebJs to pass the template as a DOM property instead of stringifying it into an attribute, and quoting it breaks that.
+Watch the dot on `.fallback`. It is a property binding, exactly as in Lit, so write `.fallback=${html`...`}`. The leading dot is what tells WebJs to pass the template as a DOM property instead of stringifying it into an attribute. Drop the dot and the fallback arrives as text.
 
 # Two slow panels do not wait on each other
 

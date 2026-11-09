@@ -273,7 +273,7 @@ turning the flag off.
 
 1. Never import a DB driver (`node:sqlite`) or `node:*` from components or pages.
 2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
-3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
+3. Event/property/boolean bindings in `html` take exactly one expression, quoted or unquoted, as in Lit: `@click=${fn}` and `@click="${fn}"` are the same binding, and surrounding text is a render error.
 4. Component state lives in signals from `@webjsdev/core`. Read with
    `signal.get()` inside `render()`, write with `signal.set(value)`.
    Module-scope signals share state across components; instance
