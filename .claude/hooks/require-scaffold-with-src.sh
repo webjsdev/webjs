@@ -67,6 +67,16 @@ if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])git commit([^[:alnum:]-]|$)
   exit 0
 fi
 
+# The bypass above reads this hook's OWN environment, which an agent cannot set:
+# Claude Code runs hooks with the harness environment, not the command's. So the
+# remedy this hook prints (re-run with WEBJS_NO_SCAFFOLD_GATE=1) also counts when it is written
+# as an env assignment directly in front of the `git commit` it applies to. It
+# must lead a simple command, so the same text in a commit message, an echo or a
+# separate command does not count.
+if printf '%s' "$cmd" | grep -Eq '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*WEBJS_NO_SCAFFOLD_GATE=1[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*git commit([^[:alnum:]-]|$)'; then
+  exit 0
+fi
+
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 0; fi
 
 staged=$(git diff --cached --name-only 2>/dev/null || true)
