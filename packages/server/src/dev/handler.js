@@ -605,7 +605,7 @@ export async function createRequestHandler(opts) {
   // process running several handlers the fallback therefore resolves against
   // the most recently booted one, which is the same scope the asset-url
   // provider already has.
-  setFormActionResolver((fn) => (state.actionIndex ? resolveActionIdentity(state.actionIndex, fn) : null));
+  setFormActionResolver((fn) => (state.actionIndex ? resolveActionIdentity(state.actionIndex, fn, { dev }) : null));
 
   /**
    * Report a dev error (#264): build a frame and push it to the open tab via

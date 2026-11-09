@@ -26,6 +26,13 @@ import { devImport } from './dev-import.js';
  */
 const _scanned = new WeakMap();
 
+/**
+ * Functions the scan already looked for and did not find, so a genuine
+ * non-action bound to a form is scanned once rather than on every render.
+ * @type {WeakSet<Function>}
+ */
+const _scanMissed = new WeakSet();
+
 /** Emit the scan-fallback warning once per process rather than per render. */
 let _warnedScan = false;
 
@@ -34,9 +41,10 @@ let _warnedScan = false;
  *
  * @param {import('./actions.js').ActionIndex} idx
  * @param {Function} fn
+ * @param {{ dev?: boolean }} [opts]
  * @returns {Promise<string | null>}
  */
-export async function resolveActionIdentity(idx, fn) {
+export async function resolveActionIdentity(idx, fn, opts = {}) {
   const known = actionIdentitiesOf(fn);
   if (known.length) {
     // The FIRST registration the index knows. Order is defining-module-first,
@@ -75,7 +83,7 @@ export async function resolveActionIdentity(idx, fn) {
     warnUnindexedAction(known[0]);
     return null;
   }
-  return await scanForIdentity(idx, fn);
+  return await scanForIdentity(idx, fn, opts);
 }
 
 /** Files already warned about, so a re-render does not repeat the line. */
@@ -189,36 +197,33 @@ function warnConfigExportsBypassed(defining, used) {
  * Cold-path fallback: find the function by loading the indexed action modules
  * and comparing exports.
  *
- * Reached in exactly one situation: a runtime with neither
- * `module.registerHooks` nor `Bun.plugin`, which never installs the hook at all.
- * A module imported BEFORE the hook installed is also unwrapped, but the gate
- * below rules it out, and the server installs the hook at boot ahead of any app
- * module, so that shape only exists in a unit test that imports one by hand.
+ * Reached in two situations. A runtime with neither `module.registerHooks` nor
+ * `Bun.plugin` never installs the hook at all. And a module imported BEFORE the
+ * hook installed is loaded unwrapped and stays that way in the module cache:
+ * the server installs the hook when the handler is created, so this is a test
+ * that statically imports an action module (to call it directly) and only then
+ * calls `createRequestHandler`. Static imports load before any code runs, so
+ * the test cannot order it away, and the page then threw "not a server
+ * action" for a function that is one.
  *
- * It is gated on the hook being ABSENT rather than merely on a registry miss.
- * The scan imports every `'use server'` module in the app, which is exactly the
- * eager loading (DB driver init, connection pools) that `buildActionIndex`
- * avoids by only hashing paths. Paying that during a render because one lookup
- * missed would turn a fast miss into a slow one on every page; with the hook
- * installed, a miss means the function genuinely is not an action, and the
- * renderer should say so immediately.
+ * With the hook installed it runs in DEV only. The scan imports every
+ * `'use server'` module in the app, which is exactly the eager loading (DB
+ * driver init, connection pools) that `buildActionIndex` avoids by only
+ * hashing paths, and in production a miss means the function genuinely is not
+ * an action and the renderer should say so at once. In dev and tests the cost
+ * is paid once per function: a miss is remembered.
  *
  * @param {import('./actions.js').ActionIndex} idx
  * @param {Function} fn
+ * @param {{ dev?: boolean }} [opts]
  * @returns {Promise<string | null>}
  */
-export async function scanForIdentity(idx, fn) {
-  if (identityHookInstalled()) return null;
+export async function scanForIdentity(idx, fn, opts = {}) {
+  const hooked = identityHookInstalled();
+  if (hooked && !opts.dev) return null;
   const cached = _scanned.get(fn);
   if (cached) return cached;
-  if (!_warnedScan) {
-    _warnedScan = true;
-    console.warn(
-      '[webjs] resolving a bound form action by scanning the action index, because '
-      + "the 'use server' load hook is not installed on this runtime. Every action "
-      + 'module is imported to do it. Node 24+ and Bun both install the hook.',
-    );
-  }
+  if (_scanMissed.has(fn)) return null;
   for (const [hash, file] of idx.hashToFile) {
     let mod;
     try {
@@ -227,7 +232,9 @@ export async function scanForIdentity(idx, fn) {
       // already holds, and a busted specifier is a fresh module whose exports
       // are new objects, so `value === fn` could never be true. In dev that
       // made this fallback import every action module and always return null.
-      mod = await import(pathToFileURL(file).toString());
+      // Bun keys a module by its plain path, Node by its file URL; each is the
+      // form a static import of the file produced.
+      mod = await import(process.versions.bun ? file : pathToFileURL(file).toString());
     } catch {
       continue;
     }
@@ -235,10 +242,30 @@ export async function scanForIdentity(idx, fn) {
       if (value !== fn) continue;
       const id = `${hash}/${name}`;
       _scanned.set(fn, id);
+      warnScanned(hooked, file);
       return id;
     }
   }
+  _scanMissed.add(fn);
   return null;
+}
+
+/**
+ * Say once why a form action was found by scanning, since the cause differs.
+ * @param {boolean} hooked
+ * @param {string} file
+ */
+function warnScanned(hooked, file) {
+  if (_warnedScan) return;
+  _warnedScan = true;
+  console.warn(hooked
+    ? `[webjs] ${file} was imported before createRequestHandler() installed the 'use server' `
+      + 'load hook, so its actions were found by scanning the action index instead. This is '
+      + 'harmless in a test; create the handler first (or import the action with a dynamic '
+      + 'import() after it) to skip the scan.'
+    : '[webjs] resolving a bound form action by scanning the action index, because '
+      + "the 'use server' load hook is not installed on this runtime. Every action "
+      + 'module is imported to do it. Node 24+ and Bun both install the hook.');
 }
 
 /**
