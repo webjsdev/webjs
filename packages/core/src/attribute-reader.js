@@ -171,8 +171,10 @@ function hyphenate(s) {
 /**
  * The attribute a declared property reads and reflects to, Lit's
  * `attribute` option: a string is used as written, `false` (or
- * `state: true`) means none, and anything else (absent, or `true`) is the
- * default name derived from the property name.
+ * `state: true`) means none, and anything else (absent, or `true`) is Lit's
+ * default name, the LOWERCASED property name (`isOpen` -> `isopen`). The
+ * kebab spelling (`is-open`) stays readable as an alias (see
+ * `attributeBackedProps`) but is never what a property reflects to.
  *
  * @param {string} propName
  * @param {{ attribute?: string | boolean, state?: boolean }} decl  normalised declaration
@@ -181,7 +183,7 @@ function hyphenate(s) {
 export function attributeNameFor(propName, decl) {
   if (!isAttributeBacked(decl)) return undefined;
   if (typeof decl.attribute === 'string') return decl.attribute;
-  return hyphenate(propName);
+  return propName.toLowerCase();
 }
 
 /**
@@ -226,14 +228,20 @@ export function attributeNameFor(propName, decl) {
  *   which case the caller must IGNORE the attribute entirely (#1341).
  */
 export function resolveAttributeProperty(Cls, attrName) {
-  // Primary names first, so a prop literally named `foobar` keeps `foobar`
-  // even when a sibling `fooBar` would answer to it as an alias.
+  // Primary names first, then aliases. Two props can share a primary name
+  // (`fooBar` and `foobar` both default to `foobar`); the prop literally
+  // named after the attribute keeps it, so a sibling never steals a real prop.
+  let primaryHit;
   let aliasHit;
   for (const { propName, def, primary, alias } of attributeBackedProps(Cls)) {
-    if (primary === attrName) return { propName, def };
-    if (aliasHit === undefined && alias === attrName) aliasHit = { propName, def };
+    if (primary === attrName) {
+      if (propName === attrName) return { propName, def };
+      if (primaryHit === undefined) primaryHit = { propName, def };
+    } else if (aliasHit === undefined && alias === attrName) {
+      aliasHit = { propName, def };
+    }
   }
-  return aliasHit;
+  return primaryHit ?? aliasHit;
 }
 
 /**
@@ -332,9 +340,11 @@ export function invalidateClass(Cls) {
  * The attribute-backed props of `Cls` with the names each answers to.
  *
  * `primary` is the custom `attribute` option, matched VERBATIM, or else the
- * kebab-cased property name. `alias` is the LOWERCASED property name, lit's
- * default attribute name, present only when the prop has no custom `attribute`
- * and the lowercased name differs from the kebab one. Without it,
+ * LOWERCASED property name, Lit's default attribute name and the one a
+ * reflected property writes. `alias` is the KEBAB-cased property name, kept
+ * as a read-only alias (WebJs's earlier default, and the spelling HTML
+ * authors reach for), present only when the prop has no custom `attribute`
+ * and the kebab name differs from the lowercase one. Without it,
  * `<quiz-player quizId=${id}>` against `{ quizId: Number }` reached neither
  * side: the parser lowercases the name to `quizid`, which matched nothing, so
  * the prop silently stayed undefined on the server AND the client (#1540).
@@ -370,8 +380,8 @@ function buildAttributeBackedProps(Cls) {
     const d = normalizeDecl(decl);
     const primary = attributeNameFor(k, d);
     if (primary === undefined) continue;
-    const lower = k.toLowerCase();
-    const alias = typeof d.attribute !== 'string' && lower !== primary ? lower : undefined;
+    const kebab = hyphenate(k);
+    const alias = typeof d.attribute !== 'string' && kebab !== primary ? kebab : undefined;
     out.push({ propName: k, def: d, primary, alias });
   }
   return out;

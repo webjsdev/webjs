@@ -26,7 +26,7 @@ export type PropertyConstructor<T = unknown> =
 export interface PropertyDeclaration<T = unknown> {
   /** Constructor used for string → value coercion when the attribute changes. */
   type?: PropertyConstructor<T>;
-  /** Write property changes back to the HTML attribute (kebab-cased). */
+  /** Write property changes back to the HTML attribute (the lowercased property name unless `attribute` names one). */
   reflect?: boolean;
   /** Internal-only: no attribute, no reflection, but still reactive. */
   state?: boolean;

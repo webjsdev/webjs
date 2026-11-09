@@ -76,7 +76,8 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  *
  * @property {boolean} [reflect]
  *   When `true`, writing to the property also sets the corresponding
- *   HTML attribute on the element (kebab-cased). Useful when you want
+ *   HTML attribute on the element (Lit's lowercased property name unless
+ *   `attribute` names one). Useful when you want
  *   CSS attribute selectors like `my-el[mode="dark"]` to work.
  *
  * @property {boolean} [state]
@@ -341,9 +342,9 @@ class WebComponentBase extends Base {
     this.finalize();
     // Derived from the same walk `resolveAttributeProperty` matches against, so
     // every observed name resolves and nothing else does. A camelCase prop with
-    // no custom `attribute` is observed under its kebab name AND its lowercased
-    // name (lit's default), since the parser turns `quizId=` into `quizid`
-    // (#1540).
+    // no custom `attribute` is observed under Lit's lowercased name (what it
+    // reflects to, and what the parser turns `quizId=` into) AND its kebab
+    // name, kept as a read alias.
     return observedAttributeNames(this);
   }
 
