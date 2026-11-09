@@ -48,7 +48,7 @@ export function promptFor(spec, appDir, port) {
 
   ${appDir}
 
-Work ONLY inside that directory. Start by reading its AGENTS.md. Dependencies are preinstalled through a linked node_modules, so never run npm install / npm ci, and pass --no-deps to any UI kit add command. Commit as you go with git (git -c user.email=a@a -c user.name=agent commit ...); never git add the node_modules link.
+Work ONLY inside that directory. Start by reading its AGENTS.md. Dependencies are preinstalled through a linked node_modules, so never run npm install / npm ci, and pass --no-deps to any UI kit add command. You are on a git feature branch; commit as you go (git -c user.email=a@a -c user.name=agent commit ...).
 
 ${spec.trim()}
 
@@ -124,11 +124,16 @@ async function oneBuild({ spec, specName, index, out, framework, model, label, t
   console.log = () => {};
   try { await scaffoldApp(specName, parent, { template: 'full-stack', install: false, skipCi: true }); } finally { console.log = log; }
   const app = join(parent, specName);
-  symlinkSync(join(framework, 'node_modules'), join(app, 'node_modules'));
-  const git = (...a) => spawnSync('git', ['-c', 'user.email=a@a', '-c', 'user.name=eval', ...a], { cwd: app, encoding: 'utf8' });
+  // The scaffold is the root commit, made with the app's own hooks off (its
+  // pre-commit hook refuses a commit on main) and BEFORE node_modules is
+  // linked, so the link is never staged. The agent works on a feature branch,
+  // as a person starting work would.
+  const git = (...a) => spawnSync('git', ['-c', 'user.email=a@a', '-c', 'user.name=eval', '-c', 'core.hooksPath=/dev/null', ...a], { cwd: app, encoding: 'utf8' });
   git('init', '-q', '-b', 'main');
   git('add', '-A');
   git('commit', '-q', '-m', 'scaffold');
+  git('checkout', '-q', '-b', `feature/${specName}`);
+  symlinkSync(join(framework, 'node_modules'), join(app, 'node_modules'));
   const transcript = join(parent, 'transcript.jsonl');
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_CODE') || k === 'CLAUDECODE') delete env[k];
