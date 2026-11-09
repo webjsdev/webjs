@@ -40,6 +40,14 @@ before(async () => {
     export function OPTIONS() { return new Response('custom', { status: 200 }); }
   `);
   await writeFile(join(dir, 'post-only.js'), `export function POST() { return new Response('p'); }`);
+  await writeFile(join(dir, 'stream.js'), `
+    export function GET() {
+      return new Response(new ReadableStream({
+        pull(c) { c.enqueue(new TextEncoder().encode('tick')); },
+        cancel() { globalThis.__webjsHeadCancelled = true; },
+      }));
+    }
+  `);
 });
 after(async () => { await rm(dir, { recursive: true, force: true }); });
 
@@ -76,6 +84,15 @@ test('HEAD is implemented from GET: same status and headers, no body', async () 
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('x-from-get'), '1');
   assert.equal(r.body, null);
+});
+
+test('a synthesized HEAD cancels the body GET produced, so a stream stops', async () => {
+  globalThis.__webjsHeadCancelled = false;
+  const r = await handleApi(route('stream.js'), {}, new Request('http://x/api/stream', { method: 'HEAD' }), false);
+  assert.equal(r.status, 200);
+  assert.equal(r.body, null);
+  await new Promise((done) => setTimeout(done, 10));
+  assert.equal(globalThis.__webjsHeadCancelled, true, 'the unread GET stream is cancelled');
 });
 
 test('OPTIONS is implemented: 204 with a sorted Allow including HEAD and OPTIONS', async () => {

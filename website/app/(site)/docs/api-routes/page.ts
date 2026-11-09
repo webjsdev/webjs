@@ -18,7 +18,7 @@ export default function ApiRoutes() {
       <li><strong>PATCH</strong>: partially update a resource</li>
       <li><strong>DELETE</strong>: remove a resource</li>
     </ul>
-    <p><strong>HEAD</strong> and <strong>OPTIONS</strong> may be exported too. When they are not, WebJs implements them for you, as Next.js does: <code>HEAD</code> runs your <code>GET</code> and sends its status and headers with no body, and <code>OPTIONS</code> answers <code>204</code> with a sorted <code>Allow</code> header. If a request arrives with any other method that has no matching export, WebJs returns <code>405 Method Not Allowed</code> with the same <code>Allow</code> header.</p>
+    <p><strong>HEAD</strong> and <strong>OPTIONS</strong> may be exported too. When they are not, WebJs implements them for you, as Next.js does: <code>HEAD</code> runs your <code>GET</code> and sends its status and headers with no body (a streamed body is cancelled rather than left running), and <code>OPTIONS</code> answers <code>204</code> with a sorted <code>Allow</code> header. If a request arrives with any other method that has no matching export, WebJs returns <code>405 Method Not Allowed</code> with the same <code>Allow</code> header.</p>
     <p>A page and a route handler cannot answer the same URL. A <code>page.ts</code> and a <code>route.ts</code> in one folder (or reaching one URL through a route group) is reported by <code>webjs check</code> as <code>no-page-route-conflict</code>, refuses to start in production, and answers every request with the problem in development.</p>
 
     <h2 id="redirect-and-not-found">redirect() and notFound() in a handler</h2>

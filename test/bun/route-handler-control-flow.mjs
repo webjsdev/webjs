@@ -37,6 +37,14 @@ try {
     `}\n` +
     `export function POST() { return new Response('p'); }\n`);
 
+  w('app/api/stream/route.ts',
+    `export function GET() {\n` +
+    `  return new Response(new ReadableStream({\n` +
+    `    pull(c) { c.enqueue(new TextEncoder().encode('tick')); },\n` +
+    `    cancel() { (globalThis as any).__webjsHeadCancelled = true; },\n` +
+    `  }));\n` +
+    `}\n`);
+
   let server;
   ({ server, close } = await startServer({ appDir: dir, dev: false, port: 0, logger: quiet }));
   const port = typeof server.port === 'number' ? server.port : server.address().port;
@@ -54,6 +62,12 @@ try {
   assert.equal(r.status, 200, `auto HEAD on ${runtime}`);
   assert.equal(r.headers.get('x-get'), '1');
   assert.equal(await r.text(), '');
+  globalThis.__webjsHeadCancelled = false;
+  r = await fetch(`http://localhost:${port}/api/stream`, { method: 'HEAD' });
+  assert.equal(r.status, 200, `auto HEAD on a streamed GET on ${runtime}`);
+  await r.text();
+  await new Promise((done) => setTimeout(done, 20));
+  assert.equal(globalThis.__webjsHeadCancelled, true, `auto HEAD cancels the unread GET stream on ${runtime}`);
   r = await fetch(base, { method: 'OPTIONS' });
   assert.equal(r.status, 204, `auto OPTIONS on ${runtime}`);
   assert.equal(r.headers.get('allow'), 'GET, HEAD, OPTIONS, POST');

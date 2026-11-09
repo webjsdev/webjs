@@ -71,8 +71,12 @@ export async function handleApi(route, params, webRequest, dev) {
     throw e;
   }
   const res = result instanceof Response ? result : Response.json(result);
-  // A synthesized HEAD answers GET's status and headers with no body.
-  return headOnly ? new Response(null, { status: res.status, statusText: res.statusText, headers: res.headers }) : res;
+  if (!headOnly) return res;
+  // A synthesized HEAD answers GET's status and headers with no body. GET's own
+  // body is never read, so it is cancelled: a streamed one (SSE, a DB cursor)
+  // would otherwise keep producing for no reader until it is collected.
+  if (res.body && !res.bodyUsed) res.body.cancel().catch(() => {});
+  return new Response(null, { status: res.status, statusText: res.statusText, headers: res.headers });
 }
 
 /**
