@@ -271,6 +271,25 @@ export const REFUSED = [
     fix: /process\.versions\.bun/,
   },
   {
+    id: 'next-url',
+    idiom: 'reading request.nextUrl in middleware',
+    file: 'middleware.ts',
+    source: [
+      'export function middleware(request: Request & { nextUrl: URL }) {',
+      "  if (request.nextUrl.pathname === '/old') return Response.redirect(new URL('/', request.url), 307);",
+      '}',
+      '',
+    ].join('\n'),
+    extra: { 'app/page.ts': [
+      "import { html } from '@webjsdev/core';",
+      'export default function Page() { return html`<main>page</main>`; }',
+      '',
+    ].join('\n') },
+    rule: 'no-next-url',
+    fix: /new URL\(request\.url\)/,
+    load: { path: '/', match: /request\.nextUrl[^\n]*new URL\(request\.url\)/ },
+  },
+  {
     id: 'page-and-route',
     idiom: 'a page.ts and a route.ts in one folder',
     file: 'app/about/route.ts',

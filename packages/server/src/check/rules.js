@@ -37,6 +37,11 @@ export const RULES = [
       'Flags `process.env.NEXT_RUNTIME`, which only Next.js sets (to `nodejs` or `edge`). Under WebJs it is undefined, so the usual `if (process.env.NEXT_RUNTIME === \'nodejs\')` guard around an instrumentation `register()` silently never runs. Drop the guard (WebJs runs `register()` once, server-side only), and use `process.versions.bun` / `process.versions.node` to tell the runtimes apart.',
   },
   {
+    name: 'no-next-url',
+    description:
+      'Flags `request.nextUrl` (as `req.nextUrl` / `request.nextUrl`, or any `.nextUrl` in a middleware or proxy file). It is Next.js\'s extended URL; WebJs passes middleware and route handlers the platform Request, so the property throws in dev. Use `new URL(request.url)`.',
+  },
+  {
     name: 'no-inline-use-server',
     description:
       'Flags a `\'use server\'` directive inside a function body (Next.js\'s inline server action, often written in a page). WebJs\'s server boundary is a FILE: the directive is honoured only at the top of a `*.server.{js,ts}` module, so an inline one is an ordinary string and the function runs wherever it is called, and binding it to a form throws (it has no action identity). Move the function into its own module (`modules/<feature>/actions/<name>.server.ts` starting with `\'use server\'`), export it, and import it.',

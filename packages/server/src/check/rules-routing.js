@@ -10,7 +10,7 @@ import {
   isServerActionFile, isComponentFile,
 } from './helpers.js';
 import { buildRouteTable } from '../router.js';
-import { maskComments } from '../js-scan.js';
+import { maskComments, redactStringsAndTemplates } from '../js-scan.js';
 import { validateAppLayout } from '../app-layout.js';
 import { buildPublicIndex } from '../public-files.js';
 import { findJsxIsm } from '@webjsdev/core/server';
@@ -189,6 +189,38 @@ export function checkNoNextRuntimeGuard(files, violations) {
       file: rel,
       message: 'Reads process.env.NEXT_RUNTIME, which only Next.js sets. Under WebJs it is undefined, so code guarded by it (an instrumentation register(), say) silently never runs.',
       fix: "Drop the guard: WebJs runs instrumentation.ts register() once, on the server only. To tell the runtimes apart use process.versions.bun (Bun) and process.versions.node (Node).",
+    });
+  }
+}
+
+/**
+ * Rule: `no-next-url`.
+ *
+ * `request.nextUrl` is Next.js's extended URL. WebJs hands middleware and
+ * route handlers the platform Request, so the property throws in dev with the
+ * fix (and answers a plain URL in production rather than crashing a live app).
+ * Matched as `req.nextUrl` / `request.nextUrl` anywhere, and as any
+ * `.nextUrl` inside a middleware or proxy file, so an app's own `nextUrl`
+ * (a pagination cursor on a response object) is left alone.
+ *
+ * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
+ * @param {Violation[]} violations  accumulator the rule pushes onto
+ * @returns {void}
+ */
+export function checkNoNextUrl(files, violations) {
+  for (const { rel, content } of files) {
+    if (!content.includes('nextUrl')) continue;
+    // Fully blanked (comment, string and template bodies), so a mention in
+    // prose or a docs sample is not code.
+    const code = redactStringsAndTemplates(content, true);
+    const isMiddleware = /(^|\/)(middleware|proxy)\.(?:m?[jt]s)$/.test(rel);
+    const hit = isMiddleware ? /\.nextUrl\b/.test(code) : /\b(?:req|request)\.nextUrl\b/.test(code);
+    if (!hit) continue;
+    violations.push({
+      rule: 'no-next-url',
+      file: rel,
+      message: 'Reads request.nextUrl, Next.js\'s extended URL. WebJs passes the platform Request, so it throws in dev.',
+      fix: 'Use new URL(request.url) (its pathname and searchParams are what nextUrl offered).',
     });
   }
 }

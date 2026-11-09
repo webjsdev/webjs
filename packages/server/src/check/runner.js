@@ -17,6 +17,7 @@ import {
   checkNoInterpolationInRawTextElement,
   checkNoServerEnvInComponents,
   checkNoNextRuntimeGuard,
+  checkNoNextUrl,
   checkShellInNonRootLayout,
   checkAppLayout,
   checkNoJsxAttributes,
@@ -114,6 +115,7 @@ export async function checkConventions(appDir) {
   const shipped = await checkServerImportInBrowserModule(appDir, violations);
   checkNoServerEnvInComponents(files, violations, shipped);
   checkNoNextRuntimeGuard(files, violations);
+  checkNoNextUrl(files, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
   checkCoreImportsExist(appDir, files, violations);
