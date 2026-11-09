@@ -11,6 +11,7 @@ import {
   checkArrayPropUsesArrayType,
   checkNoBrowserGlobalsInRender,
   checkNoShadowedNativeMember,
+  checkShadowOnlyStatics,
 } from './rules-components.js';
 import {
   checkNoRedirectInApiRoute,
@@ -95,6 +96,7 @@ export async function checkConventions(appDir) {
   checkArrayPropUsesArrayType(files, violations);
   checkNoBrowserGlobalsInRender(files, violations);
   checkNoShadowedNativeMember(files, violations);
+  checkShadowOnlyStatics(files, violations);
   checkNoRedirectInApiRoute(files, violations);
   checkNoInterpolationInRawTextElement(files, violations);
   checkNoServerEnvInComponents(files, violations);

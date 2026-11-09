@@ -124,10 +124,10 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> a server action is reachable over RPC, not over an arbitrary REST path on its own. REST endpoints go through <code>route.ts</code> (the framework's HTTP handler).</p>
     <p><strong>Fix:</strong> add an <code>app/&lt;path&gt;/route.ts</code> that imports the action and calls it, or wrap it with the <code>route()</code> adapter from <code>@webjsdev/server</code> (<code>export const POST = route(myAction)</code>). See <a href="/docs/server-actions">Server Actions</a>.</p>
 
-    <h2>A component's <code>static styles</code> have no effect (and a console warning)</h2>
-    <p><strong>Symptom:</strong> a <code>static styles = css\`...\`</code> block does not style the component at all, and the framework warns at runtime.</p>
-    <p><strong>Cause:</strong> <code>static styles</code> is adopted through a shadow root, but the component is in light DOM (the default), which has no shadow root, so the stylesheet is never adopted and the framework warns.</p>
-    <p><strong>Fix:</strong> add <code>static shadow = true</code> to scope the styles, or use Tailwind utilities (unique by construction), or, if you keep custom CSS in light DOM, prefix every class selector with the component tag name (framework invariant 7 for light-DOM CSS). See <a href="/docs/styling">Styling</a>.</p>
+    <h2 id="static-styles-light-dom">A component's <code>static styles</code> or <code>shadowRootOptions</code> have no effect (and a console warning)</h2>
+    <p><strong>Symptom:</strong> a <code>static styles = css\`...\`</code> block does not style the component at all and the framework warns at runtime, or <code>static shadowRootOptions = { delegatesFocus: true }</code> changes nothing.</p>
+    <p><strong>Cause:</strong> <code>static styles</code> is adopted through a shadow root and <code>shadowRootOptions</code> configures one, but the component is in light DOM (the WebJs default, the reverse of Lit's), which has no shadow root, so neither is applied.</p>
+    <p><strong>Fix:</strong> add <code>static shadow = true</code> to scope the styles, or use Tailwind utilities (unique by construction), or, if you keep custom CSS in light DOM, prefix every class selector with the component tag name (framework invariant 7 for light-DOM CSS). The <code>static-styles-need-shadow</code> and <code>shadow-options-need-shadow</code> check rules flag both shapes at edit time. See <a href="/docs/styling">Styling</a>.</p>
 
     <h2>A vendored package throws "X is not exported" or a missing-symbol error at runtime</h2>
     <p><strong>Symptom:</strong> two npm packages that work together locally throw at runtime in the browser, typically a missing-export or undefined-symbol error from one package reaching into another (for example <code>@codemirror/lint</code> calling into a <code>@codemirror/view</code> that is pinned an older minor than it needs).</p>

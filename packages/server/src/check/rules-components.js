@@ -299,3 +299,82 @@ export function checkNoShadowedNativeMember(files, violations) {
     }
   }
 }
+
+/**
+ * The value a class body gives `static shadow`: `true`, `false` (an explicit
+ * `= false` or no declaration at all, the light-DOM default), or `null` when
+ * it cannot be evaluated statically (a getter, a variable, an expression).
+ * @param {string} body  string/comment-masked class body
+ * @returns {boolean | null}
+ */
+function staticShadowValue(body) {
+  if (/\bstatic\s+(?:override\s+)?get\s+shadow\b/.test(body)) return null;
+  const m = /\bstatic\s+(?:override\s+)?(?:readonly\s+)?shadow\s*(?::[^=;\n]*)?=\s*([^;\n]*)/.exec(body);
+  if (!m) return false;
+  const v = m[1].trim();
+  if (/^true\b/.test(v)) return true;
+  if (/^false\b/.test(v)) return false;
+  return null;
+}
+
+/**
+ * Rules: `static-styles-need-shadow` and `shadow-options-need-shadow`.
+ *
+ * WebJs adopts `static styles` into a SHADOW root, and `static
+ * shadowRootOptions` configures that root, but a component renders into light
+ * DOM unless it sets `static shadow = true`. Lit's habit is the opposite
+ * (shadow by default), so a Lit-shaped component declaring either one with no
+ * `static shadow = true` ships styles that never apply, or options nothing
+ * reads, with no other signal at edit time.
+ *
+ * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
+ * @param {Violation[]} violations  accumulator the rule pushes onto
+ * @returns {void}
+ */
+export function checkShadowOnlyStatics(files, violations) {
+  for (const { rel, scan } of files) {
+    if (!/class\s+\w+[^{]*?\s+extends\s+WebComponent/.test(scan)) continue;
+    for (const { body } of extractWebComponentClassBodies(scan)) {
+      if (staticShadowValue(body) !== false) continue;
+      // Only TOP-LEVEL members of this class, never a nested class's.
+      const top = topLevelText(body);
+      if (/\bstatic\s+(?:override\s+)?(?:readonly\s+)?(?:get\s+)?styles\b/.test(top)) {
+        violations.push({
+          rule: 'static-styles-need-shadow',
+          file: rel,
+          message:
+            '`static styles` on a light-DOM component is never applied. WebJs adopts it into a shadow root, and this component renders into light DOM (the default, unlike Lit) because it does not set `static shadow = true`.',
+          fix:
+            'Add `static shadow = true` to scope the styles in a shadow root, or drop `static styles` and style the light DOM with Tailwind utilities or a global stylesheet whose class selectors are prefixed with the tag name.',
+        });
+      }
+      if (/\bstatic\s+(?:override\s+)?(?:readonly\s+)?(?:get\s+)?shadowRootOptions\b/.test(top)) {
+        violations.push({
+          rule: 'shadow-options-need-shadow',
+          file: rel,
+          message:
+            '`static shadowRootOptions` configures a shadow root, and this component has none: it renders into light DOM (the default, unlike Lit) because it does not set `static shadow = true`, so the options are ignored.',
+          fix: 'Add `static shadow = true` so the component attaches a shadow root with these options, or remove `shadowRootOptions`.',
+        });
+      }
+    }
+  }
+}
+
+/**
+ * The text of a class body at brace depth 0, with every nested block blanked,
+ * so a member of a nested class or object literal never reads as this class's.
+ * @param {string} body
+ * @returns {string}
+ */
+function topLevelText(body) {
+  let d = 0;
+  let out = '';
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '{') { d++; out += ' '; continue; }
+    if (c === '}') { d--; out += ' '; continue; }
+    out += d === 0 ? c : (c === '\n' ? '\n' : ' ');
+  }
+  return out;
+}
