@@ -36,6 +36,7 @@ import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
 import { devImport } from '../dev-import.js';
 import { versionImportSpecifiers } from './specifier-versions.js';
+import { devServiceWorkerResponse } from './dev-service-worker.js';
 import { runMetadataRoute } from '../metadata-routes.js';
 
 /**
@@ -161,6 +162,10 @@ export async function tryServeFrameworkStatic(path, method, { coreDir, appDir, d
  */
 export async function tryServePublicAsset(path, ctx) {
   const { appDir, dev, versioned, regenerateRules } = ctx;
+  // Under `webjs dev` the root worker is a kill switch (#1689), whether or not
+  // the app ships one: a caching worker on a dev origin serves the edit before
+  // last, and one a `webjs start` on the same port left behind is cleared too.
+  if (dev && path === '/sw.js') return devServiceWorkerResponse();
   const ROOT_ASSETS = { '/sw.js': '/public/sw.js', '/offline.html': '/public/offline.html' };
   if (!(path.startsWith('/public/') || path === '/favicon.ico' || path in ROOT_ASSETS)) return null;
   const p = path === '/favicon.ico' ? '/public/favicon.ico' : (ROOT_ASSETS[path] || path);
