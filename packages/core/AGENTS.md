@@ -122,7 +122,7 @@ them per app.
 Several modules here are barrels over a sibling directory (`component.js`,
 `render-client.js`, `render-server.js`, `router-client.js`, `slot.js`). The rule
 that produced them, and that any future split must follow, is in
-`../../.agents/skills/webjs/references/module-structure.md`. Target 800 lines,
+the "Module structure" section of `../../framework-dev.md`. Target 800 lines,
 around 1000 at the most, barrels exempt, no CI guard.
 
 Three things bite specifically in this package:
@@ -344,8 +344,7 @@ takes down every browser file rather than failing one test. The guard
 listens on `window` in the BUBBLE phase, which is load-bearing: capture
 would set `defaultPrevented` before the router's document-level listener
 runs, and `onClick` returns on that flag, so every guarded router test
-would pass while testing nothing. Full rule in
-[`references/testing.md`](../../.agents/skills/webjs/references/testing.md).
+would pass while testing nothing.
 
 The guard also covers the SECOND channel, the router's own hard navigation on
 a degradation. `preventDefault` cannot cancel a script assignment, and
@@ -376,7 +375,7 @@ guard.
 
 Cross-package tests that exercise core through the SSR pipeline
 or scaffolds live at the repo root in `test/ssr/`,
-`test/scaffolds/`, etc. See [`references/testing.md`](../../.agents/skills/webjs/references/testing.md).
+`test/scaffolds/`, etc. See https://webjs.dev/docs/testing.
 
 Run `npm test` from the repo root for node tests, `npm run test:browser`
 for the browser tests.

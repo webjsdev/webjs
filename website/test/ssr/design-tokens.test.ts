@@ -9,7 +9,7 @@
  *
  * It ALSO pins the shape the layout declares them in. Each per-theme colour is
  * one light-dark(LIGHT, DARK) declaration, which is the rule the framework
- * teaches its own users (the skill's references/styling.md) and which the site
+ * teaches its own users (/docs/styling) and which the site
  * itself did not follow until #1216: the dark half used to be written twice,
  * once under the OS media query and once under the toggle's attribute, so an
  * edit to either copy drifted the two paths apart with nothing to catch it.

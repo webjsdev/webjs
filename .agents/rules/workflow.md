@@ -55,12 +55,11 @@ These project-level rules govern all operations inside this workspace. Antigravi
   - `webjs-list-todos`: Trigger to check the list of TODOs.
   - `webjs-research-record`: Trigger to search and record findings.
   - `webjs-doc-sync`: Trigger when documenting new public surfaces or finding doc gaps or drift.
-  - `webjs-scaffold-sync`: Trigger when changing the CLI generators, the scaffold templates, or the agent teaching skill.
+  - `webjs-scaffold-sync`: Trigger when changing the CLI generators or the scaffold templates.
   - `webjs-blog-write`: Trigger when writing, drafting, or editing a WebJs blog post under `blog/`.
   - `webjs-instagram-post`: Trigger when publishing an SEO post to the WebJs Instagram account.
   - `pr-review`: Trigger when asked to review a PR. The review runs INLINE in the session that was asked, never in a subagent and never as a multi-round cycle, and posts through the GitHub review API as one review object (a summary plus line-anchored comments with suggestion blocks). A plain review ask stops at the findings: it resolves no threads and waits on no CI. An ask that says to fix them (`/code-review --fix`, "review and fix") applies the fixes too.
   - `use-railway`: Trigger when interacting with Railway deploys.
-- The framework teaching skill at `.agents/skills/webjs/` is a real directory rather than a symlink, and is the reference for building WebJs apps rather than a workflow trigger.
 - Always use the `view_file` tool on the matched skill's `SKILL.md` before executing its tasks.
 
 ## Enforcement gates

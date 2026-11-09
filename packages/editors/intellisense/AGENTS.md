@@ -142,8 +142,8 @@ The file is `.mjs` because `@webjsdev/intellisense` itself is a
 CommonJS package (`"type": "commonjs"`); the test uses ESM
 imports so the extension forces the right module type.
 
-See [`references/testing.md`](../../.agents/skills/webjs/references/testing.md)
-for the overall layout. Run `npm test` from the repo root.
+See https://webjs.dev/docs/testing for the overall layout. Run `npm test` from
+the repo root.
 
 ---
 

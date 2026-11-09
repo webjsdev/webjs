@@ -201,8 +201,8 @@ export default function RootLayout({ children, url }: LayoutProps) {
          instead of decorative. */
       /* Every per-theme COLOUR is declared ONCE, as light-dark(LIGHT, DARK),
          and the color-scheme declarations below pick the side. This is the
-         rule the framework teaches its own users (the skill's
-         references/styling.md, and the palette webjs create generates), and
+         rule the framework teaches its own users (/docs/styling, and the
+         palette webjs create generates), and
          the site had been the counter-example: the dark half was written
          twice, once under the OS media query and once under the toggle's
          attribute, so an edit to either block silently drifted the two paths

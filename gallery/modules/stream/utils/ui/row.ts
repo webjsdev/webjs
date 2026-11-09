@@ -1,7 +1,7 @@
 // A feature-local VIEW FRAGMENT: pure, returns markup, used only by the stream
 // demo. It lives in `modules/<feature>/utils/ui/` rather than `utils/` (which
 // holds helpers returning DATA) or `components/` (which holds custom elements).
-// See .agents/skills/webjs/references/styling.md.
+// See https://webjs.dev/docs/styling.
 //
 // WHY a fragment and not a display-only <stream-row> element: an element is a
 // tag in the DOM, and neither caller can carry one. The list wants a direct

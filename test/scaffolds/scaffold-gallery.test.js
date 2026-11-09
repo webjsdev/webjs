@@ -174,7 +174,7 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
   // gallery:clear must leave a minimal buildable base, not "the scaffold minus
   // the gallery". It removes the gallery, the example design system, the example
   // theme-toggle (+ its layout/home wiring), the example tests, and every empty
-  // leftover dir; it keeps the durable skill, the layout, db wiring, and cn.ts.
+  // leftover dir; it keeps AGENTS.md, the layout, db wiring, and cn.ts.
   // The pre-clear existence asserts are the counterfactual (they prove each thing
   // was really there to remove).
   const cwd = await tempCwd();
@@ -216,7 +216,7 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     assert.equal(has('test'), false, 'empty test/ pruned');
 
     // Kept: the buildable base.
-    assert.ok(has('.agents', 'skills', 'webjs', 'SKILL.md'), 'the durable agent skill is kept');
+    assert.ok(has('AGENTS.md'), 'AGENTS.md (the brief) is kept');
     assert.equal(has('lib', 'utils', 'ui.ts'), false, 'gallery ui.ts fragment helpers removed');
     assert.ok(has('lib', 'utils', 'cn.ts'), 'cn.ts kept (webjs ui add prerequisite)');
     assert.ok(has('db', 'connection.server.ts'), 'db wiring kept');

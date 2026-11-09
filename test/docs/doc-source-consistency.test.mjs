@@ -2,7 +2,7 @@
  * Doc -> source consistency gate (#808).
  *
  * Minimalist / local AI models building webjs apps trust the agent-facing docs
- * (AGENTS.md + the skill) plus the greppable no-build source, NOT training
+ * (AGENTS.md + the docs site) plus the greppable no-build source, NOT training
  * data. So a doc that names a `@webjsdev/*` export the shipped source does not
  * have lures the doc-trusting agent into a rewrite loop. This gate asserts that
  * every NAMED import of `@webjsdev/core` / `@webjsdev/server` (and their public
@@ -111,7 +111,7 @@ async function walkFiles(dir, re, out = []) {
 
 /**
  * The agent- AND user-facing doc corpus. Three surfaces:
- *  - AGENTS.md + the skill references (agent-facing markdown, imports in ``` fences).
+ *  - AGENTS.md (agent-facing markdown, imports in ``` fences).
  *  - the scaffold's shipped AGENTS.md (ships into every app).
  *  - the docs SITE (`website/app/docs/**`): its code samples
  *    are embedded in `.ts` page template strings, and its own components import
@@ -120,7 +120,6 @@ async function walkFiles(dir, re, out = []) {
  */
 async function docCorpus() {
   const files = [join(ROOT, 'AGENTS.md'), join(ROOT, 'README.md'), join(ROOT, 'packages/cli/templates/AGENTS.md')];
-  await walkFiles(join(ROOT, '.agents', 'skills', 'webjs'), /\.md$/, files);
   await walkFiles(join(ROOT, 'website', 'app', '(site)', 'docs'), /\.(ts|md|mdx)$/, files);
   // Marketing site (its sample-code strings + its own components import the
   // framework) and every package README are first-class doc surfaces too.

@@ -111,7 +111,7 @@ export async function createPost(
     <p>The scaffold ships a single cross-agent source of truth rather than a per-tool rule duplicate for each agent:</p>
     <ul>
       <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent</li>
-      <li><code>.agents/skills/webjs/SKILL.md</code>, the shipped routing skill carrying the framework context</li>
+      <li><code>AGENTS.md</code>, opening with the WebJs brief: what differs from Next.js routing and Lit components</li>
       <li><code>.agents/rules/workflow.md</code>, the git, test, and review workflow rules</li>
       <li>Thin bridges for tools that do not read <code>AGENTS.md</code> natively: <code>CLAUDE.md</code> (Claude Code), <code>GEMINI.md</code> (Gemini CLI), and <code>.github/copilot-instructions.md</code> (Copilot in VS Code), each pointing at <code>AGENTS.md</code></li>
     </ul>
@@ -121,14 +121,14 @@ export async function createPost(
     <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
 
     <h3>11. Automatic Tests and Docs</h3>
-    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention lives in <code>AGENTS.md</code> and the shipped skill (<code>.agents/skills/webjs/SKILL.md</code>), and is enforced via <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
+    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention lives in <code>AGENTS.md</code> and <code>.agents/rules/workflow.md</code>, and is enforced via <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
 
     <h3>12. Scaffold + Persistence Defaults</h3>
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. WebJs enforces this with three guardrails:</p>
     <ul>
       <li><strong>Exactly two scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default) and <code>--template api</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>. Auth is one of the full-stack gallery cards, not a separate template.</li>
       <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code>, <code>db/columns.server.ts</code>, <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.dev.before</code> + <code>webjs.start.before</code> steps running <code>webjs db migrate</code> (idempotent, so a <code>db:generate</code>'d migration applies on the next boot), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent edits the schema, runs <code>db:generate</code>, and <code>npm run dev</code> applies it, and won't accidentally fall back to JSON files for persistence.</li>
-      <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in <code>AGENTS.md</code> and the shipped skill, so an agent reading it takes the database path.</li>
+      <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in <code>AGENTS.md</code>, so an agent reading it takes the database path.</li>
     </ul>
     <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
     <code-block>User asks for…                                          Scaffold

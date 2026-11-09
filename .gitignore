@@ -84,10 +84,6 @@ coverage/
 # Playwright/chrome-devtools MCP console-log output
 .playwright-mcp/
 
-# Generated at prepack from the canonical .agents/skills/webjs/ (see
-# scripts/sync-scaffold-skill.mjs). Never commit this bundle.
-packages/cli/templates/.agents/skills/webjs/
-
 # Generated at prepack from the canonical repo-root gallery/ app (see
 # scripts/sync-scaffold-gallery.mjs). Never commit this bundle: the gallery
 # lives ONCE at gallery/, and a committed copy here would silently drift.

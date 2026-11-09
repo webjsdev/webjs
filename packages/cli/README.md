@@ -74,7 +74,7 @@ the CLI gives you `webjs ui` automatically. See
 
 The scaffold seeds opinionated defaults so AI agents produce consistent code:
 
-- `AGENTS.md` + `CONVENTIONS.md` + `.agents/skills/webjs/` (single cross-agent source of truth)
+- `AGENTS.md`, opening with the WebJs brief (single cross-agent source of truth)
 - `.agents/rules/workflow.md` & `.claude/` protective hooks
 - A `webjs.ci` step list in `package.json` (`npm run ci`, local CI) and a one-job GitHub workflow that runs the same list
 - `test/<feature>/` (with optional `browser/` / `e2e/` subfolders per kind) with example tests

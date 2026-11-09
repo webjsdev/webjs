@@ -4,57 +4,38 @@
  *
  * The framework keeps a set of workflow skills for working on WebJs itself
  * (`.claude/skills/*`, exposed cross-agent through `.agents/skills/*`
- * symlinks). Exactly ONE of them, `webjs`, is a teaching surface for app
- * authors and belongs in a generated app. Everything else is monorepo process:
- * how we file issues, how we sync docs, how we review our own PRs. Shipping
- * any of it would push our process onto a team that already has its own, and
- * `pr-review` is the live example, since how a team reviews pull requests is
- * theirs to decide.
+ * symlinks). None of them belongs in a generated app: they are monorepo
+ * process (how we file issues, sync docs, review our own PRs), and shipping
+ * any of it would push our process onto a team that already has its own. A
+ * generated app's agent docs are the brief in `AGENTS.md` plus
+ * `.agents/rules/workflow.md`; the app-facing teaching skill was removed, so
+ * `.agents/skills/` must not exist at all.
  *
- * Nothing structural enforces that today: `create.js` copies the skill by a
- * hardcoded path, so a future change that copies the skills DIRECTORY instead
- * would ship the lot silently, and the app would look fine. These assertions
- * are that enforcement.
- *
- * They also pin the reverse direction: `webjs` must actually arrive, since the
- * skill is the only teaching surface that survives `npm run gallery:clear`, so
- * an app missing it has no reference at all once the gallery is stripped.
+ * Nothing structural enforces that: a future change that copies the skills
+ * DIRECTORY would ship the lot silently, and the app would look fine. These
+ * assertions are that enforcement.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { scaffoldApp } from '../../packages/cli/lib/create.js';
 
-// The one skill an app author needs. Anything else under .agents/skills/ in a
-// generated app is monorepo process that leaked.
-const APP_SKILLS = ['webjs'];
-
 for (const template of ['full-stack', 'api']) {
-  test(`${template} scaffold ships the webjs skill and no monorepo process skills`, async () => {
+  test(`${template} scaffold ships no agent skills, only AGENTS.md and the workflow rules`, async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'webjs-scaffold-skills-'));
     try {
       await scaffoldApp('demo', cwd, { template, install: false });
-      const skillsDir = join(cwd, 'demo', '.agents', 'skills');
-      assert.ok(existsSync(skillsDir), '.agents/skills/ must exist in a generated app');
-
-      const shipped = readdirSync(skillsDir).sort();
-      assert.deepEqual(shipped, APP_SKILLS,
-        `a generated app must ship exactly ${APP_SKILLS.join(', ')}; found ${shipped.join(', ') || '(none)'}`);
-
-      // The skill has to be the real thing, not an empty directory.
-      assert.ok(existsSync(join(skillsDir, 'webjs', 'SKILL.md')), 'the `webjs` skill ships its SKILL.md');
-      assert.ok(existsSync(join(skillsDir, 'webjs', 'references')), 'the `webjs` skill ships its references/');
-
-      // Named explicitly so the failure message says WHY, rather than only
-      // that a directory listing changed.
-      for (const monorepoOnly of ['pr-review', 'webjs-start-work', 'webjs-file-issue', 'webjs-doc-sync']) {
-        assert.ok(!existsSync(join(skillsDir, monorepoOnly)),
-          `${monorepoOnly} is a monorepo workflow skill and must not ship to a generated app`);
-      }
+      const app = join(cwd, 'demo');
+      assert.ok(!existsSync(join(app, '.agents', 'skills')),
+        'a generated app ships no .agents/skills/ (the brief in AGENTS.md replaces the skill)');
+      assert.ok(existsSync(join(app, 'AGENTS.md')), 'AGENTS.md ships');
+      assert.ok(existsSync(join(app, '.agents', 'rules', 'workflow.md')), 'the workflow rules ship');
+      const agents = await readFile(join(app, 'AGENTS.md'), 'utf8');
+      assert.doesNotMatch(agents, /SKILL\.md|\.agents\/skills/, 'AGENTS.md points at no skill');
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

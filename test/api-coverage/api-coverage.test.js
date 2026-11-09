@@ -5,7 +5,7 @@
 // coverage dimensions for the public API surface:
 //
 //   1. DOCS coverage: every agent-facing @webjsdev/core + @webjsdev/server export
-//      is mentioned in a doc (AGENTS.md, the skill references, or the docs site).
+//      is mentioned in a doc (AGENTS.md or the docs site).
 //   2. TEST coverage: every agent-facing export is referenced by a test file.
 //
 // "Agent-facing" = NOT classified `internal:` in the scaffold manifest
@@ -52,7 +52,6 @@ function readAll(dir, exts, out) {
 
 // Corpora: built once.
 const DOCS = [readFileSync(join(REPO, 'AGENTS.md'), 'utf8')]
-  .concat(readAll(join(REPO, '.agents', 'skills', 'webjs'), ['.md'], []))
   // The docs site lives in the marketing app now (#1098): webjs.dev/docs.
   .concat(readAll(join(REPO, 'website', 'app', '(site)', 'docs'), ['.ts'], []))
   .join('\n');

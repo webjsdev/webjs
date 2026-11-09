@@ -267,7 +267,7 @@
       "exempt": "internal: SSR action-seeding plumbing"
     },
     "seedStats": {
-      "exempt": "internal: a dev-only seeding diagnostic, read from the console or a browser test rather than written against; the seeding docs live in the skill's data-and-actions reference"
+      "exempt": "internal: a dev-only seeding diagnostic, read from the console or a browser test rather than written against; the seeding docs live at https://webjs.dev/docs/data-fetching"
     },
     "serialize": {
       "exempt": "internal: wire serializer; app code round-trips via server actions"
@@ -324,7 +324,7 @@
       "exempt": "internal: the property a generated RPC stub carries its own identity on"
     },
     "svg": {
-      "exempt": "deferred: agent-facing (the html tag's SVG-fragment sibling, documented in AGENTS.md and the skill's components reference); no single-concept gallery demo yet"
+      "exempt": "deferred: agent-facing (the html tag's SVG-fragment sibling, documented at https://webjs.dev/docs/components); no single-concept gallery demo yet"
     },
     "classMap": {
       "demo": "modules/directives/components/directive-demo.ts"
@@ -366,7 +366,7 @@
       "exempt": "internal: the session value type, configured not demoed on a page"
     },
     "acceptsStream": {
-      "demoed": true
+      "exempt": "deferred: agent-facing, documented on the docs site; its only scaffold import was a code sample in the removed agent skill, so no gallery demo yet"
     },
     "actionContext": {
       "demoed": true
@@ -414,7 +414,7 @@
       "demoed": true
     },
     "cache": {
-      "demoed": true
+      "exempt": "deferred: agent-facing, documented on the docs site; its only scaffold import was a code sample in the removed agent skill, so no gallery demo yet"
     },
     "checkImportmapCoherence": {
       "exempt": "internal: framework/CLI plumbing"
@@ -588,7 +588,7 @@
       "demoed": true
     },
     "rawActionRequest": {
-      "demoed": true
+      "exempt": "deferred: agent-facing, documented on the docs site; its only scaffold import was a code sample in the removed agent skill, so no gallery demo yet"
     },
     "readBody": {
       "demoed": true
@@ -708,10 +708,10 @@
       "demoed": true
     },
     "stream": {
-      "demoed": true
+      "exempt": "deferred: agent-facing, documented on the docs site; its only scaffold import was a code sample in the removed agent skill, so no gallery demo yet"
     },
     "streamResponse": {
-      "demoed": true
+      "exempt": "deferred: agent-facing, documented on the docs site; its only scaffold import was a code sample in the removed agent skill, so no gallery demo yet"
     },
     "submitForm": {
       "demoed": true

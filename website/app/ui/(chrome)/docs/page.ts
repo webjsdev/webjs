@@ -78,7 +78,7 @@ export default async function UiIntro() {
       </ul>
 
       ${heading(toc, 2, 'AI-Ready')}
-      <p>The design of WebJs UI makes it easy for AI tools to work with your code. Its open code and consistent API allow AI models to read, understand, and even generate new components. Every WebJs app also ships a read-only MCP server whose <code>ui</code> tool lists the kit and returns any component's helpers and example, and the <a href="/ui/docs/skills">skill</a> tells an agent to install a ready-made block before writing a view by hand.</p>
+      <p>The design of WebJs UI makes it easy for AI tools to work with your code. Its open code and consistent API allow AI models to read, understand, and even generate new components. Every WebJs app also ships a read-only MCP server whose <code>ui</code> tool lists the kit and returns any component's helpers and example, and its <code>init</code> brief tells an agent to look for a ready-made <a href="/ui/docs/skills">block</a> before writing a view by hand.</p>
       <p><em>An AI model can learn how your components work and suggest improvements or even create new components that integrate with your existing design.</em></p>
   `;
   return docsPage({

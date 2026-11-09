@@ -224,7 +224,7 @@ and the reader key set never diverge (a counterfactual unknown key proves
 
 `dev.js`, `ssr.js`, `check.js` and `vendor.js` are barrels over sibling
 directories. The rule is in
-`../../.agents/skills/webjs/references/module-structure.md`: target 800 lines,
+the "Module structure" section of `../../framework-dev.md`: target 800 lines,
 around 1000 at the most, barrels exempt, no CI guard, and a split is a MOVE
 rather than a rewrite.
 
@@ -599,7 +599,7 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    cannot see (an OBSERVER that computes the tag it waits for, a
    `:defined` rule in an external stylesheet outside the module graph, a
    consumer reaching the element through a string selector),
-   documented in the skill's `references/components.md` and asserted in
+   documented at https://webjs.dev/docs/elision and asserted in
    `test/elision/residual-contract.test.js`; for those, add an
    interactivity signal, in practice `static interactive = true`. A
    component's OWN registration tag is a different case: invariant 3
@@ -632,7 +632,7 @@ organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
 Cross-package tests that exercise the SSR pipeline, scaffolds,
 or full app boots live at the repo root in `test/ssr/`,
 `test/scaffolds/`, `test/examples/blog/`, etc. See
-[`references/testing.md`](../../.agents/skills/webjs/references/testing.md) in the skill.
+https://webjs.dev/docs/testing.
 
 Run `npm test` from the repo root.
 

@@ -114,6 +114,10 @@ assert.equal(res.status, 200);
 assert.match(await res.text(), /About/);</code-block>
     <p>A bare path (<code>/about</code>) is prefixed with a dummy origin (the pipeline only reads <code>pathname</code> + <code>search</code>). A full URL string or a pre-built <code>Request</code> works too. The optional third arg is a standard <code>RequestInit</code> (method, headers, body).</p>
 
+    <h3>submitForm: the no-JS write path</h3>
+    <p>A form that binds an action (<code>&lt;form action=\${myAction}&gt;</code>) carries a hidden <code>__webjs_action</code> field naming the action, so a hand-written <code>POST</code> without it is answered <strong>405</strong>. <code>submitForm(app.handle, '/signup', fields)</code> renders the page, reuses the identity the server put there, and posts it back, exactly as a browser with JS off does: a success answers 303, a failure re-renders the same page at 422 with the result on <code>actionData</code>. Options: <code>cookies</code>, <code>match</code> or <code>index</code> (pick one of several forms), <code>submitPath</code>, and <code>headers</code>.</p>
+    <p>For a browser test that drives the app in a real DOM, <code>createBrowserTestHandler(appDir)</code> from <code>@webjsdev/server/testing</code> exposes the same <code>handle()</code> pipeline to the WTR Chromium session.</p>
+
     <h3>The auth/session helpers</h3>
     <p>Server-action CSRF is an Origin / <code>Sec-Fetch-Site</code> check, so a test needs no CSRF setup: <code>invokeActionForTest</code> models a same-origin browser POST and passes the check automatically (and <code>rawActionRequest(app, file, fn, args, { crossOrigin: true })</code> models a cross-site request to assert the 403). <code>loginAndGetCookies(handle, { email, password })</code> drives the REAL credentials login through <code>handle()</code> (the <code>createAuth</code> route handler) and captures the genuine signed session <code>Set-Cookie</code>, so a follow-up request can hit a protected route as the logged-in user. <code>withSessionCookie(init, cookies)</code> merges those captured cookies onto a request init.</p>
     <code-block>// unauthenticated protected route is gated
@@ -257,7 +261,7 @@ webjs check
 
 # List the checks and their descriptions
 webjs check --rules</code-block>
-    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), reactive props use <code>declare</code> (broken reactivity), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, and erasable TypeScript only. They always run. Project conventions (layout, testing, styling) are guidance in the shipped skill (<code>.agents/skills/webjs/SKILL.md</code>) and <code>AGENTS.md</code>, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
+    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), reactive props use <code>declare</code> (broken reactivity), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, and erasable TypeScript only. They always run. Project conventions (layout, testing, styling) are guidance in <code>AGENTS.md</code> and these docs, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
 
     <h2>Recommended Test Structure</h2>
     <p>Feature folders are primary, and the test kind is a subfolder inside the feature only when that kind is present:</p>
@@ -274,7 +278,7 @@ webjs check --rules</code-block>
     e2e/hello.test.ts</code-block>
 
     <h2>AI Agent Testing Convention</h2>
-    <p>In a WebJs project, AI agents are expected to write tests automatically with every code change. The convention is defined in <code>AGENTS.md</code> and the shipped skill (<code>.agents/skills/webjs/SKILL.md</code>):</p>
+    <p>In a WebJs project, AI agents are expected to write tests automatically with every code change. The convention is defined in <code>.agents/rules/workflow.md</code>, which the scaffold ships beside <code>AGENTS.md</code>:</p>
     <ul>
       <li><strong>New server action</strong> needs a unit test (round-trip it through <code>invokeActionForTest</code>).</li>
       <li><strong>New component</strong> needs a unit test (SSR rendering), plus a browser test via <code>ssrFixture()</code> when hydration / DOM / slots matter.</li>

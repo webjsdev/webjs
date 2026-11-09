@@ -72,13 +72,12 @@ const routeTable = (): Promise<RouteTable> => buildRouteTable(APP_ROOT);
 
 /**
  * What the /ui pages are built from: this app's source (its package.json
- * included, for the redirects), the kit's registry, the gallery's demo index,
- * and the agent skill /llms-full.txt appends. A root that is not there (a
- * standalone deploy) is skipped.
+ * included, for the redirects), the kit's registry, and the gallery's demo
+ * index. A root that is not there (a standalone deploy) is skipped.
  */
 const SOURCE_ROOTS = [
   'app', 'modules', 'lib', 'components', 'package.json',
-  '../packages/ui/packages/registry', '../gallery/modules/gallery', '../.agents/skills/webjs',
+  '../packages/ui/packages/registry', '../gallery/modules/gallery',
 ].map((p) => join(APP_ROOT, p));
 
 /**

@@ -1,18 +1,19 @@
 // Agent-knowledge coverage gate (tier-2, un-skippable CI enforcement).
 //
 // This keeps the surfaces that counter agents' WRONG PRIORS honest, which is
-// where agents actually fail: the symptom-keyed troubleshooting page and the
-// muscle-memory gotcha docs. Every LIVE `webjs check` RULE is explained in an
-// agent-facing surface (the troubleshooting page or a gotcha doc, matched by
-// rule name) OR exempted with a reason in knowledge-coverage.json. A new rule
-// that ships with no "here is the symptom and the fix" turns CI red. (The MCP
-// `init` primer no longer sources AGENTS.md headings; it returns the brief,
-// whose copies test/repo-health/brief-parity.test.mjs holds identical.)
+// where agents actually fail. Every LIVE `webjs check` RULE is explained on the
+// docs site (the symptom-keyed troubleshooting page or any other docs page,
+// matched by rule name) OR exempted with a reason in knowledge-coverage.json. A
+// new rule that ships with no "here is the symptom and the fix" turns CI red.
+// The docs site is the canonical documentation since the agent skill was
+// replaced by the brief, so every page under website/app/(site)/docs counts. (The
+// MCP `init` primer returns the brief, whose copies
+// test/repo-health/brief-parity.test.mjs holds identical.)
 //
 // The reconcile core is pure; failure modes are proven with synthetic inputs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RULES } from '../../packages/server/src/check.js';
@@ -21,10 +22,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '..', '..');
 const MANIFEST = JSON.parse(readFileSync(join(__dirname, 'knowledge-coverage.json'), 'utf8'));
 
-const EXPLAIN_SURFACES = [
-  'website/app/(site)/docs/troubleshooting/page.ts',
-  '.agents/skills/webjs/references/muscle-memory-gotchas.md',
-].map((p) => join(REPO, p));
+/** Every docs-site page source, the troubleshooting page included. */
+function docsPages(dir, out = []) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const f = join(dir, e.name);
+    if (e.isDirectory()) docsPages(f, out);
+    else if (e.name.endsWith('.ts')) out.push(f);
+  }
+  return out;
+}
+const EXPLAIN_SURFACES = docsPages(join(REPO, 'website', 'app', '(site)', 'docs'));
 
 /** True when the rule name appears as a whole token in any explanation surface. */
 function ruleIsExplained(name) {
@@ -49,7 +56,7 @@ export function reconcileRules(liveRules, exempt, explained) {
     const isExempt = exemptNames.has(name);
     if (!isExplained && !isExempt) {
       errors.push(
-        `check rule "${name}" is neither explained (in the troubleshooting page or a gotcha doc) ` +
+        `check rule "${name}" is neither explained (on a docs-site page, ideally the troubleshooting page) ` +
         `nor exempted in test/knowledge/knowledge-coverage.json. Add a symptom-keyed entry that ` +
         `names the rule, or an exemption with a reason.`,
       );

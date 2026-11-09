@@ -5,9 +5,9 @@ ships**, and a live app in its own right (deployed at gallery.webjs.dev). Read
 this before editing anything here, because a change in this directory changes
 what `webjs create` emits for every future WebJs app.
 
-The repo-wide contract is the root `AGENTS.md`; the framework reference is the
-skill at `.agents/skills/webjs/SKILL.md`. This file covers only what is
-special about `gallery/`.
+The repo-wide contract is the root `AGENTS.md`; the framework reference is
+https://webjs.dev/docs. This file covers only what is special about
+`gallery/`.
 
 ## The gallery lives ONCE, here
 
