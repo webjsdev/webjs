@@ -48,7 +48,15 @@ export declare function withSessionCookie(init: RequestInit | undefined, session
  * `__webjs_action` field, and POST it back with the given fields. A POST that
  * omits that field is not a form submission and is answered `405`. Without
  * `match`, it picks among the forms bound to an action, skipping a layout's
- * plain form. A `File` / `Blob` value posts the form multipart.
+ * plain form. When several remain and no `index` is given, it posts the one
+ * whose inputs hold every submitted field name, and throws (listing each form
+ * and its fields) when none or more than one does. A `File` / `Blob` value
+ * posts the form multipart.
+ *
+ * @example
+ * // A layout's bound logout form and the page's task form: the fields pick.
+ * const res = await submitForm(app.handle, '/projects/1', { title: 'Ship it' }, { cookies });
+ * assert.equal(res.status, 303);
  */
 export declare function submitForm(
   handle: Handle,

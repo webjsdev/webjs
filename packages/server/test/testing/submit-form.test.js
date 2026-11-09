@@ -140,6 +140,32 @@ test('opts.index picks by position when the forms are otherwise alike', async ()
   assert.equal(res.headers.get('location'), '/subscribed/daily');
 });
 
+test('without match or index, the bound form holding the submitted fields is the one posted', async () => {
+  // An agent's test filled in a page's task form while a layout's bound logout
+  // form came first, and the helper posted the logout. The fields say which.
+  const a = await handler();
+  const res = await submitForm(a.handle, '/two', { list: 'monthly' });
+  assert.equal(res.headers.get('location'), '/subscribed/monthly', 'the second form, the one with a list field');
+});
+
+test('fields that single out no form are refused, naming every candidate', async () => {
+  const a = await handler();
+  await assert.rejects(
+    () => submitForm(a.handle, '/two', {}),
+    (err) => /2 bound forms on \/two/.test(err.message)
+      && /fit more than one/.test(err.message)
+      && /fields: email/.test(err.message)
+      && /fields: list/.test(err.message)
+      && /\{ match: /.test(err.message),
+  );
+  const viaParams = await submitForm(a.handle, '/two', new URLSearchParams({ list: 'yearly' }));
+  assert.equal(viaParams.headers.get('location'), '/subscribed/yearly', 'URLSearchParams fields pick the same way');
+  await assert.rejects(
+    () => submitForm(a.handle, '/two', { nope: 'x' }),
+    /fit none of them/,
+  );
+});
+
 test('an unbound form is reported as unbound, not silently submitted', async () => {
   const a = await handler();
   await assert.rejects(

@@ -269,6 +269,20 @@ function findForms(html) {
   return out;
 }
 
+/**
+ * The submittable field names a form carries, `[]` suffixes dropped, the
+ * framework's own `__webjs_action` left out.
+ * @param {string} form
+ * @returns {string[]}
+ */
+function formFieldNames(form) {
+  const names = new Set();
+  for (const m of form.matchAll(/<(?:input|select|textarea|button)\b[^>]*?\bname\s*=\s*["']([^"']+)["']/gi)) {
+    if (m[1] !== '__webjs_action') names.add(m[1].replace(/\[\]$/, ''));
+  }
+  return [...names];
+}
+
 export async function submitForm(handle, path, fields = {}, opts = {}) {
   const getInit = opts.cookies ? withCookies({}, opts.cookies) : {};
   const page = await testRequest(handle, path, getInit);
@@ -279,9 +293,32 @@ export async function submitForm(handle, path, fields = {}, opts = {}) {
   // form (a logout POST, a search GET) often comes first on the page, and
   // picking it reported the page's real form as unbound.
   const isBound = (/** @type {string} */ f) => /name="__webjs_action"/.test(f);
-  const candidates = opts.match
+  let candidates = opts.match
     ? forms.filter((f) => (opts.match instanceof RegExp ? opts.match.test(f) : f.includes(opts.match)))
     : (forms.some(isBound) ? forms.filter(isBound) : forms);
+  // Several candidates and no `index`: the form a test means is the one whose
+  // fields it is filling in (a layout's logout form beside a page's task form).
+  // When the field names do not single one out, refuse rather than post the
+  // first, which used to submit a logout silently and pass a later assertion.
+  if (candidates.length > 1 && opts.index === undefined) {
+    const keys = typeof fields.keys === 'function' ? [...new Set(fields.keys())] : Object.keys(fields);
+    const wanted = keys.map((k) => k.replace(/\[\]$/, ''));
+    const covering = candidates.filter((f) => {
+      const names = new Set(formFieldNames(f));
+      return wanted.every((k) => names.has(k));
+    });
+    if (covering.length !== 1) {
+      const list = candidates
+        .map((f) => `  ${f.slice(0, f.indexOf('>') + 1)} fields: ${formFieldNames(f).join(', ') || '(none)'}`)
+        .join('\n');
+      throw new Error(
+        `submitForm: ${candidates.length} ${opts.match ? 'matching' : 'bound'} forms on ${path}, and the submitted `
+        + `fields (${wanted.join(', ') || 'none'}) ${covering.length ? 'fit more than one' : 'fit none of them'}. `
+        + `Pick one with { match: 'name="title"' } or { index: N }:\n${list}`,
+      );
+    }
+    candidates = covering;
+  }
   const form = candidates[opts.index || 0];
   if (!form) {
     throw new Error(
