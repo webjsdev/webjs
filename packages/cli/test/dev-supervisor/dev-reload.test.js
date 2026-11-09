@@ -353,3 +353,21 @@ test('a db/ source edit restarts on Node, a SQLite write never does (#1664)', as
     assert.equal(shouldIgnoreRestartPath(p), shouldIgnoreWatchPath(p), `the CLI and server agree on ${p}`);
   }
 });
+
+// #1689: an editor's temp file restarts nothing, and the CLI agrees with the
+// server watcher on every one of them and on the source next to them. The
+// corpus is the one `packages/server/test/dev/watch-ignore.test.js` checks.
+test('editor temp files never restart the dev server, and the server agrees (#1689)', async () => {
+  const { shouldIgnoreWatchPath } = await import('../../../server/src/dev/server.js');
+  const { isUnservedOutput } = await import('../../../server/src/dev/watch-ignore.js');
+  const server = (p) => shouldIgnoreWatchPath(p) || isUnservedOutput(p);
+  const temp = [
+    'app/4913', 'app/.#page.ts', 'app/#page.ts#', 'app/page.ts___jb_tmp___', 'app/page.ts___jb_old___',
+    'app/x.tmp', 'app/page.ts.swp', 'app/.page.ts.swo', 'app/page.ts.crswap', 'app/page.ts.kate-swp',
+    'app/.goutputstream-ABC123', 'app/~$doc.ts', 'app/page.ts~',
+  ];
+  const source = ['app/page.ts', 'app/2024/page.ts', 'app/[id]/page.ts', 'app/x.tmpl.ts', 'lib/swap.ts', 'public/v2.css', 'app/#hash.ts', 'components/jb_tmp.ts'];
+  for (const p of temp) assert.equal(shouldIgnoreRestartPath(p), true, p);
+  for (const p of source) assert.equal(shouldIgnoreRestartPath(p), false, p);
+  for (const p of [...temp, ...source]) assert.equal(shouldIgnoreRestartPath(p), server(p), `the CLI and server agree on ${p}`);
+});

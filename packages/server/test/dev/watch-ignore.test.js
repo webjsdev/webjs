@@ -51,6 +51,25 @@ test('tool output nothing serves is ignored, source is not', () => {
   }
 });
 
+// #1689: an editor's save writes a temp file first, and one that fell through
+// to the classifier was an unknown path, so the whole batch reloaded. The CLI
+// supervisor's copy of the pattern is checked against the same corpus in
+// `packages/cli/test/dev-supervisor/dev-reload.test.js`.
+test('editor temp files are ignored, source next to them is not (#1689)', () => {
+  for (const p of [
+    'app/4913', // vim's write probe
+    'app/.#page.ts', 'app/#page.ts#', // emacs lock and autosave
+    'app/page.ts___jb_tmp___', 'app/page.ts___jb_old___', // JetBrains safe write
+    'app/x.tmp', 'app/page.ts.swp', 'app/.page.ts.swo', 'app/page.ts.crswap', 'app/page.ts.kate-swp',
+    'app/.goutputstream-ABC123', 'app/~$doc.ts', 'app/page.ts~',
+  ]) {
+    assert.equal(isUnservedOutput(p), true, p);
+  }
+  for (const p of ['app/page.ts', 'app/2024/page.ts', 'app/[id]/page.ts', 'app/x.tmpl.ts', 'lib/swap.ts', 'public/v2.css', 'app/#hash.ts', 'components/jb_tmp.ts']) {
+    assert.equal(isUnservedOutput(p), false, p);
+  }
+});
+
 test('the scaffold .gitignore rules match like git, with last-match negation', () => {
   const rules = parseGitignore('node_modules/\n**/.webjs/*\n!**/.webjs/vendor/\npublic/tailwind.css\n*.log\n.vscode/*\n!.vscode/settings.json\n/uploads\nbuild/\n');
   assert.equal(isGitignored(rules, 'public/tailwind.css'), true);

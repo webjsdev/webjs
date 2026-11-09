@@ -2,8 +2,9 @@
  * Cross-runtime check that `webjs dev` does not reload the page for files it
  * does not serve. `npm run dev > dev.log` in the app root used to turn every
  * log line into a live-reload, wiping streamed and live UI mid-session. A
- * gitignored `dev.log`, a `coverage/` file and another `.gitignore`d path are
- * written while the reload stream is open and must produce no reload frame;
+ * gitignored `dev.log`, a `coverage/` file, another `.gitignore`d path and an
+ * editor's temp files (#1689) are written while the reload stream is open and
+ * must produce no reload frame;
  * then a real page edit must (so the stream is proven live). Run under both:
  *
  *   node test/bun/dev-ignore-unserved.mjs
@@ -89,7 +90,10 @@ try {
   writeFileSync(join(dir, 'coverage/lcov.info'), 'x');
   mkdirSync(join(dir, 'uploads'), { recursive: true });
   writeFileSync(join(dir, 'uploads/a.bin'), 'x');
-  assert.equal(await quiet, false, `a write to dev.log, coverage/ or a gitignored dir reloaded the page on ${runtime}\n--- server log ---\n${log}`);
+  // An editor's temp files beside a real source file (#1689): vim's write
+  // probe, an emacs lock, a JetBrains safe write, a generic temp file.
+  for (const f of ['app/4913', 'app/.#page.ts', 'app/page.ts___jb_tmp___', 'app/x.tmp']) writeFileSync(join(dir, f), 'x');
+  assert.equal(await quiet, false, `a write to dev.log, coverage/, a gitignored dir or an editor temp file reloaded the page on ${runtime}\n--- server log ---\n${log}`);
 
   // A tracked root file still reloads, so the silence above is not a dead
   // stream or a deaf root watcher. (Not an app/ edit: on Node that restarts the

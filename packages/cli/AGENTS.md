@@ -93,7 +93,11 @@ lib/
   dev-reload.js          The supervisor runtime (#1521). `watchRestartPaths`
                          (every watcher error handled, a watched dir created or
                          removed later followed, `webjs.dev.regenerate` outputs
-                         and build noise ignored), `createSupervisor` (the
+                         and build noise ignored, including editor temp files:
+                         vim's `4913`, emacs `.#x` / `#x#`, JetBrains
+                         `___jb_tmp___`, `*.tmp`, swap files, #1689; the
+                         pattern is the server watcher's, checked against one
+                         corpus), `createSupervisor` (the
                          restart state machine: 50ms debounce, SIGTERM then
                          SIGKILL after 2s, the replacement spawned on the old
                          child's exit, crash restart on the next change or after

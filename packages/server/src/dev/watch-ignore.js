@@ -24,7 +24,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const OUTPUT = /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|\.swp$|~$/;
+const OUTPUT = /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|(?:^|[\\/])(?:\d+|\.#[^\\/]*|#[^\\/]*#|\.goutputstream-[^\\/]*|~\$[^\\/]*)$|\.(?:sw[a-p]|tmp|crswap|kate-swp)$|___jb_(?:tmp|old)___$|~$/;
 
 /**
  * Tool output that is never served, whatever `.gitignore` says.
