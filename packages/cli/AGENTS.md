@@ -291,7 +291,8 @@ verbatim.
    Apps must NEVER use JSON files for persistence. This is a project
    convention (documented in the scaffold's CONVENTIONS.md).
 4. **Template files are verbatim copies** with `{{APP_NAME}}` substitution.
-   When editing `templates/AGENTS.md`, `templates/CONVENTIONS.md`, or `.agents/skills/webjs/`, remember they ship
+   When editing `templates/AGENTS.md` (whose brief section must stay byte-identical
+   to `packages/mcp/src/brief.js`) or `templates/.agents/rules/workflow.md`, remember they ship
    into every scaffolded app. Write for the audience of an AI agent
    working inside a freshly-scaffolded WebJs project. `templates/AGENTS.md`
    is the one exception to "verbatim": it carries a `{{PLAYBOOK}}` marker
@@ -317,8 +318,7 @@ ship from `@webjsdev/server`).
 
 End-to-end testing of the actual scaffold output is currently
 manual (`webjs create demo && cd demo && webjs dev`, since `webjs create` auto-installs).
-See [`references/testing.md`](../../.agents/skills/webjs/references/testing.md)
-for the overall layout.
+See https://webjs.dev/docs/testing for the overall layout.
 
 Run `npm test` from the repo root.
 

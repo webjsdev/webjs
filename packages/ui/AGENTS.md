@@ -560,7 +560,7 @@ upstream order so it diffs cleanly. Six named categories (`color`,
 `typography`, `spacing`, `shape`, `effects`, `motion`) and everything else is
 `layout`. Two placements are counterintuitive and both are kept: padding is
 `spacing`, margin is `layout`. `allow` takes a category name OR a class-group
-id, so `["layout", "rounded"]` admits `w-9 h-9 rounded-full` (the skill's
+id, so `["layout", "rounded"]` admits `w-9 h-9 rounded-full` (the kit's
 sanctioned icon-button one-off) without opening the whole `shape` category
 (`border-2` still fires). Do NOT redefine the taxonomy locally. #1116 was
 reverted for inventing vocabulary shadcn does not ship.
@@ -1077,8 +1077,7 @@ Real-browser tests for the kit live under
 (`ui-overlay.test.js`, `ui-stateful.test.js`, `ui-a11y.test.js` for the Tier-2
 ARIA + keyboard guarantees) and run via the
 top-level `npm run test:browser`. See
-[`references/testing.md`](../../.agents/skills/webjs/references/testing.md) for
-the overall layout.
+https://webjs.dev/docs/testing for the overall layout.
 
 ## Building / running
 

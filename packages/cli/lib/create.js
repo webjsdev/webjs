@@ -871,35 +871,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     }
   }
 
-  // The agent skill is the one cross-agent source (AGENTS.md points to it). It
-  // lives ONCE, canonically, at the repo-root `.agents/skills/webjs/`. A
-  // published CLI bundles it under `templates/` at prepack (see
-  // scripts/sync-scaffold-skill.mjs, wired into this package's prepack), so copy
-  // that bundle when present; in the monorepo the bundle is gitignored, so fall
-  // back to the repo-root canonical.
-  const bundledSkill = join(TEMPLATES, '.agents', 'skills', 'webjs');
-  const repoRootSkill = resolve(__dirname, '..', '..', '..', '.agents', 'skills', 'webjs');
-  const skillSrc = existsSync(bundledSkill) ? bundledSkill : repoRootSkill;
-  if (existsSync(skillSrc)) {
-    const skillDest = join(appDir, '.agents', 'skills', 'webjs');
-    await cp(skillSrc, skillDest, { recursive: true });
-    // Bun runtime (#541): the skill's runnable commands are authored in the
-    // canonical npm forms, so derive the bun flavor on copy, the same way the
-    // agent-config markdown above goes through bunifyProse. references/runtime.md
-    // is EXCLUDED on purpose: it is the deliberate node-vs-bun command matrix,
-    // and rewriting its npm column would destroy the comparison it exists to
-    // make.
-    if (isBun) {
-      const { readdir } = await import('node:fs/promises');
-      const entries = await readdir(skillDest, { recursive: true, withFileTypes: true });
-      for (const e of entries) {
-        if (!e.isFile() || !e.name.endsWith('.md') || e.name === 'runtime.md') continue;
-        const p = join(e.parentPath, e.name);
-        await writeFile(p, bunifyProse(await readFile(p, 'utf8')));
-      }
-    }
-  }
-
   // Make the Claude enforcement hooks + the git pre-commit executable.
   const { chmod } = await import('node:fs/promises');
   for (const hook of ['block-prose-punctuation.sh', 'block-raw-htmlelement.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'check-server-imports.sh']) {

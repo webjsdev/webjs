@@ -160,7 +160,7 @@ test('the interactivity static-field registry is the known set (change-detector)
   // A deliberate change-detector: there is no enumerable runtime source for
   // "all static conventions" (unlike prototype methods), so adding a new
   // interactivity static field must be a conscious edit here AND in
-  // the skill's references/components.md. If this assertion fails because you added a real
+  // https://webjs.dev/docs/elision. If this assertion fails because you added a real
   // convention, update both, then update this expected set.
   assert.deepEqual([...INTERACTIVITY_STATIC_FIELDS].sort(), ['interactive', 'shadow']);
 });

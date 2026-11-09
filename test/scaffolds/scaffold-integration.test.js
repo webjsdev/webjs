@@ -92,9 +92,9 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
     // Per-agent files and design-distinctness ceremony removed.
-    // CONVENTIONS.md was dropped: the brief in AGENTS.md
+    // The agent skill and CONVENTIONS.md were dropped: the brief in AGENTS.md
     // plus Lit and Next.js muscle memory is the whole agent doc set.
-    for (const f of ['GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review', 'CONVENTIONS.md']) {
+    for (const f of ['GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review', '.agents/skills/', 'CONVENTIONS.md']) {
       assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the scaffold`);
     }
     // Thin bridge (a pointer to AGENTS.md).
@@ -132,7 +132,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // must toggle the shadcn `.dark` class, not only the `data-theme`
     // attribute. Without `.dark`, the theme (and the copied components/ui/*)
     // render light tokens on the dark chrome (white buttons/cards, invisible text). Light
-    // mode hides this, so guard it here. See .agents/skills/webjs/references/styling.md "Dark mode".
+    // mode hides this, so guard it here. See https://webjs.dev/docs/styling.
     const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
     const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
     assert.match(layoutSrc, /classList\.toggle\(['"]dark['"]/,

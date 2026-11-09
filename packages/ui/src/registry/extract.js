@@ -291,9 +291,8 @@ export function uiComponentFiles(name, opts = {}) {
 
 /**
  * The kit inventory: one compact entry per `registry:ui` component (name, tier,
- * helper signatures, npm deps). The no-args payload for the MCP `ui` tool and
- * the `references/ui-kit.md` skill surface, so an agent reaches for a helper
- * instead of expanding Tailwind by hand.
+ * helper signatures, npm deps). The no-args payload for the MCP `ui` tool, so
+ * an agent reaches for a helper instead of expanding Tailwind by hand.
  *
  * @returns {Array<{ name: string, tier: 1|2, helpers: string[], dependencies: string[] }>}
  */
