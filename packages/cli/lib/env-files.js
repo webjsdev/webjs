@@ -16,6 +16,12 @@
  * exist on Bun, so a Bun app never saw its `.env`). A key is assigned only
  * when still unset, which yields the precedence above.
  *
+ * Values are expanded the way `@next/env` does with dotenv-expand: `$NAME`,
+ * `${NAME}` and `${NAME:-default}` (also `${NAME-default}`) resolve against the
+ * real environment and the files already loaded, then the same file's keys,
+ * else empty (or the default); `\$` is a literal dollar, and a single-quoted
+ * value is left as written.
+ *
  * The CLI keeps a byte-identical copy (`packages/cli/lib/env-files.js`) because
  * it must load env before the server package is imported (the port, the
  * `webjs.*` tasks); `test/cli/env-files-parity.test.mjs` keeps them in step.
@@ -60,10 +66,57 @@ export function loadEnvFiles(appDir, mode, env = process.env) {
     try { text = readFileSync(join(appDir, name), 'utf8'); } catch { continue; }
     let parsed;
     try { parsed = parseEnv(text); } catch { continue; }
-    for (const [k, v] of Object.entries(parsed)) {
-      if (env[k] === undefined) env[k] = v;
+    const literal = singleQuotedKeys(text);
+    /** @type {Record<string, string>} */
+    const done = {};
+    /** @type {Set<string>} */
+    const active = new Set();
+    /** @param {string} key @returns {string | undefined} undefined when unset */
+    const resolve = (key) => {
+      if (env[key] !== undefined) return env[key];
+      if (!(key in parsed)) return undefined;
+      if (key in done) return done[key];
+      if (active.has(key)) return ''; // a cycle expands to empty rather than looping
+      active.add(key);
+      const out = literal.has(key) ? parsed[key] : expandValue(parsed[key], resolve);
+      active.delete(key);
+      return (done[key] = out);
+    };
+    for (const k of Object.keys(parsed)) {
+      if (env[k] === undefined) env[k] = literal.has(k) ? parsed[k] : expandValue(parsed[k], resolve);
     }
     loaded.push(name);
   }
   return loaded;
+}
+
+/**
+ * Expand `$NAME`, `${NAME}`, `${NAME:-default}` and `${NAME-default}` in one
+ * value, with `\$` as a literal dollar (dotenv-expand's syntax). `:-` uses the
+ * default when NAME is unset or empty, `-` only when it is unset.
+ * @param {string} value
+ * @param {(key: string) => string | undefined} lookup undefined when unset
+ * @returns {string}
+ */
+export function expandValue(value, lookup) {
+  return value.replace(/\\\$|\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?-)([^}]*))?\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (m, braced, op, fallback, bare) => {
+    if (m === '\\$') return '$';
+    const v = lookup(braced || bare);
+    if (op === ':-') return v === undefined || v === '' ? fallback : v;
+    if (op === '-') return v === undefined ? fallback : v;
+    return v ?? '';
+  });
+}
+
+/**
+ * The keys whose value is single-quoted in the file text, which dotenv-expand
+ * leaves unexpanded (`util.parseEnv` strips the quotes, so read them here).
+ * @param {string} text
+ * @returns {Set<string>}
+ */
+function singleQuotedKeys(text) {
+  /** @type {Set<string>} */
+  const keys = new Set();
+  for (const m of text.matchAll(/^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*=[ \t]*'/gm)) keys.add(m[1]);
+  return keys;
 }

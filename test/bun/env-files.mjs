@@ -25,6 +25,11 @@ try {
   const loaded = loadEnvFiles(dir, 'production', env);
   assert.deepEqual(env, { A: 'local', B: 'prod', C: 'env' }, `precedence on ${runtime}`);
   assert.deepEqual(loaded, ['.env.local', '.env.production', '.env']);
+  writeFileSync(join(dir, '.env'), "HOST=db\nURL=postgres://${HOST}:${PORT:-5432}/app\nRAW='$HOST'\n");
+  const expanded = {};
+  loadEnvFiles(dir, 'test', expanded);
+  assert.equal(expanded.URL, 'postgres://db:5432/app', `\${NAME} and \${NAME:-default} expand on ${runtime}`);
+  assert.equal(expanded.RAW, '$HOST', `a single-quoted value is left as written on ${runtime}`);
   console.log(`ok env files on ${runtime}`);
 } finally {
   rmSync(dir, { recursive: true, force: true });

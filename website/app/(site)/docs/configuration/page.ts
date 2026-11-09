@@ -250,6 +250,7 @@ webjs routes --help     # one command's help (flag form)</code-block>
       <li><code>.env</code>.</li>
     </ol>
     <p>The mode is <code>development</code> under <code>npm run dev</code>, <code>production</code> under <code>npm run start</code>, and <code>test</code> when <code>NODE_ENV=test</code>. <code>dev</code> and <code>start</code> set <code>NODE_ENV</code> to <code>development</code> / <code>production</code> when it is not already set. Keep the <code>.env*</code> files out of git (the scaffold ignores them) and commit <code>.env.example</code> with placeholder values. The files are parsed the same way on Node and Bun, and a Bun app's scaffolded scripts pass <code>--no-env-file</code> so Bun's own loader does not read a different set first.</p>
+    <p>Values expand as they do in Next.js: <code>$NAME</code>, <code>\${NAME}</code> and <code>\${NAME:-default}</code> (or <code>\${NAME-default}</code>, used only when NAME is unset) resolve against the real environment and the files already loaded, then the same file's keys, else empty. Write <code>\\$</code> for a literal dollar; a single-quoted value is left exactly as written.</p>
 
     <p><strong>No file, no problem.</strong> A missing or malformed file is skipped silently. The server still boots; only the missing values are <code>undefined</code> (the same way a typo would be).</p>
 

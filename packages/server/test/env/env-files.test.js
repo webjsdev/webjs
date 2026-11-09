@@ -46,6 +46,40 @@ test('precedence: real env > $mode.local > .local > $mode > .env', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('values expand $NAME / ${NAME} as @next/env does', () => {
+  const dir = app({
+    '.env': [
+      'HOST=db.local',
+      'URL=postgres://$USER@${HOST}/app',
+      'PORT_URL=${HOST}:${PORT:-5432}',
+      'UNSET_DASH=${NOPE-fallback}',
+      'EMPTY=',
+      'EMPTY_COLON=${EMPTY:-used}',
+      'EMPTY_DASH=${EMPTY-unused}',
+      'PRICE=\\$5',
+      "RAW='$HOST stays'",
+      'FROM_LOCAL=${LOCAL_ONLY}',
+      'LOOP=$LOOP',
+      '',
+    ].join('\n'),
+    '.env.local': 'LOCAL_ONLY=from-local\nHOST=local-wins\n',
+  });
+  try {
+    const env = { USER: 'ada' };
+    loadEnvFiles(dir, 'development', env);
+    assert.equal(env.HOST, 'local-wins', 'a higher-precedence file still wins');
+    assert.equal(env.URL, 'postgres://ada@local-wins/app', 'the real env and already-loaded files resolve first');
+    assert.equal(env.PORT_URL, 'local-wins:5432', ':- supplies a default for an unset key');
+    assert.equal(env.UNSET_DASH, 'fallback', '- supplies a default for an unset key');
+    assert.equal(env.EMPTY_COLON, 'used', ':- also covers an empty value');
+    assert.equal(env.EMPTY_DASH, '', '- does not cover an empty value');
+    assert.equal(env.PRICE, '$5', 'an escaped dollar is literal');
+    assert.equal(env.RAW, '$HOST stays', 'a single-quoted value is not expanded');
+    assert.equal(env.FROM_LOCAL, 'from-local');
+    assert.equal(env.LOOP, '', 'a self reference expands to empty instead of looping');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('quoted values, comments, and a missing directory are handled', () => {
   const dir = app({ '.env': '# comment\nQ="a b"\nS=\'x\'\n' });
   try {
