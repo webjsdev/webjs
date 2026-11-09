@@ -196,6 +196,11 @@ async function collectMetadata(route, ctx, opts) {
           // { template, default, absolute }: `absolute` overrides everything;
           // `template` is captured for deeper layers; `default` is the value
           // used when no deeper layer supplies a plain title string.
+          // A layer's own template applies to the layers BELOW it, never to
+          // its own `default`, which goes through the closest PARENT template
+          // as Next.js documents ("augments title.template from the closest
+          // parent segment", #1686).
+          const parentTemplate = titleTemplate;
           if (typeof t.template === 'string') titleTemplate = t.template;
           if (typeof t.absolute === 'string') {
             resolved.title = t.absolute;
@@ -203,7 +208,7 @@ async function collectMetadata(route, ctx, opts) {
             // it for deeper segments below, but the *current* segment is
             // rendered absolute.
           } else if (typeof t.default === 'string') {
-            resolved.title = t.default;
+            resolved.title = parentTemplate ? parentTemplate.replace('%s', t.default) : t.default;
           } else {
             delete resolved.title;
           }

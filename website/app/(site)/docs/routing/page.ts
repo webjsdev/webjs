@@ -527,6 +527,14 @@ export default async function PostPage({ params }: { params: { slug: string } })
   // ...
 }</code-block>
     <p>
+      Title templates follow Next.js's rules. A layout's
+      <code>title: { template: '%s | Acme', default: 'Acme' }</code> wraps the titles of the
+      segments below it (never its own page's), a segment with no title shows the
+      closest <code>default</code>, a nested layout's <code>default</code> or plain string
+      title goes through its parent's template, and <code>title.absolute</code> skips
+      templates altogether.
+    </p>
+    <p>
       As in Next.js, <code>generateMetadata(props, parent)</code> receives a
       second argument, a promise of the metadata the outer layouts resolved, with
       <code>title</code> normalized to <code>{ absolute, template }</code>. Use
