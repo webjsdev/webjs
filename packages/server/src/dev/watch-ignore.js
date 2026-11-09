@@ -24,7 +24,29 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const OUTPUT = /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|(?:^|[\\/])(?:\d+|\.#[^\\/]*|#[^\\/]*#|\.goutputstream-[^\\/]*|~\$[^\\/]*)$|\.(?:sw[a-p]|tmp|crswap|kate-swp)$|___jb_(?:tmp|old)___$|~$/;
+const OUTPUT = /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|(?:^|[\\/])(?:\.#[^\\/]*|#[^\\/]*#|\.goutputstream-[^\\/]*|~\$[^\\/]*)$|\.(?:sw[a-p]|tmp|crswap|kate-swp)$|___jb_(?:tmp|old)___$|~$/;
+
+/**
+ * Vim's write probe, an all-digit FILE (`4913`, then `5036` and up when that
+ * one exists) it creates and deletes in the directory it saves into. Only a
+ * file is a probe: a directory named by digits (`app/blog/2024/`, `app/404/`)
+ * is app source, and the walkers ask about directories by the same path test.
+ */
+const DIGIT_LEAF = /(?:^|[\\/])\d+$/;
+
+/**
+ * Whether `rel` is vim's write probe: an all-digit name that is not a
+ * directory under `root` (a probe is usually already deleted when its event
+ * arrives, and a missing path is not a directory either).
+ * @param {string} rel
+ * @param {string} [root] the app root; without one an all-digit name is taken as a file
+ * @returns {boolean}
+ */
+export function isVimProbe(rel, root) {
+  if (!DIGIT_LEAF.test(rel || '')) return false;
+  if (!root) return true;
+  try { return !statSync(join(root, rel)).isDirectory(); } catch { return true; }
+}
 
 /**
  * Editor temp files that are RENAMED over the file they save (#1689): `x.tmp`
@@ -51,10 +73,11 @@ export function editorTempTarget(rel) {
 /**
  * Tool output that is never served, whatever `.gitignore` says.
  * @param {string} rel path relative to the app root
+ * @param {string} [root] the app root, which tells vim's all-digit probe file from a directory
  * @returns {boolean}
  */
-export function isUnservedOutput(rel) {
-  return OUTPUT.test(rel || '');
+export function isUnservedOutput(rel, root) {
+  return OUTPUT.test(rel || '') || isVimProbe(rel, root);
 }
 
 /**
@@ -137,7 +160,7 @@ export function createWatchIgnore(root) {
   try { rules = parseGitignore(readFileSync(join(root, '.gitignore'), 'utf8')); } catch { /* no .gitignore */ }
   return (rel) => {
     const p = String(rel || '').replace(/\\/g, '/');
-    if (isUnservedOutput(p)) return true;
+    if (isUnservedOutput(p, root)) return true;
     if (/(?:^|\/)\.env(?:\.[^/]*)?$/.test(p)) return false;
     let dir = false;
     if (rules.length) { try { dir = statSync(join(root, p)).isDirectory(); } catch { /* gone or unreadable */ } }

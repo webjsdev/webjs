@@ -106,7 +106,7 @@ lib/
                          (every watcher error handled, a watched dir created or
                          removed later followed, `webjs.dev.regenerate` outputs
                          and build noise ignored, including editor temp files:
-                         vim's `4913`, emacs `.#x` / `#x#`, JetBrains
+                         vim's `4913` (a file, never a digit directory), emacs `.#x` / `#x#`, JetBrains
                          `___jb_tmp___`, `*.tmp`, swap files, #1689; the
                          pattern is the server watcher's, checked against one
                          corpus), `createSupervisor` (the

@@ -62,6 +62,8 @@ let child;
 try {
   mkdirSync(join(dir, 'app'), { recursive: true });
   writeFileSync(join(dir, 'app/page.ts'), "import { html } from '@webjsdev/core';\nexport default () => html`<h1>ok</h1>`;\n");
+  mkdirSync(join(dir, 'app/2024'), { recursive: true });
+  writeFileSync(join(dir, 'app/2024/page.ts'), "import { html } from '@webjsdev/core';\nexport default () => html`<h1>2024</h1>`;\n");
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'ignore-unserved', type: 'module', imports: { '#*': './*' } }));
   writeFileSync(join(dir, '.gitignore'), 'node_modules/\n*.log\nuploads/\n');
   mkdirSync(join(dir, 'node_modules/@webjsdev'), { recursive: true });
@@ -105,6 +107,13 @@ try {
   await sleep(300);
   writeFileSync(join(dir, 'NOTES.md'), '# tracked\n');
   assert.ok(await fired, `a tracked root file did not reload on ${runtime}\n--- server log ---\n${log}`);
+
+  // vim's all-digit probe is a FILE: a directory named by digits is a route
+  // segment, so an edit under it still reaches the reload (#1689 review).
+  const digitDir = reloadFired(10_000);
+  await sleep(300);
+  writeFileSync(join(dir, 'app/2024/page.ts'), "import { html } from '@webjsdev/core';\nexport default () => html`<h1>2024 edited</h1>`;\n");
+  assert.ok(await digitDir, `an edit under app/2024/ did not reload on ${runtime}\n--- server log ---\n${log}`);
 
   console.log(`OK  webjs dev ignores dev.log, coverage/ and gitignored paths, and still reloads a tracked file on ${runtime}`);
 } finally {

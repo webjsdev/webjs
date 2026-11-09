@@ -308,6 +308,37 @@ test('watchRestartPaths: root files, ignored paths, and a dir created later', ()
   }
 });
 
+// Review of #1689: vim's all-digit write probe is a FILE. A directory named by
+// digits is app source, so the supervisor's walker descends into it and an
+// edit there still restarts (or reloads) like any other.
+test('watchRestartPaths: an all-digit directory is watched, the 4913 probe is not (#1689)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'webjs-restart-watch-'));
+  try {
+    mkdirSync(join(root, 'app/blog/2024'), { recursive: true });
+    assert.equal(shouldIgnoreRestartPath(join('app', 'blog', '2024'), root), false);
+    assert.equal(shouldIgnoreRestartPath(join('app', '4913'), root), true);
+    const { fn, made } = fakeWatch();
+    const changes = [];
+    watchRestartPaths(root, {
+      dirs: ['app'], files: [],
+      ignore: (rel) => shouldIgnoreRestartPath(rel, root),
+      onChange: (p) => changes.push(p), onError: () => {}, watchFn: fn,
+    });
+    const appW = made.find((w) => w.path === join(root, 'app'));
+    if (needsDirWalker()) {
+      const dirW = made.find((w) => w.path === join(root, 'app/blog/2024'));
+      assert.ok(dirW, 'the digit directory is walked');
+      dirW.cb('change', 'page.ts');
+    } else {
+      appW.cb('change', join('blog', '2024', 'page.ts'));
+    }
+    appW.cb('rename', '4913');
+    assert.deepEqual(changes, [join('app', 'blog', '2024', 'page.ts')]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('isWatchError matches only errors from a watch syscall', () => {
   assert.equal(isWatchError(Object.assign(new Error('x'), { syscall: 'watch', code: 'EACCES' })), true);
   assert.equal(isWatchError(Object.assign(new Error('x'), { syscall: 'open', code: 'EACCES' })), false);

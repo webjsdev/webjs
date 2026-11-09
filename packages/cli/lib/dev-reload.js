@@ -65,13 +65,34 @@ export const KILL_TIMEOUT_MS = 2000;
  * `@webjsdev/server`), restated here so the CLI does not depend on a server
  * internal.
  *
+ * Vim's all-digit write probe (`4913`) is ignored only when it is not a
+ * directory under `root`, so `app/blog/2024/` is still watched (the server's
+ * `isVimProbe` applies the same rule).
+ *
  * @param {string} rel  path relative to the app root
+ * @param {string} [root]  the app root; without one an all-digit name is taken as a file
  * @returns {boolean}
  */
-export function shouldIgnoreRestartPath(rel) {
+export function shouldIgnoreRestartPath(rel, root) {
   return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])db[\\/](?:dev\.db|migrations)|^db[\\/](?!.*\.[cm]?[jt]s$)/.test(rel || '')
     // Tool output nothing serves, as the server's watcher skips it (watch-ignore.js).
-    || /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|(?:^|[\\/])(?:\d+|\.#[^\\/]*|#[^\\/]*#|\.goutputstream-[^\\/]*|~\$[^\\/]*)$|\.(?:sw[a-p]|tmp|crswap|kate-swp)$|___jb_(?:tmp|old)___$|~$/.test(rel || '');
+    || /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|(?:^|[\\/])(?:\.#[^\\/]*|#[^\\/]*#|\.goutputstream-[^\\/]*|~\$[^\\/]*)$|\.(?:sw[a-p]|tmp|crswap|kate-swp)$|___jb_(?:tmp|old)___$|~$/.test(rel || '')
+    || isVimProbe(rel, root);
+}
+
+/**
+ * Whether `rel` is vim's write probe: an all-digit name that is not a
+ * directory under `root`. A probe is usually deleted by the time its event
+ * arrives, and a missing path is not a directory either.
+ *
+ * @param {string} rel
+ * @param {string} [root]
+ * @returns {boolean}
+ */
+function isVimProbe(rel, root) {
+  if (!/(?:^|[\\/])\d+$/.test(rel || '')) return false;
+  if (!root) return true;
+  try { return !statSync(join(root, rel)).isDirectory(); } catch { return true; }
 }
 
 /**
@@ -432,7 +453,7 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
   closeWatch = watchRestartPaths(cwd, {
     dirs: plan.watchDirs,
     files: plan.watchFiles,
-    ignore: (rel) => shouldIgnoreRestartPath(rel) || outputs.has(rel.replace(/\\/g, '/')),
+    ignore: (rel) => shouldIgnoreRestartPath(rel, cwd) || outputs.has(rel.replace(/\\/g, '/')),
     onChange: (rel) => sup.change(rel),
     onError: ignoreWatchError,
   });
