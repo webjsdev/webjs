@@ -191,6 +191,14 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
     <h2>Cookie names</h2>
     <p>In development the session cookie is <code>webjs.auth</code>, and the OAuth round trip uses <code>webjs.auth.state</code> and <code>webjs.auth.redirect</code>. In production (<code>NODE_ENV=production</code>) each name carries the <code>__Host-</code> prefix: <code>__Host-webjs.auth</code>, <code>__Host-webjs.auth.state</code>, <code>__Host-webjs.auth.redirect</code>. A browser stores a <code>__Host-</code> cookie only when it is <code>Secure</code>, has <code>Path=/</code> and has no <code>Domain</code>, so an app on a sibling subdomain of a shared hosting domain cannot plant its own session cookie in yours and sign a visitor in to the wrong account. Production reads only the prefixed names, so a production app upgrading from an earlier version signs its users in once more. A test or tool that sets the cookie by hand in production uses the prefixed name.</p>
 
+    <h2>Differences from Auth.js</h2>
+    <ul>
+      <li id="diff-jwt">The JWT session is a signed (HS256) token, not an encrypted (JWE) one, so keep secrets out of the session; the cookie names are the ones above.</li>
+      <li id="diff-signin-default"><code>signIn()</code> with no <code>redirectTo</code> lands on <code>/</code>; Auth.js falls back to the Referer, which from a login form is the login page itself. Pass <code>redirectTo</code> to land elsewhere.</li>
+      <li id="diff-adapter"><code>adapter</code> is the session store used by the <code>database</code> strategy (<code>load</code>, <code>save</code>, <code>destroy</code>), not an Auth.js database adapter: <code>@auth/*-adapter</code> packages are not supported, and users live in your own tables.</li>
+      <li id="diff-auth-url">There is no <code>AUTH_URL</code> or <code>basePath</code> option; the handler is mounted where the <code>route.ts</code> file is, and callback URLs come from the request.</li>
+    </ul>
+
     <h2>Environment variables</h2>
     <code-block>AUTH_SECRET=your-random-secret-32-chars-minimum
 AUTH_GOOGLE_ID=your-google-oauth-client-id

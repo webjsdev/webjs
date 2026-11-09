@@ -1,0 +1,16 @@
+{
+  "$comment": "Every reference behaviour (Next.js App Router, Lit, Auth.js v5) WebJs deliberately does not match (#1686). Each entry names the docs page and the element id that states it; differences.test.mjs fails when a stated difference disappears from its page, so a gap is either fixed or documented, never silent.",
+  "differences": [
+    { "reference": "next", "behaviour": "redirect() during render answers 307", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-redirect-status" },
+    { "reference": "next", "behaviour": "a form action's result is consumed by useActionState in the same response", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-action-result" },
+    { "reference": "next", "behaviour": "a route handler must return a Response", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-route-objects" },
+    { "reference": "next", "behaviour": "NEXT_PUBLIC_ environment variables reach the browser", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-public-env" },
+    { "reference": "next", "behaviour": "middleware request.cookies.set() changes only the request", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-middleware-cookies" },
+    { "reference": "next", "behaviour": "after(), updateTag(), unstable_rethrow()", "category": "not-applicable", "doc": "migrating-from-nextjs", "id": "diff-not-provided-apis" },
+    { "reference": "lit", "behaviour": "shadow DOM by default, decorators, a rejected updateComplete on a render error", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-lit-model" },
+    { "reference": "authjs", "behaviour": "an encrypted (JWE) session token", "category": "by-design", "doc": "auth", "id": "diff-jwt" },
+    { "reference": "authjs", "behaviour": "signIn() with no redirectTo returns to the Referer", "category": "by-design", "doc": "auth", "id": "diff-signin-default" },
+    { "reference": "authjs", "behaviour": "an @auth/*-adapter database adapter switches to database sessions", "category": "not-applicable", "doc": "auth", "id": "diff-adapter" },
+    { "reference": "authjs", "behaviour": "AUTH_URL and basePath", "category": "not-applicable", "doc": "auth", "id": "diff-auth-url" }
+  ]
+}
