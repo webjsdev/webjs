@@ -874,7 +874,24 @@ export declare class Session {
   regenerateId(deleteOld?: boolean): void;
 }
 
-/** Session middleware factory. */
+/**
+ * Session middleware factory: a signed session cookie for apps that do not use
+ * `createAuth`. It throws at import without `secret` or `SESSION_SECRET`.
+ *
+ * @example
+ * ```ts
+ * // middleware.ts
+ * import { session } from '@webjsdev/server';
+ * export default session({ secret: process.env.SESSION_SECRET });
+ *
+ * // In a 'use server' action or a page:
+ * import { getRequest, getSession } from '@webjsdev/server';
+ * const s = getSession(getRequest()!);
+ * s.regenerateId(true);       // after a login, against session fixation
+ * s.set('userId', user.id);
+ * const userId = s.get<string>('userId');
+ * ```
+ */
 export declare function session(opts?: {
   storage?: SessionStorage;
   cookieName?: string;
@@ -911,9 +928,14 @@ export declare function broadcast(
 // file-storage.js (#247)
 // ---------------------------------------------------------------------------
 
-/** A streaming handle returned by `FileStore.get` (body is a stream, never buffered). */
+/**
+ * A streaming handle returned by `FileStore.get` (body is a stream, never
+ * buffered). The body is a web `ReadableStream`, so `new Response(file.body)`
+ * serves it as is; an adapter whose SDK returns a Node stream converts it with
+ * `Readable.toWeb`.
+ */
 export interface StoredObjectHandle {
-  body: ReadableStream | import('node:stream').Readable;
+  body: ReadableStream<Uint8Array>;
   size: number;
   contentType: string;
 }
@@ -947,7 +969,26 @@ export declare const DEFAULT_UPLOAD_DIR: string;
 export declare function diskStore(opts?: { dir?: string; baseUrl?: string }): FileStore;
 /** Set the default file store (call at startup to use a custom dir or S3). */
 export declare function setFileStore(store: FileStore): void;
-/** Get the default file store (`diskStore` under `<cwd>/.webjs/uploads` unless set). */
+/**
+ * Get the default file store (`diskStore` under `<cwd>/.webjs/uploads` unless set).
+ *
+ * @example
+ * ```ts
+ * // In a 'use server' action bound to <form action=${save} enctype="multipart/form-data">
+ * // with <input type="file" name="photo">: the field arrives as a File.
+ * import { getFileStore, generateKey } from '@webjsdev/server';
+ * const key = generateKey(input.photo.name);   // opaque, traversal-safe
+ * await getFileStore().put(key, input.photo);  // streams to disk
+ *
+ * // app/uploads/[key]/route.ts serves it back:
+ * export async function GET(_req: Request, { params }: { params: { key: string } }) {
+ *   let file;
+ *   try { file = await getFileStore().get(params.key); } catch { file = null; } // an unsafe key throws
+ *   if (!file) return new Response('Not found', { status: 404 });
+ *   return new Response(file.body, { headers: { 'content-type': file.contentType } });
+ * }
+ * ```
+ */
 export declare function getFileStore(): FileStore;
 /** Generate a random, opaque, traversal-safe key, preserving a whitelisted extension. */
 export declare function generateKey(filename?: string): string;
@@ -1156,6 +1197,33 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  * {@link AuthUser} interface for global typing; both make `auth().user` typed
  * with no cast. Defaults to the open {@link AuthUser}, so existing untyped code
  * keeps compiling unchanged.
+ *
+ * @example
+ * ```ts
+ * // modules/auth/auth.server.ts
+ * import { createAuth, Credentials } from '@webjsdev/server';
+ * export const { auth, signIn, signOut, handlers } = createAuth({
+ *   secret: process.env.AUTH_SECRET ?? 'dev-only-secret',
+ *   providers: [Credentials({
+ *     async authorize(c: { email: string; password: string }) {
+ *       const user = await findUserByEmail(c.email); // your own query
+ *       if (!user || !(await verifyPassword(c.password, user.passwordHash))) return null;
+ *       return { id: String(user.id), email: user.email };
+ *     },
+ *   })],
+ *   pages: { error: '/login' }, // a failed sign-in lands on /login?error=CredentialsSignin
+ * });
+ *
+ * // app/api/auth/[...path]/route.ts mounts it, as in Auth.js:
+ * //   import { handlers } from '#modules/auth/auth.server.ts';
+ * //   export const { GET, POST } = handlers;
+ *
+ * // A page, layout or action reads the signed-in user:
+ * //   const session = await auth();   // null when signed out
+ * // Sign in and out with plain forms, which work with JavaScript off:
+ * //   <form method="post" action="/api/auth/signin/credentials"> (email, password, redirectTo)
+ * //   <form method="post" action="/api/auth/signout">
+ * ```
  */
 export declare function createAuth<TUser = ResolvedAuthUser>(config: AuthConfig): AuthInstance<TUser>;
 /**

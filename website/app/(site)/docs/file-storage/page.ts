@@ -18,7 +18,7 @@ export default function FileStorage() {
       </thead>
       <tbody>
         <tr><td><code>put(key, file, opts?)</code></td><td>Stream a <code>File</code> / <code>Blob</code> / <code>ReadableStream</code> / <code>Uint8Array</code> to storage. Returns <code>{ key, size, contentType }</code>.</td></tr>
-        <tr><td><code>get(key)</code></td><td>Returns <code>{ body, size, contentType }</code> (a STREAMING handle) or <code>null</code>. The serving route does <code>new Response(handle.body, { headers })</code>.</td></tr>
+        <tr><td><code>get(key)</code></td><td>Returns <code>{ body, size, contentType }</code> (a STREAMING handle, <code>body</code> a web <code>ReadableStream</code>) or <code>null</code>. The serving route does <code>new Response(handle.body, { headers })</code>, with no cast. A custom adapter whose SDK returns a Node stream converts it with <code>Readable.toWeb</code>.</td></tr>
         <tr><td><code>delete(key)</code></td><td>Remove the object. Idempotent (a missing key is not an error).</td></tr>
         <tr><td><code>url(key)</code></td><td>The served URL (<code>&lt;baseUrl&gt;/&lt;key&gt;</code> for <code>diskStore</code>).</td></tr>
         <tr><td><code>has(key)</code></td><td>Whether the key exists (optional).</td></tr>

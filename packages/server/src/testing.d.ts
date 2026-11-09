@@ -93,6 +93,25 @@ export declare function actionEndpoint(
  * Round-trip an action through its REAL RPC endpoint (serializer + CSRF + prod
  * error sanitization) and return the parsed return value. Models a same-origin
  * browser POST, so it passes the Origin / Sec-Fetch-Site CSRF check.
+ *
+ * @example
+ * ```ts
+ * // test/tasks/add-task.test.ts, run with `webjs test`
+ * import { test } from 'node:test';
+ * import assert from 'node:assert/strict';
+ * import { createRequestHandler } from '@webjsdev/server';
+ * import { invokeActionForTest, submitForm } from '@webjsdev/server/testing';
+ *
+ * test('a blank title is refused', async () => {
+ *   const app = await createRequestHandler({ appDir: process.cwd() });
+ *   const result = await invokeActionForTest<{ success: boolean }>(
+ *     app, 'modules/tasks/actions/add-task.server.ts', 'addTask', [{ title: '' }]);
+ *   assert.equal(result.success, false);
+ *   // The no-JS form path: renders /tasks, posts its bound form, 422 on failure.
+ *   const res = await submitForm(app.handle, '/tasks', { title: '' });
+ *   assert.equal(res.status, 422);
+ * });
+ * ```
  */
 export declare function invokeActionForTest<T = unknown>(
   app: AppOrHandle,

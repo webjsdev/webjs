@@ -95,6 +95,13 @@ void guard;
 // @ts-expect-error the platform Request alone has no cookies.
 (new Request('http://x') as Request).cookies;
 
+// A stored file's body is a web stream, so a route serves it with no cast.
+async function serveStored(key: string) {
+  const file = await getFileStore().get(key);
+  return file ? new Response(file.body, { headers: { 'content-type': file.contentType } }) : null;
+}
+void serveStored;
+
 // Auth factory.
 const authInst = createAuth({ secret: 's', providers: [] });
 // The credentials provider takes Auth.js's authorize contract.
