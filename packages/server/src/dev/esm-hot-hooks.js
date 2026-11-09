@@ -34,13 +34,21 @@
  * State lives on `globalThis` under a registered symbol, so a second handler in
  * one process (tests) shares it with the hook. Old module instances stay in
  * Node's cache for the life of the dev process, the trade Remix accepts too;
- * `devImport` stays content-keyed, so an idle tab adds nothing. Node only: on
- * Bun `bun --hot` and the fresh-reading app plugin do this job (`hot-host.js`,
- * `bun-app-source.js`), and a runtime with no `registerHooks` keeps the dev
- * supervisor's restart.
+ * `devImport` stays content-keyed, so an idle tab adds nothing.
+ *
+ * Bun has no resolve hook, so there the same state is filled and read by the
+ * dev source plugins instead (`installBunModuleVersions`): every app module
+ * Bun loads in dev goes through a `Bun.plugin` `onLoad`, which records the
+ * module's import edges from its source and rewrites the specifier of a bumped
+ * target to its absolute path plus `?webjs-v=<n>` (`bun-app-source.js`), and
+ * `devImportSpecifier` adds the version to an entry. Bun keys a plain path's
+ * module by the query too, so the result is the same as on Node: the edited
+ * chain evaluates fresh and an untouched module keeps its instance, with no
+ * `bun --hot` registry reset. A runtime with neither keeps the dev supervisor's
+ * restart.
  */
 import * as nodeModule from 'node:module';
-import { realpathSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, relative, isAbsolute } from 'node:path';
 
@@ -54,6 +62,7 @@ const MODULE_FILE = /\.(?:m?[jt]s|json)$/;
  *   importers: Map<string, Set<string>>,
  *   next: number,
  *   installed: boolean,
+ *   loaded?: Map<string, string>,
  * }} EsmHotState
  */
 
@@ -144,7 +153,74 @@ export function installEsmHotHooks(appDir) {
   return true;
 }
 
-/** Whether the resolve hook is installed in this process. @returns {boolean} */
+/**
+ * Turn on module versions for an app root on Bun, where the dev source plugins
+ * record the edges and stamp the versions (`bun-app-source.js`) because there
+ * is no resolve hook. Idempotent. Returns false, doing nothing, off Bun.
+ * @param {string} appDir  absolute app root
+ * @returns {boolean}
+ */
+export function installBunModuleVersions(appDir) {
+  if (!process.versions.bun) return false;
+  const st = state();
+  st.roots.add(appDir);
+  st.installed = true;
+  if (!st.loaded) st.loaded = new Map();
+  return true;
+}
+
+/** A file's identity on disk, or '' when it is gone. @param {string} abs */
+function diskStamp(abs) {
+  try {
+    const s = statSync(abs);
+    return `${s.ino}:${s.size}:${s.mtimeMs}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Note that the Bun source plugins just served `abs` as it is on disk now.
+ * A rebuild compares every noted file against the disk (`bumpModuleVersions`),
+ * because Bun's `fs.watch` (1.3.14) drops the event for a second file written
+ * a few milliseconds after another in the same directory, so an agent saving
+ * two files at once would otherwise leave the second one stale for good. The
+ * `bun --hot` registry reset used to hide that, since it re-evaluated
+ * everything. A no-op where module versions are off or not on Bun.
+ * @param {string} abs
+ */
+export function recordModuleLoad(abs) {
+  const st = state();
+  if (st.loaded && isAppModule(abs, st)) st.loaded.set(abs, diskStamp(abs));
+}
+
+/**
+ * Record that `importer` imports `target`, the edge a bump walks up. Only an
+ * edge between two app modules is kept. The Bun source plugins call this for
+ * each import specifier of a module they serve.
+ * @param {string} importer  absolute path
+ * @param {string} target  absolute path
+ */
+export function recordModuleImport(importer, target) {
+  const st = state();
+  if (!st.installed || importer === target || !isAppModule(importer, st) || !isAppModule(target, st)) return;
+  let set = st.importers.get(target);
+  if (!set) st.importers.set(target, (set = new Set()));
+  set.add(importer);
+}
+
+/**
+ * Whether an absolute path is a module this process versions in place: module
+ * versions are on and the path is an app module under a registered root.
+ * @param {string} abs
+ * @returns {boolean}
+ */
+export function isVersionedModule(abs) {
+  const st = state();
+  return st.installed && isAppModule(abs, st);
+}
+
+/** Whether module versions are on in this process (the Node resolve hook, or Bun's source plugins). @returns {boolean} */
 export function hotHooksInstalled() {
   return state().installed;
 }
@@ -196,6 +272,14 @@ export function bumpModuleVersions(absFiles) {
   const n = st.next++;
   const stack = [];
   for (const f of absFiles) stack.push(...spellings(f));
+  // On Bun, also every served module that changed on disk without an event
+  // reaching the watcher (see `recordModuleLoad`).
+  if (st.loaded) {
+    for (const [f, stamp] of st.loaded) {
+      const now = diskStamp(f);
+      if (now !== stamp) { st.loaded.set(f, now); stack.push(f); }
+    }
+  }
   while (stack.length) {
     const f = /** @type {string} */ (stack.pop());
     if (bumped.has(f) || !isAppModule(f, st)) continue;

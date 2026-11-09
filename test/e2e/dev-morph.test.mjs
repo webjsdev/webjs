@@ -20,7 +20,9 @@
  * through its module resolve hook (#1689), so the supervisor restarts it only
  * for a restart file and every edit below reaches the tab as a classified
  * verdict from the same process. On Bun the same in-process shape is what
- * `bun --hot` gives users by default.
+ * `bun --hot` gives users by default, and the dev source plugins version the
+ * edited module and its importers the same way, so an untouched module keeps
+ * its state there too.
  *
  * This is the first e2e that WRITES to a staged app file. It writes into the
  * temp copy `stageApp()` made, never into the repo.

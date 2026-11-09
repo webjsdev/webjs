@@ -20,7 +20,7 @@ import {
   hasUseServerDirective,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
-import { installEsmHotHooks, bumpModuleVersions } from './esm-hot-hooks.js';
+import { installEsmHotHooks, installBunModuleVersions, isVersionedModule, bumpModuleVersions } from './esm-hot-hooks.js';
 import { createBrowserVersions } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
@@ -388,10 +388,17 @@ export async function createRequestHandler(opts) {
   }
   // Bun under `bun --hot` serves a replaced file's old source forever (#1575):
   // load app modules through a plugin that reads them fresh. After the
-  // source-locations plugin, so that one wins when it is on.
-  if (dev && serverRuntime() === 'bun') {
+  // source-locations plugin, so that one wins when it is on. The plugins also
+  // stamp the module versions (#1689), Bun's stand-in for the Node resolve
+  // hook, so an edit re-evaluates its chain without a registry reset.
+  const bunVersions = dev && serverRuntime() === 'bun';
+  if (bunVersions) {
     registerBunAppSource(appDir);
-    try { const real = realpathSync(appDir); if (real !== appDir) registerBunAppSource(real); } catch { /* appDir only */ }
+    installBunModuleVersions(appDir);
+    try {
+      const real = realpathSync(appDir);
+      if (real !== appDir) { registerBunAppSource(real); installBunModuleVersions(real); }
+    } catch { /* appDir only */ }
   }
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
@@ -1792,9 +1799,10 @@ export async function createRequestHandler(opts) {
      * (#1575), the `bun --hot` re-run `startServer` pokes for. A module no
      * other app module imports is only ever loaded through `devImport`, whose
      * specifier names the file's content, so its edit is a new specifier and
-     * needs nothing reset. Anything imported by another module, a file the last
-     * analysis never saw (a new file may be the target of an import that
-     * failed), or any edit before the first analysis does.
+     * needs nothing reset, and neither does an existing app module once the Bun
+     * module versions are on (#1689). Otherwise anything imported by another
+     * module, a file the last analysis never saw (a new file may be the target
+     * of an import that failed), or any edit before the first analysis does.
      *
      * @param {string} filename  relative to `root`
      * @param {string} [root]  the watched root, defaulting to the app dir
@@ -1802,6 +1810,10 @@ export async function createRequestHandler(opts) {
      */
     needsRegistryReset: (filename, root) => {
       const abs = resolve(root || appDir, filename);
+      // On Bun an existing app module is versioned in place (#1689): the
+      // rebuild bumps it and its importers, and the next import evaluates that
+      // chain fresh. A deleted file, or one outside the app root, still resets.
+      if (bunVersions && isVersionedModule(abs) && existsSync(abs)) return false;
       if (!analysisEverDone) return true;
       // A new routing file (a page, layout, route handler, boundary) is only
       // ever loaded by the router, and nothing can have tried to import it yet.

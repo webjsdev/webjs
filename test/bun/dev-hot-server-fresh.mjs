@@ -7,18 +7,16 @@
  *   node test/bun/dev-hot-server-fresh.mjs
  *   bun  test/bun/dev-hot-server-fresh.mjs
  *
- * On Node this exercises the `module.registerHooks` resolve hook
- * (`packages/server/src/dev/esm-hot-hooks.js`): the edited module and the page
- * importing it get a new URL and evaluate fresh, while a module neither edited
- * nor importing an edited one keeps its instance. So on Node the script also
- * asserts that an untouched module's module-scope counter keeps counting across
- * the edit. Before #1689 the supervisor restarted the Node child for every app
- * edit, which changed the boot id and reset that counter.
- *
- * On Bun the same edit goes through `bun --hot` and the fresh-reading app
- * plugin (#1575). A `bun --hot` re-run resets the whole module registry, so
- * module-scope state does not survive there; that is Bun's model, not this
- * change, and the counter assertion is Node-only.
+ * The edited module and the page importing it get a new module key
+ * (`webjs-v=<n>`) and evaluate fresh, while a module neither edited nor
+ * importing an edited one keeps its instance, so the script also asserts that
+ * an untouched module's module-scope counter keeps counting across the edit.
+ * On Node the versions come from the `module.registerHooks` resolve hook
+ * (`packages/server/src/dev/esm-hot-hooks.js`). Before #1689 the supervisor
+ * restarted the Node child for every app edit, which changed the boot id and
+ * reset that counter. On Bun they come from the dev source plugins, which
+ * rewrite the served import specifiers (`dev/bun-app-source.js`); before, the
+ * edit asked `bun --hot` for a registry reset, which reset the counter too.
  *
  * The CLI is spawned by path (`packages/cli/bin/webjs.js`), and the fixture's
  * `@webjsdev/*` links point at this checkout's packages, so the run exercises
@@ -55,21 +53,27 @@ async function until(fn, { timeoutMs, stepMs = 100 }) {
   }
 }
 
-/** One render of `/`: the page's `msg` and `hits`, and the boot id it was rendered by. */
+/** One render of `/`: the page's `msg`, `hits` and `tag`, and the boot id it was rendered by. */
 async function render() {
   const res = await fetch(BASE + '/');
   if (!res.ok) return null;
   const body = await res.text();
-  const m = /msg=(\w+) hits=(\d+)/.exec(body);
+  const m = /msg=(\w+) hits=(\d+) tag=(\w+)/.exec(body);
   const meta = /<meta name="webjs-dev-reload" content="([^"]*)"/.exec(body);
   if (!m || !meta) return null;
   const state = JSON.parse(meta[1].replace(/&quot;/g, '"').replace(/&#34;/g, '"'));
-  return { msg: m[1], hits: Number(m[2]), boot: state.boot };
+  return { msg: m[1], hits: Number(m[2]), tag: m[3], boot: state.boot };
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'webjs-hot-server-fresh-'));
 const msgFile = join(dir, 'lib/msg.ts');
-const writeMsg = (v) => writeFileSync(msgFile, `export const msg: string = '${v}';\n`);
+const writeMsg = (v) => {
+  // The label first, so a render that shows the new msg was rebuilt after both.
+  // Two writes this close in one directory are also the shape Bun's fs.watch
+  // (1.3.14) reports only the first of, which the rebuild's disk check covers.
+  writeFileSync(join(dir, 'lib/label.ts'), `export const label: string = 'L${v}';\n`);
+  writeFileSync(msgFile, `export const msg: string = '${v}';\n`);
+};
 
 let child;
 let log = '';
@@ -81,7 +85,16 @@ try {
     "import { html } from '@webjsdev/core';",
     "import { msg } from '#lib/msg.ts';",
     "import { hit } from '../lib/hits.ts';",
-    'export default () => html`<main>msg=${msg} hits=${hit()}</main>`;',
+    "import { tag } from '#lib/tag.server.ts';",
+    'export default async () => html`<main>msg=${msg} hits=${hit()} tag=${await tag()}</main>`;',
+    '',
+  ].join('\n'));
+  // A 'use server' action (served through the seed facade) whose own import is
+  // edited too, so the version reaches through the facade to the real module.
+  writeFileSync(join(dir, 'lib/tag.server.ts'), [
+    "'use server';",
+    "import { label } from './label.ts';",
+    'export async function tag(): Promise<string> { return label; }',
     '',
   ].join('\n'));
   // Module-scope state in a module the edit does not touch.
@@ -115,12 +128,9 @@ try {
     `the edit was applied by the SAME process on ${runtime} (a new boot id is a restart)\n--- server log ---\n${log}`);
   assert.doesNotMatch(log, /restarting the dev server/, `the supervisor restarted nothing on ${runtime}`);
 
-  if (!isBun) {
-    assert.ok(after.hits > before.hits,
-      `an untouched module kept its instance on ${runtime}: hits went ${before.hits} -> ${after.hits}, a reset means it was re-evaluated`);
-  } else {
-    console.log(`note: the module-scope counter is not asserted on ${runtime}, where a bun --hot re-run resets the module registry (hits ${before.hits} -> ${after.hits})`);
-  }
+  assert.equal(after.tag, 'LM2', `the edit reached through a 'use server' module on ${runtime}`);
+  assert.ok(after.hits > before.hits,
+    `an untouched module kept its instance on ${runtime}: hits went ${before.hits} -> ${after.hits}, a reset means it was re-evaluated`);
 
   // A second edit of the same file, which must get a NEW version, not the one
   // the first edit already used.
@@ -128,7 +138,8 @@ try {
   const again = await until(async () => { const r = await render(); return r && r.msg === 'M3' ? r : null; }, { timeoutMs: 20_000 });
   assert.ok(again, `a second edit of the same lib/ module stayed STALE on ${runtime}\n--- server log ---\n${log}`);
   assert.equal(again.boot, before.boot, `still the same process on ${runtime}`);
-  if (!isBun) assert.ok(again.hits > after.hits, `and the counter still survives on ${runtime}`);
+  assert.equal(again.tag, 'LM3', `the second edit reached through the 'use server' module on ${runtime}`);
+  assert.ok(again.hits > after.hits, `and the counter still survives on ${runtime}`);
 
   console.log(`OK  webjs dev applied a server module edit in place on ${runtime} (#1689)`);
 } finally {
