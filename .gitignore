@@ -93,3 +93,6 @@ packages/cli/templates/gallery/
 # so the local setup keeps resolving it, untracked so it does not dangle in
 # every other clone. See test/repo-health/no-committed-symlinks.test.mjs.
 .agents/skills/omarchy
+
+# Local agent-eval output (scripts/agent-eval/run.mjs)
+/agent-eval-results.json
