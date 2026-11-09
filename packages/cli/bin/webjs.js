@@ -1798,11 +1798,11 @@ Full docs: https://webjs.dev/docs`);
         console.error('usage: webjs source <Export> [--pkg core|server|cli|ui|intellisense]');
         process.exit(1);
       }
-      const { lookupExport, resolveFrameworkRoots } = await import('@webjsdev/mcp');
-      const { existsSync, readdirSync } = await import('node:fs');
+      const { lookupExport, resolveFrameworkRoots, listDir } = await import('@webjsdev/mcp');
+      const { existsSync } = await import('node:fs');
       const { readFile } = await import('node:fs/promises');
       const roots = resolveFrameworkRoots(process.cwd(), { exists: existsSync });
-      const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+      const readdir = listDir;
       const out = await lookupExport({ roots, readFile, readdir }, name, pkg);
       console.log(out);
       if (!/^@webjsdev\//m.test(out)) process.exit(1);

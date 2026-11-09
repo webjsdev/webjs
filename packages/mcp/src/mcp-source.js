@@ -27,6 +27,7 @@
 
 import { createRequire } from 'node:module';
 import { join, resolve, sep, relative } from 'node:path';
+import { readdirSync, statSync } from 'node:fs';
 
 /** The published framework packages whose source an agent may want to read. */
 export const FRAMEWORK_PACKAGES = ['core', 'server', 'cli', 'intellisense', 'ui'];
@@ -91,6 +92,25 @@ export function resolveFrameworkRoots(cwd, fsDeps) {
  * @param {{ readdir: (d: string) => Array<{ name: string, isDir: boolean }> }} deps
  * @returns {string[]}
  */
+/**
+ * The real directory listing `walkSource` and the source tool read, following
+ * a symlinked directory the way the module resolver does.
+ * @param {string} dir
+ * @returns {Array<{ name: string, isDir: boolean }>}
+ */
+export function listDir(dir) {
+  return readdirSync(dir, { withFileTypes: true }).map((e) => {
+    let isDir = e.isDirectory();
+    // A symlinked directory is a directory: pnpm and workspace installs link
+    // a package (or its `src`) rather than copying it, and a Dirent of a link
+    // answers isDirectory() false, which skipped everything under it (#1686).
+    if (!isDir && e.isSymbolicLink()) {
+      try { isDir = statSync(join(dir, e.name)).isDirectory(); } catch { /* dangling */ }
+    }
+    return { name: e.name, isDir };
+  });
+}
+
 export function walkSource(dir, deps) {
   /** @type {string[]} */
   const files = [];

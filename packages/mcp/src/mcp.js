@@ -24,10 +24,10 @@ import { createInterface } from 'node:readline';
 import { relative } from 'node:path';
 
 import { initText } from './mcp-init.js';
-import { resolveFrameworkRoots, runSourceTool } from './mcp-source.js';
+import { resolveFrameworkRoots, runSourceTool, listDir } from './mcp-source.js';
 // The export lookup behind the `source` tool's `export` arg, re-exported for
 // `webjs source <Export>` in the CLI (#1623), which shells the same text.
-export { lookupExport, resolveFrameworkRoots } from './mcp-source.js';
+export { lookupExport, resolveFrameworkRoots, listDir } from './mcp-source.js';
 import { projectRoutes } from './routes-report.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -535,8 +535,8 @@ export async function runMcpServer(opts) {
   let sourceDeps = opts.sourceDeps;
   if (!sourceDeps) {
     const { readFile } = await import('node:fs/promises');
-    const { readdirSync, existsSync, realpathSync } = await import('node:fs');
-    const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+    const { existsSync, realpathSync } = await import('node:fs');
+    const readdir = listDir;
     sourceDeps = {
       roots: resolveFrameworkRoots(cwd, { exists: existsSync }),
       readFile,

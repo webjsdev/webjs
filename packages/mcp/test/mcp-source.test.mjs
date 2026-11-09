@@ -300,3 +300,24 @@ test('lookupExport: a member of an exported type answers by its own name (#1686)
   assert.match(real, /"actionData" is a member of PageProps/);
   assert.ok(real.split('\n').length < 40, 'one member, not the file');
 });
+
+test('lookupExport: source under a SYMLINKED directory is searched (pnpm / workspace installs, #1686)', async () => {
+  // A clean eval build linked each package's src, as pnpm links packages, and
+  // `webjs source actionData` found nothing: a Dirent of a link is not a directory.
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = await import('node:fs');
+  const { readFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { listDir } = await import(resolve(REPO, 'packages', 'mcp', 'src', 'mcp-source.js'));
+  const base = mkdtempSync(join(tmpdir(), 'webjs-src-link-'));
+  try {
+    mkdirSync(join(base, 'real-src'));
+    writeFileSync(join(base, 'real-src', 'routes.d.ts'), ['export interface PageProps {', '  /** The failed submission. */', '  actionData?: unknown;', '}', ''].join('\n'));
+    mkdirSync(join(base, 'core'));
+    symlinkSync(join(base, 'real-src'), join(base, 'core', 'src'));
+    const roots = [{ pkg: 'core', root: join(base, 'core'), src: join(base, 'core', 'src') }];
+    const out = await lookupExport({ roots, readFile, readdir: listDir }, 'actionData');
+    assert.match(out, /"actionData" is a member of PageProps/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
