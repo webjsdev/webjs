@@ -85,7 +85,7 @@ function parseRoutesFlag(argv) {
 }
 
 const USAGE = `webjs commands:
-  webjs dev   [--port 8080] [--no-hot]            Start dev server with live reload
+  webjs dev   [--port 8080] [--no-hot]            Start dev server with hot reload
                                                   (--no-hot: run in-process, no hot-reload supervisor)
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
@@ -154,7 +154,7 @@ const USAGE = `webjs commands:
 const HELP = {
   dev: {
     usage: 'webjs dev [--port <n>] [--no-hot]',
-    summary: 'Start the dev server with live reload (source is the runtime, no build step). Run it in the app directory (the one holding app/); anywhere else it exits 1 naming the app to start.',
+    summary: 'Start the dev server with hot reload (source is the runtime, no build step): a page or layout edit refreshes in place, a component edit hot-swaps, a stylesheet edit swaps the sheet, and a full reload logs why in the browser console. Run it in the app directory (the one holding app/); anywhere else it exits 1 naming the app to start.',
     options: [
       { flag: '--port <n>', description: 'Port to listen on (else PORT, else 8080).' },
       { flag: '--no-hot', description: 'Run in-process, without the hot-reload supervisor.' },
@@ -368,7 +368,7 @@ const HELP = {
     options: [
       { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then 8080, the same resolution `webjs dev` uses.' },
       { flag: '--json', description: 'Print one JSON document: { ok, url, settled, ready, rebuilds, paths, errors }, each error carrying kind, message, file, line, column and codeFrame.' },
-      { flag: '--timeout <seconds>', description: 'How long to wait for the server to settle (default 30). A restarting Node dev server is retried until then.' },
+      { flag: '--timeout <seconds>', description: 'How long to wait for the server to settle (default 30). A restarting dev server (after a .env, package.json, lockfile, instrumentation or env edit) is retried until then.' },
     ],
     notesTitle: 'Exit status',
     notes: [
@@ -623,10 +623,11 @@ async function main() {
       const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
 
       // Decide how to run: in-process (`--no-hot`), or in a child under WebJs's
-      // reload supervisor (#1521), which restarts it on a change on Node and
-      // runs it under `bun --hot` on Bun (#514), restarting it there only for an
-      // edit to a module a Bun.plugin serves (#1550), and brings a crashed child
-      // back on either. The branch logic lives in the pure `planDevSupervisor`
+      // reload supervisor (#1521). On Node the child re-evaluates edits in place
+      // and is restarted only for a restart file once it says so (#1689); on Bun
+      // it runs under `bun --hot` (#514), restarted for a restart file or an edit
+      // to a module a Bun.plugin serves (#1550). A crashed child is brought back
+      // on either. The branch logic lives in the pure `planDevSupervisor`
       // so it is unit-testable without spawning a process.
       const plan = planDevSupervisor({
         isBun: !!process.versions.bun,
