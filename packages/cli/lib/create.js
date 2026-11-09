@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi, bunifyEnvExample } from './runtime-rewrite.js';
 import { postgresCompose, postgresCi } from './db-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
@@ -1042,6 +1043,17 @@ export default defineConfig({
     await writeFile(envExample, dbUrlLine + '\n');
   }
 
+  // A real .env with fresh secrets, the way `rails new` writes its secret key:
+  // createAuth() and session() both refuse to run without theirs, and an app
+  // that works on the first `npm run dev` should not need a manual step first.
+  // The file is gitignored, so each clone generates its own; never overwrite one.
+  const envFile = join(appDir, '.env');
+  if (!existsSync(envFile)) {
+    const example = await readFile(envExample, 'utf8');
+    const secret = () => randomBytes(32).toString('hex');
+    await writeFile(envFile, example.replace(/^(AUTH_SECRET|SESSION_SECRET)=$/gm, (_, key) => `${key}=${secret()}`));
+  }
+
   // .gitignore the generated SQLite file (sqlite only; postgres has no local file).
   if (dialect !== 'postgres') {
     const gitignore = join(appDir, '.gitignore');
@@ -1630,7 +1642,7 @@ ThemeToggle.register('theme-toggle');
   // local file with no .env). Point it at a running database; `dev` / `start`
   // then apply pending migrations via webjs.*.before.
   const pgNote = dialect === 'postgres'
-    ? `\nPostgres: copy .env.example to .env and set DATABASE_URL to a running database before \`${pm} run dev\`.\nThe example URL names the database \`${dbName}\`. Create that database or edit the URL.\n`
+    ? `\nPostgres: set DATABASE_URL in .env to a running database before \`${pm} run dev\`.\nThe example URL names the database \`${dbName}\`. Create that database or edit the URL.\n`
     : '';
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
   // `webjs` npm name is owned by an unrelated package; `npx webjs
