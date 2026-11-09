@@ -1381,8 +1381,8 @@ async function main() {
     case 'elision': {
       // Report the elision verdict for the app in cwd (#1308): which component
       // modules the browser never downloads, why each one that ships does,
-      // which page/layout is inert / import-only / ships whole, and any orphan
-      // class that gets no verdict at all. Reuses the ONE analysis pass
+      // the component frontier each route module is replaced by (route modules
+      // never ship, #1686), and any orphan class that gets no verdict at all. Reuses the ONE analysis pass
       // (`analyzeAppElision`, the same reporting layer `webjs doctor` and
       // the MCP `list_elision` tool call), so `--json` is byte-identical to
       // that tool. Read-only: no autofix, and nothing is written to disk.
@@ -1555,7 +1555,6 @@ async function main() {
       if (!report.analysed) {
         const why = {
           'no-app': 'no app/ directory here, so there is nothing to analyse',
-          'elide-off': 'elision is disabled (webjs.elide false, or WEBJS_ELIDE), so every module ships',
           unanalysable: 'the app could not be analysed (`webjs check` and `webjs dev` name the real problem)',
         }[report.skipped] || 'nothing was analysed';
         console.log(`webjs elision: ${why}.`);
@@ -1565,7 +1564,8 @@ async function main() {
       const s = report.summary;
       console.log(
         `webjs elision: ${s.components} component module(s), ${s.elided} elided, ${s.shipped} shipped. ` +
-        `${s.routeModules} route module(s): ${s.inert} inert, ${s.importOnly} import-only, ${s.shippedWhole} ship whole.\n`,
+        `${s.routeModules} route module(s), which never ship: ${s.zeroJs} load no JavaScript, ${s.carriers} load the components they render.` +
+        (report.elide ? '\n' : ' Component elision is disabled, so every component ships.\n'),
       );
 
       const elided = report.components.filter((c) => c.verdict === 'elided');
@@ -1593,16 +1593,17 @@ async function main() {
         console.log();
       }
       if (report.routeModules.length) {
-        console.log('Route modules');
+        console.log('Route modules (run on the server only; the browser loads the components listed)');
         const rows = report.routeModules.map((r) => [
-          r.verdict, r.file,
-          r.verdict === 'import-only' ? `emits ${r.emits.join(', ') || '(nothing)'}`
-            : r.verdict === 'shipped' ? (r.blocker ? `blocked by ${r.blocker}, which ${r.reason}` : `it ${r.reason}`)
-            : '',
+          r.kind, r.file,
+          r.emits.length ? `loads ${r.emits.join(', ')}` : 'no JavaScript',
         ]);
-        const w0 = pad(rows, 0, 12), w1 = pad(rows, 1, FILE_W);
-        for (const [verdict, file, note] of rows) {
-          console.log(`  ${verdict.padEnd(w0)}  ${file.padEnd(w1)}${note ? '  ' + note : ''}`.trimEnd());
+        const w0 = pad(rows, 0, 16), w1 = pad(rows, 1, FILE_W);
+        for (const [kind, file, note] of rows) {
+          console.log(`  ${kind.padEnd(w0)}  ${file.padEnd(w1)}  ${note}`.trimEnd());
+        }
+        for (const r of report.routeModules) {
+          for (const h of r.hints) console.log(`  hint: ${r.file}: ${h}`);
         }
         console.log();
       }

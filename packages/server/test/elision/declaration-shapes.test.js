@@ -15,8 +15,9 @@
  * shipping, because the cheap way to make the first half pass is to stop
  * seeing calls at all. Reverting the frame blanking in `component-elision.js`
  * reds every declaration test except the block-bodied arrow (which the
- * depth-0 frame already dropped), plus the route test, and nothing else
- * (proven at 015faf5c).
+ * depth-0 frame already dropped), plus the component-closure test, and
+ * nothing else (proven at 015faf5c for the then route-module form of that
+ * test; a route module never ships since #1686, so it now rides a component).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -70,22 +71,27 @@ for (const [name, src] of Object.entries(CALLS)) {
   });
 }
 
-test('a page importing a formatting helper module does not ship for it', async () => {
+test('a display-only component importing a formatting helper module does not ship for it', async () => {
   const format = `const MICROS = 1_000_000;
 export const usd = (m) => '$' + (Math.round(m / 10_000) / 100).toFixed(2);
 export function relativeTime(when, now = Date.now()) {
   return Math.round((now - when) / 1000) + 's ago';
 }`;
-  const page = `import { html } from '@webjsdev/core';
+  // A route module never ships (#1686), so the place this heuristic still
+  // decides anything is a component's closure: a helper read as doing load-time
+  // work would pin the component that imports it.
+  const price = `import { WebComponent, html } from '@webjsdev/core';
 import { usd, relativeTime } from './format.js';
-export default ({ cost, at }) => html\`<p>\${usd(cost)} \${relativeTime(at)}</p>\`;`;
-  const files = { '/app/page.js': page, '/app/format.js': format };
+class XPrice extends WebComponent {
+  render() { return html\`<p>\${usd(1)} \${relativeTime(0)}</p>\`; }
+}
+XPrice.register('x-price');`;
+  const files = { '/app/price.js': price, '/app/format.js': format };
   const r = await analyzeElision(
-    [],
-    ['/app/page.js'],
-    new Map([['/app/page.js', new Set(['/app/format.js'])]]),
+    [{ tag: 'x-price', file: '/app/price.js', className: 'XPrice' }],
+    new Map([['/app/price.js', new Set(['/app/format.js'])], ['/app/format.js', new Set()]]),
     async (f) => files[f],
     '/app',
   );
-  assert.ok(r.inertRouteModules.has('/app/page.js'), 'the page must be inert');
+  assert.ok(r.elidableComponents.has('/app/price.js'), 'the component stays display-only, so it is elided');
 });

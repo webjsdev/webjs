@@ -282,25 +282,6 @@ export function shouldAccessLog(pathname) {
  * @returns {Set<string>}
  */
 /**
- * Collect every page + layout file across the route table. These are the
- * modules the client boot script imports, and thus the candidates for
- * inert-route elision (dropping a module that does no client work).
- * `route.{js,ts}` / middleware / metadata are excluded: they never ship.
- *
- * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
- * @returns {string[]}
- */
-export function collectRouteModules(routeTable) {
-  /** @type {Set<string>} */
-  const mods = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) mods.add(page.file);
-    for (const f of page.layouts || []) mods.add(f);
-  }
-  return [...mods];
-}
-
-/**
  * List the app's top-level source directory names, for expanding a `#*`
  * catch-all import alias into one browser importmap prefix scope per dir (#555).
  * Excludes infra dirs that are never imported via `#` (node_modules, dotfiles,

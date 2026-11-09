@@ -8,16 +8,17 @@
  * followed by `(`, so `hasModuleScopeSideEffect`'s top-level-call matcher read
  * it as a call and classified a module of pure typed data as running code at
  * module scope. The cost was invisible: no error, no warning, identical
- * behaviour, just every importing route module downgraded from inert to
- * shipping whole, and any component carrying such an annotation forced to ship
- * along with the display-only children it renders.
+ * behaviour, just any component importing or carrying such an annotation
+ * forced to ship along with the display-only children it renders. (Route
+ * modules never ship since #1686, so the component closure is where the
+ * verdict lives now.)
  *
  * These tests drive the REAL pipeline over a REAL `.ts` app on disk, because
  * that is the only level the fix lives at: the analyser erases types before it
  * scans, so a unit call on a source string would prove nothing about the path
- * that decides what the browser downloads. The first three are the issue's
+ * that decides what the browser downloads. The first two are the issue's
  * acceptance criteria, and they are the discriminating ones: reverting the
- * erasure reds exactly those three (proven at 3b3cb6a5). The rest are the
+ * erasure reds them (proven at 3b3cb6a5 on the route-module form). The rest are the
  * counterweight that keeps them honest, since erasing too much would satisfy
  * the first three by simply never detecting anything, and they stay green in
  * both directions on purpose.
@@ -51,14 +52,12 @@ export function winner(cells: Cell[]): Cell {
 
 /**
  * Write a throwaway TypeScript app, run the real pipeline over it, and return
- * the verdict plus the paths the assertions key on.
+ * the verdict plus the component the assertions key on: a display-only badge
+ * that imports the util, rendered by a page. The util is the badge's whole
+ * client closure, so a wrong verdict on it shows up directly as the badge
+ * shipping.
  *
- * `direct: true` has the PAGE import the util and render no component, which is
- * the shape the report hit: there the util is the page's whole client closure,
- * so a wrong verdict on it shows up directly as the page's blocker instead of
- * being laundered through a component that ships for its own reason.
- *
- * @param {{ utilSrc: string, direct?: boolean }} spec
+ * @param {{ utilSrc: string }} spec
  */
 async function analyseApp(spec) {
   const dir = await mkdtemp(join(tmpdir(), 'webjs-type-annotations-'));
@@ -67,7 +66,7 @@ async function analyseApp(spec) {
     await mkdir(join(dir, 'components'), { recursive: true });
     await mkdir(join(dir, 'modules/game/utils'), { recursive: true });
     await writeFile(join(dir, 'modules/game/utils/game.ts'), spec.utilSrc);
-    if (!spec.direct) await writeFile(join(dir, 'components/badge.ts'), `
+    await writeFile(join(dir, 'components/badge.ts'), `
 import { WebComponent, html } from '@webjsdev/core';
 import { LINES } from '../modules/game/utils/game.ts';
 export class Badge extends WebComponent {
@@ -75,11 +74,7 @@ export class Badge extends WebComponent {
 }
 Badge.register('my-badge');
 `);
-    await writeFile(join(dir, 'app/page.ts'), spec.direct ? `
-import { html } from '@webjsdev/core';
-import { LINES } from '../modules/game/utils/game.ts';
-export default () => html\`<p>\${LINES.length}</p>\`;
-` : `
+    await writeFile(join(dir, 'app/page.ts'), `
 import { html } from '@webjsdev/core';
 import '../components/badge.ts';
 export default () => html\`<my-badge></my-badge>\`;
@@ -87,38 +82,45 @@ export default () => html\`<my-badge></my-badge>\`;
 
     const graph = await buildModuleGraph(dir);
     const components = await scanComponents(dir);
-    const pageFile = join(dir, 'app/page.ts');
     const badgeFile = join(dir, 'components/badge.ts');
-    const verdict = await analyzeElision(
-      components, [pageFile], graph, (f) => readFile(f, 'utf8'), dir,
-    );
-    return { verdict, pageFile, badgeFile };
+    const verdict = await analyzeElision(components, graph, (f) => readFile(f, 'utf8'), dir);
+    return { verdict, badgeFile };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 }
 
 test('a parenthesised type annotation does not mark its module as running code at module scope', async () => {
-  const { verdict, pageFile } = await analyseApp({ utilSrc: LINES_TS, direct: true });
-  const shipped = verdict.shippedRouteModules.get(pageFile);
-  assert.equal(shipped, undefined,
-    `the page must not ship; it did, blocked by ${shipped && shipped.blocker} (${shipped && shipped.reason})`);
-});
-
-test('a page importing only such a module is inert', async () => {
-  const { verdict, pageFile } = await analyseApp({ utilSrc: LINES_TS });
-  assert.ok(verdict.inertRouteModules.has(pageFile),
-    'the whole client closure is display-only, so the page ships zero JavaScript');
+  const { verdict, badgeFile } = await analyseApp({ utilSrc: LINES_TS });
+  const row = verdict.componentVerdicts.get(badgeFile);
+  assert.ok(verdict.elidableComponents.has(badgeFile),
+    `the badge must not ship; it did (${row && row.evidence}: ${row && row.reason})`);
 });
 
 test('a component whose only module-scope construct is a parenthesised annotation is elided', async () => {
-  const { verdict, badgeFile } = await analyseApp({ utilSrc: LINES_TS });
-  assert.ok(verdict.elidableComponents.has(badgeFile),
-    'the badge renders static markup and the annotation is not a signal');
-  assert.equal(verdict.componentVerdicts.get(badgeFile).shipped, false);
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-type-annotations-own-'));
+  try {
+    await mkdir(join(dir, 'components'), { recursive: true });
+    await writeFile(join(dir, 'components/badge.ts'), `
+import { WebComponent, html } from '@webjsdev/core';
+const LINES: readonly (readonly [number, number, number])[] = [[0, 1, 2]];
+export class Badge extends WebComponent {
+  render() { return html\`<span>\${LINES.length}</span>\`; }
+}
+Badge.register('my-badge');
+`);
+    const badgeFile = join(dir, 'components/badge.ts');
+    const verdict = await analyzeElision(await scanComponents(dir), await buildModuleGraph(dir),
+      (f) => readFile(f, 'utf8'), dir);
+    assert.ok(verdict.elidableComponents.has(badgeFile),
+      'the badge renders static markup and the annotation is not a signal');
+    assert.equal(verdict.componentVerdicts.get(badgeFile).shipped, false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
-test('the pin is the ANNOTATION, not the data: an `as const` spelling was already inert', async () => {
+test('the pin is the ANNOTATION, not the data: an `as const` spelling was already elided', async () => {
   // The report's own workaround, kept as a control. Both spellings describe the
   // same runtime value, so a fix that only moved one of them would be reading
   // something other than the annotation.
@@ -127,11 +129,11 @@ test('the pin is the ANNOTATION, not the data: an `as const` spelling was alread
     'export const LINES = [',
   ).replace(/\n\];/, '\n] as const;');
   assert.notEqual(asConst, LINES_TS, 'the control rewrite must actually apply');
-  const { verdict, pageFile } = await analyseApp({ utilSrc: asConst, direct: true });
-  assert.ok(verdict.inertRouteModules.has(pageFile));
+  const { verdict, badgeFile } = await analyseApp({ utilSrc: asConst });
+  assert.ok(verdict.elidableComponents.has(badgeFile));
 });
 
-test('real module-scope work in a .ts module still ships the page', async () => {
+test('real module-scope work in a .ts module still ships the component', async () => {
   // The conservative direction, asserted per construct. Type erasure must not
   // become a way for genuine client work to slip past: each of these is real
   // code in the file the browser would run.
@@ -143,11 +145,10 @@ test('real module-scope work in a .ts module still ships the page', async () => 
     'a browser global': 'export const w = window.innerWidth;',
   };
   for (const [label, stmt] of Object.entries(cases)) {
-    const { verdict, pageFile } = await analyseApp({
+    const { verdict, badgeFile } = await analyseApp({
       utilSrc: `export const LINES: readonly (readonly [number, number, number])[] = [[0, 1, 2]];\n${stmt}\n`,
-      direct: true,
     });
-    assert.ok(!verdict.inertRouteModules.has(pageFile), `${label} must keep the page shipping`);
+    assert.ok(!verdict.elidableComponents.has(badgeFile), `${label} must keep the component shipping`);
   }
 });
 
@@ -155,11 +156,10 @@ test('a genuine top-level call named like a type keyword still ships', async () 
   // `readonly` is a legal function name in JavaScript, so exempting the bare
   // identifier would have been a false NEGATIVE, the one direction this
   // analyser may not take. Erasing types instead leaves the real call visible.
-  const { verdict, pageFile } = await analyseApp({
+  const { verdict, badgeFile } = await analyseApp({
     utilSrc: 'function readonly(x: number) { return x; }\nexport const LINES = readonly(1);\n',
-    direct: true,
   });
-  assert.ok(!verdict.inertRouteModules.has(pageFile),
+  assert.ok(!verdict.elidableComponents.has(badgeFile),
     'a call to a function named `readonly` is a call');
 });
 
@@ -186,7 +186,7 @@ Badge.register('my-badge');
     const badgeFile = join(dir, 'components/badge.tsx');
     assert.ok(components.some((c) => c.file === badgeFile),
       'precondition: the component scanner admits a .tsx file');
-    const verdict = await analyzeElision(components, [], graph, (f) => readFile(f, 'utf8'), dir);
+    const verdict = await analyzeElision(components, graph, (f) => readFile(f, 'utf8'), dir);
     assert.ok(verdict.elidableComponents.has(badgeFile),
       'the annotation is not a signal in a .tsx file either');
   } finally {
@@ -202,27 +202,30 @@ test('the strip memo is validated against the source, so an edit is re-erased', 
   // path, two different sources, two different verdicts is what proves it.
   const dir = await mkdtemp(join(tmpdir(), 'webjs-type-annotations-memo-'));
   try {
-    await mkdir(join(dir, 'app'), { recursive: true });
+    await mkdir(join(dir, 'components'), { recursive: true });
     await mkdir(join(dir, 'modules/game/utils'), { recursive: true });
     const util = join(dir, 'modules/game/utils/game.ts');
-    const pageFile = join(dir, 'app/page.ts');
-    await writeFile(pageFile, `
-import { html } from '@webjsdev/core';
+    const badgeFile = join(dir, 'components/badge.ts');
+    await writeFile(badgeFile, `
+import { WebComponent, html } from '@webjsdev/core';
 import { LINES } from '../modules/game/utils/game.ts';
-export default () => html\`<p>\${LINES.length}</p>\`;
+export class Badge extends WebComponent {
+  render() { return html\`<span>\${LINES.length}</span>\`; }
+}
+Badge.register('my-badge');
 `);
     const analyse = async () => {
       const graph = await buildModuleGraph(dir);
-      return analyzeElision(await scanComponents(dir), [pageFile], graph, (f) => readFile(f, 'utf8'), dir);
+      return analyzeElision(await scanComponents(dir), graph, (f) => readFile(f, 'utf8'), dir);
     };
 
     await writeFile(util, 'export const LINES: readonly (readonly [number, number, number])[] = [[0, 1, 2]];\n');
-    assert.ok((await analyse()).inertRouteModules.has(pageFile), 'pure typed data is inert');
+    assert.ok((await analyse()).elidableComponents.has(badgeFile), 'pure typed data keeps the badge elided');
 
     // Same path, new content that DOES do module-scope work. A memo keyed only
-    // by path would hand back the erased first version and call this inert too.
+    // by path would hand back the erased first version and elide this too.
     await writeFile(util, 'export const LINES = init();\nfunction init() { return [[0, 1, 2]]; }\n');
-    assert.ok(!(await analyse()).inertRouteModules.has(pageFile),
+    assert.ok(!(await analyse()).elidableComponents.has(badgeFile),
       'the edit must be re-read and re-scanned, not served from the memo');
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -236,10 +239,9 @@ test('a .ts module with non-erasable syntax falls back to scanning it as authore
   // authored, which is the pre-#1423 behaviour and therefore the conservative
   // direction. The `init()` call is the proof it still SCANNED rather than
   // silently gave up and called the module clean.
-  const { verdict, pageFile } = await analyseApp({
+  const { verdict, badgeFile } = await analyseApp({
     utilSrc: 'export enum E { A, B }\nexport const LINES = init();\nfunction init() { return []; }\n',
-    direct: true,
   });
-  assert.ok(!verdict.inertRouteModules.has(pageFile),
-    'an unstrippable module is still scanned, and its real call still ships the page');
+  assert.ok(!verdict.elidableComponents.has(badgeFile),
+    'an unstrippable module is still scanned, and its real call still ships the component');
 });

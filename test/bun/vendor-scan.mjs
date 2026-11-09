@@ -35,6 +35,7 @@ import { browserEntryFiles } from '../../packages/server/src/browser-entries.js'
 import { scanComponents } from '../../packages/server/src/component-scanner.js';
 import { buildRouteTable } from '../../packages/server/src/router.js';
 import { analyzeElision } from '../../packages/server/src/component-elision.js';
+import { collectBootRouteModules } from '../../packages/server/src/route-frontier.js';
 
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
 const dir = mkdtempSync(join(tmpdir(), 'webjs-vendor-scan-x-'));
@@ -90,13 +91,11 @@ export default () => html\`<my-counter></my-counter><my-badge></my-badge>\`;
   const graph = await buildModuleGraph(dir);
   const components = await scanComponents(dir);
   const routeTable = await buildRouteTable(dir);
-  const routeModules = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) routeModules.add(page.file);
-    for (const f of page.layouts || []) routeModules.add(f);
-  }
-  const r = await analyzeElision(components, [...routeModules], graph, async (f) => readFileSync(f, 'utf8'), dir);
-  const skip = new Set([...r.elidableComponents, ...r.inertRouteModules, ...r.importOnlyRouteModules.keys()]);
+  // The dev server's skip set: elided components and every route module, since
+  // a route module never ships (#1686).
+  const ic = routeTable.instrumentationClient;
+  const r = await analyzeElision(components, graph, async (f) => readFileSync(f, 'utf8'), dir, { entries: ic ? [ic] : [] });
+  const skip = new Set([...r.elidableComponents, ...collectBootRouteModules(routeTable)]);
   const rt = [...reachedBareImports(graph, [...browserEntryFiles(routeTable, components)], dir, skip)].sort();
 
   assert.deepEqual(pin, ['analytics-sdk', 'dayjs', 'zod'],

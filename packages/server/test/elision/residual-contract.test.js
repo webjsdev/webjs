@@ -20,6 +20,10 @@
  * sibling route-elision tests use. That is load-bearing for residual (b),
  * which is precisely about a file that is NOT in the module graph: against a
  * faked graph the assertion would be vacuous.
+ *
+ * Only a module the browser loads observes anything (#1686), so every
+ * observer here rides a shipping component (an interactive counter the page
+ * renders), never the page itself.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,6 +34,7 @@ import { join } from 'node:path';
 import { buildModuleGraph } from '../../src/module-graph.js';
 import { scanComponents, findOrphanComponents } from '../../src/component-scanner.js';
 import { analyzeElision } from '../../src/component-elision.js';
+import { routeFrontiers } from '../../src/route-frontier.js';
 
 /** A display-only badge: static markup, no events, no props, no hooks, light DOM. */
 const badge = (extra = '') => `
@@ -72,11 +77,23 @@ export class Counter extends WebComponent {
 Counter.register('my-counter');
 `;
 
+/** The same counter, importing the observer module so the browser loads it. */
+const counterImporting = (spec) => `
+import { WebComponent, html } from '@webjsdev/core';
+import '${spec}';
+export class Counter extends WebComponent {
+  render() { return html\`<button @click=\${() => {}}>+</button>\`; }
+}
+Counter.register('my-counter');
+`;
+
 const PAGE = `
 import { html } from '@webjsdev/core';
 import '../components/badge.js';
 export default () => html\`<my-badge></my-badge>\`;
 `;
+
+const readSrc = (f) => import('node:fs/promises').then((m) => m.readFile(f, 'utf8'));
 
 /**
  * Write a throwaway app, run the real pipeline over it, and return the verdict
@@ -92,7 +109,8 @@ async function analyseApp(spec) {
     let page = PAGE;
     if (spec.observerSrc) {
       await writeFile(join(dir, 'components/observer.js'), spec.observerSrc);
-      page = page.replace("import '../components/badge.js';", "import '../components/badge.js';\nimport '../components/observer.js';");
+      await writeFile(join(dir, 'components/counter.js'), counterImporting('./observer.js'));
+      page = page.replace("import '../components/badge.js';", "import '../components/badge.js';\nimport '../components/counter.js';");
     }
     if (spec.css) {
       await mkdir(join(dir, 'public'), { recursive: true });
@@ -104,10 +122,10 @@ async function analyseApp(spec) {
     const components = await scanComponents(dir);
     const pageFile = join(dir, 'app/page.js');
     const badgeFile = join(dir, 'components/badge.js');
-    const verdict = await analyzeElision(
-      components, [pageFile], graph, (f) => import('node:fs/promises').then((m) => m.readFile(f, 'utf8')), dir,
-    );
-    return { dir, components, verdict, pageFile, badgeFile, orphans: await findOrphanComponents(dir) };
+    const verdict = await analyzeElision(components, graph, readSrc, dir);
+    const skip = new Set([...verdict.elidableComponents, pageFile]);
+    const frontier = routeFrontiers([pageFile], graph, new Set(components.map((c) => c.file)), skip).get(pageFile);
+    return { dir, components, verdict, pageFile, badgeFile, frontier, orphans: await findOrphanComponents(dir) };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -162,27 +180,26 @@ test('residual (a) rescue: static interactive = true ships the badge anyway', as
 // Residual (b): a :defined rule in an EXTERNAL stylesheet
 // ---------------------------------------------------------------------------
 
-test('residual (b): an external-stylesheet :defined rule leaves the badge elided and the page inert', async () => {
+test('residual (b): an external-stylesheet :defined rule leaves the badge elided and the page loading nothing', async () => {
   // TAG_DEFINED_RE only scans graph-reachable MODULE source, and a
   // `public/app.css` is not in the module graph at all, so the rule is
-  // invisible. The badge is elided AND the page becomes inert, which drops
-  // both modules from the boot entirely.
-  const { verdict, badgeFile, pageFile } = await analyseApp({
+  // invisible. The badge is elided, so the page's frontier is empty and the
+  // boot loads no module for it.
+  const { verdict, badgeFile, frontier } = await analyseApp({
     badgeSrc: badge(),
     css: 'my-badge:defined { opacity: 1 }',
   });
   assert.ok(verdict.elidableComponents.has(badgeFile), 'an external stylesheet is outside the module graph');
-  assert.ok(verdict.inertRouteModules.has(pageFile), 'with its only component elided the page is inert');
+  assert.deepEqual(frontier, [], 'with its only component elided the page loads no JavaScript');
 });
 
-test('residual (b) rescue: static interactive = true ships the badge and makes the page import-only', async () => {
-  const { verdict, badgeFile, pageFile } = await analyseApp({
+test('residual (b) rescue: static interactive = true ships the badge and puts it in the frontier', async () => {
+  const { verdict, badgeFile, frontier } = await analyseApp({
     badgeSrc: badge('static interactive = true;'),
     css: 'my-badge:defined { opacity: 1 }',
   });
   assert.ok(!verdict.elidableComponents.has(badgeFile), 'the override must force the ship');
-  assert.ok(!verdict.inertRouteModules.has(pageFile), 'a shipping component reclassifies the page');
-  assert.deepEqual(verdict.importOnlyRouteModules.get(pageFile), [badgeFile]);
+  assert.deepEqual(frontier, [badgeFile], 'the boot imports the badge in the page module place');
 });
 
 // ---------------------------------------------------------------------------
@@ -226,67 +243,61 @@ test('residual (c) rescue: static interactive = true ships the badge anyway', as
 test('a computed Class.register(tag) is invisible to the SCANNER, so it gets no verdict at all', async () => {
   // `scanComponents` requires a literal tag (invariant 3 already does too), so
   // this component never enters the component set. `analyzeComponentSource` is
-  // never consulted for it, the page sees only a `register(...)` call (which
-  // hasModuleScopeSideEffect explicitly exempts) and is classified INERT, so
-  // both modules are dropped and the element silently never registers.
-  const { components, verdict, pageFile, badgeFile, orphans } = await analyseApp({
+  // never consulted for it, and since a page never ships (#1686) and the
+  // orphan is no component, the page's frontier is empty: the module never
+  // reaches the browser and the element silently never registers.
+  const { components, verdict, badgeFile, frontier, orphans } = await analyseApp({
     badgeSrc: badgeComputedRegistration(),
   });
   assert.deepEqual(components, [], 'the scanner sees no component');
   assert.equal(verdict.componentVerdicts.size, 0, 'no component means no verdict to report');
-  assert.ok(verdict.inertRouteModules.has(pageFile), 'the page is classified inert');
+  assert.deepEqual(frontier, [], 'the page loads nothing, so the orphan never registers');
   assert.deepEqual(orphans, [{ className: 'Badge', file: badgeFile }], 'it surfaces as an ORPHAN instead');
 });
 
-test('a computed-tag component still REGISTERS when its importer ships (#1308)', async () => {
-  // The two orphan shapes fail differently, and the docs used to claim both
-  // "never upgrade". Not so: a computed tag is invisible to the SCANNER, but
-  // `Badge.register(TAG)` is ordinary code that runs whenever the module
-  // reaches the browser. Here the page ships whole for its own reason, so the
-  // page module is emitted AND keeps its import of the component, which means
-  // the element does upgrade. What is genuinely lost either way is the
-  // verdict, the registry entry, and the preload hint.
-  //
-  // The inert-page case (the test above) is the one where the claim holds,
-  // because the page is dropped and the import goes with it.
+test('a computed-tag component still REGISTERS when a shipping COMPONENT imports it (#1308, #1686)', async () => {
+  // The two orphan shapes fail differently. A computed tag is invisible to the
+  // SCANNER, but `Badge.register(TAG)` is ordinary code that runs whenever the
+  // module reaches the browser. A page never ships, so the only importer that
+  // carries it there is a shipping component: the boot imports the counter in
+  // the page module's place, and the counter's own import of the orphan loads
+  // it. What is genuinely lost either way is the verdict, the registry entry,
+  // and the preload hint.
   const dir = await mkdtemp(join(tmpdir(), 'webjs-residual-upgrade-'));
   try {
     await mkdir(join(dir, 'app'), { recursive: true });
     await mkdir(join(dir, 'components'), { recursive: true });
-    await mkdir(join(dir, 'lib'), { recursive: true });
     await writeFile(join(dir, 'components/badge.js'), badgeComputedRegistration());
-    // Client-effecting at module scope, so the PAGE ships whole.
-    await writeFile(join(dir, 'lib/track.js'),
-      "if (typeof window !== 'undefined') { window.__hits = 1; }\nexport const track = () => {};\n");
+    await writeFile(join(dir, 'components/counter.js'), counterImporting('./badge.js'));
     await writeFile(join(dir, 'app/page.js'),
-      "import { html } from '@webjsdev/core';\nimport '../components/badge.js';\n" +
-      "import { track } from '../lib/track.js';\nexport default () => html`<my-badge></my-badge>${String(track)}`;\n");
+      "import { html } from '@webjsdev/core';\nimport '../components/counter.js';\n" +
+      "export default () => html`<my-counter></my-counter><my-badge></my-badge>`;\n");
 
     const graph = await buildModuleGraph(dir);
     const components = await scanComponents(dir);
     const pageFile = join(dir, 'app/page.js');
-    const verdict = await analyzeElision(
-      components, [pageFile], graph, (f) => import('node:fs/promises').then((m) => m.readFile(f, 'utf8')), dir,
-    );
-    assert.deepEqual(components, [], 'still invisible to the scanner');
-    assert.ok(!verdict.inertRouteModules.has(pageFile), 'the page is NOT inert here');
-    assert.ok(verdict.shippedRouteModules.has(pageFile),
-      'the page ships whole, so its import of the component survives and the registration runs');
+    const counterFile = join(dir, 'components/counter.js');
+    const badgeFile = join(dir, 'components/badge.js');
+    const verdict = await analyzeElision(components, graph, readSrc, dir);
+    const frontier = routeFrontiers([pageFile], graph, new Set(components.map((c) => c.file)),
+      new Set([...verdict.elidableComponents, pageFile])).get(pageFile);
+    assert.ok(!components.some((c) => c.file === badgeFile), 'still invisible to the scanner');
+    assert.ok(!verdict.elidableComponents.has(counterFile), 'the counter ships');
+    assert.deepEqual(frontier, [counterFile], 'the boot imports the counter');
+    assert.ok(graph.get(counterFile)?.has(badgeFile),
+      "the counter's import of the orphan loads it in the browser, so its registration runs");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test('an IMPORT-ONLY importer drops the computed-tag orphan, the ordinary case (#1308)', async () => {
-  // The third importer verdict, and the one an author actually hits: a page
-  // mixing one interactive component with a computed-tag orphan. The orphan is
-  // not in `componentFiles`, so it never joins the import-only frontier, and
-  // the boot emits only the frontier in the page module's place. The page's
-  // import of the orphan goes with the dropped page module, so `register(TAG)`
-  // never runs.
-  //
-  // This is what makes "only when its importer ships WHOLE" the right rule:
-  // enumerating the losing verdicts is how import-only got missed.
+test('a PAGE importer drops the computed-tag orphan, even next to a real component (#1308, #1686)', async () => {
+  // The case an author actually hits: a page mixing one interactive component
+  // with a computed-tag orphan. The orphan is not in `componentFiles`, so it
+  // never joins the page's frontier, and the page module itself never ships,
+  // so its import of the orphan never runs in the browser and `register(TAG)`
+  // never happens there. Before #1686 a page that shipped whole carried it;
+  // no page ships now.
   const dir = await mkdtemp(join(tmpdir(), 'webjs-residual-importonly-'));
   try {
     await mkdir(join(dir, 'app'), { recursive: true });
@@ -300,13 +311,11 @@ test('an IMPORT-ONLY importer drops the computed-tag orphan, the ordinary case (
     const graph = await buildModuleGraph(dir);
     const components = await scanComponents(dir);
     const pageFile = join(dir, 'app/page.js');
-    const verdict = await analyzeElision(
-      components, [pageFile], graph, (f) => import('node:fs/promises').then((m) => m.readFile(f, 'utf8')), dir,
-    );
-    const emits = verdict.importOnlyRouteModules.get(pageFile);
-    assert.ok(emits, 'the page is import-only, not shipped whole');
-    assert.deepEqual(emits, [join(dir, 'components/counter.js')],
-      'only the real component is emitted; the orphan is not in the frontier, so its import is dropped');
+    const verdict = await analyzeElision(components, graph, readSrc, dir);
+    const frontier = routeFrontiers([pageFile], graph, new Set(components.map((c) => c.file)),
+      new Set([...verdict.elidableComponents, pageFile])).get(pageFile);
+    assert.deepEqual(frontier, [join(dir, 'components/counter.js')],
+      'only the real component is booted; the orphan is not in the frontier, so it never loads');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -316,12 +325,12 @@ test('static interactive = true does NOT rescue a computed registration tag', as
   // The measured finding the docs used to get wrong: the override is a
   // property the ANALYSER reads, and nothing consults the analyser for a
   // component the scanner never saw. Adding it changes nothing.
-  const { components, verdict, pageFile, orphans } = await analyseApp({
+  const { components, verdict, frontier, orphans } = await analyseApp({
     badgeSrc: badgeComputedRegistration('static interactive = true;'),
   });
   assert.deepEqual(components, [], 'still invisible to the scanner');
   assert.equal(verdict.componentVerdicts.size, 0, 'still no verdict');
-  assert.ok(verdict.inertRouteModules.has(pageFile), 'the page is still inert, so the module is still dropped');
+  assert.deepEqual(frontier, [], 'the page still loads nothing, so the module is still dropped');
   assert.equal(orphans.length, 1, 'still an orphan');
 });
 

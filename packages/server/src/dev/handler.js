@@ -80,7 +80,7 @@ import {
   readDevToolingFromApp,
 } from './config.js';
 import {
-  exists, kebab, resolveRequestId, shouldAccessLog, collectRouteModules,
+  exists, kebab, resolveRequestId, shouldAccessLog,
   appTopLevelDirs, locateCoreDir,
   setReloadIdleMs,
   resolveReloadIdleMs,
@@ -553,8 +553,6 @@ export async function createRequestHandler(opts) {
     testMode: opts.testMode === true,
     moduleGraph: null,
     elidableComponents: new Set(),
-    inertRouteModules: new Set(),
-    importOnlyRouteModules: new Map(),
     // Route module -> the component files the boot imports in its place
     // (#1686). Route modules never ship; see `route-frontier.js`.
     /** @type {Map<string, string[]>} */
@@ -766,14 +764,12 @@ export async function createRequestHandler(opts) {
             // Read the switch ONCE: the dev summary below reports it too, and
             // calling readElideEnabled twice per warm re-reads package.json.
             const elideOn = await readElideEnabled(appDir);
+            const ic = state.routeTable.instrumentationClient;
             const r = elideOn
-              ? await analyzeElision(components, collectRouteModules(state.routeTable),
-                  state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
-              : { elidableComponents: new Set(), inertRouteModules: new Set(), importOnlyRouteModules: new Map(),
-                  shippedRouteModules: new Map(), componentVerdicts: new Map() };
+              ? await analyzeElision(components, state.moduleGraph, (f) => readFile(f, 'utf8'), appDir,
+                  { entries: ic ? [ic] : [] })
+              : { elidableComponents: new Set(), componentVerdicts: new Map() };
             state.elidableComponents = r.elidableComponents;
-            state.inertRouteModules = r.inertRouteModules;
-            state.importOnlyRouteModules = r.importOnlyRouteModules;
             // Route modules never ship (#1686): each is replaced in the boot by
             // its component frontier. Computed whether or not elision is on,
             // since `webjs.elide` only switches display-only COMPONENT elision.
@@ -823,11 +819,6 @@ export async function createRequestHandler(opts) {
               const rel = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
               const elidedPaths = [
                 ...state.elidableComponents,
-                ...state.inertRouteModules,
-                // An import-only module is dropped from the boot (replaced by its
-                // component imports), so a flip in / out of that class must bust
-                // the importer's `?v` too.
-                ...state.importOnlyRouteModules.keys(),
                 // A file flipping to or from `static lazy` changes how every
                 // importer serves its import of it (#1524).
                 ...[...state.lazyComponentFiles.keys()].map((f) => `lazy:${f}`),
@@ -906,10 +897,9 @@ export async function createRequestHandler(opts) {
               // analysisDone = false and this sits inside that stage.
               logger.info?.(
                 elideOn
-                  ? `[webjs] elision: ${r.elidableComponents.size}/${new Set(components.map((c) => c.file)).size} components elided, ` +
-                    `${r.inertRouteModules.size} route modules inert, ${r.importOnlyRouteModules.size} import-only, ` +
-                    `${r.shippedRouteModules.size} ship whole. Run \`webjs elision\` for the per-module verdict.`
-                  : `[webjs] elision: disabled (WEBJS_ELIDE / webjs.elide), every module ships.`,
+                  ? `[webjs] elision: ${r.elidableComponents.size}/${new Set(components.map((c) => c.file)).size} components elided; ` +
+                    `pages, layouts and boundaries run on the server only. Run \`webjs elision\` for the per-module verdict.`
+                  : `[webjs] elision: disabled (WEBJS_ELIDE / webjs.elide), every component ships.`,
               );
             }
             // The analysis stage is the last writer of per-build inputs (the

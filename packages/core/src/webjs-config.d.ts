@@ -220,7 +220,7 @@ export type WebjsDoctorSeverity = 'off' | 'warn' | 'error';
 export interface WebjsDoctorConfig {
   /**
    * Per-check severity, keyed by the stable doctor code (`NODE_VERSION`,
-   * `UNMARKED_ASSET_LINKS`, `ELISION_CARRIERS`, and so on; `webjs doctor --json`
+   * `UNMARKED_ASSET_LINKS`, `ROUTE_BROWSER_CODE`, and so on; `webjs doctor --json`
    * carries the code on every result). A code with no entry keeps its default:
    * `error` for a hard toolchain failure, `warn` otherwise. This is how CI gates
    * on a chosen subset without `--strict` making every warning fatal.

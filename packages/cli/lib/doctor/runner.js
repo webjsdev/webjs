@@ -7,7 +7,7 @@ import { checkVendorGitignore } from './probes/vendor-gitignore.js';
 import { checkImportmapCoherence } from './probes/importmap-coherence.js';
 import { checkWebjsVersions } from './probes/webjs-versions.js';
 import { checkGitHook } from './probes/git-hook.js';
-import { checkElisionCarriers, checkElisionComponents } from './probes/elision.js';
+import { checkRouteBrowserCode, checkElisionComponents } from './probes/elision.js';
 import { checkStaticAssetFreshness } from './probes/static-asset-freshness.js';
 import { checkUnmarkedAssetLinks } from './probes/unmarked-asset-links.js';
 import { checkFrameworkResolves, checkFrameworkLinks } from './probes/framework-resolves.js';
@@ -65,7 +65,7 @@ export async function runDoctorChecks(appDir, opts = {}) {
     Promise.resolve(checkFrameworkLinks(appDir)),
     checkImportmapCoherence(appDir, opts),
     Promise.resolve(checkGitHook(appDir)),
-    checkElisionCarriers(elision),
+    checkRouteBrowserCode(elision),
     checkElisionComponents(elision),
     checkStaticAssetFreshness(appDir, opts),
     checkUnmarkedAssetLinks(appDir),

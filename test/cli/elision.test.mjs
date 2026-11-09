@@ -85,16 +85,18 @@ function fixtureApp() {
 // The analysis, direct.
 // ---------------------------------------------------------------------------
 
-test('analyzeAppElision reports both verdicts and both route classes', async () => {
+test('analyzeAppElision reports both verdicts and each route module\'s frontier', async () => {
   const r = await analyzeAppElision(fixtureApp());
   assert.equal(r.analysed, true);
   assert.deepEqual(
     r.components.map((c) => [c.file, c.verdict]),
     [['components/badge.js', 'elided'], ['components/counter.js', 'shipped']],
   );
+  // Route modules never ship (#1686): each row is its kind plus the components
+  // the boot imports in its place.
   assert.deepEqual(
-    r.routeModules.map((m) => [m.file, m.verdict]),
-    [['app/about/page.js', 'inert'], ['app/page.js', 'import-only']],
+    r.routeModules.map((m) => [m.file, m.kind, m.emits]),
+    [['app/about/page.js', 'page', []], ['app/page.js', 'page', ['components/counter.js']]],
   );
 });
 
@@ -111,15 +113,16 @@ test('webjs elision --json equals the direct analyzeAppElision call', async () =
   assert.deepEqual(JSON.parse(r.stdout), JSON.parse(JSON.stringify(await analyzeAppElision(dir))));
 });
 
-test('webjs elision names the elided component, the ship reason, and the route classes', () => {
+test('webjs elision names the elided component, the ship reason, and what each route module loads', () => {
   const r = runCli(fixtureApp(), []);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Elided components/);
   assert.match(r.stdout, /components\/badge\.js\s+my-badge/);
   assert.match(r.stdout, /Shipped components/);
   assert.match(r.stdout, /components\/counter\.js.*own: template has an @event binding/);
-  assert.match(r.stdout, /inert\s+app\/about\/page\.js/);
-  assert.match(r.stdout, /import-only\s+app\/page\.js\s+emits components\/counter\.js/);
+  assert.match(r.stdout, /2 route module\(s\), which never ship: 1 load no JavaScript, 1 load the components they render/);
+  assert.match(r.stdout, /page\s+app\/about\/page\.js\s+no JavaScript/);
+  assert.match(r.stdout, /page\s+app\/page\.js\s+loads components\/counter\.js/);
 });
 
 test('webjs elision lists an orphan under its own heading', () => {

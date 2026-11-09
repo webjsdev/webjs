@@ -14,10 +14,10 @@
  *     forcing. This is the direction where a wrong verdict silently loses
  *     interactivity in production, and before #1308 an app had no way to ask
  *     "what did you drop from my page?".
- *   - `routeModules`: every page / layout as `inert` / `import-only` /
- *     `shipped`, a module that ships whole naming the first client-effecting
- *     blocker that pins it (a non-component on a component-free path from the
- *     module, #963, or its own signal when the module itself is the cause).
+ *   - `routeModules`: every page, layout and boundary with its kind and the
+ *     component frontier the boot imports in its place (`emits`). A route
+ *     module never ships itself (#1686), so this is what each one costs the
+ *     browser: nothing when `emits` is empty.
  *   - `orphans`: a `class X extends WebComponent` with no literal-tag
  *     registration, either because there is no registration call or because
  *     the tag is computed. The scanner never sees it (invariant 3 requires a
@@ -30,28 +30,30 @@
  *
  * Consumed by `webjs elision` (the CLI report + `--json`), the MCP
  * `list_elision` tool, and `webjs doctor`'s two elision checks, which share
- * ONE call so the module graph is built once per doctor run. Advisory only: a
- * page legitimately MAY ship, and the analyser is biased toward shipping by
- * design (server AGENTS invariant 7), so this never fails anything.
+ * ONE call so the module graph is built once per doctor run. Advisory only:
+ * the analyser is biased toward shipping by design (server AGENTS invariant
+ * 7), so this never fails anything.
  *
  * Nothing is cached here. Every out-of-process consumer runs the analysis once
  * and exits, so a cache would never hit and would only add a staleness bug.
  */
 import { readFile, stat } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 
 import { buildModuleGraph } from './module-graph.js';
 import { scanComponents, findOrphanComponents } from './component-scanner.js';
 import { buildRouteTable } from './router.js';
-import { analyzeElision } from './component-elision.js';
+import { analyzeElision, routeModuleBrowserHints } from './component-elision.js';
+import { routeFrontiers, routeModuleKinds } from './route-frontier.js';
 
 /**
  * @typedef {'own'|'observed'|'closure'|'render'|'import'|'unreadable'} ElisionEvidence
  * @typedef {{ file: string, tags: string[], verdict: 'elided'|'shipped', evidence: ElisionEvidence|null, reason: string|null, by: string|null }} ElisionComponentRow
- * @typedef {{ file: string, verdict: 'inert'|'import-only'|'shipped', emits: string[], blocker: string|null, reason: string|null }} ElisionRouteModuleRow
+ * @typedef {'page'|'layout'|'error'|'loading'|'not-found'|'forbidden'|'unauthorized'|'global-not-found'} RouteModuleKind
+ * @typedef {{ file: string, kind: RouteModuleKind, emits: string[], hints: string[] }} ElisionRouteModuleRow
  * @typedef {{ file: string, className: string }} ElisionOrphanRow
- * @typedef {{ components: number, elided: number, shipped: number, routeModules: number, inert: number, importOnly: number, shippedWhole: number, orphans: number }} ElisionSummary
- * @typedef {{ analysed: boolean, skipped: 'no-app'|'elide-off'|'unanalysable'|null, components: ElisionComponentRow[], routeModules: ElisionRouteModuleRow[], orphans: ElisionOrphanRow[], summary: ElisionSummary }} ElisionReport
+ * @typedef {{ components: number, elided: number, shipped: number, routeModules: number, zeroJs: number, carriers: number, orphans: number }} ElisionSummary
+ * @typedef {{ analysed: boolean, skipped: 'no-app'|'unanalysable'|null, elide: boolean, components: ElisionComponentRow[], routeModules: ElisionRouteModuleRow[], orphans: ElisionOrphanRow[], summary: ElisionSummary }} ElisionReport
  */
 
 /**
@@ -59,11 +61,15 @@ import { analyzeElision } from './component-elision.js';
  * @returns {Promise<ElisionReport>}
  */
 export async function analyzeAppElision(appDir) {
+  // Every path the analysis compares is absolute, so a relative app dir would
+  // match nothing and report empty frontiers.
+  appDir = resolve(appDir);
   // No `app/` means this is not a routable app (a bare component library, a
   // lib-only fixture); nothing ships, so there is nothing to report on.
   if (!(await pathExists(join(appDir, 'app')))) return empty('no-app');
-  // Elision off (opt-out) ships everything by design, so the verdict is moot.
-  if (!(await readElideEnabled(appDir))) return empty('elide-off');
+  // Elision off ships every component; route modules still never ship, so
+  // the route rows are reported either way.
+  const elide = await readElideEnabled(appDir);
 
   let moduleGraph, components, routeTable, orphans;
   try {
@@ -79,45 +85,84 @@ export async function analyzeAppElision(appDir) {
     return empty('unanalysable');
   }
 
-  // Exactly the page + layout set the dev server feeds to analyzeElision, so
-  // the verdict matches (error / loading / not-found modules always ship and
-  // are never elision candidates, so they are not in scope here).
-  const routeModuleSet = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) routeModuleSet.add(page.file);
-    for (const f of page.layouts || []) routeModuleSet.add(f);
-  }
-
-  const { inertRouteModules, importOnlyRouteModules, shippedRouteModules, componentVerdicts } =
-    await analyzeElision(components, [...routeModuleSet], moduleGraph, (f) => readFile(f, 'utf8'), appDir);
+  const ic = routeTable.instrumentationClient;
+  const { elidableComponents, componentVerdicts } = elide
+    ? await analyzeElision(components, moduleGraph, (f) => readFile(f, 'utf8'), appDir, { entries: ic ? [ic] : [] })
+    : { elidableComponents: new Set(), componentVerdicts: null };
 
   const rel = (f) => (f == null ? null : relative(appDir, f) || f);
   const byFile = (a, b) => a.file.localeCompare(b.file);
 
   /** @type {ElisionComponentRow[]} */
-  const componentRows = [...componentVerdicts.entries()].map(([file, v]) => ({
-    file: /** @type {string} */ (rel(file)),
-    tags: v.tags,
-    verdict: v.shipped ? 'shipped' : 'elided',
-    evidence: v.shipped ? /** @type {ElisionEvidence|null} */ (v.evidence) : null,
-    reason: v.shipped ? relativizeReason(v.reason, appDir) : null,
-    by: v.shipped ? rel(v.by) : null,
-  })).sort(byFile);
+  let componentRows;
+  if (componentVerdicts) {
+    componentRows = [...componentVerdicts.entries()].map(([file, v]) => ({
+      file: /** @type {string} */ (rel(file)),
+      tags: v.tags,
+      verdict: v.shipped ? 'shipped' : 'elided',
+      evidence: v.shipped ? /** @type {ElisionEvidence|null} */ (v.evidence) : null,
+      reason: v.shipped ? relativizeReason(v.reason, appDir) : null,
+      by: v.shipped ? rel(v.by) : null,
+    }));
+  } else {
+    // Elision off: every component ships, with no evidence to name.
+    const tagsByFile = new Map();
+    for (const c of components) {
+      const t = tagsByFile.get(c.file) || [];
+      if (!t.includes(c.tag)) t.push(c.tag);
+      tagsByFile.set(c.file, t);
+    }
+    componentRows = [...tagsByFile].map(([file, tags]) => ({
+      file: /** @type {string} */ (rel(file)), tags: tags.sort(), verdict: /** @type {const} */ ('shipped'),
+      evidence: null, reason: 'elision is disabled', by: null,
+    }));
+  }
+  componentRows.sort(byFile);
 
+  // The same frontier walk the dev server runs, so `emits` is exactly what the
+  // boot imports in each route module's place.
+  const kinds = routeModuleKinds(routeTable);
+  const routeFiles = new Set(kinds.keys());
+  const frontiers = routeFrontiers([...routeFiles], moduleGraph,
+    new Set(components.map((c) => c.file)), new Set([...elidableComponents, ...routeFiles]));
+  const componentFileSet = new Set(components.map((c) => c.file));
+  // A side-effect import of a barrel that leads to a component is how a route
+  // module registers components, and the boot loads those in its place.
+  /** @type {Map<string, boolean>} */
+  const carries = new Map();
+  const carriesComponent = (/** @type {string} */ abs) => {
+    if (carries.has(abs)) return /** @type {boolean} */ (carries.get(abs));
+    const seen = new Set([abs]);
+    const work = [abs];
+    let found = false;
+    while (work.length && !found) {
+      for (const dep of moduleGraph.get(/** @type {string} */ (work.pop())) || []) {
+        if (seen.has(dep) || /\.server\.m?[jt]s$/.test(dep)) continue;
+        if (componentFileSet.has(dep)) { found = true; break; }
+        seen.add(dep);
+        work.push(dep);
+      }
+    }
+    carries.set(abs, found);
+    return found;
+  };
   /** @type {ElisionRouteModuleRow[]} */
-  const routeRows = [
-    ...[...inertRouteModules].map((f) => ({
-      file: /** @type {string} */ (rel(f)), verdict: /** @type {const} */ ('inert'), emits: [], blocker: null, reason: null,
-    })),
-    ...[...importOnlyRouteModules].map(([f, emits]) => ({
-      file: /** @type {string} */ (rel(f)), verdict: /** @type {const} */ ('import-only'),
-      emits: emits.map((e) => /** @type {string} */ (rel(e))).sort(), blocker: null, reason: null,
-    })),
-    ...[...shippedRouteModules].map(([f, v]) => ({
-      file: /** @type {string} */ (rel(f)), verdict: /** @type {const} */ ('shipped'), emits: [],
-      blocker: rel(v.blocker), reason: relativizeReason(v.reason, appDir),
-    })),
-  ].sort(byFile);
+  const routeRows = [];
+  for (const [f, kind] of kinds) {
+    let hints = [];
+    try {
+      hints = routeModuleBrowserHints(await readFile(f, 'utf8'), {
+        file: f, appDir, isComponent: (abs) => componentFileSet.has(abs), carriesComponent,
+      });
+    } catch { /* unreadable: no advice */ }
+    routeRows.push({
+      file: /** @type {string} */ (rel(f)),
+      kind,
+      emits: (frontiers.get(f) || []).map((e) => /** @type {string} */ (rel(e))).sort(),
+      hints,
+    });
+  }
+  routeRows.sort(byFile);
 
   /** @type {ElisionOrphanRow[]} */
   const orphanRows = orphans
@@ -125,16 +170,15 @@ export async function analyzeAppElision(appDir) {
     .sort((a, b) => byFile(a, b) || a.className.localeCompare(b.className));
 
   return {
-    analysed: true, skipped: null,
+    analysed: true, skipped: null, elide,
     components: componentRows, routeModules: routeRows, orphans: orphanRows,
     summary: {
       components: componentRows.length,
       elided: componentRows.filter((c) => c.verdict === 'elided').length,
       shipped: componentRows.filter((c) => c.verdict === 'shipped').length,
       routeModules: routeRows.length,
-      inert: inertRouteModules.size,
-      importOnly: importOnlyRouteModules.size,
-      shippedWhole: shippedRouteModules.size,
+      zeroJs: routeRows.filter((r) => r.emits.length === 0).length,
+      carriers: routeRows.filter((r) => r.emits.length > 0).length,
       orphans: orphanRows.length,
     },
   };
@@ -142,15 +186,15 @@ export async function analyzeAppElision(appDir) {
 
 /**
  * The no-verdict report, naming WHY nothing was analysed so a machine consumer
- * can tell "elision is switched off" from "this is not an app".
- * @param {'no-app'|'elide-off'|'unanalysable'} skipped
+ * can tell "this is not an app" from "the analysis could not run".
+ * @param {'no-app'|'unanalysable'} skipped
  * @returns {ElisionReport}
  */
 function empty(skipped) {
   return {
-    analysed: false, skipped,
+    analysed: false, skipped, elide: false,
     components: [], routeModules: [], orphans: [],
-    summary: { components: 0, elided: 0, shipped: 0, routeModules: 0, inert: 0, importOnly: 0, shippedWhole: 0, orphans: 0 },
+    summary: { components: 0, elided: 0, shipped: 0, routeModules: 0, zeroJs: 0, carriers: 0, orphans: 0 },
   };
 }
 

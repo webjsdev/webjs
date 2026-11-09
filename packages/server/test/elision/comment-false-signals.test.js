@@ -27,8 +27,8 @@ function graphOf(edges) {
   for (const [from, tos] of Object.entries(edges)) g.set(from, new Set(tos));
   return g;
 }
-async function run({ files, components = [], routeModules = [], edges = {} }) {
-  return analyzeElision(components, routeModules, graphOf(edges), async (f) => files[f], '/app');
+async function run({ files, components = [], edges = {} }) {
+  return analyzeElision(components, graphOf(edges), async (f) => files[f], '/app');
 }
 const COMPONENTS = [{ tag: 'x-badge', className: 'Badge', file: '/app/components/badge.js' }];
 
@@ -50,17 +50,29 @@ test('a commented whenDefined does NOT force the observed component to ship', as
     // historical note: we used to call whenDefined('x-badge') here
     export const x = 1;
   `;
+  // The observer rides a SHIPPING component: only a module the browser loads
+  // observes anything (#1686), and a page never loads there.
+  const widget = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import '../lib/obs.js';
+    class Widget extends WebComponent {
+      render() { return html\`<button @click=\${() => {}}>go</button>\`; }
+    }
+    Widget.register('x-widget');
+  `;
   const page = `
     import { html } from '@webjsdev/core';
     import './components/badge.js';
-    import './lib/obs.js';
-    export default () => html\`<x-badge></x-badge>\`;
+    import './components/widget.js';
+    export default () => html\`<x-widget></x-widget><x-badge></x-badge>\`;
   `;
   const { elidableComponents } = await run({
-    files: { '/app/page.js': page, '/app/components/badge.js': BADGE, '/app/lib/obs.js': observer },
-    components: COMPONENTS,
-    routeModules: ['/app/page.js'],
-    edges: { '/app/page.js': ['/app/components/badge.js', '/app/lib/obs.js'] },
+    files: { '/app/page.js': page, '/app/components/badge.js': BADGE, '/app/components/widget.js': widget, '/app/lib/obs.js': observer },
+    components: [...COMPONENTS, { tag: 'x-widget', className: 'Widget', file: '/app/components/widget.js' }],
+    edges: {
+      '/app/page.js': ['/app/components/badge.js', '/app/components/widget.js'],
+      '/app/components/widget.js': ['/app/lib/obs.js'],
+    },
   });
   assert.ok(elidableComponents.has('/app/components/badge.js'),
     'a whenDefined that is only in a comment does not force the badge to ship');
@@ -71,17 +83,29 @@ test('counterfactual: a REAL whenDefined does force it to ship', async () => {
     customElements.whenDefined('x-badge').then(() => {});
     export const x = 1;
   `;
+  // The observer rides a SHIPPING component: only a module the browser loads
+  // observes anything (#1686), and a page never loads there.
+  const widget = `
+    import { WebComponent, html } from '@webjsdev/core';
+    import '../lib/obs.js';
+    class Widget extends WebComponent {
+      render() { return html\`<button @click=\${() => {}}>go</button>\`; }
+    }
+    Widget.register('x-widget');
+  `;
   const page = `
     import { html } from '@webjsdev/core';
     import './components/badge.js';
-    import './lib/obs.js';
-    export default () => html\`<x-badge></x-badge>\`;
+    import './components/widget.js';
+    export default () => html\`<x-widget></x-widget><x-badge></x-badge>\`;
   `;
   const { elidableComponents } = await run({
-    files: { '/app/page.js': page, '/app/components/badge.js': BADGE, '/app/lib/obs.js': observer },
-    components: COMPONENTS,
-    routeModules: ['/app/page.js'],
-    edges: { '/app/page.js': ['/app/components/badge.js', '/app/lib/obs.js'] },
+    files: { '/app/page.js': page, '/app/components/badge.js': BADGE, '/app/components/widget.js': widget, '/app/lib/obs.js': observer },
+    components: [...COMPONENTS, { tag: 'x-widget', className: 'Widget', file: '/app/components/widget.js' }],
+    edges: {
+      '/app/page.js': ['/app/components/badge.js', '/app/components/widget.js'],
+      '/app/components/widget.js': ['/app/lib/obs.js'],
+    },
   });
   assert.ok(!elidableComponents.has('/app/components/badge.js'),
     'a real whenDefined forces the badge to ship (proves the comment case is what flips it)');
@@ -106,7 +130,6 @@ test('a commented @event or browser global does NOT force a component to ship', 
   const { elidableComponents } = await run({
     files: { '/app/page.js': page, '/app/components/note.js': commented },
     components: [{ tag: 'x-note', className: 'Note', file: '/app/components/note.js' }],
-    routeModules: ['/app/page.js'],
     edges: { '/app/page.js': ['/app/components/note.js'] },
   });
   assert.ok(elidableComponents.has('/app/components/note.js'),
@@ -129,7 +152,6 @@ test('counterfactual: a REAL @click in the template forces ship', async () => {
   const { elidableComponents } = await run({
     files: { '/app/page.js': page, '/app/components/note.js': interactive },
     components: [{ tag: 'x-note', className: 'Note', file: '/app/components/note.js' }],
-    routeModules: ['/app/page.js'],
     edges: { '/app/page.js': ['/app/components/note.js'] },
   });
   assert.ok(!elidableComponents.has('/app/components/note.js'),
@@ -156,7 +178,6 @@ test('a commented child tag does NOT force ship via the render rule', async () =
   const { elidableComponents } = await run({
     files: { '/app/page.js': page, '/app/components/badge.js': BADGE, '/app/components/widget.js': widget },
     components: [...COMPONENTS, { tag: 'x-widget', className: 'Widget', file: '/app/components/widget.js' }],
-    routeModules: ['/app/page.js'],
     edges: { '/app/page.js': ['/app/components/badge.js', '/app/components/widget.js'] },
   });
   assert.ok(elidableComponents.has('/app/components/badge.js'),

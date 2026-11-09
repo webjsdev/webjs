@@ -73,7 +73,7 @@ webjs doctor --strict   # also fail on EVERY remaining warning, not just hard fa
     "doctor": &#123;
       "gate": &#123;
         "UNMARKED_ASSET_LINKS": "error",
-        "ELISION_CARRIERS": "off"
+        "ROUTE_BROWSER_CODE": "off"
       &#125;
     &#125;
   &#125;

@@ -886,7 +886,7 @@ test('readDoctorPolicy keeps well-formed entries and reports the rest separately
       doctor: {
         gate: {
           UNMARKED_ASSET_LINKS: 'error',
-          ELISION_CARRIERS: 'off',
+          ROUTE_BROWSER_CODE: 'off',
           NOT_A_REAL_CODE: 'error',
           ENV_DRIFT: 'fatal',
           NODE_VERSION: 3,
@@ -895,7 +895,7 @@ test('readDoctorPolicy keeps well-formed entries and reports the rest separately
     },
   }));
   const p = readDoctorPolicy(dir);
-  assert.deepEqual(p.gate, { UNMARKED_ASSET_LINKS: 'error', ELISION_CARRIERS: 'off' });
+  assert.deepEqual(p.gate, { UNMARKED_ASSET_LINKS: 'error', ROUTE_BROWSER_CODE: 'off' });
   assert.deepEqual(p.unknownCodes, ['NOT_A_REAL_CODE']);
   assert.deepEqual(
     p.badSeverities.map((b) => b.code).sort(),
@@ -1232,40 +1232,41 @@ test('vendor-gitignore: ignores leaked GIT_WORK_TREE/GIT_DIR (worktree pre-commi
 });
 
 // ---------------------------------------------------------------------------
-// Page/layout elision advisory (#646): name why a page/layout ships.
+// Route-module advisory (#1686): a page, layout or boundary runs only on the
+// server, so code in one that looks meant for the browser does nothing there.
 // ---------------------------------------------------------------------------
-const CARRIER_CHECK = 'Page/layout elision (carrier hygiene)';
+const ROUTE_CHECK = 'Route modules (browser code that runs only on the server)';
 
-test('a page pinned by a client-effecting non-component WARNS and names the blocker', async () => {
+test('a page side-effect-importing a helper that touches the document WARNS, naming both', async () => {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
-  // The page is a pure carrier EXCEPT it side-effect-imports a util that
-  // touches a browser global at module load, so it ships whole.
   write(dir, 'app/page.js',
     `import { html } from '@webjsdev/core';\nimport '../lib/track.js';\nexport default () => html\`<p>hi</p>\`;\n`);
   write(dir, 'lib/track.js', `document.title = 'set at module load';\nexport const y = 1;\n`);
 
   const results = await runDoctorChecks(dir, baseOpts());
-  const r = byName(results, CARRIER_CHECK);
-  assert.equal(r.status, 'warn', 'a shipping page is a warn advisory');
-  assert.match(r.message, /app\/page\.js/, 'names the page that ships');
-  assert.match(r.message, /lib\/track\.js/, 'names the client-effecting blocker');
-  assert.ok(r.fix, 'offers an actionable fix line');
+  const r = byName(results, ROUTE_CHECK);
+  assert.equal(r.status, 'warn', 'browser-meant code in a page is a warn advisory');
+  assert.equal(r.code, 'ROUTE_BROWSER_CODE');
+  assert.match(r.message, /app\/page\.js/, 'names the page');
+  assert.match(r.message, /\.\.\/lib\/track\.js/, 'names the side-effect import');
+  assert.match(r.message, /runs only on the server/);
+  assert.match(r.fix, /component/, 'offers an actionable fix line');
   // Advisory only: it must NOT make doctor hard-fail.
   assert.ok(!results.some((x) => x.status === 'fail'), 'the advisory never produces a hard fail');
 });
 
-test('an inert app passes the carrier check (no advisory)', async () => {
+test('a static app passes the route-module check (no advisory)', async () => {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
   write(dir, 'app/page.js',
     `import { html } from '@webjsdev/core';\nexport default () => html\`<p>static</p>\`;\n`);
 
   const results = await runDoctorChecks(dir, baseOpts());
-  assert.equal(byName(results, CARRIER_CHECK).status, 'pass', 'a static page is elided, nothing to advise');
+  assert.equal(byName(results, ROUTE_CHECK).status, 'pass', 'a static page holds no browser code, nothing to advise');
 });
 
-test('elision disabled (webjs.elide=false) skips the carrier advisory', async () => {
+test('elision disabled (webjs.elide=false) still reports: route modules never ship either way', async () => {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module', webjs: { elide: false } }));
   write(dir, 'app/page.js',
@@ -1273,13 +1274,14 @@ test('elision disabled (webjs.elide=false) skips the carrier advisory', async ()
   write(dir, 'lib/track.js', `document.title = 'x';\nexport const y = 1;\n`);
 
   const results = await runDoctorChecks(dir, baseOpts());
-  assert.equal(byName(results, CARRIER_CHECK).status, 'pass', 'opted-out apps ship everything by design, so no advice');
+  const r = byName(results, ROUTE_CHECK);
+  assert.equal(r.status, 'warn', 'the switch only covers component elision, so the advice still applies');
+  assert.match(r.message, /app\/page\.js/);
 });
 
 // ---------------------------------------------------------------------------
-// Component elision verdict (#1308): the OTHER direction. The carrier check
-// above reports the benign over-ship; this one reports what was DROPPED, which
-// is where a wrong verdict silently costs an app its interactivity.
+// Component elision verdict (#1308): which component modules were DROPPED,
+// which is where a wrong verdict silently costs an app its interactivity.
 // ---------------------------------------------------------------------------
 const COMPONENT_CHECK = 'Component elision (what the browser drops)';
 

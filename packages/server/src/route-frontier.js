@@ -65,29 +65,42 @@ export function routeFrontiers(routeFiles, moduleGraph, componentFiles, skip) {
 }
 
 /**
- * Every route module the client boot could be asked to stand in for: pages,
- * layouts and every boundary kind (error, loading, forbidden, unauthorized,
- * not-found, global-not-found). None of them ships; each is replaced in the
- * boot by its component frontier (`route-frontier.js`). `global-error` is left
- * out: it renders its own document with no boot script.
+ * Every route module the client boot could be asked to stand in for, with its
+ * kind: pages, layouts and every boundary (error, loading, not-found,
+ * forbidden, unauthorized, global-not-found). None of them ships; each is
+ * replaced in the boot by its component frontier. `global-error` is left out:
+ * it renders its own document with no boot script.
  *
  * Route-ness comes from the route table, never from a file name (a plain
- * helper may be called `page.ts`).
+ * helper may be called `page.ts`). A file used as more than one kind keeps
+ * the first kind found, pages first.
  *
  * @param {any} routeTable  the router's table (`buildRouteTable`)
+ * @returns {Map<string, 'page'|'layout'|'error'|'loading'|'not-found'|'forbidden'|'unauthorized'|'global-not-found'>}
+ */
+export function routeModuleKinds(routeTable) {
+  /** @type {Map<string, any>} */
+  const kinds = new Map();
+  const add = (/** @type {string|undefined} */ f, /** @type {string} */ kind) => { if (f && !kinds.has(f)) kinds.set(f, kind); };
+  const pages = routeTable.pages || [];
+  for (const page of pages) add(page.file, 'page');
+  for (const [key, kind] of /** @type {const} */ ([
+    ['layouts', 'layout'], ['errors', 'error'], ['loadings', 'loading'], ['notFounds', 'not-found'],
+    ['forbiddens', 'forbidden'], ['unauthorizeds', 'unauthorized'],
+  ])) {
+    for (const page of pages) for (const f of page[key] || []) add(f, kind);
+  }
+  add(routeTable.notFound, 'not-found');
+  if (routeTable.notFounds) for (const f of routeTable.notFounds.values()) add(f, 'not-found');
+  add(routeTable.globalNotFound, 'global-not-found');
+  return kinds;
+}
+
+/**
+ * The route modules `routeModuleKinds` lists, as an array.
+ * @param {any} routeTable
  * @returns {string[]}
  */
 export function collectBootRouteModules(routeTable) {
-  /** @type {Set<string>} */
-  const mods = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) mods.add(page.file);
-    for (const key of ['layouts', 'errors', 'loadings', 'notFounds', 'forbiddens', 'unauthorizeds']) {
-      for (const f of /** @type {any} */ (page)[key] || []) mods.add(f);
-    }
-  }
-  if (routeTable.notFound) mods.add(routeTable.notFound);
-  if (routeTable.notFounds) for (const f of routeTable.notFounds.values()) mods.add(f);
-  if (routeTable.globalNotFound) mods.add(routeTable.globalNotFound);
-  return [...mods];
+  return [...routeModuleKinds(routeTable).keys()];
 }

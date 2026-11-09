@@ -76,7 +76,7 @@ function maskJsSet(html) {
     .replace(/<link[^>]+rel=["']modulepreload["'][^>]*>\s*/g, '');
 }
 
-test('import-only elision does not change the SSR body (on vs off, #605)', async () => {
+test('the boot is the same frontier with elision on and off (#605, #1686)', async () => {
   const files = {
     'app/layout.ts': INERT_LAYOUT,
     'app/page.ts': `import { html } from '@webjsdev/core';
@@ -97,9 +97,14 @@ export default () => html\`<x-counter>seed</x-counter><p>static copy</p>\`;`,
     if (offApp.warmup) await offApp.warmup();
     const offHtml = await (await offApp.handle(new Request('http://x/'))).text();
 
-    // Sanity: the two really did diverge in the JS set (otherwise the mask is
-    // vacuous and the equality below proves nothing).
-    assert.notEqual(onHtml, offHtml, 'precondition: on and off differ in the JS set');
+    // A route module never ships (#1686), whatever WEBJS_ELIDE says: the
+    // switch only governs display-only COMPONENT elision. With the one
+    // component interactive, both runs boot exactly that component.
+    for (const [label, html] of [['on', onHtml], ['off', offHtml]]) {
+      const boot = bootOf(html);
+      assert.match(boot, /\/components\/counter\.ts/, `elision ${label}: the component boots`);
+      assert.doesNotMatch(boot, /\/app\/(page|layout)\.ts/, `elision ${label}: no route module boots`);
+    }
     assert.equal(maskJsSet(onHtml), maskJsSet(offHtml), 'the SSR body is identical apart from the boot JS set');
   } finally {
     if (prev === undefined) delete process.env.WEBJS_ELIDE; else process.env.WEBJS_ELIDE = prev;

@@ -550,15 +550,17 @@ export interface ElisionComponentRow {
   by: string | null;
 }
 
-/** One page/layout route module's verdict. */
+/**
+ * One route module (page, layout or boundary). A route module never ships to
+ * the browser; the boot imports `emits`, its component frontier, in its place.
+ */
 export interface ElisionRouteModuleRow {
   file: string;
-  verdict: 'inert' | 'import-only' | 'shipped';
-  /** For `import-only`: the component modules the boot emits in its place. */
+  kind: 'page' | 'layout' | 'error' | 'loading' | 'not-found' | 'forbidden' | 'unauthorized' | 'global-not-found';
+  /** The component modules the boot imports in this module's place (empty: zero JS). */
   emits: string[];
-  /** For `shipped`: the first client-effecting blocker, or null when its own code is the cause. */
-  blocker: string | null;
-  reason: string | null;
+  /** Advisory notes on code that looks meant for the browser but runs only on the server. */
+  hints: string[];
 }
 
 /** A `class X extends WebComponent` with no literal-tag registration. */
@@ -572,9 +574,10 @@ export interface ElisionSummary {
   elided: number;
   shipped: number;
   routeModules: number;
-  inert: number;
-  importOnly: number;
-  shippedWhole: number;
+  /** Route modules whose frontier is empty: the browser loads nothing for them. */
+  zeroJs: number;
+  /** Route modules whose frontier names at least one component. */
+  carriers: number;
   orphans: number;
 }
 
@@ -582,7 +585,9 @@ export interface ElisionSummary {
 export interface ElisionReport {
   analysed: boolean;
   /** Why nothing was analysed, when `analysed` is false. */
-  skipped: 'no-app' | 'elide-off' | 'unanalysable' | null;
+  skipped: 'no-app' | 'unanalysable' | null;
+  /** Whether display-only component elision is on (`webjs.elide` / `WEBJS_ELIDE`). */
+  elide: boolean;
   components: ElisionComponentRow[];
   routeModules: ElisionRouteModuleRow[];
   orphans: ElisionOrphanRow[];
@@ -592,8 +597,8 @@ export interface ElisionReport {
 /**
  * App-level elision report, BOTH directions (#646, #1308): every component
  * module as elided or shipped (a shipped one naming the evidence and the module
- * that forced it), every page/layout as inert / import-only / shipped (a
- * shipped one naming the first client-effecting blocker), and every orphan
+ * that forced it), every route module with the component frontier the boot
+ * imports in its place (route modules never ship), and every orphan
  * component class that gets no verdict at all. A reporting layer over
  * `analyzeElision`, never a second analysis and never a build artifact.
  * Consumed by `webjs elision`, the MCP `list_elision` tool, and both `webjs

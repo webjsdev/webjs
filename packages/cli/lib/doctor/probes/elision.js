@@ -3,55 +3,39 @@
  */
 
 /**
- * Advisory (#646): name why a page/layout SHIPS its module to the browser
- * instead of being elided. A page/layout that is a pure carrier (import-only
- * #605 / inert #179) stays out of the browser; one that ships whole is pinned
- * by a specific client-effecting NON-component on a component-free path from it, #963 (a util touching
- * a client global, a module-scope side effect, a bare side-effect import) or by
- * its own client work. This turns that invisible #605/#179 regression into a
- * named line. WARN only: a page legitimately MAY ship, and the analyser is
- * biased toward shipping by design (server AGENTS invariant 7), so this is a
- * "you may not have intended this" hint, never a hard fail.
+ * Advisory (#1686): a page, layout or boundary runs only on the server, so
+ * code in one that looks meant for the browser (a browser global, a
+ * client-router or reactive import, a side-effect import that sets something
+ * up) silently does nothing there. The hints come from the shared report's
+ * route rows. WARN only: each pattern is legal on the server.
  * @param {Promise<any|null>} elisionPromise  the ONE shared report (#1308)
  * @returns {Promise<DoctorResult>}
  */
-export async function checkElisionCarriers(elisionPromise) {
-  const name = 'Page/layout elision (carrier hygiene)';
+export async function checkRouteBrowserCode(elisionPromise) {
+  const name = 'Route modules (browser code that runs only on the server)';
   const report = await elisionPromise;
-  if (!report) {
-    // Analysis unavailable (no app, malformed, server import failed): no advice.
+  if (!report || !report.analysed) {
     return { name, status: 'pass', message: 'not analysed (no routable app or analysis unavailable)' };
   }
-  if (!report.analysed) {
-    return { name, status: 'pass', message: 'not analysed (no routable app, or elision is disabled)' };
+  const hinted = report.routeModules.filter((r) => r.hints && r.hints.length);
+  if (hinted.length === 0) {
+    return { name, status: 'pass', message: 'no route module holds code meant for the browser' };
   }
-  // Paths and reasons arrive app-relative from `analyzeAppElision` (#1308).
-  const shipped = report.routeModules.filter((r) => r.verdict === 'shipped');
-  if (shipped.length === 0) {
-    return { name, status: 'pass', message: 'every page/layout is elided (a pure import-only or inert carrier)' };
-  }
-  // Name the FIRST client-effecting blocker (there may be more than one; the
-  // module stays shipped until every such blocker is moved out).
-  const lines = shipped.map(({ file, blocker, reason }) =>
-    blocker
-      ? `${file} ships whole. Its first client-effecting blocker is ${blocker}, which ${reason} and is not a component`
-      : `${file} ships whole because it ${reason}`,
-  );
+  const lines = hinted.flatMap((r) => r.hints.map((h) => `${r.file}: ${h}`));
   return {
     name,
     status: 'warn',
     message:
-      `${shipped.length} page/layout module(s) ship to the browser instead of being elided:\n` +
+      `${hinted.length} route module(s) hold code that looks meant for the browser, but pages, layouts and boundaries run only on the server:\n` +
       lines.map((l) => `    ${l}`).join('\n'),
-    fix: 'Move the client work out of the page/layout closure (into a component, or a .server module reached through an action) so the carrier can be elided, or accept that it ships. See https://webjs.dev/docs/elision.',
+    fix: 'Move browser code into a component (or `instrumentation-client.ts` for app-wide code). See https://webjs.dev/docs/elision.',
   };
 }
 
 /**
  * The OTHER direction of the elision verdict (#1308): which COMPONENT modules
- * the browser never downloads. `checkElisionCarriers` above reports the benign
- * over-ship direction; this one reports what was DROPPED, which is where a
- * wrong verdict silently costs an app its interactivity.
+ * the browser never downloads, which is where a wrong verdict silently costs an
+ * app its interactivity.
  *
  * Pass-only except for orphans, deliberately. An elided component is the
  * DESIRED outcome, so warning on one would fire on every healthy app and train
@@ -74,9 +58,10 @@ export async function checkElisionComponents(elisionPromise) {
   const notAnalysed = { name, status: /** @type {const} */ ('pass'), message: 'not analysed (no routable app or analysis unavailable)' };
   if (!report) return notAnalysed;
   if (!report.analysed) {
-    return report.skipped === 'elide-off'
-      ? { name, status: 'pass', message: 'elision is disabled (webjs.elide false or WEBJS_ELIDE), so every component module ships' }
-      : notAnalysed;
+    return notAnalysed;
+  }
+  if (!report.elide) {
+    return { name, status: 'pass', message: 'elision is disabled (`webjs.elide` false or WEBJS_ELIDE), so every component module ships' };
   }
   if (report.orphans.length > 0) {
     const lines = report.orphans.map(({ file, className }) =>

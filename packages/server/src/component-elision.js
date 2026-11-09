@@ -44,7 +44,7 @@ import {
   maskComments,
   redactToPlaceholders,
 } from './js-scan.js';
-import { transitiveDeps, expandImportAlias } from './module-graph.js';
+import { transitiveDeps, expandImportAlias, resolveImport } from './module-graph.js';
 import { ensureStripper } from './ts-strip.js';
 
 /**
@@ -744,7 +744,7 @@ const CORE_IMPORT_RE =
  * @param {string} src raw module source
  * @returns {{ interactive: boolean, reason: string | null }}
  */
-export function analyzeComponentSource(src) {
+export function analyzeComponentSource(src, appDir) {
   // A reactive primitive imported from core is the strongest signal and
   // is file-scoped, so check it first against the whole source.
   const reactiveImport = importsReactivePrimitive(src);
@@ -778,7 +778,7 @@ export function analyzeComponentSource(src) {
   // that effect, so ship. (Mirrors the route-module analysis.) The global
   // scan reads the placeholder redaction, so a name inside a string or in
   // template text is not a reference, while one in a `${...}` hole still is.
-  if (importsSideEffectNonCorePackage(src)) {
+  if (importsSideEffectNonCorePackage(src, appDir)) {
     return { interactive: true, reason: 'side-effect imports an npm package' };
   }
   if (COMPONENT_CLIENT_GLOBAL_RE.test(redactToPlaceholders(src).redacted) || COMPONENT_CLIENT_GLOBAL_KEY_RE.test(src)) {
@@ -1187,7 +1187,7 @@ async function resolveScanStripper() {
  * @returns {Promise<Set<string>>} absolute paths of elidable component files
  */
 export async function computeElidableComponents(components, moduleGraph, readFileFn, appDir) {
-  const { elidableComponents } = await analyzeElision(components, [], moduleGraph, readFileFn, appDir);
+  const { elidableComponents } = await analyzeElision(components, moduleGraph, readFileFn, appDir);
   return elidableComponents;
 }
 
@@ -1197,7 +1197,7 @@ export async function computeElidableComponents(components, moduleGraph, readFil
  * file and nothing else, so an unchanged file never needs it again; on a large
  * app it was most of the elision pass (about 350 ms of Crisp's 450 ms rebuild),
  * repeated in full after every edit.
- * @type {Map<string, { src: string, isRoute: boolean, isComponent: boolean, result: ReturnType<typeof scanFileUncached> }>}
+ * @type {Map<string, { src: string, isComponent: boolean, result: ReturnType<typeof scanFileUncached> }>}
  */
 const SCAN_RESULT_CACHE = new Map();
 
@@ -1205,22 +1205,22 @@ const SCAN_RESULT_CACHE = new Map();
  * The per-file half of `analyzeElision`: every signal it reads off ONE file.
  * @param {string} file
  * @param {string} src  the raw source as read
- * @param {{ isRoute: boolean, isComponent: boolean, appDir: string, scanStripper: any }} ctx
+ * @param {{ isComponent: boolean, appDir: string, scanStripper: any }} ctx
  */
 function scanFileForElision(file, src, ctx) {
   const hit = SCAN_RESULT_CACHE.get(file);
-  if (hit && hit.src === src && hit.isRoute === ctx.isRoute && hit.isComponent === ctx.isComponent) return hit.result;
+  if (hit && hit.src === src && hit.isComponent === ctx.isComponent) return hit.result;
   const result = scanFileUncached(file, src, ctx);
-  SCAN_RESULT_CACHE.set(file, { src, isRoute: ctx.isRoute, isComponent: ctx.isComponent, result });
+  SCAN_RESULT_CACHE.set(file, { src, isComponent: ctx.isComponent, result });
   return result;
 }
 
 /**
  * @param {string} file
  * @param {string} src
- * @param {{ isRoute: boolean, isComponent: boolean, appDir: string, scanStripper: any }} ctx
+ * @param {{ isComponent: boolean, appDir: string, scanStripper: any }} ctx
  */
-function scanFileUncached(file, src, { isRoute, isComponent, appDir, scanStripper }) {
+function scanFileUncached(file, src, { isComponent, appDir, scanStripper }) {
   // Erase type syntax first, so every scan below reads the code that RUNS
   // (#1423). This is the single point where the analyser reads a file, so
   // doing it here covers the module-scope, template, import, and component
@@ -1239,21 +1239,14 @@ function scanFileUncached(file, src, { isRoute, isComponent, appDir, scanStrippe
   const masked = maskComments(src);
   const tags = extractRenderedTags(masked);
   const { redacted, literals } = redactToPlaceholders(src);
-  // A page/layout NEVER hydrates (#605), so its `html` TEMPLATE content is
-  // SSR output, not module client work: an inline `<script>`'s browser
-  // globals run from the rendered HTML, and a page-template `@event` is
-  // dropped at SSR. For a route module, scan the `@event` signals on the
-  // template-redacted source so they do not pin the module; a non-route
-  // module keeps its template text, because a helper's `@click=${}` binds when
-  // a shipping component renders it. The browser-global scan reads `redacted`
-  // for EVERY module: a global's name in a string or template text is data
-  // (an inline `<script>` runs from the HTML, a `'lucide-app-window'` class
-  // is a class), while a genuine `document.x` in code, including code in a
-  // `${...}` hole, still flags (#623).
-  // The import-based checks stay on `redacted`: a real `import 'pkg'` side
-  // effect DOES run when a page/layout module loads in the browser, and
-  // `importsSideEffectNonCorePackage` itself skips local `#`-alias imports.
-  const templateScan = isRoute ? redacted : masked;
+  // The browser-global scan reads `redacted` for EVERY module: a global's name
+  // in a string or template text is data (an inline `<script>` runs from the
+  // rendered HTML, a `'lucide-app-window'` class is a class), while a genuine
+  // `document.x` in code, including code in a `${...}` hole, still flags
+  // (#623). The `@event` scans keep template text, because a helper's
+  // `@click=${}` binds when a shipping component renders it. Route modules
+  // are never analysed for their own sake: they never ship (#1686).
+  const templateScan = masked;
   const clientGlobalOrBare = EVENT_BINDING_RE.test(templateScan) || EVENT_PROP_RE.test(templateScan) ||
     importsSideEffectNonCorePackage(redacted, appDir, literals) || CLIENT_GLOBAL_RE.test(redacted) ||
     hasModuleScopeSideEffect(redacted, literals);
@@ -1261,7 +1254,7 @@ function scanFileUncached(file, src, { isRoute, isComponent, appDir, scanStrippe
   /** @type {string | null} */
   let interactiveReason = null;
   if (isComponent) {
-    const v = analyzeComponentSource(masked);
+    const v = analyzeComponentSource(masked, appDir);
     if (v.interactive) { interactive = true; interactiveReason = v.reason ?? null; }
   }
   return {
@@ -1278,27 +1271,23 @@ function scanFileUncached(file, src, { isRoute, isComponent, appDir, scanStrippe
 
 /**
  * Full elision analysis: which display-only COMPONENT modules can be elided,
- * AND which page/layout ROUTE modules are inert (do no client work) and can
- * therefore be dropped from the client boot script entirely. The second is
- * the progressive-enhancement completion of the first: a route whose whole
- * subtree is inert ships zero JavaScript.
+ * and the evidence behind every component that ships (#1308).
  *
- * A route module is inert only when neither it nor its effective client
- * closure (the import graph with elided components and `.server` stubs
- * skipped, since those never run on the client) touches anything
- * client-effecting: a reactive primitive, the client router, an `@event` /
- * `.on*` binding, a non-core npm import (which may self-execute), a client
- * global (`window`, `document`, …), or a shipping component. Anything
- * ambiguous or unreadable keeps shipping.
+ * Route modules (pages, layouts, boundaries) are not analysed: they never ship
+ * (#1686), and the boot imports each one's component frontier instead
+ * (`route-frontier.js`). A module counts as an OBSERVER of a component's
+ * registration (`whenDefined`, `:defined`, `instanceof`) only when the browser
+ * can load it, i.e. it is reachable from a component or from one of `entries`
+ * (`instrumentation-client.*`) without passing a `.server` file.
  *
  * @param {Array<{ tag: string, file: string, className?: string }>} components
- * @param {string[]} routeModules  absolute paths of page + layout files
  * @param {import('./module-graph.js').ModuleGraph} moduleGraph
  * @param {(file: string) => Promise<string>} readFileFn
  * @param {string} [appDir]
- * @returns {Promise<{ elidableComponents: Set<string>, inertRouteModules: Set<string>, importOnlyRouteModules: Map<string, string[]>, shippedRouteModules: Map<string, { blocker: string|null, reason: string }>, componentVerdicts: Map<string, { tags: string[], className: string|null, shipped: boolean, evidence: string|null, by: string|null, reason: string|null }> }>}
+ * @param {{ entries?: string[] }} [opts]  extra browser entries beyond the components
+ * @returns {Promise<{ elidableComponents: Set<string>, componentVerdicts: Map<string, { tags: string[], className: string|null, shipped: boolean, evidence: string|null, by: string|null, reason: string|null }> }>}
  */
-export async function analyzeElision(components, routeModules, moduleGraph, readFileFn, appDir) {
+export async function analyzeElision(components, moduleGraph, readFileFn, appDir, opts = {}) {
   /** @type {Set<string>} */
   const componentFiles = new Set();
   /** @type {Map<string, string>} */
@@ -1345,12 +1334,11 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   const observedComponentFiles = new Set();
   /** @type {Map<string, string>} observed component file -> the module observing it (#1308) */
   const observedBy = new Map();
+  /** @type {Array<[string, string]>} [observing module, observed component file] */
+  const observations = [];
 
   /** @type {Set<string>} */
   const allFiles = new Set(componentFiles);
-  /** @type {Set<string>} page/layout modules: never hydrate, so template content is SSR output. */
-  const routeModuleSet = new Set(routeModules);
-  for (const f of routeModules) allFiles.add(f);
   for (const [k, vs] of moduleGraph) {
     if (!appDir || k.startsWith(appDir)) allFiles.add(k);
     for (const v of vs) if (!appDir || v.startsWith(appDir)) allFiles.add(v);
@@ -1377,7 +1365,6 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     // doing it here covers the module-scope, template, import, and component
     // scans at once.
     const scan = scanFileForElision(file, src, {
-      isRoute: routeModuleSet.has(file),
       isComponent: componentFiles.has(file),
       appDir,
       scanStripper,
@@ -1394,10 +1381,33 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     // the per-file cache, because the component set is not a property of this
     // file. Verdict-safe: only ever forces MORE components to ship.
     for (const tag of scan.observedTags) {
-      const f = tagToFile.get(tag); if (f) { observedComponentFiles.add(f); if (!observedBy.has(f)) observedBy.set(f, file); }
+      const f = tagToFile.get(tag); if (f) observations.push([file, f]);
     }
     for (const cls of scan.observedClasses) {
-      const f = classToFile.get(cls); if (f) { observedComponentFiles.add(f); if (!observedBy.has(f)) observedBy.set(f, file); }
+      const f = classToFile.get(cls); if (f) observations.push([file, f]);
+    }
+  }
+
+  // Only a module the browser can load observes anything (#1686): a page that
+  // calls `whenDefined` runs on the server only, so it cannot need the tag
+  // registered. Reachable = the static closure of the components and the extra
+  // entries, stopping at `.server` files (their stubs import nothing).
+  {
+    const roots = [...componentFiles, ...(opts.entries || [])];
+    const reachable = new Set(roots);
+    const work = [...roots];
+    while (work.length) {
+      const cur = /** @type {string} */ (work.pop());
+      for (const dep of moduleGraph.get(cur) || []) {
+        if (reachable.has(dep) || SERVER_FILE_RE.test(dep)) continue;
+        reachable.add(dep);
+        work.push(dep);
+      }
+    }
+    for (const [by, f] of observations) {
+      if (!reachable.has(by)) continue;
+      observedComponentFiles.add(f);
+      if (!observedBy.has(f)) observedBy.set(f, by);
     }
   }
 
@@ -1518,18 +1528,8 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     if (!mustShip.has(file)) elidableComponents.add(file);
   }
 
-  // A file does client work if it ships as a component, or itself reaches a
-  // reactive primitive / client router / event binding / non-core npm import
-  // / client global.
-  const isClientEffecting = (file) =>
-    (componentFiles.has(file) && mustShip.has(file)) ||
-    reactiveFiles.has(file) ||
-    clientRouterFiles.has(file) ||
-    clientGlobalOrBareFiles.has(file);
-
-  // A human reason for WHY a file does client work, for the advisory that
-  // names why a page/layout ships (#646). Mirrors the isClientEffecting
-  // branches, most specific first.
+  // A human reason for WHY a file does client work, for the verdict that names
+  // why a component ships through its closure (#1308), most specific first.
   const clientEffectReason = (file) => {
     if (componentFiles.has(file) && mustShip.has(file)) return 'is an interactive component';
     if (clientRouterFiles.has(file)) return 'imports the client router';
@@ -1573,103 +1573,70 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   }
   for (const row of componentVerdicts.values()) row.tags.sort();
 
-  // Route modules fall into three classes by their effective client closure
-  // (skipping elided components and server stubs, which never load on the
-  // client):
-  //   - INERT: neither the module nor its closure does any client work. Dropped
-  //     from the boot script entirely (#179).
-  //   - IMPORT-ONLY (#605): the module itself does no client work, and the ONLY
-  //     client work its closure reaches is SHIPPING COMPONENTS (or modules
-  //     those components carry). Such a page / layout module is just the
-  //     import-graph carrier for its components; the boot can emit those
-  //     component modules directly and drop the module.
-  //   - SHIP: anything else (the module itself is client-effecting, or its
-  //     closure reaches a client-effecting non-component through a path that
-  //     does NOT pass through a shipping component). Unchanged behaviour.
-  //
-  // The walk is PATH-AWARE (#963): it stops descending at a shipping
-  // component, because that component is emitted in the module's place, so
-  // its whole subtree loads regardless of whether the page module ships.
-  // Consequently a client-effecting non-component reachable ONLY through
-  // shipping components (the module-scope-signal-in-its-own-file idiom of
-  // invariant 5, imported by a component the page renders) does not block
-  // import-only: dropping the page loses nothing, the emitted component
-  // still imports it. A client-effecting non-component reachable through a
-  // component-free path still ships the whole module, since dropping it
-  // would lose that side effect.
-  /** @type {Set<string>} */
-  const skip = new Set([...elidableComponents, ...serverFiles]);
-  /** @type {Set<string>} */
-  const inertRouteModules = new Set();
-  /** @type {Map<string, string[]>} route file -> component files to emit in its place */
-  const importOnlyRouteModules = new Map();
-  // Advisory (#646): for each route module that SHIPS WHOLE (neither inert nor
-  // import-only), record the first client-effecting blocker so a tool can name
-  // why it ships. blocker is null when the module's OWN code is the cause.
-  /** @type {Map<string, { blocker: string|null, reason: string }>} */
-  const shippedRouteModules = new Map();
-  for (const file of routeModules) {
-    if (!fileTags.has(file)) continue; // unreadable / not analysed: ship (omit from both sets)
-    if (isClientEffecting(file)) {
-      // The module itself ships whole; its own signal is the blocker.
-      shippedRouteModules.set(file, { blocker: null, reason: clientEffectReason(file) });
+  return { elidableComponents, componentVerdicts };
+}
+
+/** Reactive primitives: state a route module can hold but never update in a browser. */
+const REACTIVE_NAMES = new Set(['signal', 'computed', 'effect', 'watch']);
+const IMPORT_STMT_RE = /(?:^|[;\n])\s*import\s+(?:(type\s+)?([^'"`;]*?)\s+from\s+)?['"]__STR_(\d+)__['"]/g;
+const FIX_HINT = 'Move it into a component, or into `instrumentation-client.ts` for app-wide browser code.';
+
+/**
+ * Advisory notes on a ROUTE module's source (#1686): code that looks meant for
+ * the browser but runs only on the server, because a page, layout or boundary
+ * never loads there. Never a refusal: each pattern is legal on the server and
+ * merely does nothing useful, so `webjs elision` and `webjs doctor`
+ * (`ROUTE_BROWSER_CODE`) surface these as hints.
+ *
+ * Reads the placeholder redaction, so a browser global written in a string or
+ * in template TEXT (an inline `<script>` that runs from the rendered HTML) is
+ * not a hint, while one in code or in a `${...}` hole is.
+ *
+ * @param {string} src  the route module's source
+ * @param {{ file: string, appDir: string, isComponent: (abs: string) => boolean, carriesComponent?: (abs: string) => boolean }} ctx
+ *   `carriesComponent` says whether a module leads to a component (a barrel of
+ *   component imports), whose components the boot already loads in its place
+ * @returns {string[]}
+ */
+export function routeModuleBrowserHints(src, { file, appDir, isComponent, carriesComponent }) {
+  /** @type {string[]} */
+  const hints = [];
+  const { redacted, literals } = redactToPlaceholders(src);
+  const global = CLIENT_GLOBAL_RE.exec(redacted);
+  if (global) {
+    hints.push(`\`${global[0]}\` is used, but this module runs only on the server, so that code never runs in a browser. ${FIX_HINT}`);
+  }
+  for (const m of redacted.matchAll(IMPORT_STMT_RE)) {
+    if (m[1]) continue; // `import type` is erased
+    const spec = literals[Number(m[3])];
+    const bindings = m[2];
+    if (spec === undefined) continue;
+    if (spec === '@webjsdev/core/client-router') {
+      hints.push('`@webjsdev/core/client-router` is imported, but this module never loads in a browser. The router starts by itself once any component loads, or import it from `instrumentation-client.ts`.');
       continue;
     }
-    // Truncated walk (path-aware, #963): BFS the module's import graph, but
-    // do NOT descend into shipping components (they are emitted in the
-    // module's place, so their subtrees load regardless). Collect those
-    // frontier components as the emit set: what loading the module would
-    // have registered, so a component imported but only conditionally
-    // rendered still registers. Skip elided components and server files
-    // exactly like transitiveDeps (they never load client-side; a stub is
-    // served instead). Non-appDir deps (core, vendor) are traversed but
-    // never classified, matching the old closure's appDir restriction.
-    //
-    // A `static lazy` component is NOT special-cased here: it only appears
-    // on this STATIC walk when the route statically imports it, and in that
-    // case loading the module already eager-loaded it before elision, so
-    // emitting it directly preserves that exact behaviour. A normally-used
-    // lazy component is tag-referenced (never statically imported), so it
-    // is absent from this walk and still loads via the IntersectionObserver
-    // `observeLazy` path.
-    /** @type {Set<string>} shipping components to emit in the module's place */
-    const frontier = new Set();
-    /** @type {string|null} first client-effecting non-component on a component-free path */
-    let blocker = null;
-    if (appDir) {
-      const visited = new Set([file]);
-      const queue = [file];
-      while (queue.length) {
-        const cur = /** @type {string} */ (queue.shift());
-        const deps = moduleGraph.get(cur);
-        if (!deps) continue;
-        for (const dep of deps) {
-          if (visited.has(dep)) continue;
-          visited.add(dep);
-          // Elided components and appDir server files are in `skip`;
-          // SERVER_FILE_RE additionally stops at a `.server.*` OUTSIDE appDir
-          // (a relative import escaping the app dir), exactly like
-          // transitiveDeps: the browser only ever sees its stub, so its
-          // subtree never loads and must not contribute a blocker.
-          if (skip.has(dep) || SERVER_FILE_RE.test(dep)) continue;
-          if (componentFiles.has(dep)) { frontier.add(dep); continue; } // emitted; subtree carried
-          if (dep.startsWith(appDir) && isClientEffecting(dep)) blocker ??= dep;
-          queue.push(dep);
-        }
+    if (bindings && /^@webjsdev\/core(\/signals)?$/.test(spec)) {
+      const names = (bindings.match(/\{([^}]*)\}/)?.[1] || '').split(',')
+        .map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter((n) => REACTIVE_NAMES.has(n));
+      if (names.length) {
+        hints.push(`\`${names[0]}\` is imported, but this module never hydrates, so its state never changes in a browser. Keep reactive state in a component.`);
       }
+      continue;
     }
-    if (blocker !== null) {
-      // A client-effecting non-component is reachable on a component-free
-      // path; ship the whole module and name the blocker for the advisory.
-      shippedRouteModules.set(file, { blocker, reason: clientEffectReason(blocker) });
-    } else if (frontier.size === 0) {
-      inertRouteModules.add(file);
-    } else {
-      importOnlyRouteModules.set(file, [...frontier]);
+    if (bindings) continue;
+    // A side-effect import: anything it sets up happens on the server only.
+    if (/\.css$/.test(spec) || SERVER_FILE_RE.test(spec)) continue;
+    const local = spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('#');
+    if (local) {
+      const abs = resolveImport(spec, file, appDir);
+      if (!abs || isComponent(abs) || SERVER_FILE_RE.test(abs)) continue;
+      if (carriesComponent && carriesComponent(abs)) continue;
+    } else if (spec.startsWith('@webjsdev/') || spec.startsWith('node:')) {
+      continue;
     }
+    hints.push(`The side-effect import of \`${spec}\` runs only on the server. If it sets something up in the browser, import it from a component or from \`instrumentation-client.ts\`.`);
   }
-
-  return { elidableComponents, inertRouteModules, importOnlyRouteModules, shippedRouteModules, componentVerdicts };
+  return hints;
 }
 
 /** Match a whole-line side-effect import: `import './x.js';` (no bindings). */

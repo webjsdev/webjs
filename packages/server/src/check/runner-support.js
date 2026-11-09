@@ -150,7 +150,8 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
   const elideEnabled = await readElideEnabledForCheck(appDir);
   const routeModules = collectBootRouteModules(routeTable);
   const { elidableComponents } = elideEnabled
-    ? await analyzeElision(components, routeModules, moduleGraph, (f) => readFile(f, 'utf8'), appDir)
+    ? await analyzeElision(components, moduleGraph, (f) => readFile(f, 'utf8'), appDir,
+      { entries: routeTable.instrumentationClient ? [routeTable.instrumentationClient] : [] })
     : { elidableComponents: new Set() };
   const routeFiles = new Set(routeModules);
 

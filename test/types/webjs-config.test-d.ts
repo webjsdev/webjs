@@ -43,7 +43,7 @@ const full: WebjsConfig = {
   requestTimeoutMs: 30000,
   headersTimeoutMs: 20000,
   keepAliveTimeoutMs: 5000,
-  doctor: { gate: { UNMARKED_ASSET_LINKS: 'error', ELISION_CARRIERS: 'off', ENV_DRIFT: 'warn' } },
+  doctor: { gate: { UNMARKED_ASSET_LINKS: 'error', ROUTE_BROWSER_CODE: 'off', ENV_DRIFT: 'warn' } },
   ci: {
     steps: [
       'webjs check',

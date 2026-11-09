@@ -10,6 +10,7 @@ import { browserEntryFiles } from '../../src/browser-entries.js';
 import { scanComponents } from '../../src/component-scanner.js';
 import { buildRouteTable } from '../../src/router.js';
 import { analyzeElision } from '../../src/component-elision.js';
+import { collectBootRouteModules } from '../../src/route-frontier.js';
 
 /**
  * The pin/runtime parity invariant (#197, #446), asserted directly rather than
@@ -25,8 +26,8 @@ import { analyzeElision } from '../../src/component-elision.js';
  *     at the browser-bound entries with NO elision analysis. Cheaper, and a
  *     superset by construction.
  *   - runtime side (`reachedBareImports` with the dev server's skip set):
- *     the same roots, additionally pruned of elided / inert / import-only
- *     modules and the subtrees behind them.
+ *     the same roots, additionally pruned of elided components and of every
+ *     route module (which never ships, #1686), and the subtrees behind them.
  *
  * This file is what fails if a future change narrows the pin path without
  * narrowing the runtime path.
@@ -49,13 +50,9 @@ async function runtimeScan(dir) {
   const graph = await buildModuleGraph(dir);
   const components = await scanComponents(dir);
   const routeTable = await buildRouteTable(dir);
-  const routeModules = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) routeModules.add(page.file);
-    for (const f of page.layouts || []) routeModules.add(f);
-  }
-  const r = await analyzeElision(components, [...routeModules], graph, (f) => readFile(f, 'utf8'), dir);
-  const skip = new Set([...r.elidableComponents, ...r.inertRouteModules, ...r.importOnlyRouteModules.keys()]);
+  const ic = routeTable.instrumentationClient;
+  const r = await analyzeElision(components, graph, (f) => readFile(f, 'utf8'), dir, { entries: ic ? [ic] : [] });
+  const skip = new Set([...r.elidableComponents, ...collectBootRouteModules(routeTable)]);
   return reachedBareImports(graph, [...browserEntryFiles(routeTable, components)], dir, skip);
 }
 

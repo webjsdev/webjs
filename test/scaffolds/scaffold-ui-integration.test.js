@@ -164,11 +164,13 @@ test('lib/utils/cn.ts ships the pure cn() helper; onBeforeCache is in lib/utils/
   }
 });
 
-test('kit helpers do not pin a page to the browser (#1320)', async () => {
-  // The end-to-end property #1320 is about: a page whose only client-facing
-  // imports are Tier-1 class helpers must still be elided. Both defects that
-  // broke it were module-scope work (`...borderGroups()` in cn.ts, a stylesheet
-  // injection in native-select.ts), and either one made this page ship whole.
+test('kit helpers add no browser code to a page or a display-only component (#1320)', async () => {
+  // The property #1320 is about: Tier-1 class helpers do no client work at
+  // module scope. Both defects that broke it were module-scope work
+  // (`...borderGroups()` in cn.ts, a stylesheet injection in native-select.ts).
+  // A page never ships any more (#1686), so the helpers now matter where a
+  // COMPONENT imports them: a display-only component using them must still be
+  // elided, and the page using them must load nothing and draw no hint.
   //
   // Asserted on the elision REPORT rather than on byte size: size moves with
   // every unrelated kit change, so it would be a maintenance tax carrying no
@@ -203,6 +205,15 @@ test('kit helpers do not pin a page to the browser (#1320)', async () => {
       `  </div>\`;`,
       `}`,
     ].join('\n'));
+    await writeFile(join(appDir, 'components', 'kit-card.ts'), [
+      `import { WebComponent, html } from '@webjsdev/core';`,
+      `import { buttonClass } from '#components/ui/button.ts';`,
+      `import { nativeSelectClass } from '#components/ui/native-select.ts';`,
+      `class KitCard extends WebComponent {`,
+      `  render() { return html\`<select class=\${nativeSelectClass()}></select><button class=\${buttonClass()}>Go</button>\`; }`,
+      `}`,
+      `KitCard.register('kit-card');`,
+    ].join('\n'));
 
     const report = await analyzeAppElision(appDir);
     assert.ok(report.analysed, `elision analysis ran (skipped: ${report.skipped})`);
@@ -210,18 +221,16 @@ test('kit helpers do not pin a page to the browser (#1320)', async () => {
     const kit = report.routeModules.find((r) => r.file === join('app', 'kit', 'page.ts'));
     assert.ok(kit, 'the kit page has a verdict');
     // It imports only Tier-1 helpers, which register no element, so there is
-    // nothing for it to carry into the browser.
-    assert.equal(kit.verdict, 'inert', `kit page ships, blocked by ${kit.blocker}`);
+    // nothing for it to carry into the browser and nothing to hint about.
+    assert.deepEqual(kit.emits, [], 'the kit page loads no JavaScript');
+    assert.deepEqual(kit.hints, [], 'and holds nothing that looks meant for the browser');
 
-    // And no OTHER route module is pinned by the two modules this fixed, which
-    // is the assertion that fails if either regression comes back anywhere in
-    // the scaffold.
-    const pinned = report.routeModules.filter(
-      (r) => r.verdict === 'shipped'
-        && (r.blocker?.endsWith(join('lib', 'utils', 'cn.ts'))
-          || r.blocker?.endsWith(join('components', 'ui', 'native-select.ts'))),
-    );
-    assert.deepEqual(pinned, [], 'no route module is pinned by cn.ts or native-select.ts');
+    // The helpers do no module-scope client work, so a display-only component
+    // using them stays elided. This is the assertion that fails if either
+    // #1320 regression comes back.
+    const card = report.components.find((c) => c.tags.includes('kit-card'));
+    assert.ok(card, 'the kit component has a verdict');
+    assert.equal(card.verdict, 'elided', `kit component ships: ${card.evidence} ${card.reason}`);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
