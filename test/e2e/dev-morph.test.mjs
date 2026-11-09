@@ -178,6 +178,40 @@ describe('E2E: a dev page, layout, server module or component edit applies in pl
     }
   });
 
+  // A stylesheet the browser does not hold as a module swaps in place (#1689):
+  // the tab re-requests its sheets and drops the old link once the new one has
+  // loaded, so nothing re-renders, nothing reloads, and the new rule applies.
+  // Runs before the layout edit below, which drops the stylesheet link.
+  test('a public/ stylesheet edit restyles in place, with no navigation', async () => {
+    const page = await open();
+    try {
+      await page.click('#bump');
+      const before = await page.evaluate(() => ({
+        token: window.__docToken,
+        count: document.querySelector('#bump').textContent.trim(),
+      }));
+      const requestsBefore = page.cssRequests.length;
+      writeFileSync(join(dir, 'public/app.css'), '#page-marker { color: rgb(255, 0, 0); }\n');
+      await page.waitForFunction(
+        () => getComputedStyle(document.querySelector('#page-marker')).color === 'rgb(255, 0, 0)',
+        { timeout: RELOAD_SETTLE_MS + 3000 },
+      );
+      const after = await page.evaluate(() => ({
+        token: window.__docToken,
+        count: document.querySelector('#bump').textContent.trim(),
+        sheets: document.querySelectorAll('link[rel="stylesheet"][href*="/public/app.css"]').length,
+      }));
+      assert.equal(after.token, before.token, 'the document never loaded again');
+      assert.equal(after.count, before.count, 'the counter kept its state, nothing re-rendered it');
+      assert.equal(after.sheets, 1, 'the old link was dropped once the replacement loaded');
+      assert.ok(page.cssRequests.length > requestsBefore, 'the stylesheet was re-requested');
+      assert.ok(page.consoleLines.some((l) => l.includes('[webjs] stylesheets refreshed (public/app.css)')),
+        `the tab says what it refreshed (saw: ${page.consoleLines.join(' | ')})`);
+    } finally {
+      await page.close();
+    }
+  });
+
   test('a PAGE edit updates in place: no reload, scroll kept, component state kept', async () => {
     const page = await open();
     try {

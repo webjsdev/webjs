@@ -125,6 +125,8 @@ class Counter extends WebComponent({ count: Number }) {
 }
 Counter.register('my-counter');
 `);
+  mkdirSync(join(dir, 'public'), { recursive: true });
+  writeFileSync(join(dir, 'public/x.css'), 'body { color: black; }\n');
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: 'morph-verdict', type: 'module', imports: { '#*': './*' },
   }));
@@ -184,6 +186,14 @@ Counter.register('my-counter');
 `);
   assert.equal(ctor.v, 'reload', `a constructor edit reloads on ${runtime}, got ${JSON.stringify(ctor)}`);
   assert.equal(ctor.why, 'constructor-changed', `naming the reason on ${runtime}`);
+
+  // A stylesheet the browser does not hold as a module swaps in place (#1689):
+  // the tab re-requests its sheets, with no reload and no re-render.
+  const css = await verdictForEdit('public/x.css', 'body { color: red; }\n');
+  assert.deepEqual({ v: css.v, by: css.by, why: css.why, css: css.css }, { v: 'css', by: 'public/x.css', why: 'stylesheet', css: true },
+    `a public/ stylesheet edit is a css swap on ${runtime}\n--- server log ---\n${log}`);
+  assert.deepEqual(parseReloadFrame(JSON.stringify(css)), { v: 'css', by: 'public/x.css', why: 'stylesheet', modules: [], css: true },
+    `the relay reads the css frame into the full verdict object on ${runtime}`);
 
   console.log(`OK  the dev reload frame carries the change verdict on ${runtime} (#1398)`);
 } finally {

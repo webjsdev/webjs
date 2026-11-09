@@ -121,7 +121,7 @@ function verdictRank(v) {
  *    gap. Reading currency here would therefore turn the feature off for every
  *    edit after the first in a burst. Classifying against the previous build's
  *    graph is the intended behaviour, and it is conservative in the right
- *    direction: a file the stale graph has never seen falls to rung 6 and
+ *    direction: a file the stale graph has never seen falls to rung 7 and
  *    reloads.
  * 2. The path is outside `appDir`. The watcher only fires for `appDir` plus the
  *    opt-in `webjs.dev.watch` roots (#894), and a file outside `appDir` is
@@ -129,25 +129,33 @@ function verdictRank(v) {
  *    change what any layout renders, so it takes the whole-body `shell` swap.
  * 3. The path is in the SHIPPED closure. This is the transitive answer and the
  *    one that matters: the browser holds this module, so the page must reload.
- * 4. The path is a page module. Morphable.
- * 5. The path is somewhere else in the module graph (a layout, a server-only
+ *    A CSS module script (`import s from './x.css' with { type: 'css' }`) is in
+ *    the closure too, so it stops here and never reaches rung 4.
+ * 4. The path is a stylesheet (`.css`) the browser does not hold as a module
+ *    (#1689): a `public/` sheet, an `@import`ed partial, a
+ *    `webjs.dev.regenerate` input such as Tailwind's. The tab re-requests every
+ *    same-origin stylesheet and swaps them in place, with no reload and no
+ *    re-render. Every sheet rather than the changed one, which is what makes a
+ *    partial and a regenerate output come out right, since neither is the file
+ *    the page links.
+ * 5. The path is a page module. Morphable.
+ * 6. The path is somewhere else in the module graph (a layout, a server-only
  *    util, a `.server.*` file reachable only from a page). Server-only by
  *    elimination, so `shell`.
- * 6. Anything else. A brand-new file, a deleted file, and every `public/` asset
- *    land here. `public/` is not in the module graph at all, so the server
- *    cannot tell what the file IS or what depends on it, and most of what lives
- *    there (an image, a font, a service worker, a hand-written script) is
- *    something no amount of re-rendering picks up. The refresh does re-request
- *    the page's stylesheets, so a `public/` CSS edit alone would now survive a
- *    morph, but that is one knowable case inside a rung whose whole point is
- *    that the file is unknowable.
+ * 7. Anything else. A brand-new file, a deleted file, and every other `public/`
+ *    asset land here. `public/` is not in the module graph at all, so the
+ *    server cannot tell what the file IS or what depends on it, and most of
+ *    what lives there (an image, a font, a service worker, a hand-written
+ *    script) is something no amount of re-rendering picks up. A stylesheet is
+ *    the one kind it can name from the path alone, which is why rung 4 takes
+ *    it out first.
  *
  * Note what step 3 sweeps in deliberately. A `'use server'` action file
  * imported by a SHIPPING component is inside the closure (the graph keeps a
  * `.server.*` node and stops at it), so editing it reloads. That is correct
  * rather than merely conservative, because adding an export to that file
  * changes the generated RPC stub the browser holds. The same action imported
- * only by a page falls to step 5 and gets `shell`.
+ * only by a page falls to step 6 and gets `shell`.
  *
  * @param {string} abs  absolute path of the changed file
  * @param {object} ctx
@@ -166,6 +174,7 @@ export function classifyChangedPath(abs, ctx) {
   if (!ctx.analysisReady) return { v: 'reload', by, why: 'analysis-cold' };
   if (!isUnder(abs, ctx.appDir, sep)) return { v: 'shell', by, why: 'extra-watch-root' };
   if (ctx.shippedFiles && ctx.shippedFiles.has(abs)) return { v: 'reload', by, why: 'ships-to-browser' };
+  if (abs.endsWith('.css')) return { v: 'css', by, why: 'stylesheet', css: true };
   if (ctx.pageFiles && ctx.pageFiles.has(abs)) return { v: 'page', by, why: 'page-module' };
   if (ctx.graphFiles && ctx.graphFiles.has(abs)) return { v: 'shell', by, why: 'server-only-module' };
   return { v: 'reload', by, why: 'unknown-path' };

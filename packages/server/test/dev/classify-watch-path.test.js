@@ -99,10 +99,32 @@ test('an action reachable from a shipping component reloads; one reachable only 
 // `public/` is outside the module graph, so the server cannot tell what the
 // file is or what depends on it, and most of what lives there (an image, a
 // font, a service worker) is something no re-render picks up.
-test('a public/ asset is a full reload, never a morph', () => {
-  const v = classifyChangedPath(p('public/app.css'), ctx());
+test('a public/ asset other than a stylesheet is a full reload, never a morph', () => {
+  for (const f of ['public/logo.png', 'public/sw.js', 'public/fonts/inter.woff2']) {
+    const v = classifyChangedPath(p(f), ctx());
+    assert.equal(v.v, 'reload', f);
+    assert.equal(v.why, 'unknown-path', f);
+  }
+});
+
+// #1689: a stylesheet the browser does not hold as a module swaps in place.
+// The tab refreshes every same-origin sheet, so a public/ sheet, a partial
+// anywhere in the app, and a regenerate input all take the same verdict.
+test('a stylesheet outside the shipped graph is a css swap', () => {
+  for (const f of ['public/app.css', 'app/x.css', 'styles/partials/buttons.css']) {
+    const v = classifyChangedPath(p(f), ctx());
+    assert.deepEqual(v, { v: 'css', by: f, why: 'stylesheet', css: true }, f);
+  }
+});
+
+// A CSS module script (`import s from './x.css' with { type: 'css' }`) is a
+// browser module, so it is in the shipped closure and the shipped rung wins.
+test('a CSS module script in the shipped closure still ships to the browser', () => {
+  const c = ctx();
+  c.shippedFiles.add(p('components/counter.css'));
+  const v = classifyChangedPath(p('components/counter.css'), c);
   assert.equal(v.v, 'reload');
-  assert.equal(v.why, 'unknown-path');
+  assert.equal(v.why, 'ships-to-browser');
 });
 
 test('a brand-new or deleted file the graph has never seen is a full reload', () => {

@@ -538,14 +538,24 @@ function __webjsVerdictOf(v) {
 // page edit) the hydrated state of components outside the changed region
 // survive. A \`component\` verdict (#1689) re-imports the versioned component
 // modules it lists, which patch the registered classes in place, so the live
-// elements keep their state. Anything else, including every signal the server
-// could not classify, is the full reload this always was. A \`css\` verdict
-// also reloads until this client learns to apply it in place.
+// elements keep their state. A \`css\` verdict re-requests the stylesheets and
+// swaps them in, with no re-render at all. Anything else, including every signal
+// the server could not classify, is the full reload this always was.
 function __webjsApplyReload(verdict) {
   if (__webjsHold.offer(verdict)) return;
   __webjsWhenReady(function () {
     var mods = verdict.modules || [];
     if (verdict.v !== 'reload' && mods.length) { __webjsApplyHot(verdict, mods); return; }
+    if (verdict.v === 'css') {
+      // Every same-origin sheet, not just the edited file, so an @import-ed
+      // partial and a webjs.dev.regenerate output (Tailwind) come out right.
+      // The clone-swap keeps the working sheet when a re-request fails.
+      preloadStyles().then(function (styles) {
+        styles.commit();
+        console.info('[webjs] stylesheets refreshed' + (verdict.by ? ' (' + verdict.by + ')' : ''));
+      }).then(null, function () { location.reload(); });
+      return;
+    }
     // Runtime feature detection, never an assumption. The refresh entry is
     // published by enableClientRouter and removed by disableClientRouter, so its
     // ABSENCE covers both no-router cases at once: an app that opted out with
