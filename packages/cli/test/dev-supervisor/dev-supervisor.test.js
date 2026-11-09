@@ -236,6 +236,7 @@ test('the in-place IPC message matches the one @webjsdev/server sends (#1575)', 
   const cli = await import('../../lib/dev-reload.js');
   const server = await import('../../../server/src/dev/hot-host.js');
   assert.equal(cli.HOT_IN_PLACE_MESSAGE, server.HOT_IN_PLACE_MESSAGE);
+  assert.equal(cli.HOT_RESTART_MESSAGE, server.HOT_RESTART_MESSAGE, 'and so does the restart request (#1689)');
 });
 
 test('the Bun child runs with the transpiler cache off; Node gets only the restart-file pattern', () => {

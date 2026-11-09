@@ -6,7 +6,7 @@ import { createPokeState } from './poke-state.js';
 import { relative, resolve } from 'node:path';
 import {
   hotRerunCapable, hotHostKey, getHotHost, setHotHost, deleteHotHost,
-  armHotSentinel, pokeHotSentinel, removeHotSentinel, needsHotReset, announceHotInPlace,
+  armHotSentinel, pokeHotSentinel, removeHotSentinel, needsHotReset, announceHotInPlace, requestSupervisorRestart,
 } from './hot-host.js';
 import { createServer as createHttp1Server } from 'node:http';
 import { createRequestHandler } from './handler.js';
@@ -415,6 +415,11 @@ export async function startServer(opts) {
           // The supervisor restarts the process for this one, and the restart
           // is the reload; a frame from here would be a second one (#1689).
           if (restartFile && root === app.appDir && restartFile.test(filename)) return;
+          // A module the CommonJS loader holds cannot be versioned, so the
+          // edit needs a fresh process (#1689): the supervisor restarts, and
+          // that restart is the reload, so no frame goes out from here.
+          if (restartFile && app.isCommonJsModule(resolve(root, filename))
+            && requestSupervisorRestart(relative(app.appDir, resolve(root, filename)))) return;
           pending.verdict = mergeVerdicts(pending.verdict, app.classifyWatchPath(filename, root));
           pending.changed.add(resolve(root, filename));
           if (hotKey && needsHotReset(filename, (f) => !app.needsRegistryReset(f, root))) pendingPoke = true;

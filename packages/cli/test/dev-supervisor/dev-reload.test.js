@@ -339,6 +339,25 @@ test('watchRestartPaths: an all-digit directory is watched, the 4913 probe is no
   }
 });
 
+// Review of #1689: a child that reloads in place still needs a restart for a
+// module the CommonJS loader holds, which no version reaches. It asks over
+// IPC; the request restarts for that path once, and nothing else changes.
+test('inPlaceRestarts: a child asking for a restart gets one for that path, once', async () => {
+  const { inPlaceRestarts, HOT_IN_PLACE_MESSAGE, HOT_RESTART_MESSAGE } = await import('../../lib/dev-reload.js');
+  const { planDevSupervisor } = await import('../../lib/dev-supervisor.js');
+  const r = inPlaceRestarts(planDevSupervisor({ isBun: false, argv: ['x'], noHot: false }));
+  assert.equal(r.onMessage({ webjs: HOT_IN_PLACE_MESSAGE }), null);
+  assert.equal(r.restartFor('lib/legacy.cjs'), false, 'an in-place child restarts for no app file by itself');
+  assert.equal(r.onMessage({ webjs: HOT_RESTART_MESSAGE, path: 'lib/legacy.cjs' }), 'lib/legacy.cjs', 'the request names its path');
+  assert.equal(r.restartFor('lib/legacy.cjs'), true, 'which then restarts');
+  assert.equal(r.restartFor('lib/legacy.cjs'), false, 'once');
+  assert.equal(r.restartFor('package.json'), true, 'restart files still restart');
+  r.onMessage({ webjs: HOT_RESTART_MESSAGE, path: 'lib/x.cjs' });
+  r.reset();
+  assert.equal(r.restartFor('lib/x.cjs'), true, 'a fresh child that never announced restarts for everything again');
+  assert.equal(r.onMessage({ webjs: HOT_RESTART_MESSAGE }), null, 'a request with no path is ignored');
+});
+
 test('isWatchError matches only errors from a watch syscall', () => {
   assert.equal(isWatchError(Object.assign(new Error('x'), { syscall: 'watch', code: 'EACCES' })), true);
   assert.equal(isWatchError(Object.assign(new Error('x'), { syscall: 'open', code: 'EACCES' })), false);

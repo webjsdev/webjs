@@ -63,6 +63,7 @@ const MODULE_FILE = /\.(?:m?[jt]s|json)$/;
  *   next: number,
  *   installed: boolean,
  *   loaded?: Map<string, string>,
+ *   commonjs?: Set<string>,
  * }} EsmHotState
  */
 
@@ -94,6 +95,49 @@ function isAppModule(abs, st) {
   return false;
 }
 
+/**
+ * Whether an absolute path is an app file of ANY extension (under a registered
+ * root, outside its `node_modules` and `.webjs`): what a CommonJS load is
+ * recorded for, `.cjs` and a `require`d `.json` included.
+ * @param {string} abs
+ * @param {EsmHotState} st
+ */
+function isAppFile(abs, st) {
+  for (const root of st.roots) {
+    const rel = relative(root, abs);
+    if (!rel || rel.startsWith('..') || isAbsolute(rel)) continue;
+    return !/(?:^|[\\/])(?:node_modules|\.webjs)(?:[\\/]|$)/.test(rel);
+  }
+  return false;
+}
+
+/**
+ * Note an app file the CommonJS loader holds (#1689). No version can reach
+ * it: `require` caches by filename, so a query changes nothing, and an ESM
+ * import of a CommonJS module resolves to a format the hook leaves alone. An
+ * edit to one needs a fresh process, so the dev server asks the `webjs dev`
+ * supervisor for a restart (`isCommonJsModule`).
+ * @param {string} abs
+ * @param {EsmHotState} st
+ */
+function recordCommonJs(abs, st) {
+  if (!st.commonjs) st.commonjs = new Set();
+  if (st.commonjs.has(abs)) return;
+  st.commonjs.add(abs);
+}
+
+/**
+ * Whether the CommonJS loader holds `abs` in this process, so an edit to it
+ * cannot apply in place and needs a restart. Always false on Bun, where a
+ * `bun --hot` registry reset reloads it.
+ * @param {string} abs
+ * @returns {boolean}
+ */
+export function isCommonJsModule(abs) {
+  const st = state();
+  return !!st.commonjs && st.commonjs.has(abs);
+}
+
 /** The path of a `file:` URL with its query dropped, or null. @param {string | undefined} url */
 function pathOf(url) {
   if (typeof url !== 'string' || !url.startsWith('file:')) return null;
@@ -107,17 +151,23 @@ function pathOf(url) {
  * that failed on resolution, so once the file exists the unchanged importer
  * links again with no version of its own.
  * @param {string} specifier
- * @param {{ parentURL?: string }} context
+ * @param {{ parentURL?: string, conditions?: string[] }} context
  * @param {(s: string, c: any) => { url: string, format?: string | null }} nextResolve
  */
 function resolveHook(specifier, context, nextResolve) {
   const result = nextResolve(specifier, context);
   try {
     if (!result || typeof result.url !== 'string' || !result.url.startsWith('file:')) return result;
-    if (typeof result.format === 'string' && result.format.startsWith('commonjs')) return result;
     const st = state();
     const url = new URL(result.url);
     const abs = fileURLToPath(url);
+    // A module the CommonJS loader holds (a `.cjs` file, a `require`d one) is
+    // recorded and left alone: no version reaches it.
+    const conditions = context && Array.isArray(/** @type {any} */ (context).conditions) ? /** @type {any} */ (context).conditions : [];
+    if ((typeof result.format === 'string' && result.format.startsWith('commonjs')) || conditions.includes('require')) {
+      if (isAppFile(abs, st)) recordCommonJs(abs, st);
+      return result;
+    }
     if (!isAppModule(abs, st)) return result;
     const parent = pathOf(context && context.parentURL);
     if (parent && parent !== abs && isAppModule(parent, st)) {

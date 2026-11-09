@@ -99,6 +99,18 @@ try {
   ].join('\n'));
   // Module-scope state in a module the edit does not touch.
   writeFileSync(join(dir, 'lib/hits.ts'), 'let n = 0;\nexport function hit(): number { return ++n; }\n');
+  // A CommonJS module, imported by ESM and required, which no module version
+  // reaches (review of #1689).
+  mkdirSync(join(dir, 'app/legacy'), { recursive: true });
+  writeFileSync(join(dir, 'app/legacy/route.ts'), [
+    "import legacy from '../../lib/legacy.cjs';",
+    "import { createRequire } from 'node:module';",
+    'const require = createRequire(import.meta.url);',
+    "export const GET = () => new Response('esm=' + legacy.v + ' req=' + require('../../lib/req.cjs').v);",
+    '',
+  ].join('\n'));
+  writeFileSync(join(dir, 'lib/legacy.cjs'), "module.exports = { v: 'A1' };\n");
+  writeFileSync(join(dir, 'lib/req.cjs'), "module.exports = { v: 'B1' };\n");
   writeMsg('M1');
   mkdirSync(join(dir, 'node_modules/@webjsdev'), { recursive: true });
   symlinkSync(join(ROOT, 'packages/core'), join(dir, 'node_modules/@webjsdev/core'));
@@ -160,6 +172,18 @@ try {
     return res.ok && /extra=E1/.test(await res.text());
   }, { timeoutMs: 20_000 });
   assert.ok(added, `a page importing a module created after boot rendered it on ${runtime}\n--- server log ---\n${log}`);
+
+  // A CommonJS module cannot be re-evaluated in place, so its edit must still
+  // land: on Node the server asks the supervisor for a restart, on Bun the
+  // registry reset reloads it (review of #1689; it used to stay stale on Node).
+  const legacy = () => fetch(BASE + '/legacy').then((r) => (r.ok ? r.text() : ''));
+  assert.ok(await until(async () => /esm=A1 req=B1/.test(await legacy()), { timeoutMs: 20_000 }), `the CommonJS route renders on ${runtime}`);
+  writeFileSync(join(dir, 'lib/legacy.cjs'), "module.exports = { v: 'A2' };\n");
+  assert.ok(await until(async () => /esm=A2/.test(await legacy()), { timeoutMs: 20_000 }),
+    `an edited .cjs module an ESM route imports stayed STALE on ${runtime}\n--- server log ---\n${log}`);
+  writeFileSync(join(dir, 'lib/req.cjs'), "module.exports = { v: 'B2' };\n");
+  assert.ok(await until(async () => /esm=A2 req=B2/.test(await legacy()), { timeoutMs: 20_000 }),
+    `an edited module the route requires stayed STALE on ${runtime}\n--- server log ---\n${log}`);
 
   console.log(`OK  webjs dev applied a server module edit in place on ${runtime} (#1689)`);
 } finally {

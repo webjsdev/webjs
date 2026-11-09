@@ -41,6 +41,14 @@ export const RESTART_DEBOUNCE_MS = 50;
 export const HOT_IN_PLACE_MESSAGE = 'hot-reload-in-place';
 
 /**
+ * A child that reloads in place asks for a restart with this message when an
+ * edit reaches a module it cannot version (a file the CommonJS loader holds,
+ * #1689). Mirrors `HOT_RESTART_MESSAGE` in `@webjsdev/server`'s
+ * `dev/hot-host.js`.
+ */
+export const HOT_RESTART_MESSAGE = 'hot-reload-restart';
+
+/**
  * Delays before restarting a child that exited on its own (a crash), indexed
  * by consecutive crash count and capped at the last entry. A file change
  * restarts it at once regardless, so the backoff only matters when nothing is
@@ -377,19 +385,39 @@ export function createSupervisor({
  * Per child: `reset()` on every spawn, so a child that never announces (an
  * older `@webjsdev/server`) keeps the restarts it needs.
  *
+ * Such a child can still ask for a restart for one path it cannot apply in
+ * place (`HOT_RESTART_MESSAGE`, #1689): `onMessage` returns that path for the
+ * caller to report as a change, and `restartFor` answers true for it once.
+ *
  * @param {{ restartFor?: (path: string) => boolean, inPlaceRestartFor?: (path: string) => boolean }} plan
  */
 export function inPlaceRestarts(plan) {
   let inPlace = false;
   const base = plan.restartFor || (() => true);
+  /** @type {Set<string>} */
+  const requested = new Set();
+  const norm = (/** @type {string} */ p) => String(p).replace(/\\/g, '/');
   return {
     /** @param {string} p */
-    restartFor: (p) => (inPlace && plan.inPlaceRestartFor ? plan.inPlaceRestartFor(p) : base(p)),
-    /** @param {unknown} msg */
-    onMessage: (msg) => {
-      if (msg && typeof msg === 'object' && /** @type {any} */ (msg).webjs === HOT_IN_PLACE_MESSAGE) inPlace = true;
+    restartFor: (p) => {
+      if (requested.delete(norm(p))) return true;
+      return inPlace && plan.inPlaceRestartFor ? plan.inPlaceRestartFor(p) : base(p);
     },
-    reset: () => { inPlace = false; },
+    /**
+     * @param {unknown} msg
+     * @returns {string | null} a path the child asked to be restarted for
+     */
+    onMessage: (msg) => {
+      const m = /** @type {any} */ (msg);
+      if (!m || typeof m !== 'object') return null;
+      if (m.webjs === HOT_IN_PLACE_MESSAGE) inPlace = true;
+      if (m.webjs === HOT_RESTART_MESSAGE && typeof m.path === 'string' && m.path) {
+        requested.add(norm(m.path));
+        return m.path;
+      }
+      return null;
+    },
+    reset: () => { inPlace = false; requested.clear(); },
   };
 }
 
@@ -438,7 +466,12 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
         cwd,
         env,
       });
-      c.on('message', restarts.onMessage);
+      c.on('message', (msg) => {
+        // A child asking for a restart (#1689) reports its path as a change,
+        // which `restartFor` then answers with a restart.
+        const path = restarts.onMessage(msg);
+        if (path) sup.change(path);
+      });
       // A failed spawn emits 'error' and may never emit 'exit'; report it as
       // an exit so the backoff retries it (a repeated exit is ignored).
       c.on('error', (err) => {

@@ -235,3 +235,41 @@ test('movedServedModules checks only the directories it is given', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Review of #1689: a module the CommonJS loader holds cannot be versioned (an
+// ESM import of a `.cjs` file resolves to a format the hook leaves alone, and
+// `require` caches by filename), so an edit to one stayed stale in the one
+// long-lived dev process. The hook records each such app file, and the dev
+// server asks the supervisor to restart for an edit to one.
+test('a CommonJS app module is recorded, an ESM one is not', () => {
+  const dir = fixture();
+  const out = mkdtempSync(join(tmpdir(), 'webjs-esm-hot-driver-'));
+  try {
+    writeFileSync(join(dir, 'lib/legacy.cjs'), "module.exports = { v: 'A' };\n");
+    writeFileSync(join(dir, 'lib/data.json'), '{ "v": "B" }\n');
+    writeFileSync(join(dir, 'app/cjs.ts'), [
+      "import legacy from '../lib/legacy.cjs';",
+      "import { createRequire } from 'node:module';",
+      "import { v } from '../lib/dep.ts';",
+      'const require = createRequire(import.meta.url);',
+      "export default (): string => legacy.v + require('../lib/data.json').v + v;",
+      '',
+    ].join('\n'));
+    const file = join(out, 'driver.mjs');
+    writeFileSync(file, `
+import { pathToFileURL } from 'node:url';
+import { installEsmHotHooks, isCommonJsModule } from ${JSON.stringify(HOOKS)};
+const dir = ${JSON.stringify(dir)};
+installEsmHotHooks(dir);
+const value = (await import(pathToFileURL(dir + '/app/cjs.ts').href)).default();
+console.log(JSON.stringify({ value, legacy: isCommonJsModule(dir + '/lib/legacy.cjs'), data: isCommonJsModule(dir + '/lib/data.json'), esm: isCommonJsModule(dir + '/lib/dep.ts'), fake: isCommonJsModule(dir + '/node_modules/fake/index.js') }));
+`);
+    const r = spawnSync(process.execPath, [file], { cwd: dir, encoding: 'utf8', timeout: 60_000 });
+    assert.equal(r.status, 0, r.stderr);
+    const got = JSON.parse(r.stdout.trim().split('\n').pop());
+    assert.deepEqual(got, { value: 'ABdep-1', legacy: true, data: true, esm: false, fake: false });
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

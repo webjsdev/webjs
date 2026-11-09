@@ -122,6 +122,12 @@ lib/
                          `__WEBJS_DEV_CHILD` re-entry. Tests:
                          `test/dev-supervisor/dev-reload.test.js`
                          (unit) + `test/bun/dev-hot-reload.mjs` (cross-runtime).
+                         `inPlaceRestarts` also takes a child's
+                         `HOT_RESTART_MESSAGE` (#1689: an edit to a module the
+                         CommonJS loader holds, which no version reaches):
+                         `onMessage` returns the path, the supervisor reports
+                         it as a change, and `restartFor` answers true for it
+                         once.
   watch-recursive.js     `watchRecursive(dir, listener, { ignore })` (#1529), the
                          recursive watch under `watchRestartPaths` AND the
                          server's `watchTree` (a byte-identical copy in

@@ -20,7 +20,7 @@ import {
   hasUseServerDirective,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
-import { installEsmHotHooks, installBunModuleVersions, isServedModule, bumpModuleVersions, movedServedModules, diskStamp } from './esm-hot-hooks.js';
+import { installEsmHotHooks, installBunModuleVersions, isServedModule, bumpModuleVersions, movedServedModules, diskStamp, isCommonJsModule } from './esm-hot-hooks.js';
 import { createBrowserVersions } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
@@ -1884,6 +1884,9 @@ export async function createRequestHandler(opts) {
      * Node (#1689), so `startServer` can tell the dev supervisor it need not
      * restart the process for an app edit. */
     hotModules: !!hotModules,
+    // Whether an app file is held by the CommonJS loader, which no module
+    // version reaches, so an edit to it needs a restart (#1689). Node only.
+    isCommonJsModule: (abs) => !!hotModules && isCommonJsModule(abs),
     appDir,
     dev,
     logger,

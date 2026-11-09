@@ -44,6 +44,29 @@ const HOSTS = Symbol.for('webjs.dev.hotHosts');
  */
 export const HOT_IN_PLACE_MESSAGE = 'hot-reload-in-place';
 
+/**
+ * Sent to the `webjs dev` supervisor to restart this server for an edit it
+ * cannot apply in place (#1689): a module the CommonJS loader holds, which no
+ * version reaches. The restart is the reload. Mirrors `HOT_RESTART_MESSAGE` in
+ * `@webjsdev/cli`'s `dev-reload.js`.
+ */
+export const HOT_RESTART_MESSAGE = 'hot-reload-restart';
+
+/**
+ * Ask the supervisor (when there is one) to restart for `path`, app-relative.
+ * @param {string} path
+ * @returns {boolean} whether the request was sent
+ */
+export function requestSupervisorRestart(path) {
+  try {
+    if (typeof process.send === 'function' && process.connected) {
+      process.send({ webjs: HOT_RESTART_MESSAGE, path });
+      return true;
+    }
+  } catch { /* no supervisor, or it is gone */ }
+  return false;
+}
+
 /** Tell the supervisor (when there is one) that edits reload in place. */
 export function announceHotInPlace() {
   try {
