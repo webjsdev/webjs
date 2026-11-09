@@ -30,7 +30,7 @@ export { WebComponent, prop } from './src/component.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { render } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
-export { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
 export { cspNonce } from './src/csp-nonce.js';
 export { asset } from './src/asset-url.js';
 // Form actions (#1155). The field name is shared with the server dispatcher;
@@ -77,6 +77,9 @@ export { takeSeed, scanSeeds, seedStats, SEED_MISS } from './src/action-seed-cli
 // Client tag-cache coordinator for HTTP-verb actions (#488): tag-based
 // browser-cache eviction after a mutation. Inert server-side.
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
+// Effects an RPC action response asks the browser for (revalidatePath's
+// in-place refresh), read by the generated action stub.
+export { applyActionRefresh, followActionRedirect } from './src/action-effects-client.js';
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';

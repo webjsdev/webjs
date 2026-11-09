@@ -29,7 +29,17 @@ export const RULES = [
   {
     name: 'no-server-env-in-components',
     description:
-      'Component files (under components/ or modules/*/components/) must not read non-public environment variables. process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser via the SSR shim) or equals NODE_ENV (also defined in the browser). Any other process.env read in a component would leak the server-side value into the SSR\'d HTML, then read as undefined after hydration. Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes.',
+      'Code the browser runs must not read non-public environment variables: every component file (under components/ or modules/*/components/) and every module the build ships to the browser (a util a component imports). process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser by the SSR shim) or equals NODE_ENV. Any other read leaks the server-side value into the SSR\'d HTML, then reads as undefined after hydration. Next.js\'s NEXT_PUBLIC_ prefix gets a targeted fix (rename it to WEBJS_PUBLIC_). Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes. Page, layout and boundary modules are not scanned: their functions run on the server only.',
+  },
+  {
+    name: 'no-next-runtime-guard',
+    description:
+      'Flags `process.env.NEXT_RUNTIME`, which only Next.js sets (to `nodejs` or `edge`). Under WebJs it is undefined, so the usual `if (process.env.NEXT_RUNTIME === \'nodejs\')` guard around an instrumentation `register()` silently never runs. Drop the guard (WebJs runs `register()` once, server-side only), and use `process.versions.bun` / `process.versions.node` to tell the runtimes apart.',
+  },
+  {
+    name: 'no-inline-use-server',
+    description:
+      'Flags a `\'use server\'` directive inside a function body (Next.js\'s inline server action, often written in a page). WebJs\'s server boundary is a FILE: the directive is honoured only at the top of a `*.server.{js,ts}` module, so an inline one is an ordinary string and the function runs wherever it is called, and binding it to a form throws (it has no action identity). Move the function into its own module (`modules/<feature>/actions/<name>.server.ts` starting with `\'use server\'`), export it, and import it.',
   },
   {
     name: 'tag-name-has-hyphen',
@@ -107,9 +117,34 @@ export const RULES = [
       'Flags `<form action=${someAction}>` bound to a `\'use server\'` action whose file declares `export const method = \'GET\'` (#488). A GET action is a READ: it is CSRF-exempt and rides its arguments in the url, while a form submission is a CSRF-checked POST carrying a body, so the two contracts contradict each other and the submission is answered with a 405 at runtime. The rule reads the imported action\'s own file, so it only fires when the binding really does resolve to a GET-declared action. Fix by dropping the `method` export (an action with no `method` is a POST, which is what a form wants) or by binding a different action; if the form really is a read, use a plain `<form method="get" action="/search">` with no bound action.',
   },
   {
-    name: 'no-redirect-in-api-route',
+    name: 'no-foreign-framework-import',
     description:
-      'API route handlers (`route.{js,ts}`) must NOT call `redirect()` from `@webjsdev/core`. That function throws a control-flow signal designed for the SSR page renderer; in a route handler it goes uncaught and produces a 500. Use `Response.redirect(url, 303)` for external redirects or return a 3xx Response directly. Page functions, layouts, and server actions may still use `redirect()` (caught by the SSR pipeline).',
+      'Flags an import of `next` / `next/*`, `react` / `react-dom`, `lit` / `lit-html` / `lit-element` / `lit/*`, `@lit/*` or `@lit-labs/*`, in any form (named, default, namespace, `import type`, side-effect, `export ... from`, or a string-literal dynamic `import()`). WebJs never aliases or loads those packages: a Next import fails to resolve, and a Lit import quietly loads a second component runtime from the CDN. The violation names the exact `@webjsdev/*` replacement (for example `next/navigation` -> `redirect` / `notFound` from `@webjsdev/core`, `lit` -> `WebComponent` / `html` / `css` from `@webjsdev/core`, `@lit/context` -> `@webjsdev/core/context`). `react` / `react-dom` stay allowed inside a `*.server.*` module (an email renderer, say), which never reaches the browser. The same refusal runs at load time: the dev overlay and production readiness name the import, and a server import is rewritten to the same fix.',
+  },
+  {
+    name: 'no-jsx-attributes',
+    description:
+      'Flags JSX written into an `html` template: a `className=` or `htmlFor=` attribute (HTML reads them as unknown `classname` / `htmlfor` attributes, so the class never applies and the label never targets its control) and a capitalised component tag such as `<Link>` or `<Button>` (HTML lowercases it into an unknown element that renders nothing). Both renderers throw on these when the template first compiles; the rule reports them ahead of time. Write `class=` / `for=`, and render a custom element by its registered hyphenated tag (or a plain `<a href>` for a link). Text in the template (`&lt;Link&gt;`, a `className` mentioned in prose), comments, and script / style bodies are never flagged.',
+  },
+  {
+    name: 'no-jsx-route-file',
+    description:
+      'Flags a routing file (`page`, `layout`, `route`, a boundary such as `error` / `not-found` / `loading`, `middleware`, or a metadata route) written as `.tsx` or `.jsx`, the Next.js default. WebJs has no build step, so JSX never loads and the router skips the file: the route silently does not exist. Production refuses to boot on it, dev answers every request with the problem, and `webjs doctor` fails (`JSX_ROUTE_FILES`). Rename it to `.ts` / `.js` and return an `html` template.',
+  },
+  {
+    name: 'no-css-import',
+    description:
+      'Flags `import \'./styles.css\'` (or any `.css` import, including `import styles from \'./x.module.css\'`). Importing CSS is a bundler feature WebJs does not have: Node refuses the `.css` extension, Bun silently turns the import into a no-op on the server, and the browser refuses a stylesheet as a module script, so the importing module never loads. The same refusal runs at load time. Load a stylesheet with `<link rel="stylesheet" href="...">` in the root layout (the scaffold links its Tailwind output this way), or scope CSS to a component with `static styles = css` and `static shadow = true`.',
+  },
+  {
+    name: 'no-public-route-conflict',
+    description:
+      'Files in `public/` are served at the URL ROOT, as in Next.js (`public/logo.png` is `/logo.png`; there is no `/public/` prefix), and before every route, so a public file wins over a dynamic route. A public file at the same URL as a static page, a `route.{js,ts}` handler, or a metadata route (`public/robots.txt` beside `app/robots.ts`) would make one of them unreachable, so it is flagged here and refused at production boot. Rename or move one side.',
+  },
+  {
+    name: 'no-page-route-conflict',
+    description:
+      'A `page.{js,ts}` and a `route.{js,ts}` must not answer the same URL (including through a route group, `app/(a)/x/page.ts` beside `app/x/route.ts`). Next.js refuses this at build time; WebJs refuses to boot in production and answers every dev request with the problem, because the route handler would shadow the page and it could never render. Move the route handler to its own folder (`app/api/...`) or delete the page.',
   },
   {
     name: 'no-interpolation-in-raw-text-element',

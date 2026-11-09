@@ -103,7 +103,7 @@ async function headIconHrefs(handle, url = 'http://localhost/') {
     'app/icon.ts': ICON_ROUTE,
     'app/apple-icon.ts': APPLE_ICON_ROUTE,
     'app/layout.js': [
-      "export const metadata = { icons: '/public/brand.svg' };",
+      "export const metadata = { icons: '/brand.svg' };",
       'export default function Layout({ children }) { return children; }',
       '',
     ].join('\n'),
@@ -114,7 +114,7 @@ async function headIconHrefs(handle, url = 'http://localhost/') {
   const hrefs = await headIconHrefs(h.handle);
   assert.deepEqual(
     hrefs,
-    ['/public/brand.svg'],
+    ['/brand.svg'],
     `a declared metadata.icons did not suppress the icon routes on ${runtime}`,
   );
 }

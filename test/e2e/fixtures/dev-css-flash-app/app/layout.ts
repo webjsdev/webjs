@@ -5,7 +5,7 @@ import '../components/bump-button.ts';
 export default function RootLayout({ children }: LayoutProps) {
   return html`
     <script>window.__docToken = window.__docToken || String(Math.random());</script>
-    <link rel="stylesheet" href="/public/app.css">
+    <link rel="stylesheet" href="/app.css">
     <bump-button></bump-button>
     <main>${children}</main>
   `;

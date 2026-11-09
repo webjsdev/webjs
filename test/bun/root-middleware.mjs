@@ -74,4 +74,31 @@ const PAGE = `export default function Home() { return 'home'; }\n`;
   assert.equal(res.headers.get('x-mw'), 'ran', `root middleware.ts post-process did not run on ${runtime}`);
 }
 
+// Next.js conventions: a proxy.ts with a named `proxy` export, a matcher, and
+// returning undefined to continue (URLPattern + the TS strip, runtime-sensitive).
+{
+  const appDir = makeApp({
+    'package.json': '{"name":"x","type":"module"}',
+    'app/page.js': PAGE,
+    'app/admin/page.js': PAGE,
+    'proxy.ts': [
+      'export function proxy(req: Request): Response | undefined {',
+      "  if (new URL(req.url).pathname.startsWith('/admin')) return new Response('nope', { status: 403 });",
+      '}',
+      "export const config = { matcher: ['/admin/:path*', '/'] };",
+      '',
+    ].join('\n'),
+  });
+  const h = await createRequestHandler({ appDir, dev: false });
+  assert.equal((await h.handle(new Request('http://localhost/admin/'))).status, 403, `proxy matcher on ${runtime}`);
+  assert.equal((await h.handle(new Request('http://localhost/'))).status, 200, `undefined continues on ${runtime}`);
+}
+
+// A root middleware that cannot load fails CLOSED.
+{
+  const appDir = makeApp({ 'package.json': '{"name":"x","type":"module"}', 'app/page.js': PAGE, 'middleware.js': 'this is not js !!!' });
+  const h = await createRequestHandler({ appDir, dev: false, logger: { info() {}, warn() {}, error() {} } });
+  assert.equal((await h.handle(new Request('http://localhost/'))).status, 500, `fail closed on ${runtime}`);
+}
+
 console.log(`root middleware.ts resolution OK on ${runtime}`);

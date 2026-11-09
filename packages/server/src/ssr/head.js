@@ -639,28 +639,22 @@ export function wrapHead(opts) {
   }
   metaTags.push(`<meta name="viewport" content="${escapeAttr(viewportStr || 'width=device-width,initial-scale=1')}">`);
 
-  if (m.themeColor) metaTags.push(`<meta name="theme-color" content="${escapeAttr(m.themeColor)}">`);
+  // themeColor: a string, a `{ color, media? }` descriptor, or an array of
+  // them (Next's viewport shape): one <meta> per descriptor.
+  for (const tc of themeColorList(m.themeColor)) {
+    const media = tc.media ? ` media="${escapeAttr(tc.media)}"` : '';
+    metaTags.push(`<meta name="theme-color" content="${escapeAttr(tc.color)}"${media}>`);
+  }
   if (m.colorScheme) metaTags.push(`<meta name="color-scheme" content="${escapeAttr(m.colorScheme)}">`);
 
-  // robots: { index, follow, googleBot, etc. }
+  // robots: a string or Next's object (index, follow, the directive keys, and
+  // a nested `googleBot` resolved the same way into <meta name="googlebot">).
   if (m.robots) {
-    if (typeof m.robots === 'string') {
-      metaTags.push(`<meta name="robots" content="${escapeAttr(m.robots)}">`);
-    } else if (typeof m.robots === 'object') {
-      const parts = [];
-      if (m.robots.index === false) parts.push('noindex');
-      else if (m.robots.index === true) parts.push('index');
-      if (m.robots.follow === false) parts.push('nofollow');
-      else if (m.robots.follow === true) parts.push('follow');
-      if (m.robots.noarchive) parts.push('noarchive');
-      if (m.robots.nosnippet) parts.push('nosnippet');
-      if (m.robots.noimageindex) parts.push('noimageindex');
-      if (parts.length) {
-        metaTags.push(`<meta name="robots" content="${escapeAttr(parts.join(', '))}">`);
-      }
-      if (typeof m.robots.googleBot === 'string') {
-        metaTags.push(`<meta name="googlebot" content="${escapeAttr(m.robots.googleBot)}">`);
-      }
+    const basic = resolveRobotsValue(m.robots);
+    if (basic) metaTags.push(`<meta name="robots" content="${escapeAttr(basic)}">`);
+    if (typeof m.robots === 'object') {
+      const gb = resolveRobotsValue(m.robots.googleBot);
+      if (gb) metaTags.push(`<meta name="googlebot" content="${escapeAttr(gb)}">`);
     }
   }
 
@@ -1128,4 +1122,58 @@ ${suspenseBoot}
 </head>
 <body>
 `;
+}
+
+/** Next's robot directive keys, in its emit order. */
+const ROBOTS_KEYS = [
+  'noarchive', 'nosnippet', 'noimageindex', 'nocache', 'notranslate', 'indexifembedded',
+  'nositelinkssearchbox', 'unavailable_after', 'max-video-preview', 'max-image-preview', 'max-snippet',
+];
+
+/**
+ * A port of Next.js's `resolveRobotsValue` (resolve-basics.ts): a string
+ * passes through; an object becomes `index` / `noindex`, `follow` /
+ * `nofollow`, then each set directive key (`key` for `true`,
+ * `key:value` otherwise).
+ * @param {unknown} robots
+ * @returns {string | null}
+ */
+export function resolveRobotsValue(robots) {
+  if (!robots) return null;
+  if (typeof robots === 'string') return robots;
+  if (typeof robots !== 'object') return null;
+  const r = /** @type {Record<string, unknown>} */ (robots);
+  const values = [];
+  if (r.index) values.push('index');
+  else if (typeof r.index === 'boolean') values.push('noindex');
+  if (r.follow) values.push('follow');
+  else if (typeof r.follow === 'boolean') values.push('nofollow');
+  for (const key of ROBOTS_KEYS) {
+    const value = r[key];
+    if (typeof value !== 'undefined' && value !== false) {
+      values.push(typeof value === 'boolean' ? key : `${key}:${value}`);
+    }
+  }
+  return values.length ? values.join(', ') : null;
+}
+
+/**
+ * Normalize Next's `themeColor` (a string, a descriptor, or an array of
+ * descriptors) to a list of `{ color, media? }`.
+ * @param {unknown} v
+ * @returns {{ color: string, media?: string }[]}
+ */
+export function themeColorList(v) {
+  if (!v) return [];
+  if (typeof v === 'string') return [{ color: v }];
+  const list = Array.isArray(v) ? v : [v];
+  /** @type {{ color: string, media?: string }[]} */
+  const out = [];
+  for (const d of list) {
+    if (typeof d === 'string') out.push({ color: d });
+    else if (d && typeof d === 'object' && typeof d.color === 'string') {
+      out.push(typeof d.media === 'string' ? { color: d.color, media: d.media } : { color: d.color });
+    }
+  }
+  return out;
 }

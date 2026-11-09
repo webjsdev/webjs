@@ -83,7 +83,7 @@ test('handleApi: unsupported method → 405 with allow header listing supported 
   const req = new Request('http://x/api/only-get', { method: 'DELETE' });
   const resp = await handleApi(route, {}, req, false);
   assert.equal(resp.status, 405);
-  assert.equal(resp.headers.get('allow'), 'GET');
+  assert.equal(resp.headers.get('allow'), 'GET, HEAD, OPTIONS');
 });
 
 test('handleApi: allow header lists all exported handlers', async () => {

@@ -60,8 +60,8 @@ export default function UiHome({ url }: Pick<PageProps, 'url'>) {
                grid itself, wider than the screen and cropped, in each
                theme (scripts/shoot-home-cards.mjs takes it from this page). -->
           <section class="-mx-4 w-[140vw] overflow-hidden md:hidden">
-            <img src=${asset('/public/images/home-cards-light.png')} width="2560" height="2764" alt="WebJs UI components in a dashboard" class="block h-auto w-full dark:hidden">
-            <img src=${asset('/public/images/home-cards-dark.png')} width="2560" height="2764" alt="WebJs UI components in a dashboard" class="hidden h-auto w-full dark:block">
+            <img src=${asset('/images/home-cards-light.png')} width="2560" height="2764" alt="WebJs UI components in a dashboard" class="block h-auto w-full dark:hidden">
+            <img src=${asset('/images/home-cards-dark.png')} width="2560" height="2764" alt="WebJs UI components in a dashboard" class="hidden h-auto w-full dark:block">
           </section>
           <section class="style-rhea hidden md:block">
             ${cardsDemo()}

@@ -140,11 +140,11 @@ test('PROD: a /public/* asset is fingerprinted + served immutable when ?v is pre
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
 
-  const withV = await app.handle(new Request('http://x/public/logo.svg?v=abc123'));
+  const withV = await app.handle(new Request('http://x/logo.svg?v=abc123'));
   assert.equal(withV.status, 200);
   assert.equal(withV.headers.get('cache-control'), 'public, max-age=31536000, immutable');
 
-  const noV = await app.handle(new Request('http://x/public/logo.svg'));
+  const noV = await app.handle(new Request('http://x/logo.svg'));
   assert.equal(noV.status, 200);
   assert.equal(noV.headers.get('cache-control'), 'public, max-age=3600');
 });

@@ -10,7 +10,7 @@ import type { PublicUser } from '#modules/auth/types.ts';
  * the AsyncLocalStorage-backed request context.
  */
 export async function currentUser(): Promise<PublicUser | null> {
-  const token = cookies().get(SESSION_COOKIE);
+  const token = cookies().get(SESSION_COOKIE)?.value;
   const user = await getUserByToken(token);
   if (!user) return null;
   return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };

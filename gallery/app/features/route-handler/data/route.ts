@@ -30,7 +30,7 @@ export async function GET(req: Request) {
     // cookies() reads the REQUEST cookies. Report how many are present (a
     // truthful, always-correct value); the app's theme lives in localStorage,
     // not a cookie, so do not read it here.
-    cookieCount: cookies().entries().length,
+    cookieCount: cookies().size,
     // cspNonce() reads the request's CSP nonce ('' with CSP off). Server-side
     // you use it to nonce a server-rendered inline <script> under CSP (a <style>
     // only needs it if you tighten style-src, which by default allows inline).

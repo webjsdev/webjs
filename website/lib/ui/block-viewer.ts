@@ -146,7 +146,7 @@ export function blockPreview(name: string, opts: { caption?: string } = {}) {
  * the desktop page a reader is choosing.
  */
 function blockImage(name: string, cls: string) {
-  const src = (theme: string) => asset(`/public/images/blocks/${name}-${theme}.png`);
+  const src = (theme: string) => asset(`/images/blocks/${name}-${theme}.png`);
   return html`<img src=${src('light')} alt=${name} data-block=${name} width="1440" height="900" loading="lazy" decoding="async" class=${`${cls} dark:hidden`}>
     <img src=${src('dark')} alt=${name} data-block=${name} width="1440" height="900" loading="lazy" decoding="async" class=${`${cls} hidden dark:block`}>`;
 }

@@ -104,7 +104,7 @@ export function fontFaceCss(fonts: TypesetFont[]): string {
   font-style: normal;
   font-weight: ${font.range.replace('..', ' ')};
   font-display: swap;
-  src: url('/public/fonts/${font.id}.woff2') format('woff2');
+  src: url('/fonts/${font.id}.woff2') format('woff2');
 }`);
   return ['/* public/input.css */', ...faces, '', fontVariables(fonts)].join('\n');
 }

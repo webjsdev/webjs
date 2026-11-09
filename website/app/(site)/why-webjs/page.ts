@@ -25,7 +25,7 @@ import { DOCS_START_PATH, GH_URL, NEW_TAB } from '#lib/links.ts';
 
 export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
-  const image = `${origin}/public/og-why.png`;
+  const image = `${origin}/og-why.png`;
   const title = 'Why WebJs - The Framework Your AI Agent Already Understands';
   const description =
     'WebJs is a full-stack JavaScript framework where Build me an app is the whole prompt. The architecture, the code, a real database, and a design system arrive without being specified, because the framework already made those calls rather than leaving them for your prompt to close. Nothing is hidden behind a build step either, so any AI model reads the framework source from node_modules and reasons about the whole stack. No training data required, no single blessed model.';

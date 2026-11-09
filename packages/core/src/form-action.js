@@ -491,6 +491,9 @@ export function assertSubmittableSubmitter(tag, formMethod, formEnctype) {
  */
 export function assertNotFunctionActionAttr(val, attrName, tag) {
   if (!carriesFunction(val)) return;
+  // Every attribute commit site already calls this guard, so the React-style
+  // `onClick=${fn}` refusal rides it too (one call site per renderer path).
+  assertNotFunctionEventAttr(val, attrName, tag);
   if (!isFormActionAttr(attrName)) return;
   throw new Error(formActionError(attrName, tag));
 }
@@ -563,8 +566,12 @@ export function assertIdentifiableAction(id, tag) {
     `[webjs] the function in ${attr} on <${tag || 'form'}> is not a server action. `
     + `Only a function imported from a 'use server' *.server.{js,ts} module can be `
     + `bound to a form or a submitter, because the identity the browser submits `
-    + `has to resolve back to something the server can run. Move the handler into `
-    + `a server action and import it, or pass a url string.`,
+    + `has to resolve back to something the server can run. A 'use server' `
+    + `directive inside a function body (Next.js's inline action) is not one: the `
+    + `boundary is a file. Move the function into its own module, e.g. `
+    + `modules/<feature>/actions/<name>.server.ts starting with 'use server', `
+    + `export it and import it here, or pass a url string. `
+    + `See https://webjs.dev/docs/troubleshooting#inline-use-server`,
   );
 }
 
@@ -1255,4 +1262,30 @@ function formActionError(attrName, tag) {
     + `is refused. To run a server action from a form, write an unquoted `
     + `action=\${action} on the <form> itself or a formaction=\${action} on a `
     + `<button> inside a bound form. Anywhere else, pass a URL string.`;
+}
+
+/**
+ * Refuse a function interpolated into an `on*` ATTRIBUTE (`onClick=${fn}`,
+ * `onclick="${fn}"`, `?onclick=${fn}`), React's event spelling. An attribute
+ * stringifies its value, so the function's SOURCE would be written into the
+ * HTML as an inline handler that runs in the global scope with none of its
+ * closure: it never does what it says, and it ships the code to every
+ * visitor. A WebComponent template binds events with `@click=${fn}`.
+ *
+ * @param {unknown} val
+ * @param {string | undefined} attrName
+ * @param {string | undefined} tag
+ */
+export function assertNotFunctionEventAttr(val, attrName, tag) {
+  if (!carriesFunction(val)) return;
+  const name = String(attrName || '').replace(/^[?.@]/, '');
+  if (!/^on[a-z]/i.test(name)) return;
+  const event = name.slice(2).toLowerCase();
+  throw new Error(
+    `webjs: a function was interpolated into the \`${name}\` attribute on <${tag || 'element'}>. `
+    + `An attribute is a string, so the function's source would be written into the HTML as an inline handler `
+    + `that runs without its closure. Bind the event with \`@${event}=\${handler}\` in a WebComponent's render() `
+    + `(a page or layout never hydrates, so its handlers must live in a component). `
+    + `See https://webjs.dev/docs/troubleshooting#function-in-on-attribute`,
+  );
 }

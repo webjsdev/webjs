@@ -12,7 +12,7 @@
  * request straight through, so `req.url` kept the internal `http://container`
  * view and every absolute URL the app derived came out `http://`. That shipped:
  * https://webjs.dev (Bun on Railway behind Cloudflare) served
- * `<meta property="og:image" content="http://webjs.dev/public/og.png">`.
+ * `<meta property="og:image" content="http://webjs.dev/og.png">`.
  *
  * Both surfaces are asserted, because they fail independently:
  *   1. a PAGE's `ctx.url` (what `generateMetadata` builds og:image from), and
@@ -84,7 +84,7 @@ try {
   w('app/layout.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default ({ children }: { children: unknown }) => html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;`);
   // The real shape: a page building an absolute asset URL from ctx.url, exactly
   // how website/app/layout.ts derives its og:image.
-  w('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport function generateMetadata(ctx: { url: string }) {\n  const origin = new URL(ctx.url).origin;\n  return { title: 'fwd', openGraph: { image: origin + '/public/og.png' } };\n}\nexport default () => html\`<main>page</main>\`;`);
+  w('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport function generateMetadata(ctx: { url: string }) {\n  const origin = new URL(ctx.url).origin;\n  return { title: 'fwd', openGraph: { image: origin + '/og.png' } };\n}\nexport default () => html\`<main>page</main>\`;`);
   // A route handler reading the raw request url, the app-code surface.
   w('app/api/whoami/route.ts', `export async function GET(req: Request) {\n  return Response.json({ url: req.url, origin: new URL(req.url).origin, ip: req.headers.get('x-webjs-remote-ip') });\n}`);
   w('app/api/echo/route.ts', `export async function POST(req: Request) {\n  return Response.json({ method: req.method, body: await req.text(), ct: req.headers.get('content-type'), origin: new URL(req.url).origin });\n}`);
@@ -107,7 +107,7 @@ try {
   const html = await page.text();
   const og = /<meta property="og:image" content="([^"]+)"/.exec(html);
   assert.ok(og, 'the page rendered an og:image tag');
-  assert.equal(og[1], 'https://webjs.dev/public/og.png', `ctx.url honors the forwarded headers on ${runtime}`);
+  assert.equal(og[1], 'https://webjs.dev/og.png', `ctx.url honors the forwarded headers on ${runtime}`);
 
   // 2. A route handler's raw req.url. This is the surface a threaded-url-only
   // fix would miss.

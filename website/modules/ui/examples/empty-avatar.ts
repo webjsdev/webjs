@@ -13,7 +13,7 @@ export default function EmptyAvatar() {
       <div data-slot="empty-header" class=${emptyHeaderClass()}>
         <div data-slot="empty-icon" data-variant="default" class=${emptyMediaClass({ variant: 'default' })}>
           <span data-slot="avatar" data-size="default" class=${cn(avatarClass(), 'size-12')}>
-            <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="" class=${cn(avatarImageClass(), 'grayscale')}>
+            <img data-slot="avatar-image" src="/avatars/vivek.jpg" alt="" class=${cn(avatarImageClass(), 'grayscale')}>
             <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>VK</span>
           </span>
         </div>

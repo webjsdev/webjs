@@ -33,8 +33,8 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     const p = pkg(appDir);
 
     // The long-running server scripts force --bun (the shebang gotcha).
-    assert.equal(p.scripts.dev, 'bun --bun webjs dev');
-    assert.equal(p.scripts.start, 'bun --bun webjs start');
+    assert.equal(p.scripts.dev, 'bun --bun --no-env-file webjs dev');
+    assert.equal(p.scripts.start, 'bun --bun --no-env-file webjs start');
     // The test runner stays plain webjs (it shells `node --test`).
     assert.equal(p.scripts.test, 'webjs test');
     assert.equal(p.scripts.check, 'webjs check');
@@ -197,7 +197,7 @@ test('bun scaffold works across both templates', async () => {
       await scaffoldApp('app', cwd, { template, runtime: 'bun' });
       const appDir = join(cwd, 'app');
       const p = pkg(appDir);
-      assert.equal(p.scripts.dev, 'bun --bun webjs dev', `${template}: dev script`);
+      assert.equal(p.scripts.dev, 'bun --bun --no-env-file webjs dev', `${template}: dev script`);
       const df = read(appDir, 'Dockerfile');
       assert.match(df, /FROM oven\/bun:1/, `${template}: pure oven/bun base`);
       assert.match(df, /CMD \["bun", "--bun", "run", "start"\]/, `${template}: serves on bun`);
@@ -216,7 +216,7 @@ test('bun is auto-detected from npm_config_user_agent (no explicit flag)', async
   try {
     // No runtime opt: detection picks bun because the invoking PM is bun.
     await scaffoldApp('detected', cwd, { template: 'full-stack' });
-    assert.equal(pkg(join(cwd, 'detected')).scripts.dev, 'bun --bun webjs dev');
+    assert.equal(pkg(join(cwd, 'detected')).scripts.dev, 'bun --bun --no-env-file webjs dev');
   } finally {
     if (prev === undefined) delete process.env.npm_config_user_agent;
     else process.env.npm_config_user_agent = prev;

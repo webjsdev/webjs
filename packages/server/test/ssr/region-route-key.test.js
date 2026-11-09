@@ -139,3 +139,10 @@ test('layoutsForBoundary breaks the prefix test on a segment', () => {
   assert.deepEqual(_layoutsForBoundary(['/x/app/doc/layout.ts'], '/docs'), []);
   assert.deepEqual(_layoutsForBoundary(['/x/app/docs/layout.ts'], '/docs-archive'), []);
 });
+
+test('a catch-all string[] param joins with / (never the array comma), and an absent optional one is skipped', async () => {
+  const { regionRouteKey } = await import('../../src/ssr/document.js');
+  assert.equal(regionRouteKey('docs/[...slug]', { slug: ['a', 'b c'] }), regionRouteKey('docs/[...slug]', { slug: 'a/b c' }));
+  assert.doesNotMatch(regionRouteKey('docs/[...slug]', { slug: ['a', 'b'] }), /,/);
+  assert.equal(regionRouteKey('docs/[[...slug]]', {}), regionRouteKey('docs/[[...slug]]', { slug: [] }));
+});

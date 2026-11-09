@@ -25,7 +25,7 @@ import { messageClass, messageAvatarClass, messageContentClass } from '#componen
     ${codeFigure(`<div data-slot="message" data-align="start" class=\${messageClass()}>
   <div data-slot="message-avatar" class=\${messageAvatarClass()}>
     <span data-slot="avatar" class=\${avatarClass()}>
-      <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="@vivek" class=\${avatarImageClass()}>
+      <img data-slot="avatar-image" src="/avatars/vivek.jpg" alt="@vivek" class=\${avatarImageClass()}>
     </span>
   </div>
   <div data-slot="message-content" class=\${messageContentClass()}>

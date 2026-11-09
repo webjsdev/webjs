@@ -14,10 +14,12 @@ import {
   checkShadowOnlyStatics,
 } from './rules-components.js';
 import {
-  checkNoRedirectInApiRoute,
   checkNoInterpolationInRawTextElement,
   checkNoServerEnvInComponents,
+  checkNoNextRuntimeGuard,
   checkShellInNonRootLayout,
+  checkAppLayout,
+  checkNoJsxAttributes,
 } from './rules-routing.js';
 import {
   checkErasableTypescriptOnly,
@@ -27,6 +29,7 @@ import {
   checkUseServerNeedsExtension,
   checkUseServerExportsCallable,
   checkOneActionPerConfiguredFile,
+  checkNoInlineUseServer,
 } from './rules-actions.js';
 import {
   checkTagNameHasHyphen,
@@ -37,6 +40,7 @@ import {
   checkNoMissingLocalImport,
   checkFormActionNotAGetAction,
   checkCoreImportsExist,
+  checkNoForeignFrameworkImport,
 } from './rules-imports.js';
 
 /**
@@ -97,21 +101,25 @@ export async function checkConventions(appDir) {
   checkNoBrowserGlobalsInRender(files, violations);
   checkNoShadowedNativeMember(files, violations);
   checkShadowOnlyStatics(files, violations);
-  checkNoRedirectInApiRoute(files, violations);
   checkNoInterpolationInRawTextElement(files, violations);
-  checkNoServerEnvInComponents(files, violations);
   checkShellInNonRootLayout(files, violations);
   await checkErasableTypescriptOnly(appDir, violations);
   await checkNoNonErasableTypescript(appDir, violations);
   checkUseServerNeedsExtension(files, violations);
   checkUseServerExportsCallable(files, violations);
   checkOneActionPerConfiguredFile(files, violations);
+  checkNoInlineUseServer(files, violations);
   checkTagNameHasHyphen(files, violations);
   await checkNoDuplicateTag(appDir, files, violations);
-  await checkServerImportInBrowserModule(appDir, violations);
+  const shipped = await checkServerImportInBrowserModule(appDir, violations);
+  checkNoServerEnvInComponents(files, violations, shipped);
+  checkNoNextRuntimeGuard(files, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
   checkCoreImportsExist(appDir, files, violations);
+  checkNoForeignFrameworkImport(files, violations);
+  checkNoJsxAttributes(files, violations);
+  await checkAppLayout(appDir, violations);
 
   return violations;
 }

@@ -120,10 +120,13 @@ export function findImportChain(graph, from, to) {
 // `await auth()` (import from `lib/auth.server.ts`) AND imports a component
 // directly, so it is not elided and ships the server import.
 export async function checkServerImportInBrowserModule(appDir, violations) {
+  /** Every non-server module the browser loads (the shipping candidates and
+   * their transitive closures), returned for the env rule. @type {Set<string>} */
+  const shipped = new Set();
   // No `app/` directory means this is not a routable WebJs app (e.g. a bare
   // component library, or a fixture with only `lib/`); nothing ships, so the
   // rule has nothing to police. Skip rather than do the heavy analysis.
-  if (!(await pathExists(join(appDir, 'app')))) return;
+  if (!(await pathExists(join(appDir, 'app')))) return shipped;
 
   let moduleGraph, components, routeTable;
   try {
@@ -133,7 +136,7 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
   } catch {
     // A malformed app the analysis can't process is left to the other rules
     // (and the dev server) to surface; this rule degrades to a no-op.
-    return;
+    return shipped;
   }
 
   // Page + layout modules that the router treats as route modules, exactly the
@@ -228,6 +231,8 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
     // is not in the result. A direct OR indirect server import both surface,
     // because the closure walks every non-server edge until it hits one.
     const closure = transitiveDeps(moduleGraph, [file], appDir);
+    shipped.add(file);
+    for (const d of closure) if (!/\.server\.m?[jt]s$/.test(d)) shipped.add(d);
     // Of the reachable server files, find one that is a genuine throw-at-load
     // crash in the browser. TWO kinds of `.server.*` import are NOT crashes and
     // must be skipped, or the rule false-positives on legitimate code:
@@ -289,6 +294,7 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
       fix: fixText,
     });
   }
+  return shipped;
 }
 
 /**

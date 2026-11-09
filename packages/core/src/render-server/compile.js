@@ -1,5 +1,6 @@
 import { BINDING_PREFIXES } from '../binding-prefixes.js';
 import { isVoidElement, isRawtextTag, isTextOnlyTag } from './html-scan.js';
+import { assertNoJsxIsms } from '../jsx-guard.js';
 
 /**
  * The SSR template compiler (#1646): one tokenizer pass per template, run
@@ -74,6 +75,8 @@ export function _compileCount() { return compiled; }
 export function compile(strings) {
   let ops = cache.get(strings);
   if (ops === undefined) {
+    // `className=`, `htmlFor=`, `<Link>`: JSX that HTML silently ignores.
+    assertNoJsxIsms(strings);
     ops = tokenize(strings);
     cache.set(strings, ops);
   }

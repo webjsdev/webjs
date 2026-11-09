@@ -225,7 +225,7 @@ export default function RootLayout({ children }: LayoutProps) {
          the CSS changes the url and the framework serves it immutable for a
          year. Without it this stable url can serve the PREVIOUS stylesheet
          from a CDN or a service-worker cache after a deploy. -->
-    <link rel="stylesheet" href=\${asset('/public/tailwind.css')}>
+    <link rel="stylesheet" href=\${asset('/tailwind.css')}>
     <style>
       :root { color-scheme: light; }
       :root.dark { color-scheme: dark; }

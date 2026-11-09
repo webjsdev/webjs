@@ -86,7 +86,8 @@ export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from 
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
-export { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export type { RedirectType } from './src/nav.js';
 export { repeat, isRepeat } from './src/repeat.js';
 export { Suspense, isSuspense } from './src/suspense.js';
 export { connectWS } from './src/websocket-client.js';
@@ -120,6 +121,7 @@ export { asset, setAssetUrlProvider } from './src/asset-url.js';
 export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';
 export { takeSeed, scanSeeds, seedStats, SEED_MISS } from './src/action-seed-client.js';
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
+export { applyActionRefresh, followActionRedirect } from './src/action-effects-client.js';
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';

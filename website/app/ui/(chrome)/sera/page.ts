@@ -48,8 +48,8 @@ function imagePreview() {
   return html`<div class="mt-8 flex flex-col overflow-hidden md:hidden">
     ${['sera-01', 'sera-03', 'sera-02', 'sera-06'].map((name) => html`
       <div class="theme-taupe overflow-hidden bg-muted px-4 py-2 first:pt-4 last:pb-4">
-        <img src=${`/public/images/${name}-light.png`} alt=${name} width="1440" height="900" loading="lazy" class="h-auto w-full dark:hidden">
-        <img src=${`/public/images/${name}-dark.png`} alt=${name} width="1440" height="900" loading="lazy" class="hidden h-auto w-full dark:block">
+        <img src=${`/images/${name}-light.png`} alt=${name} width="1440" height="900" loading="lazy" class="h-auto w-full dark:hidden">
+        <img src=${`/images/${name}-dark.png`} alt=${name} width="1440" height="900" loading="lazy" class="hidden h-auto w-full dark:block">
       </div>`)}
   </div>`;
 }
@@ -57,7 +57,7 @@ function imagePreview() {
 export default function SeraPage() {
   return html`
     ${styleLinks('/ui/sera')}
-    <link rel="stylesheet" href=${asset('/public/sera-fonts.css')}>
+    <link rel="stylesheet" href=${asset('/sera-fonts.css')}>
     <main id="main" tabindex="-1" class="style-sera flex flex-1 flex-col">
       <section class="border-grid">
         <div class="container-wrapper">

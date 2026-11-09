@@ -9,7 +9,7 @@ export default function AvatarGroupCountIconExample() {
   return html`
     <div data-slot="avatar-group" class=${cn(avatarGroupClass(), 'grayscale')}>
       <span data-slot="avatar" data-size="default" class=${avatarClass()}>
-        <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="@vivek" class=${avatarImageClass()}>
+        <img data-slot="avatar-image" src="/avatars/vivek.jpg" alt="@vivek" class=${avatarImageClass()}>
         <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>VK</span>
       </span>
       <span data-slot="avatar" data-size="default" class=${avatarClass()}>

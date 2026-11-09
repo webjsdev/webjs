@@ -335,14 +335,12 @@ export function withAssetHash(url, basePath = '') {
  * body behind the isomorphic `asset()` helper (#1194); `dev.js` installs it
  * via `setAssetUrlProvider` at boot.
  *
- * The `public/` gate is defensive, not decorative. `resolveUrlToFile` maps any
- * same-origin path under the PROJECT ROOT, so an app that passed request- or
- * user-derived data in (`asset(user.avatarPath)`) would otherwise read and
- * publish a content hash for `/.env`, `/db/app.db`, or a `.server.ts`, leaking
- * both that the file exists and a fingerprint of its exact bytes for files the
- * serve path deliberately 404s. Mirror the static-asset route instead: under
- * `public/`, no traversal. Anything else returns unchanged WITHOUT touching
- * the disk, so a rejected path costs nothing and reveals nothing.
+ * The path is resolved under `<appDir>/public` ONLY (public files are served at
+ * the url root, so `/app.css` is `public/app.css`), never the project root, so
+ * an app that passed request- or user-derived data in (`asset(user.avatarPath)`)
+ * cannot get a content hash published for `/.env`, `/db/app.db`, or a
+ * `.server.ts`. Mirror the static-asset route: inside `public/`, no traversal.
+ * A path naming no public file returns unchanged.
  *
  * A fragment is split before hashing. `withAssetHash` appends the query, so
  * passing the whole thing would emit `/x.svg#icon?v=H`: the browser then
@@ -360,14 +358,23 @@ export function resolveAssetUrl(p, bp = '') {
   const cuts = [probe.indexOf('?'), probe.indexOf('#')].filter((i) => i !== -1);
   let decoded = probe.slice(0, cuts.length ? Math.min(...cuts) : probe.length);
   try { decoded = decodeURIComponent(decoded); } catch { /* keep raw */ }
-  if (decoded.includes('..') || !decoded.startsWith('/public/')) return p;
+  // Public files are served at the url ROOT (`public/app.css` is `/app.css`,
+  // Next.js parity), so the path names a file under `<appDir>/public`. The
+  // gate keeps the lookup inside that directory: no traversal, no other file.
+  if (decoded.includes('..') || decoded.startsWith('/__webjs/')) return p;
   const h = p.indexOf('#');
   const path = h === -1 ? p : p.slice(0, h);
   const frag = h === -1 ? '' : p.slice(h);
   // An author-supplied query is left alone: it may carry meaning we do not
   // own, and appending would merge with `&`.
   if (path.includes('?')) return p;
-  return withAssetHash(path, bp) + frag;
+  if (!_enabled || !_appDir) return p;
+  const root = join(_appDir, 'public') + sep;
+  const abs = join(root, decoded);
+  if (!abs.startsWith(root)) return p;
+  const hash = assetHashFor(abs);
+  if (!hash) return p;
+  return `${path}?v=${hash}` + frag;
 }
 
 /**

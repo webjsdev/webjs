@@ -2,6 +2,7 @@ import { buildModuleGraph, reachableBareSpecifiers } from '../module-graph.js';
 import { browserEntryFiles } from '../browser-entries.js';
 import { scanComponents } from '../component-scanner.js';
 import { buildRouteTable } from '../router.js';
+import { foreignImport } from '../foreign-imports.js';
 
 /**
  * Set of package names whose importmap entries are populated by the
@@ -127,6 +128,10 @@ export function reachedBareImports(graph, entryFiles, appDir, skip) {
   for (const spec of found) {
     const p = extractPackageName(spec);
     if (p && (BUILTIN.has(p) || FRAMEWORK_SERVER_ONLY.has(p))) found.delete(spec);
+    // A foreign framework (`lit`, `react`, `next/*`) is refused at check and
+    // at analysis time; it must never be resolved from jspm meanwhile, or a
+    // second component runtime would load from the CDN beside WebJs.
+    else if (foreignImport(spec)) found.delete(spec);
   }
   return found;
 }

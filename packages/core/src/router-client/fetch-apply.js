@@ -15,7 +15,8 @@ import { restoreOptimistic } from './dom-differ.js';
 import { parseHTML } from './dom-parse.js';
 import { clearFrameBusy, markFrameBusy } from './frames.js';
 import { handleNavigationError } from './nav-error.js';
-import { navigate } from './navigator.js';
+import { navigate, revalidate } from './navigator.js';
+import { parseRefreshHeader } from '../refresh-header.js';
 import { prefetchTake } from './prefetch.js';
 import { currentNavigationToken } from './state.js';
 import { readStreamedShell, streamBoundariesProgressively } from './stream.js';
@@ -181,6 +182,12 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
     // any form response that answers in place.
     const invalidated = parseTagHeader(resp.headers.get('x-webjs-invalidate'));
     if (invalidated.length) markStale(invalidated);
+    // `revalidatePath()` in a form action (a 422 re-render, or any response
+    // answered in place): drop the router's cached copies of those paths.
+    for (const e of parseRefreshHeader(resp.headers.get('x-webjs-refresh'))) {
+      if (e.layout || e.path.includes('[')) revalidate();
+      else revalidate(e.path);
+    }
     const ctype = resp.headers.get('content-type') || '';
     const isHTML = /^text\/html\b/i.test(ctype);
     const isStream = ctype.toLowerCase().indexOf(STREAM_MIME) === 0;

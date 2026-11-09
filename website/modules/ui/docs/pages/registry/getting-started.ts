@@ -130,7 +130,7 @@ lib
     ${commandBlock(packageCommands('build'))}
     <p><code>build</code> reads <code>registry.json</code>, inlines the content of every file it lists, and writes one <code>&lt;name&gt;.json</code> per item, the <code>index.json</code> the CLI lists from, and a copy of the manifest as <code>registry.json</code>.</p>
     ${callout(html`<p><strong>Note:</strong> By default, the build command writes the registry JSON files to <code>./r</code>, e.g. <code>r/brand-button.json</code>. You can change the output directory by passing the <code>--output</code> option. See the <a href="/ui/docs/cli#build">build command</a> for more information.</p>`)}
-    <p>A WebJs app serves everything under <code>public/</code> at <code>/public/</code>, so build into it:</p>
+    <p>A WebJs app serves everything under <code>public/</code> at <code>/</code>, so build into it:</p>
     ${commandBlock(packageCommands('build --output public/r'))}
     <p>Then run the app.</p>
     ${bash('npm run dev')}

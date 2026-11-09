@@ -6,5 +6,5 @@ import { cookies } from '@webjsdev/server';
  * actions below are what change it.
  */
 export function signedIn(): boolean {
-  return cookies().get('fixture_session') === '1';
+  return cookies().get('fixture_session')?.value === '1';
 }

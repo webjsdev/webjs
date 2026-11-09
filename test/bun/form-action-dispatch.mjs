@@ -105,6 +105,15 @@ function urlencoded(fields) {
   const res = await app.handle(urlencoded({ [FIELD]: id, email: 'a@b.com' }));
   assert.equal(res.status, 303, `[${runtime}] a successful submission PRG-redirects`);
   assert.equal(res.headers.get('location'), '/welcome?got=a%40b.com', `[${runtime}] redirect target`);
+  // The result rides the 303 in the signed flash cookie (node:crypto HMAC +
+  // rich serializer, both runtime-sensitive), and decodes back on this runtime.
+  const flash = res.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash='));
+  assert.ok(flash && /HttpOnly; SameSite=Lax/.test(flash), `[${runtime}] the flash cookie is set`);
+  const { decodeFlash } = await import('../../packages/server/src/action-flash.js');
+  const decoded = await decodeFlash(flash.split(';')[0].slice('__webjs_flash='.length));
+  assert.equal(decoded && decoded.id, id, `[${runtime}] the flash names the action`);
+  assert.equal(decoded.result.redirect, undefined, `[${runtime}] the redirect is not carried`);
+  assert.equal(decoded.result.success, true);
 }
 
 // Failure: 422 re-render carrying the field error and the typed value.

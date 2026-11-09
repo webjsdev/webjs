@@ -150,7 +150,9 @@ export function regionRouteKey(segmentPath, params) {
   const p = params || {};
   /** Encode one substituted value, per slash-piece (catch-alls keep their
    *  literal separators; each piece is comment-safe + delimiter-safe). */
-  const enc = (v) => String(v).split('/').map((s) => encodeURIComponent(s)).join('/');
+  const enc = (v) => (Array.isArray(v) ? v.join('/') : String(v)).split('/').map((s) => encodeURIComponent(s)).join('/');
+  /** A catch-all value present and non-empty (a string[] since Next parity). */
+  const has = (v) => (Array.isArray(v) ? v.length > 0 : !!v);
   /** A STATIC piece is a folder name emitted as-is EXCEPT the boundary/header
    *  delimiter characters (':' would mis-split the `segment:route-key` parses,
    *  ',' the have-entry list, '%' the decode); percent-encode just those so
@@ -166,12 +168,12 @@ export function regionRouteKey(segmentPath, params) {
     // the already-slash-joined tail (may be '' for an empty optional one).
     if (seg.startsWith('[[...') && seg.endsWith(']]')) {
       const v = p[seg.slice(5, -2)];
-      if (v) out.push(enc(v));
+      if (has(v)) out.push(enc(v));
       continue;
     }
     if (seg.startsWith('[...') && seg.endsWith(']')) {
       const v = p[seg.slice(4, -1)];
-      if (v) out.push(enc(v));
+      if (has(v)) out.push(enc(v));
       continue;
     }
     // Dynamic `[name]`.

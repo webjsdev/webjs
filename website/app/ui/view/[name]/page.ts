@@ -58,7 +58,7 @@ export default async function BlockView({ params, searchParams }: PageProps<'/ui
   // The stylesheets lead the markup, so the framework moves them into <head>.
   return html`
     ${styleLinks(`/ui/view/${params.name}`)}
-    ${demo ? html`<link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>` : ''}
+    ${demo ? html`<link rel="stylesheet" href=${asset('/rtl-fonts.css')}>` : ''}
     <!-- The root layout reserves the fixed header's height on the page body, and
          this frame has no header. -->
     <style>:root { --header-h: 0px; }</style>

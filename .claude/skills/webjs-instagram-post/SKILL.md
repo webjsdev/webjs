@@ -140,7 +140,7 @@ git push origin --delete "$BR"
 
 Any other public HTTPS host works too, as long as the final URL is reachable
 and serves real JPEG bytes. (Committing to `website/public/social/` + a PR +
-Railway deploy also works and lands a real `webjs.dev/public/social/<slug>.jpg`
+Railway deploy also works and lands a real `webjs.dev/social/<slug>.jpg`
 asset, but that is heavier and not the default. Only take it if the user
 specifically wants the asset on the site.)
 
@@ -178,7 +178,7 @@ rolling 24 hours).
 
 ```sh
 set -a; . ~/.config/webjs/instagram.env; set +a
-IMG="https://webjs.dev/public/social/why-webjs.jpg"
+IMG="https://webjs.dev/social/why-webjs.jpg"
 CAP="Build on the platform, not against it. WebJs is a no-build, web-components-first framework. webjs.dev/why #webdevelopment #javascript #webcomponents"
 
 # quota

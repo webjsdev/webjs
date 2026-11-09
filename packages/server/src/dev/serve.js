@@ -8,7 +8,7 @@
  * half calls into it at exactly three points.
  */
 import { stat, readFile } from 'node:fs/promises';
-import { join, extname, resolve, relative, sep } from 'node:path';
+import { join, extname, resolve, relative, sep, dirname } from 'node:path';
 
 import { matchPage, matchApi } from '../router.js';
 import { ssrPage, ssrNotFound } from '../ssr.js';
@@ -37,6 +37,8 @@ import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './he
 import { devImport } from '../dev-import.js';
 import { runMetadataRoute } from '../metadata-routes.js';
 import { findDecorator, decoratorReport } from '../lit-hints.js';
+import { loadMiddlewareFile } from '../middleware-load.js';
+import { publicFilePath, resolvePublicFile } from '../public-files.js';
 
 /**
  * Serve framework-internal static assets that depend on NEITHER the whole-app
@@ -141,11 +143,9 @@ export async function tryServeFrameworkStatic(path, method, { coreDir, appDir, d
 }
 
 /**
- * Serve `/public/*`, plus a small set of ROOT assets that must serve at the
- * site root even though they live under public/. A service worker registered at
- * /sw.js scopes to the origin root, so it MUST serve at / (not /public/sw.js),
- * and so must its offline fallback. Same remap shape as the /favicon.ico
- * special-case. (#830)
+ * Serve a file from `public/` at the URL root (public-files.js): `public/a.css`
+ * is `/a.css`, `public/sw.js` is `/sw.js` (so a service worker scopes to the
+ * origin root, #830), `public/favicon.ico` is `/favicon.ico`.
  *
  * Extracted (#1397) so the dev pre-`ensureReady()` call site and the
  * `handleCore` one share ONE implementation, and the containment guard below
@@ -155,50 +155,38 @@ export async function tryServeFrameworkStatic(path, method, { coreDir, appDir, d
  * @param {{ appDir: string, dev: boolean, versioned?: boolean, regenerateRules: any[] }} ctx
  * @returns {Promise<Response|null>} a Response, or null when the path is not a
  *   public asset OR the file does not exist, in both of which cases the caller
- *   must fall through to the rest of the pipeline (a missing `/public/x.png`
- *   404s through normal routing today, and that must not change). A containment
- *   rejection returns a 404 Response and short-circuits.
+ *   must fall through to the rest of the pipeline (a missing `/x.png`
+ *   404s through normal routing). A path that escapes `public/` is simply not
+ *   a public file and falls through the same way.
  */
 export async function tryServePublicAsset(path, ctx) {
-  const { appDir, dev, versioned, regenerateRules } = ctx;
-  const ROOT_ASSETS = { '/sw.js': '/public/sw.js', '/offline.html': '/public/offline.html' };
-  if (!(path.startsWith('/public/') || path === '/favicon.ico' || path in ROOT_ASSETS)) return null;
-  const p = path === '/favicon.ico' ? '/public/favicon.ico' : (ROOT_ASSETS[path] || path);
-  const abs = join(appDir, p);
-  // Containment check. `join` normalises `..` segments, so a path
-  // like `/public/..%2Fsecret/x.svg` decodes to `/public/../secret/
-  // x.svg` and `join(appDir, ...)` resolves it to `appDir/secret/
-  // x.svg`. The resulting `abs` could be inside `appDir` but OUTSIDE
-  // `appDir/public/`, exposing files the user reasonably thought were
-  // private under their non-public directories. Reject anything
-  // that doesn't stay under `appDir/public/` (and the favicon
-  // exception, which is already validated above).
-  // The live vector encodes the SLASH, not the dots: the WHATWG URL
-  // parser decodes `%2E%2E` and normalises the dot segment away, so a
-  // `/public/%2E%2E/x` request arrives here as plain `/x` and never
-  // enters this branch. `..%2F` survives parsing intact and does.
-  const publicRoot = join(appDir, 'public') + sep;
-  if (!abs.startsWith(publicRoot)) {
-    return new Response(null, { status: 404 });
-  }
+  const { appDir, dev, versioned, regenerateRules, publicFiles } = ctx;
+  // `public/` is served at the URL ROOT (Next.js parity): `public/logo.png`
+  // is `/logo.png`. `publicFilePath` keeps the containment guard: `join`
+  // normalises `..`, so a `/..%2Fsecret/x.svg` that survived URL parsing
+  // (the WHATWG parser normalises a decoded `%2E%2E` away, but not `..%2F`)
+  // would otherwise resolve outside `public/`. A path escaping it is not a
+  // public file and falls through to the routes.
+  if (!publicFilePath(appDir, path)) return null;
   // On-request regeneration (#967): in dev, if a `webjs.dev.regenerate` rule
   // matches this output and it is stale (a source is newer, or it is missing),
   // rebuild it to completion BEFORE serving, so a newly added utility class is
   // never served stale. No-op when no rule matches or the output is fresh, and
   // never runs in prod (rules are empty there). This replaces the fragile
   // `tailwindcss --watch` that could die mid-session and serve stale CSS.
-  if (dev && regenerateRules.length) {
-    await maybeRegenerate(appDir, p.replace(/^\/+/, ''), regenerateRules);
+  if (dev && regenerateRules && regenerateRules.length) {
+    await maybeRegenerate(appDir, `public${path}`, regenerateRules);
   }
+  const abs = resolvePublicFile(appDir, path, { dev, index: publicFiles });
+  if (!abs) return null;
   // A `?v=<hash>` public asset is content-addressed -> immutable (#243).
-  if (await exists(abs)) {
-    const res = await fileResponse(abs, { dev, immutable: versioned });
-    // A worker served below its registration path only controls that subtree
-    // unless the response opts it up to the root scope. (#830)
-    if (path === '/sw.js') res.headers.set('Service-Worker-Allowed', '/');
-    return res;
-  }
-  return null;
+  const res = await fileResponse(abs, { dev, immutable: versioned });
+  // A worker served below its registration path only controls that subtree
+  // unless the response opts it up to the root scope. Served at the root
+  // already, so this only matters to a worker under a subdirectory, but it is
+  // harmless and keeps a registration with `scope: '/'` working. (#830)
+  if (path === '/sw.js') res.headers.set('Service-Worker-Allowed', '/');
+  return res;
 }
 
 export async function handleCore(req, ctx) {
@@ -243,12 +231,6 @@ export async function handleCore(req, ctx) {
     const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
     return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins, logger);
   }
-
-  // Static: /public/*, the #830 root remaps, and /favicon.ico. In dev this
-  // already ran before ensureReady() (#1397); this stays the LIVE path in prod
-  // and the fallback in dev, and both call sites share one implementation.
-  const publicResp = await tryServePublicAsset(path, { appDir, dev, versioned, regenerateRules: state.regenerateRules });
-  if (publicResp) return publicResp;
 
   // User source modules (served as ES modules, with action-file rewriting).
   //
@@ -360,6 +342,17 @@ export async function handleCore(req, ctx) {
     }
   }
 
+  // Static files from `public/`, served at the URL root (Next.js parity), after
+  // the app's own source modules and before every route, so a public file
+  // beats a dynamic route at the same url. One at the url of a static page, a
+  // route.ts or a metadata route is refused at boot (no-public-route-conflict).
+  // In dev this already ran before ensureReady() (#1397); this stays the LIVE
+  // path in prod and the fallback in dev, both sharing one implementation.
+  if (method === 'GET' || method === 'HEAD') {
+    const publicResp = await tryServePublicAsset(path, { appDir, dev, versioned, regenerateRules: state.regenerateRules, publicFiles: state.publicFiles });
+    if (publicResp) return method === 'HEAD' ? new Response(null, { status: publicResp.status, headers: publicResp.headers }) : publicResp;
+  }
+
   // Metadata routes: /sitemap.xml, /robots.txt, /icon, /opengraph-image, etc.
   if (method === 'GET' && state.routeTable.metadataRoutes) {
     const meta = state.routeTable.metadataRoutes.find((r) => r.urlPath === path)
@@ -391,11 +384,16 @@ export async function handleCore(req, ctx) {
     // A handler that throws is recorded in the dev status as a `route` error
     // HERE, before a root middleware wrapping `next()` reports the same error
     // as its own (#1664). The rethrow keeps the response path unchanged.
-    const handler = recordDevStatus
-      ? async () => {
-        try { return await handleApi(api.route, api.params, req, dev); } catch (e) { recordDevStatus(e, req, 'route'); throw e; }
+    // The same throw is reported to onError / onRequestError as a `route`
+    // error (reportError dedupes, so the top-level catch does not report it
+    // again under a vaguer phase).
+    const handler = async () => {
+      try { return await handleApi(api.route, api.params, req, dev); } catch (e) {
+        if (recordDevStatus) recordDevStatus(e, req, 'route');
+        if (reportError) reportError(e, req, 'route', routePathOf(appDir, api.route.file));
+        throw e;
       }
-      : () => handleApi(api.route, api.params, req, dev);
+    };
     return runWithSegmentMiddleware(req, api.route.middlewares, handler, dev);
   }
 
@@ -447,7 +445,7 @@ export async function handleCore(req, ctx) {
         cspEnabled,
         // onError sink (issue #239): a page render error that becomes a 500 is
         // reported to the APM hook with the active request's correlation id.
-        onError: reportError ? (e) => reportError(e, req, 'ssr') : undefined,
+        onError: reportError ? (e) => reportError(e, req, 'ssr', routePathOf(appDir, page.route.file)) : undefined,
         // Dev error overlay (#264): a render crash pushes a frame to the open
         // tab. Dev-only (reportDevError early-returns in prod), so no source
         // leaks. Distinct from onError (the APM sink), which always fires.
@@ -570,6 +568,17 @@ export async function handleCore(req, ctx) {
   return resp;
 }
 
+/**
+ * The route file's directory as Next's `onRequestError` context names it,
+ * `/app/blog/[slug]` for `app/blog/[slug]/page.ts`.
+ * @param {string} appDir
+ * @param {string} file
+ */
+export function routePathOf(appDir, file) {
+  const rel = relative(join(appDir, 'app'), dirname(file)).split(sep).join('/');
+  return rel ? `/app/${rel}` : '/app';
+}
+
 /** @param {Request} req @param {string} path */
 export function wantsJson(req, path) {
   const accept = req.headers.get('accept') || '';
@@ -592,10 +601,15 @@ export async function runWithSegmentMiddleware(req, files, terminal, dev) {
   const handlers = [];
   for (const f of files) {
     try {
-      const mod = await devImport(f, dev);
-      if (typeof mod.default === 'function') handlers.push(mod.default);
-    } catch {
-      // Bad middleware file: skip; top-level error handler will catch real problems.
+      handlers.push(await loadMiddlewareFile(f, dev));
+    } catch (e) {
+      // FAIL CLOSED: a segment middleware usually guards its subtree (auth,
+      // a paywall), so one that cannot load must never let the request
+      // through unguarded. Log the cause and answer 500.
+      console.error(`[webjs] segment middleware ${f} failed to load; answering 500 rather than skipping the guard:`, e);
+      return new Response(dev ? `[webjs] middleware ${f} failed to load: ${/** @type {Error} */ (e).message}\n` : 'Server error', {
+        status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' },
+      });
     }
   }
   let i = 0;
@@ -605,43 +619,6 @@ export async function runWithSegmentMiddleware(req, files, terminal, dev) {
     return fn(req, next);
   };
   return next();
-}
-
-/**
- * Root-middleware filename candidates, in resolution order.
- *
- * Every other routing convention accepts all four extensions (the router
- * matches on the STEM, so `app/<segment>/middleware.ts` has always worked),
- * and both the scaffold and the dev supervisor write / watch `middleware.ts`.
- * This lookup used to be the single literal `middleware.js`, so a root
- * `middleware.ts` was silently never loaded: no error, no warning, the app
- * just ran with no global middleware. TypeScript is the documented default
- * for an app, so that was the common case, and it went unnoticed because the
- * failure is invisible (a missing middleware looks exactly like an app that
- * has none). `.ts` is tried first to match the dev supervisor's order.
- */
-const ROOT_MIDDLEWARE_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'];
-
-/**
- * Load the optional top-level `middleware.{ts,js,mts,mjs}`.
- * @param {string} appDir
- * @param {boolean} dev
- * @param {import('../logger.js').Logger} logger
- */
-export async function loadMiddleware(appDir, dev, logger) {
-  let file = null;
-  for (const name of ROOT_MIDDLEWARE_FILES) {
-    const candidate = join(appDir, name);
-    if (await exists(candidate)) { file = candidate; break; }
-  }
-  if (!file) return null;
-  try {
-    const mod = await devImport(file, dev);
-    return typeof mod.default === 'function' ? mod.default : null;
-  } catch (e) {
-    logger.error('failed to load root middleware', { file, err: String(e) });
-    return null;
-  }
 }
 
 /**

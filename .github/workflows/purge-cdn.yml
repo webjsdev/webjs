@@ -3,7 +3,7 @@ name: Purge CDN
 # Evicts the Cloudflare edge cache after a site deploy actually reaches the
 # origin.
 #
-# Why this exists: the site's static assets (/public/tailwind.css, the brand
+# Why this exists: the site's static assets (/tailwind.css, the brand
 # SVGs) are served with `cache-control: public, max-age=14400` at STABLE urls,
 # so without a purge Cloudflare keeps serving the previous copy for up to four
 # hours after a deploy. That shipped two visible regressions in one day (a
@@ -263,7 +263,7 @@ jobs:
               | awk 'tolower($1)=="etag:"{print $2}' || true
           }
           origin_etag=$(etag_of "$ORIGIN/public/tailwind.css")
-          edge_etag=$(etag_of "https://webjs.dev/public/tailwind.css")
+          edge_etag=$(etag_of "https://webjs.dev/tailwind.css")
 
           echo "origin etag: ${origin_etag:-<none>}"
           echo "edge etag:   ${edge_etag:-<none>}"
@@ -274,9 +274,9 @@ jobs:
             echo "::warning::Could not compare ETags (one side did not send one)."
             echo "This check is inconclusive; the purge above reported success."
           elif [ "$origin_etag" != "$edge_etag" ]; then
-            echo "::warning::Edge and origin ETags still differ for /public/tailwind.css."
+            echo "::warning::Edge and origin ETags still differ for /tailwind.css."
             echo "This can be a slow pop rather than a real failure. Re-check with:"
-            echo "  curl -sI https://webjs.dev/public/tailwind.css | grep -i 'etag\\|cf-cache-status'"
+            echo "  curl -sI https://webjs.dev/tailwind.css | grep -i 'etag\\|cf-cache-status'"
           else
             echo "Edge matches the origin."
           fi

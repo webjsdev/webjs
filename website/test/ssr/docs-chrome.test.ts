@@ -170,11 +170,11 @@ test('docs pages keep the full social card, not just the fields they override', 
   // RISK, not only the ones the sub-layout means to set.
   const doc = await bodyOf(DOC_PATH);
   for (const tag of [
-    '<meta property="og:image" content="http://localhost/public/og.png">',
+    '<meta property="og:image" content="http://localhost/og.png">',
     '<meta property="og:image:width" content="1200">',
     '<meta property="og:image:height" content="630">',
     '<meta name="twitter:card" content="summary_large_image">',
-    '<meta name="twitter:image" content="http://localhost/public/og.png">',
+    '<meta name="twitter:image" content="http://localhost/og.png">',
   ]) {
     assert.ok(doc.includes(tag), `docs page is missing ${tag}`);
   }

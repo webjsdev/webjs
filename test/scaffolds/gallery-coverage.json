@@ -391,6 +391,15 @@
     },
     "deepArrayEquals": {
       "exempt": "deferred: agent-facing (Lit's structural Task argsEqual, documented on the docs-site task page); no single-concept gallery demo yet"
+    },
+    "applyActionRefresh": {
+      "exempt": "internal: RPC stub plumbing (revalidatePath in-place refresh)"
+    },
+    "permanentRedirect": {
+      "demo": "app/features/routing/legacy/page.ts"
+    },
+    "followActionRedirect": {
+      "exempt": "internal: RPC stub plumbing (redirect() in an action navigates)"
     }
   },
   "serverSpecifier": "@webjsdev/server",

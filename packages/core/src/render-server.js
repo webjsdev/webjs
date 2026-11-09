@@ -4,3 +4,5 @@
 // backs the published `@webjsdev/core/server` subpath, so re-exporting it would
 // widen the package's public API for a helper no consumer asked for.
 export { renderToString, renderToStream } from './render-server/stream.js';
+// The JSX-in-template scan, shared with `webjs check` (`no-jsx-attributes`).
+export { findJsxIsm, jsxIsmMessage } from './jsx-guard.js';

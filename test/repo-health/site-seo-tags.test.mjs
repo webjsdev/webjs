@@ -97,7 +97,7 @@ for (const app of APPS) {
     const [w, h] = sizes.split('x');
     assert.equal(w, h, 'declared as square');
 
-    const file = href.replace(/^\/public\//, '');
+    const file = href.replace(/^\//, '');
     const asset = publicFile(app.dir, file);
     assert.ok(existsSync(asset), `${file} exists in public/`);
 
@@ -124,7 +124,7 @@ for (const app of APPS) {
     const links = await renderedIconLinks(app.dir);
     const apple = links.find((l) => attr(l, 'rel') === 'apple-touch-icon');
     assert.ok(apple, 'serves an apple-touch-icon');
-    const file = attr(apple, 'href').replace(/^\/public\//, '');
+    const file = attr(apple, 'href').replace(/^\//, '');
     const asset = publicFile(app.dir, file);
     assert.ok(existsSync(asset), `${file} exists in public/`);
     assert.equal(Number(attr(apple, 'sizes').split('x')[0]), pngSize(asset).width,

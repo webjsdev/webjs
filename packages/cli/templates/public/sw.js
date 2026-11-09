@@ -35,7 +35,7 @@
  *     gets a new URL and the cache cannot serve stale bytes for those.
  *
  *     A public/ asset is the exception: its URL is fingerprinted only when you
- *     mark it with asset() (href=${asset('/public/app.css')}). An un-marked
+ *     mark it with asset() (href=${asset('/app.css')}). An un-marked
  *     public/ URL is stable across deploys, so this worker serves the CACHED
  *     copy and revalidates behind it, and the first load after a deploy shows
  *     the OLD bytes. The cache version below will not necessarily rescue you,

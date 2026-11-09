@@ -96,8 +96,8 @@ test('the gallery serves the same brand mark as the website', async () => {
 
   for (const file of ['favicon.svg', 'favicon-192.png', 'apple-touch-icon.png']) {
     assert.ok(
-      (await bytes(`/public/${file}`)).equals(canonical(file)),
-      `/public/${file} is byte-identical to the website's copy`,
+      (await bytes(`/${file}`)).equals(canonical(file)),
+      `/${file} is byte-identical to the website's copy`,
     );
   }
   assert.ok(

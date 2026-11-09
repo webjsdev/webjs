@@ -38,12 +38,18 @@ export function checkUseServerNeedsExtension(files, violations) {
       if (/\.server\.m?[jt]s$/.test(rel)) continue; // OK: has both markers
       const fileBase = basename(rel);
       const renamedBase = fileBase.replace(/\.(m?[jt]sx?)$/, '.server.$1');
+      // A routing file (page, layout, ...) cannot be renamed: the router
+      // matches its exact name, so `page.server.ts` would stop being a page.
+      // Next.js lets a page carry 'use server' actions; here they move out.
+      const routing = /^(?:page|layout|route|error|loading|not-found|forbidden|unauthorized|global-error|global-not-found|middleware|template|default)\.m?[jt]sx?$/.test(fileBase);
       violations.push({
         rule: 'use-server-needs-extension',
         file: rel,
         message:
           "File declares `'use server'` but its name does not match `.server.{js,ts,mts,mjs}`. The directive is silently ignored: the file is served to the browser as plain source and its exports are not RPC-callable. Code the developer expects to run on the server actually runs in the browser.",
-        fix: `Rename to ${renamedBase} (add the .server. infix before the extension)`,
+        fix: routing
+          ? `Do not rename ${fileBase}: it is a routing file. Move its server actions into their own module (modules/<feature>/actions/<name>.server.ts starting with 'use server'), export them, and import them here.`
+          : `Rename to ${renamedBase} (add the .server. infix before the extension)`,
       });
     }
   }
@@ -170,5 +176,35 @@ export function checkOneActionPerConfiguredFile(files, violations) {
         });
       }
     }
+  }
+}
+
+/**
+ * Rule: `no-inline-use-server`.
+ *
+ * A `'use server'` directive as the first statement of a FUNCTION body,
+ * Next.js's inline server action. WebJs honours the directive only at the top
+ * of a `*.server.{js,ts}` module, so an inline one is an ordinary string: the
+ * function is not an action, runs wherever it is called, and binding it to a
+ * form throws because it has no action identity.
+ *
+ * @param {ScannedFile[]} files
+ * @param {Violation[]} violations
+ */
+export function checkNoInlineUseServer(files, violations) {
+  for (const { rel, scan } of files) {
+    // `scan` blanks comments and template bodies but keeps plain-string
+    // bodies, so the directive is visible and a mention in a comment or a
+    // template sample is not.
+    const re = /\{\s*(['"])use server\1/g;
+    const m = re.exec(scan);
+    if (!m) continue;
+    const line = scan.slice(0, m.index).split('\n').length;
+    violations.push({
+      rule: 'no-inline-use-server',
+      file: rel,
+      message: `A 'use server' directive inside a function body (line ${line}) does nothing in WebJs: the server boundary is a FILE, so this function is not a server action and runs wherever it is called. Binding it to a <form action> throws.`,
+      fix: "Move the function into its own module, e.g. modules/<feature>/actions/<name>.server.ts whose first line is 'use server', export it, and import it where it is used (a form binds it with action=${fn}).",
+    });
   }
 }

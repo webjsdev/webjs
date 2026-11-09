@@ -552,6 +552,11 @@ function buildFacade(origUrl, absPath, exports) {
     out += `  const fn = ${v} || (${v} = __w(${file}, ${k}, __orig[${k}]));\n`;
     out += `  return typeof fn === 'function' ? fn.apply(this, args) : fn;\n`;
     out += `}\n`;
+    // Keep the action's declared arity: a form-bound action declaring
+    // `(prevState, formData)` is told apart by `fn.length` (Next's
+    // useActionState contract), and the rest-args wrapper reports 0. A
+    // circular import can leave `__orig` in TDZ here, hence the guard.
+    out += `try { Object.defineProperty(${n}, 'length', { value: (__orig[${k}] && __orig[${k}].length) || 0 }); } catch {}\n`;
     out += `__w(${file}, ${k}, ${n});\n`;
   }
   for (const n of exports.valNames) {

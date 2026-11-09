@@ -6,6 +6,7 @@ import { findInstrumentationClient } from './instrumentation.js';
  * @typedef {{
  *   pattern: RegExp,
  *   paramNames: string[],
+ *   paramKinds?: ParamKind[],
  *   file: string,
  *   routeDir: string,
  *   layouts: string[],
@@ -37,6 +38,8 @@ import { findInstrumentationClient } from './instrumentation.js';
  *   globalNotFound: string | null,
  *   metadataRoutes: MetadataRoute[],
  *   instrumentationClient: string | null,
+ *   conflicts: { page: string, route: string, url: string }[],
+ *   ignoredJsx: string[],
  *   appDir: string
  * }} RouteTable
  */
@@ -96,6 +99,8 @@ export async function buildRouteTable(appDir) {
   let globalNotFound = null;
   /** @type {MetadataRoute[]} */
   const metadataRoutes = [];
+  /** @type {string[]} */
+  const ignoredJsx = [];
 
   /** @type {Set<string>} */
   const METADATA_STEMS = new Set(['sitemap', 'robots', 'manifest', 'icon', 'apple-icon', 'opengraph-image', 'twitter-image']);
@@ -131,16 +136,25 @@ export async function buildRouteTable(appDir) {
       }
     }
 
+    // A routing file written as `.tsx` / `.jsx` (Next's default) is never a
+    // route here: JSX needs a build. Recorded so validateAppLayout refuses it
+    // loudly instead of the route silently not existing.
+    {
+      const jsx = /^([A-Za-z0-9_.-]+)\.(?:tsx|jsx)$/.exec(base);
+      if (jsx && ROUTING_STEMS.has(jsx[1])) { ignoredJsx.push(file); continue; }
+    }
+
     // Match `<name>.<js|mjs|ts|mts>` conventions. Stem is the name without ext.
     const stem = stemOf(base);
     if (!stem) continue;
 
     if (stem === 'page') {
       const segs = dir === '.' ? [] : dir.split('/');
-      const { pattern, paramNames, isCatchAll } = segmentsToPattern(segs);
+      const { pattern, paramNames, paramKinds, isCatchAll } = segmentsToPattern(segs);
       pages.push({
         pattern,
         paramNames,
+        paramKinds,
         file,
         routeDir: dir,
         layouts: [],
@@ -182,8 +196,8 @@ export async function buildRouteTable(appDir) {
     } else if (stem === 'route') {
       // route.js / route.ts can live anywhere under app/ (matches NextJs).
       const segs = dir === '.' ? [] : dir.split('/');
-      const { pattern, paramNames } = segmentsToPattern(segs);
-      apis.push({ pattern, paramNames, file, routeDir: dir, middlewares: [] });
+      const { pattern, paramNames, paramKinds } = segmentsToPattern(segs);
+      apis.push({ pattern, paramNames, paramKinds, file, routeDir: dir, middlewares: [] });
     }
   }
 
@@ -221,7 +235,21 @@ export async function buildRouteTable(appDir) {
   // the entry, which inverted the pin-is-a-superset invariant. Deriving it in
   // the one place that builds the table makes that class of miss impossible.
   const instrumentationClient = await findInstrumentationClient(appDir);
-  return { pages, apis, notFound, notFounds, globalError, globalNotFound, metadataRoutes, instrumentationClient, appDir };
+  // A page and a route handler answering the same URL (Next refuses this as
+  // "Conflicting route and page"). Compared by the compiled pattern, so a
+  // route group (`app/(a)/x/page.ts` beside `app/x/route.ts`) conflicts too.
+  // validateAppLayout turns each into a boot error and a check violation.
+  /** @type {{ page: string, route: string, url: string }[]} */
+  const conflicts = [];
+  const pageBySource = new Map(pages.map((p) => [p.pattern.source, p]));
+  for (const api of apis) {
+    const page = pageBySource.get(api.pattern.source);
+    if (page) {
+      const a = /** @type any */ (api);
+      conflicts.push({ page: page.file, route: api.file, url: '/' + urlSegmentsOf(a.routeDir).join('/') });
+    }
+  }
+  return { pages, apis, notFound, notFounds, globalError, globalNotFound, metadataRoutes, instrumentationClient, conflicts, ignoredJsx, appDir };
 }
 
 /**
@@ -262,6 +290,13 @@ export function staticMetadataFile(base) {
   }
   return null;
 }
+
+/** Every routing-file stem, for spotting one written as `.tsx` / `.jsx`. */
+const ROUTING_STEMS = new Set([
+  'page', 'layout', 'route', 'error', 'loading', 'not-found', 'forbidden', 'unauthorized',
+  'global-error', 'global-not-found', 'middleware', 'template', 'default',
+  'sitemap', 'robots', 'manifest', 'icon', 'apple-icon', 'opengraph-image', 'twitter-image',
+]);
 
 function stemOf(base) {
   const m = /^([A-Za-z0-9_.-]+)\.(?:m?[jt]s)$/.exec(base);
@@ -354,6 +389,8 @@ export function compareSpecificity(a, b) {
  */
 function segmentsToPattern(segments, prefix = '') {
   const paramNames = [];
+  /** @type {ParamKind[]} parallel to paramNames */
+  const paramKinds = [];
   let isCatchAll = false;
   let isOptionalCatchAll = false;
   const parts = segments
@@ -362,17 +399,22 @@ function segmentsToPattern(segments, prefix = '') {
       // Optional catch-all: [[...slug]] matches with AND without params
       if (seg.startsWith('[[...') && seg.endsWith(']]')) {
         paramNames.push(seg.slice(5, -2));
+        paramKinds.push('optional');
         isCatchAll = true;
         isOptionalCatchAll = true;
         return '(.*)';
       }
       if (seg.startsWith('[...') && seg.endsWith(']')) {
         paramNames.push(seg.slice(4, -1));
+        paramKinds.push('catchall');
         isCatchAll = true;
-        return '(.*)';
+        // At least one character: a required catch-all never matches its
+        // empty base (`/docs` is a 404 for `docs/[...slug]`, as in Next).
+        return '(.+)';
       }
       if (seg.startsWith('[') && seg.endsWith(']')) {
         paramNames.push(seg.slice(1, -1));
+        paramKinds.push('single');
         return '([^/]+)';
       }
       return escapeRe(seg);
@@ -387,9 +429,44 @@ function segmentsToPattern(segments, prefix = '') {
   const pattern = new RegExp(`^${escapeRe(prefix)}${regexBody}${isOptionalCatchAll ? suffix : '/?$'}`);
   if (!isOptionalCatchAll) {
     // Standard pattern needs end anchor
-    return { pattern: new RegExp(`^${escapeRe(prefix)}${body}/?$`), paramNames, isCatchAll };
+    return { pattern: new RegExp(`^${escapeRe(prefix)}${body}/?$`), paramNames, paramKinds, isCatchAll };
   }
-  return { pattern, paramNames, isCatchAll };
+  return { pattern, paramNames, paramKinds, isCatchAll };
+}
+
+/** @typedef {'single' | 'catchall' | 'optional'} ParamKind */
+
+/** @param {string} s */
+function safeDecode(s) {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
+/**
+ * Build a route's params from a pattern match, Next.js style: a dynamic
+ * `[id]` is a string, a catch-all `[...slug]` is a `string[]` (the tail split
+ * on `/`, then each piece decoded), and an EMPTY optional catch-all
+ * `[[...slug]]` omits its key entirely. Returns null when a required
+ * catch-all came back empty (no match).
+ * @param {{ paramNames: string[], paramKinds?: ParamKind[] }} route
+ * @param {RegExpExecArray} m
+ * @returns {Record<string, string | string[]> | null}
+ */
+export function fillParams(route, m) {
+  /** @type {Record<string, string | string[]>} */
+  const params = {};
+  for (let i = 0; i < route.paramNames.length; i++) {
+    const name = route.paramNames[i];
+    const kind = route.paramKinds ? route.paramKinds[i] : 'single';
+    const raw = m[i + 1] || '';
+    if (kind === 'single') { params[name] = safeDecode(raw); continue; }
+    const pieces = raw.replace(/\/+$/, '').split('/').filter((p, j, all) => p !== '' || (j > 0 && j < all.length - 1)).map(safeDecode);
+    if (!pieces.length) {
+      if (kind === 'catchall') return null;
+      continue; // empty optional catch-all: the key is absent, as in Next
+    }
+    params[name] = pieces;
+  }
+  return params;
 }
 
 /** @param {string} s */
@@ -405,9 +482,8 @@ export function matchPage(table, pathname) {
   for (const route of table.pages) {
     const m = route.pattern.exec(pathname);
     if (!m) continue;
-    /** @type {Record<string,string>} */
-    const params = {};
-    route.paramNames.forEach((n, i) => (params[n] = decodeURIComponent(m[i + 1] || '')));
+    const params = fillParams(route, m);
+    if (!params) continue;
     return { route, params };
   }
   return null;
@@ -421,9 +497,8 @@ export function matchApi(table, pathname) {
   for (const route of table.apis) {
     const m = route.pattern.exec(pathname);
     if (!m) continue;
-    /** @type {Record<string,string>} */
-    const params = {};
-    route.paramNames.forEach((n, i) => (params[n] = decodeURIComponent(m[i + 1] || '')));
+    const params = fillParams(route, m);
+    if (!params) continue;
     return { route, params };
   }
   return null;

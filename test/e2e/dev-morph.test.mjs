@@ -130,7 +130,7 @@ describe('E2E: a dev page or layout edit refreshes in place (#1398)', {
   async function open() {
     const page = await browser.newPage();
     const cssRequests = [];
-    page.on('request', (r) => { if (r.url().includes('/public/app.css')) cssRequests.push(r.url()); });
+    page.on('request', (r) => { if (r.url().includes('/app.css')) cssRequests.push(r.url()); });
     await page.goto(base + '/', { waitUntil: 'networkidle2' });
     await page.waitForFunction(() => !!customElements.get('morph-counter'), { timeout: 10000 });
     await page.waitForSelector('#bump');

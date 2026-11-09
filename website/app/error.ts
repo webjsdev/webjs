@@ -22,7 +22,7 @@ export default function ErrorBoundary({ error }: { error: unknown }) {
   // this boundary renders outside both, so it links the marketing sheet
   // itself, first, which moves it into <head> (#1669).
   return html`
-    <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
+    <link rel="stylesheet" href=${asset('/tailwind.css')}>
     <main id="main" tabindex="-1" class="min-h-[60vh] flex flex-col items-start justify-center max-w-2xl mx-auto px-6 py-20 focus:outline-none">
       <div class="text-xs font-mono uppercase tracking-widest text-accent mb-4">500 &middot; server error</div>
       <h1 class="font-serif text-5xl md:text-6xl font-bold tracking-tight text-fg mb-4" style="letter-spacing: -0.03em">Something went wrong.</h1>

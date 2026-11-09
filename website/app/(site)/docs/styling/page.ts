@@ -50,7 +50,7 @@ import type { LayoutProps } from '@webjsdev/core';
 
 export default function RootLayout({ children }: LayoutProps) {
   return html\`
-    &lt;link rel="stylesheet" href=\${asset('/public/tailwind.css')}&gt;
+    &lt;link rel="stylesheet" href=\${asset('/tailwind.css')}&gt;
     &lt;style&gt;
       /* Token VALUES: plain CSS custom properties, so they resolve with JS off. */
       :root {

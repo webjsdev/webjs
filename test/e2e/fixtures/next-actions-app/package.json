@@ -1,0 +1,1 @@
+{ "name": "next-actions-fixture-app", "private": true, "type": "module", "imports": { "#*": "./*" }, "webjs": {} }

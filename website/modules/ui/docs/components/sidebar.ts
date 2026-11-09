@@ -415,7 +415,7 @@ sidebar.setOpen(false);`, { lineNumbers: true })}
 import { cookies } from '@webjsdev/server';
 
 export async function sidebarOpen() {
-  return cookies().get('sidebar_state') !== 'false';
+  return cookies().get('sidebar_state')?.value !== 'false';
 }`, { title: 'modules/layout/queries/sidebar-open.server.ts', lineNumbers: true })}
     ${codeFigure(`<ui-sidebar-provider default-open=\${String(await sidebarOpen())}>`, { title: 'app/layout.ts' })}
 

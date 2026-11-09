@@ -469,8 +469,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         const script = isApi ? 'clear-api-gallery.mjs' : 'clear-gallery.mjs';
         return isBun ? `bun scripts/${script}` : `node scripts/${script}`;
       })(),
-      dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
-      start: isBun ? 'bun --bun webjs start' : 'webjs start',
+      // --no-env-file: WebJs loads .env files itself in Next's order; Bun's
+      // auto-load would read .env.development under `start` too.
+      dev: isBun ? 'bun --bun --no-env-file webjs dev' : 'webjs dev',
+      start: isBun ? 'bun --bun --no-env-file webjs start' : 'webjs start',
       test: 'webjs test',
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',
@@ -622,7 +624,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // added utility class has no backing rule, so the app renders unstyled
     // locally while prod is fine). `regenerate` instead recompiles ON REQUEST
     // when the output does not match its build record (or is missing): the
-    // framework rebuilds it before serving `/public/tailwind.css`, so there is
+    // framework rebuilds it before serving `/tailwind.css`, so there is
     // no watch process to die and no staleness window. Same `cssBuildCmd` as
     // prod, so dev and prod resolve classes identically (nothing to diverge).
     // `inputs` mirrors the
@@ -648,7 +650,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // Which doctor findings are FATAL is the app's own call (#1257), declared
       // here rather than in the CI workflow so `npm run doctor` locally and the
       // workflow step agree about what fails. UNMARKED_ASSET_LINKS starts at
-      // error because an un-versioned /public url is a real deploy-staleness
+      // error because an un-versioned public url is a real deploy-staleness
       // bug (it shipped a visible regression on webjs.dev) and the generated
       // layout already writes asset(), so a fresh app is green on day one.
       // Two checks are fatal with no entry here at all, NODE_VERSION and
@@ -768,6 +770,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'test/**/*',
       'middleware.js',
       'middleware.ts',
+      'proxy.ts',
       '.webjs/routes.d.ts',
     ],
     exclude: ['node_modules', '.webjs/vendor', 'db/migrations'],
@@ -1499,14 +1502,14 @@ export default function RootLayout({ children }: LayoutProps) {
          it never goes stale). A real stylesheet, so the app is fully styled with
          JavaScript DISABLED (no in-browser compile).
 
-         asset() adds a content hash in production (/public/tailwind.css?v=...)
+         asset() adds a content hash in production (/tailwind.css?v=...)
          and the framework then serves it immutable for a year, so a deploy that
          changes the CSS changes the url and no browser or CDN can serve the old
          bytes. Mark the thing that FETCHES: do not wrap a <link rel="preload">
          whose asset is really fetched by an @font-face url() in the CSS, or the
          preload can never match the request and the file downloads twice. -->
 
-    <link rel="stylesheet" href=\${asset('/public/tailwind.css')}>
+    <link rel="stylesheet" href=\${asset('/tailwind.css')}>
     <style>
       /* The design tokens (colours, fonts, radius) live in styles/globals.css,
          in the theme block that webjs ui init owns: npx webjsdev ui init --preset

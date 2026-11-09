@@ -13,30 +13,25 @@
  * one implementation and the logic is unit-testable without spawning a
  * server.
  */
-import { join } from 'node:path';
+import { loadEnvFiles } from './env-files.js';
 
 /**
- * Load `<appDir>/.env` into `process.env`, guarded exactly like the server's
- * own `loadAppEnv` (`packages/server/src/dev.js`): only on a Node with the
- * built-in `process.loadEnvFile`, and swallowing a missing or malformed file.
+ * Load the app's env files into `process.env` in Next.js's order
+ * (`.env.$mode.local`, `.env.local`, `.env.$mode`, `.env`; see env-files.js),
+ * where the mode follows `NODE_ENV` (`test`, `production`, else
+ * `development`). The dev and start commands set `NODE_ENV` first when it is
+ * unset, so `webjs start` reads `.env.production`.
  *
- * Node's `loadEnvFile` does NOT override a var already present in
- * `process.env`, so a real shell-exported `PORT=NNNN npm run dev` still wins
- * over the file. That "shell beats file" precedence is intentional and
- * matches what the server does after its own load.
+ * A key already in `process.env` is never overwritten, so a real
+ * shell-exported `PORT=NNNN npm run dev` still wins over a file.
  *
  * @param {string} appDir
+ * @returns {string[]} the files read
  */
 export function loadAppEnv(appDir) {
-  try {
-    if (typeof process.loadEnvFile === 'function') {
-      process.loadEnvFile(join(appDir, '.env'));
-    }
-  } catch {
-    // No .env, malformed file, or a Node without loadEnvFile. Fall through
-    // silently: the app may not need any env vars, or they may be set via
-    // the shell.
-  }
+  const nodeEnv = process.env.NODE_ENV;
+  const mode = nodeEnv === 'test' ? 'test' : nodeEnv === 'production' ? 'production' : 'development';
+  return loadEnvFiles(appDir, mode);
 }
 
 /**

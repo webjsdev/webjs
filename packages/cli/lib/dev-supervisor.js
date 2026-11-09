@@ -53,7 +53,7 @@ export const WATCH_DIRS = ['app', 'components', 'modules', 'lib', 'actions', 'db
  * never restarts the dev server when edited, which is the quiet half of the
  * bug where a `middleware.ts` was loaded by neither.
  */
-export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', ...bootFiles()];
+export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', 'proxy.ts', 'proxy.js', 'proxy.mts', 'proxy.mjs', ...bootFiles()];
 
 /**
  * The app-root boot hooks the server runs ONCE per process (#1575):
@@ -107,7 +107,9 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
     const plugin = bunPluginServed(sourceLocations);
     return {
       mode: 'supervise',
-      args: ['--hot', ...argv],
+      // --no-env-file: WebJs loads the env files itself in Next's order
+      // (env-files.js); Bun's own auto-load would pick a different set.
+      args: ['--no-env-file', '--hot', ...argv],
       env: BUN_CHILD_ENV,
       restartOnChange: true,
       restartFor: (p) => plugin(p) || isBootFile(p),

@@ -13,6 +13,8 @@ import {
 import { resolveImport } from '../module-graph.js';
 import { coreSurface, isTypeOnlyAnywhere } from '../core-exports.js';
 import { missingCoreNameFix } from '../lit-hints.js';
+import { foreignImport, foreignImportAllowed } from '../foreign-imports.js';
+import { CSS_IMPORT_FIX } from '../app-layout.js';
 import {
   hasUseServerDirective, enumerableExports, importedLocalNames, importedValueNames,
 } from './helpers.js';
@@ -245,6 +247,64 @@ export function checkCoreImportsExist(appDir, files, violations) {
           fix: elsewhere
             ? `Import it from \`${elsewhere[0]}\`.`
             : missingCoreNameFix(name, { typeOnly, specifier: spec }),
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Rule: `no-foreign-framework-import`.
+ *
+ * A `next/*`, `react`, `react-dom`, `lit`, `lit-html`, `lit-element`,
+ * `@lit/*` or `@lit-labs/*` import, in any form (named, default, namespace,
+ * `import type`, side-effect, `export ... from`, or a string-literal dynamic
+ * `import()`). WebJs never loads those packages; the violation names the exact
+ * `@webjsdev/*` replacement from the shared table in foreign-imports.js.
+ * `react` / `react-dom` stay allowed in a `*.server.*` module.
+ *
+ * @param {ScannedFile[]} files
+ * @param {Violation[]} violations
+ * @returns {void}
+ */
+export function checkNoForeignFrameworkImport(files, violations) {
+  // Keyword positions come from the fully-blanked view (no literal body
+  // survives, so an import written inside a string or template is never
+  // matched); the specifier is read back from the raw content at the same,
+  // length-preserved offset.
+  const reStatic = /\b(?:import|export)\b[^'";]*?\bfrom\s*(['"])/g;
+  const reBare = /\bimport\s*(['"])/g;
+  const reDynamic = /\bimport\s*\(\s*(['"])/g;
+  for (const { rel, content } of files) {
+    const masked = redactStringsAndTemplates(content, true);
+    const seen = new Set();
+    for (const re of [reStatic, reBare, reDynamic]) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(masked))) {
+        const quote = m[1];
+        const start = re.lastIndex;
+        const end = content.indexOf(quote, start);
+        if (end < 0) continue;
+        const spec = content.slice(start, end);
+        if (/\.css(?:\?.*)?$/i.test(spec) && !seen.has(spec)) {
+          seen.add(spec);
+          violations.push({
+            rule: 'no-css-import',
+            file: rel,
+            message: `Imports '${spec}', a stylesheet. WebJs has no bundler: the import fails on Node, is silently dropped on Bun, and stops the module from loading in the browser.`,
+            fix: CSS_IMPORT_FIX,
+          });
+          continue;
+        }
+        const f = foreignImport(spec);
+        if (!f || seen.has(spec) || foreignImportAllowed(spec, rel)) continue;
+        seen.add(spec);
+        violations.push({
+          rule: 'no-foreign-framework-import',
+          file: rel,
+          message: `Imports '${spec}', a ${f.framework} package. WebJs does not load ${f.framework}: the import fails in the browser and on the server, or (for Lit) loads a second component runtime beside WebJs.`,
+          fix: f.fix,
         });
       }
     }

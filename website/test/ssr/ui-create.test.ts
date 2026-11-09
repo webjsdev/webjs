@@ -86,7 +86,7 @@ test('/ui/preview/<name> wears the design system init --preset installs', async 
   assert.ok(wrapper.includes('--radius: 0.875rem'), 'the radius');
   assert.ok(wrapper.includes(`--font-sans: 'Figtree', sans-serif`), 'the body font');
   assert.match(wrapper, /data-style="lyra" data-radius="large" data-font="figtree" data-font-heading="inherit" data-style-title="Lyra" data-font-title="Figtree"/, 'the choice as data, for preview content that shows it');
-  assert.match(html.slice(0, html.indexOf('</head>')), /<link rel="stylesheet" href="\/public\/ui-styles\/lyra\.css[^"]*" data-style-sheet="lyra"[^>]*>/, 'the style\'s stylesheet, in <head>');
+  assert.match(html.slice(0, html.indexOf('</head>')), /<link rel="stylesheet" href="\/ui-styles\/lyra\.css[^"]*" data-style-sheet="lyra"[^>]*>/, 'the style\'s stylesheet, in <head>');
   assert.equal((await handle('/ui/preview/not-a-preview')).status, 404);
 });
 
@@ -107,7 +107,7 @@ test('the menu color rides the frame wrapper: inverted by CSS, translucent by th
   const html = await page(`/ui/preview/preview?preset=${encodePreset(config)}`);
   assert.match(html, /<div data-slot="design-system"[^>]*data-menu-color="inverted-translucent"/);
   assert.match(html, /\[data-slot="design-system"\]\[data-menu-color\^="inverted"\] :is\([^)]*\[data-slot="dropdown-menu-content"\][^)]*\) \{ color-scheme: dark; \}/, 'the inverted rule');
-  assert.match(html, /<script src="\/public\/ui-menu-color\.js[^"]*" defer><\/script>/, 'the translucent script');
+  assert.match(html, /<script src="\/ui-menu-color\.js[^"]*" defer><\/script>/, 'the translucent script');
 });
 
 test('the menu script and the CSS name the same menu surfaces', () => {

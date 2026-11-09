@@ -572,6 +572,9 @@ async function main() {
   }
   switch (cmd) {
     case 'dev': {
+      // `dev` is development unless NODE_ENV says otherwise (Next's convention),
+      // so `.env.development` loads; the supervised child inherits it.
+      if (!process.env.NODE_ENV) process.env.NODE_ENV = 'development';
       // If we're already inside the reload child (under the supervisor),
       // start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
@@ -650,6 +653,9 @@ async function main() {
       break;
     }
     case 'start': {
+      // Next's convention: `start` is production unless NODE_ENV says
+      // otherwise, so `.env.production` loads and the app sees production.
+      if (!process.env.NODE_ENV) process.env.NODE_ENV = 'production';
       const { startServer } = await import('@webjsdev/server');
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
       // the 8080 default (#447), same as for `dev`.

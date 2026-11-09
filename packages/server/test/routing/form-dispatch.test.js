@@ -544,13 +544,13 @@ export default () => html\`<form action=\${readIt}></form>\`;
   assert.equal(resp.status, 405);
 });
 
-test('action that throws redirect() defaults to 307 (method-preserving, not PRG 303)', async () => {
-  // A submission is a POST, so a thrown redirect with no explicit status
-  // defaults to the method-preserving 307 here, deliberately NOT the GET gate's
-  // 302. The PRG success path (303) is separate. #452.
+test('a thrown redirect() in a form action answers 303 and the action runs ONCE', async () => {
+  // Next.js answers a redirect from a server action with 303, so the browser
+  // follows with a GET. The old 307 re-POSTed the body, identity included, to
+  // the target page, and the action ran a second time there.
   const app = await createRequestHandler({
     appDir: makeApp({
-      'modules/gate/actions/gate.server.ts': `'use server';\nimport { redirect } from ${CORE};\nexport async function gate() { redirect('/login'); }\n`,
+      'modules/gate/actions/gate.server.ts': `'use server';\nimport { redirect } from ${CORE};\nexport async function gate() { globalThis.__gateRuns = (globalThis.__gateRuns || 0) + 1; redirect('/gate'); }\n`,
       'app/gate/page.ts': `
 import { html } from ${CORE};
 import { gate } from '../../modules/gate/actions/gate.server.ts';
@@ -560,16 +560,20 @@ export default () => html\`<form action=\${gate}></form>\`;
     dev: true,
   });
   await app.warmup();
-
+  globalThis.__gateRuns = 0;
   const resp = await submit(app, '/gate', {});
-  assert.equal(resp.status, 307, 'thrown action redirect defaults to 307');
-  assert.equal(resp.headers.get('location'), '/login');
+  assert.equal(resp.status, 303, 'a thrown action redirect is 303');
+  assert.equal(resp.headers.get('location'), '/gate');
+  // Follow the redirect the way a browser does (a GET), to the SAME page.
+  const followed = await app.handle(new Request('http://x/gate'));
+  assert.equal(followed.status, 200);
+  assert.equal(globalThis.__gateRuns, 1, 'the action ran exactly once');
 });
 
-test('a thrown redirect with an explicit status overrides the 307 default', async () => {
+test('an explicit status or permanentRedirect still answers 303 from a form action', async () => {
   const app = await createRequestHandler({
     appDir: makeApp({
-      'modules/g2/actions/g2.server.ts': `'use server';\nimport { redirect } from ${CORE};\nexport async function g2() { redirect('/done', 303); }\n`,
+      'modules/g2/actions/g2.server.ts': `'use server';\nimport { permanentRedirect } from ${CORE};\nexport async function g2() { permanentRedirect('/done'); }\n`,
       'app/gate2/page.ts': `
 import { html } from ${CORE};
 import { g2 } from '../../modules/g2/actions/g2.server.ts';
@@ -579,16 +583,95 @@ export default () => html\`<form action=\${g2}></form>\`;
     dev: true,
   });
   await app.warmup();
-
   const resp = await submit(app, '/gate2', {});
-  assert.equal(resp.status, 303, 'explicit status wins');
+  assert.equal(resp.status, 303);
   assert.equal(resp.headers.get('location'), '/done');
+});
+
+test("Next's { errors } return is a failure (422 re-render), not a success", async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/e/actions/e.server.ts': `'use server';\nexport async function e() { return { errors: { title: ['Required'] } }; }\n`,
+      'app/err/page.ts': `
+import { html } from ${CORE};
+import { e } from '../../modules/e/actions/e.server.ts';
+export default ({ actionData }) => html\`<form action=\${e}></form><p id="msg">\${actionData?.errors?.title?.[0] ?? ''}</p>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const resp = await submit(app, '/err', {});
+  assert.equal(resp.status, 422);
+  assert.match(await resp.text(), /<p id="msg">Required<\/p>/);
+});
+
+/** The Set-Cookie value for the flash, as a Cookie request header. */
+function flashCookie(resp) {
+  const set = resp.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash='));
+  return set ? set.split(';')[0] : null;
+}
+
+test('a successful result survives the 303 as actionData, shown once', async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/s/actions/s.server.ts': `'use server';\nexport async function save() { return { success: true, message: 'Saved!', data: { at: new Date(0) } }; }\n`,
+      'app/save/page.ts': `
+import { html } from ${CORE};
+import { save } from '../../modules/s/actions/s.server.ts';
+export default ({ actionData }) => html\`<form action=\${save}></form><p id="msg">\${actionData?.message ?? 'none'} \${actionData?.data?.at instanceof Date ? 'date' : ''}</p>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const resp = await submit(app, '/save', {});
+  assert.equal(resp.status, 303);
+  const cookie = flashCookie(resp);
+  assert.ok(cookie, 'the flash cookie is set on the 303');
+  assert.match(resp.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash=')), /HttpOnly; SameSite=Lax/);
+  const landed = await app.handle(new Request('http://x/save', { headers: { cookie } }));
+  assert.match(await landed.text(), /<p id="msg">Saved! date<\/p>/, 'actionData carries the rich result');
+  // The landing page rewrites the flash as shown, so a reload does not repeat it.
+  const shown = flashCookie(landed);
+  assert.ok(shown && shown !== cookie);
+  const reload = await app.handle(new Request('http://x/save', { headers: { cookie: shown } }));
+  assert.match(await reload.text(), /<p id="msg">none /);
+  // A forged cookie is ignored.
+  const forged = await app.handle(new Request('http://x/save', { headers: { cookie: '__webjs_flash=eyJhIjoiMSJ9.bad' } }));
+  assert.match(await forged.text(), /<p id="msg">none /);
+});
+
+test('an action declaring (prevState, formData) receives its previous result', async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/c/actions/c.server.ts': `'use server';\nexport async function count(prev, input) { const n = (prev?.n ?? 0) + Number(input.get('by')); return n < 2 ? { success: false, error: 'more', n } : { success: true, n }; }\n`,
+      'app/count/page.ts': `
+import { html } from ${CORE};
+import { count } from '../../modules/c/actions/c.server.ts';
+export default ({ actionData }) => html\`<form action=\${count}></form><p id="n">\${actionData?.n ?? 0}</p>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const page = await app.handle(new Request('http://x/count'));
+  const id = identityOf(await page.text());
+  const first = await app.handle(new Request('http://x/count', form({ by: '1', __webjs_action: id })));
+  assert.equal(first.status, 422, 'prevState was undefined: n = 1, a failure');
+  assert.match(await first.text(), /<p id="n">1<\/p>/);
+  const cookie = flashCookie(first);
+  assert.ok(cookie, 'the failure is carried for the next submission');
+  const req2 = new Request('http://x/count', form({ by: '1', __webjs_action: id }));
+  req2.headers.set('cookie', cookie);
+  const second = await app.handle(req2);
+  assert.equal(second.status, 303, 'prevState.n (1) + 1 = 2, a success');
 });
 
 test('a redirect thrown during the FAILED-action re-render returns 302 (GET-shaped)', async () => {
   // A failed action re-renders the SAME page through ssrPage (a GET-shaped page
   // render at 422). If THAT render throws a gate redirect, it resolves via the
-  // ssr.js catch site, so it gets the GET-gate 302 default, not the action 307.
+  // ssr.js catch site, so it gets the GET-gate 302 default, not the action 303.
   // This pins that the re-render is treated as a page render. #452.
   const app = await createRequestHandler({
     appDir: makeApp({

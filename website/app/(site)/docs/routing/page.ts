@@ -201,22 +201,25 @@ export default async function UserPage({ params }: { params: { id: string } }) {
     <h3>Catch-All Routes (<code>[...rest]</code>)</h3>
     <p>
       Prefix the parameter name with <code>...</code> to capture all remaining path
-      segments as a single string.
+      segments. As in Next.js, the value is an array of the segments, each
+      decoded. A required catch-all needs at least one segment (<code>/files</code>
+      alone is a 404); an optional catch-all <code>[[...path]]</code> also
+      matches the bare base, where its key is absent from <code>params</code>.
     </p>
 
     <code-block>app/
 └── files/
     └── [...path]/
-        └── page.ts     # /files/a/b/c → { path: "a/b/c" }</code-block>
+        └── page.ts     # /files/a/b/c → { path: ["a", "b", "c"] }</code-block>
 
     <code-block>// app/files/[...path]/page.ts
 import { html } from '@webjsdev/core';
 
-export default function FilesPage({ params }: { params: { path: string } }) {
-  const segments = params.path.split('/');
+export default function FilesPage({ params }: { params: { path: string[] } }) {
+  const segments = params.path;
   return html\`
     &lt;h1&gt;File browser&lt;/h1&gt;
-    &lt;p&gt;Current path: /files/\${params.path}&lt;/p&gt;
+    &lt;p&gt;Current path: /files/\${segments.join('/')}&lt;/p&gt;
     &lt;ul&gt;
       \${segments.map((s) =&gt; html\`&lt;li&gt;\${s}&lt;/li&gt;\`)}
     &lt;/ul&gt;
@@ -515,6 +518,25 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function PostPage({ params }: { params: { slug: string } }) {
   // ...
 }</code-block>
+    <p>
+      As in Next.js, <code>generateMetadata(props, parent)</code> receives a
+      second argument, a promise of the metadata the outer layouts resolved, with
+      <code>title</code> normalized to <code>{ absolute, template }</code>. Use
+      it to extend rather than replace a parent value:
+    </p>
+    <code-block>export async function generateMetadata({ params }, parent) {
+  const previous = (await parent).openGraph?.images || [];
+  return { openGraph: { images: ['/post.png', ...previous] } };
+}</code-block>
+    <p>
+      <code>generateViewport(props, parent)</code> works the same way for the
+      <code>viewport</code> export. A <code>notFound()</code> or
+      <code>redirect()</code> thrown from <code>generateMetadata</code> answers
+      the request exactly as it would from the page. Any other error is logged
+      with the file name, reported to <code>onError</code> and
+      <code>onRequestError</code>, and that segment's metadata is skipped, so a
+      broken metadata function never takes the page down.
+    </p>
 
     <h3>Metadata Merging</h3>
     <p>
@@ -526,7 +548,8 @@ export default async function PostPage({ params }: { params: { slug: string } })
       <li><code>title</code>: sets <code>&lt;title&gt;</code></li>
       <li><code>description</code>: sets <code>&lt;meta name="description"&gt;</code></li>
       <li><code>viewport</code>: sets <code>&lt;meta name="viewport"&gt;</code> (defaults to <code>width=device-width,initial-scale=1</code>)</li>
-      <li><code>themeColor</code>: sets <code>&lt;meta name="theme-color"&gt;</code></li>
+      <li><code>themeColor</code> sets <code>&lt;meta name="theme-color"&gt;</code>; as in Next it may be a string, a <code>{ color, media }</code> descriptor, or an array of them (one tag each, for light and dark)</li>
+      <li><code>robots</code> sets <code>&lt;meta name="robots"&gt;</code> from a string or Next's object (<code>index</code>, <code>follow</code>, <code>noarchive</code>, <code>max-snippet</code> and the rest); a nested <code>googleBot</code> object or string becomes <code>&lt;meta name="googlebot"&gt;</code></li>
       <li><code>openGraph</code>: an object of Open Graph properties (keys become <code>og:key</code>)</li>
       <li><code>preload</code>: an array of <code>&lt;link rel="preload"&gt;</code> entries (e.g. fonts, images)</li>
     </ul>
@@ -558,12 +581,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
       Aborts rendering and returns a redirect response. When you do not pass a
       status, the catching site picks the conventional one: a redirect thrown
       during a <strong>GET</strong> page or layout render (a gate, an auth
-      bounce) becomes <code>302</code> Found, the usual GET-to-GET code; a
-      redirect thrown from a <strong>server action</strong> (a POST) becomes
-      <code>307</code> Temporary Redirect, which is method-preserving so the
-      action's intent survives. Pass an explicit status to override either
-      default: positionally as <code>redirect('/x', 308)</code>, or with the
-      options form <code>redirect('/x', { status: 301 })</code>.
+      bounce) becomes <code>302</code> Found, the usual GET-to-GET code, and an
+      explicit status overrides it: positionally as <code>redirect('/x', 308)</code>,
+      or with the options form <code>redirect('/x', { status: 301 })</code>.
     </p>
     <code-block>import { redirect } from '@webjsdev/core';
 
@@ -576,15 +596,42 @@ export default async function ProtectedPage() {
   return html\`&lt;h1&gt;Welcome, \${user.name}&lt;/h1&gt;\`;
 }</code-block>
     <p>
-      Inside a server action, the same <code>redirect('/somewhere')</code>
-      defaults to <code>307</code> instead, so a POST that bounces keeps its
-      method. The Post/Redirect/Get success path (returning
-      <code>{ success: true, redirect }</code>) is separate and always uses
-      <code>303</code> See Other.
+      The other catching sites follow Next.js. In a <code>route.ts</code> handler
+      it answers <code>307</code> (see <a href="/docs/api-routes#redirect-and-not-found">API Routes</a>).
+      In a server action bound to a <code>&lt;form&gt;</code> it always answers
+      <code>303</code> See Other, so the browser follows with a GET and the
+      mutation runs exactly once (the Post/Redirect/Get success path,
+      returning <code>{ success: true, redirect }</code>, is a <code>303</code>
+      too). In a server action a component calls over RPC, the response tells
+      the generated stub where to go and the client router navigates there;
+      the <code>await action()</code> call rejects with the redirect, so code
+      after it does not run, exactly as in Next.
+    </p>
+
+    <h3><code>permanentRedirect(url, type?)</code></h3>
+    <p>
+      Next.js's <code>permanentRedirect</code>, exported from
+      <code>@webjsdev/core</code>, behaves as <code>redirect(url, 308)</code>
+      and answers a <code>308</code> Permanent Redirect, which browsers and
+      search engines remember. Use it when a URL has moved for good, such as a
+      renamed slug.
+    </p>
+    <code-block>import { permanentRedirect } from '@webjsdev/core';
+
+export default async function OldSlug({ params }: { params: { slug: string } }) {
+  const post = await findPostByOldSlug(params.slug);
+  if (post) permanentRedirect(\`/blog/\${post.slug}\`);  // 308
+}</code-block>
+    <p>
+      Both <code>redirect()</code> and <code>permanentRedirect()</code> also
+      accept Next's <code>RedirectType</code>, <code>'push'</code> or
+      <code>'replace'</code>, as the second argument. It only matters when the
+      redirect reaches the browser from a server action called over RPC, where
+      it decides whether the client navigation adds a history entry.
     </p>
 
     <p>
-      Both server helpers can be called from pages, layouts, and
+      These server helpers can be called from pages, layouts, route handlers, and
       <code>generateMetadata</code> functions, anywhere in the server-side rendering
       chain.
     </p>
@@ -651,7 +698,7 @@ export default function Loading() {
     <h2>Route Resolution Order</h2>
     <p>When a request arrives, WebJs resolves it in this order:</p>
     <ol>
-      <li><strong>Static file</strong>: if a file exists in the project's public/static directory, it is served directly.</li>
+      <li><strong>Static file</strong>: a file in <code>public/</code> is served at the url root, as in Next.js: <code>public/logo.png</code> is <code>/logo.png</code>, and there is no <code>/public/</code> prefix. A public file wins over a <em>dynamic</em> route at the same url; one at the same url as a static page, a <code>route.ts</code> or a metadata route is an error (<code>no-public-route-conflict</code>: <code>webjs check</code> reports it and production refuses to start), since one would hide the other.</li>
       <li><strong>API route</strong>: <code>route.ts</code> handlers are matched against the URL by the same positional specificity as pages (below), so <code>api/auth/callback/github/route.ts</code> answers before <code>api/auth/[...path]/route.ts</code>. WebSocket upgrades also match here.</li>
       <li><strong>Page route</strong>: <code>page.ts</code> files are matched by positional specificity (segment by segment, a static segment beats a dynamic one beats a catch-all, so the catch-all kind is lowest at its position rather than blanket-last), with ties broken by a stable alphabetical key rather than file order.</li>
       <li><strong>Not found</strong>: if nothing matches, <code>not-found.ts</code> is rendered with a <code>404</code> status.</li>

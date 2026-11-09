@@ -80,6 +80,8 @@ webjs doctor --strict   # also fail on EVERY remaining warning, not just hard fa
 
     <p>One more check, <code>WORKSPACE_OVERRIDES</code>, warns when the app is a member of an npm or bun workspace and its own <code>package.json</code> carries <code>overrides</code> (or <code>resolutions</code>): package managers honour those only at the workspace root, so the block is silently ignored there. Move it into the root <code>package.json</code>.</p>
 
+    <p><code>JSX_ROUTE_FILES</code> fails when a routing file (a page, layout, route handler, boundary or metadata route) is written as <code>.tsx</code> or <code>.jsx</code>, the Next.js default. WebJs has no build step, so such a file is never loaded and its route does not exist; the server refuses to start on the same condition and <code>webjs check</code> reports it as <code>no-jsx-route-file</code>. Rename it to <code>.ts</code> and return an <code>html</code> template.</p>
+
     <p>And <code>APP_ICON</code> warns while the app's favicon is still the placeholder <code>app/icon.svg</code> the scaffold shipped. Replace it with the app's own icon (see <a href="/docs/metadata-routes#app-icon">App icon and manifest</a>).</p>
 
     <h3>webjs audit</h3>
@@ -237,11 +239,19 @@ webjs routes --help     # one command's help (flag form)</code-block>
     <p>Editors catch more of this earlier still: a scaffolded app wires the schema into <code>.vscode/settings.json</code>, and the <code>WebjsConfig</code> type from <code>@webjsdev/core</code> types the block while you author it. And <code>webjs.doctor</code> is checked by a different tool entirely: the server never reads it, and <code>webjs doctor</code> exits non-zero on a malformed one, because a silently ignored gate would leave CI un-gated while looking gated.</p>
 
     <h2>Environment Variables</h2>
-    <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). WebJs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> once at boot using Node 24+'s built-in <code>process.loadEnvFile</code>, so a scaffolded app with a committed <code>.env.example</code> and a developer-copied <code>.env</code> just works without installing <code>dotenv</code> or wiring up the file path. The auto-load fires before any server-only module is imported, which matters for code that reads <code>process.env</code> at module-init time (e.g. <code>createAuth({ secret: process.env.AUTH_SECRET })</code>).</p>
+    <p>Use <code>process.env</code> in server-side code (pages, actions, route handlers, middleware). WebJs loads the app's env files into <code>process.env</code> once at boot, in the same order as Next.js, so a Next project's <code>.env.local</code> and <code>.env.production</code> keep working with no <code>dotenv</code>. The load happens before any server-only module is imported, which matters for code that reads <code>process.env</code> at module-init time (e.g. <code>createAuth({ secret: process.env.AUTH_SECRET })</code>).</p>
 
-    <p><strong>Precedence: shell wins over file.</strong> <code>process.loadEnvFile</code> does not override values that are already present in <code>process.env</code>, so values exported by the host shell or a process manager (Docker, systemd, Railway, Fly) take precedence over the same key in <code>.env</code>. This matches the Rails / Next / Astro convention: <code>.env</code> is for developer-local defaults; production secrets come from the platform.</p>
+    <p id="env-file-order"><strong>Order, highest precedence first:</strong></p>
+    <ol>
+      <li>the real environment (exported by the shell or the platform: Docker, systemd, Railway, Fly), which is never overwritten;</li>
+      <li><code>.env.$mode.local</code>;</li>
+      <li><code>.env.local</code> (not read when the mode is <code>test</code>, so tests are reproducible);</li>
+      <li><code>.env.$mode</code>;</li>
+      <li><code>.env</code>.</li>
+    </ol>
+    <p>The mode is <code>development</code> under <code>npm run dev</code>, <code>production</code> under <code>npm run start</code>, and <code>test</code> when <code>NODE_ENV=test</code>. <code>dev</code> and <code>start</code> set <code>NODE_ENV</code> to <code>development</code> / <code>production</code> when it is not already set. Commit <code>.env</code> and <code>.env.$mode</code> defaults; keep <code>.local</code> files and real secrets out of git. The files are parsed the same way on Node and Bun, and a Bun app's scaffolded scripts pass <code>--no-env-file</code> so Bun's own loader does not read a different set first.</p>
 
-    <p><strong>No file, no problem.</strong> A missing <code>.env</code>, a malformed file, or running on Node without <code>loadEnvFile</code> all fail silently. The server still boots; only the missing values are <code>undefined</code> (the same way a typo would be).</p>
+    <p><strong>No file, no problem.</strong> A missing or malformed file is skipped silently. The server still boots; only the missing values are <code>undefined</code> (the same way a typo would be).</p>
 
     <p>Override per-invocation by passing values on the command line:</p>
     <code-block>DATABASE_URL=postgres://... npm start</code-block>

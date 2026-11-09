@@ -245,42 +245,6 @@ export function shouldAccessLog(pathname) {
   return !pathname.startsWith('/__webjs/');
 }
 
-/**
- * Auto-load `<appDir>/.env` into `process.env` once at boot. Mirrors
- * what Rails / Next / Astro do out of the box: a scaffolded app with
- * a committed `.env.example` and a developer-copied `.env` should
- * "just work" without the user having to add a dotenv import or set
- * the file path on the CLI.
- *
- * Uses Node 24+'s built-in `process.loadEnvFile`, which is dotenv-
- * compatible and DOES NOT override pre-existing `process.env` values.
- * Calls that hit a missing file or parse error are silenced; the
- * server should still come up cleanly when there's no `.env`.
- *
- * Idempotent: re-running is a no-op for any env var the user already
- * exported (e.g. via the host shell or a process manager). That
- * keeps the "shell-set wins over file" precedence Rails users
- * expect.
- *
- * Must run before any server-only module is loaded by
- * buildActionIndex, since module-init code in `lib/*.server.ts`
- * (e.g. `createAuth({ secret: process.env.AUTH_SECRET })`) reads
- * process.env at import time. createRequestHandler is the
- * single entry point where this is guaranteed.
- *
- * @param {string} appDir
- */
-export function loadAppEnv(appDir) {
-  try {
-    if (typeof process.loadEnvFile === 'function') {
-      process.loadEnvFile(join(appDir, '.env'));
-    }
-  } catch {
-    // No .env file, malformed file, or Node version without
-    // loadEnvFile. Either way, fall through silently: the user
-    // may not need any env vars, or they may set them via shell.
-  }
-}
 
 /**
  * Walk the route table + component scanner to collect every file the

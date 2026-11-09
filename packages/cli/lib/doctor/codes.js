@@ -51,6 +51,7 @@ export const DOCTOR_CODES = {
   'Asset urls (unmarked stylesheet links)': 'UNMARKED_ASSET_LINKS',
   'workspace-overrides': 'WORKSPACE_OVERRIDES',
   'app-icon': 'APP_ICON',
+  'jsx-route-files': 'JSX_ROUTE_FILES',
 };
 
 /**

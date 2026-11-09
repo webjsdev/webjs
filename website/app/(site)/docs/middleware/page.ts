@@ -9,9 +9,9 @@ export default function Middleware() {
 
     <h2>Root Middleware</h2>
     <p>Place a <code>middleware.ts</code> at the root of your project (next to <code>app/</code>, not inside it). This middleware runs on <strong>every app request</strong> before WebJs routes it to a page, API route, or server action. Any of <code>middleware.ts</code>, <code>.js</code>, <code>.mts</code>, or <code>.mjs</code> works, and <code>.ts</code> wins if you somehow have more than one.</p>
-    <p>Some requests are answered before it and so never reach it. The rule is worth holding onto rather than a list: <strong>anything the listener shell or the framework's pre-analysis stage answers bypasses root middleware, and everything routed with your app reaches it.</strong> In practice that means WebSocket upgrades bound for a <code>route.ts</code> exporting <code>WS</code>, the dev live-reload SSE stream at <code>/__webjs/events</code>, and the framework's own <code>/__webjs/*</code> runtime assets and health probes, which your app needs in order to boot at all. In <strong>development only</strong>, static files under <code>/public/*</code> (plus the <code>/sw.js</code> and <code>/offline.html</code> root remaps and <code>/favicon.ico</code>) are answered there too, so a stylesheet is never queued behind the dev server's startup analysis.</p>
+    <p>Some requests are answered before it and so never reach it. The rule is worth holding onto rather than a list: <strong>anything the listener shell or the framework's pre-analysis stage answers bypasses root middleware, and everything routed with your app reaches it.</strong> In practice that means WebSocket upgrades bound for a <code>route.ts</code> exporting <code>WS</code>, the dev live-reload SSE stream at <code>/__webjs/events</code>, and the framework's own <code>/__webjs/*</code> runtime assets and health probes, which your app needs in order to boot at all. In <strong>development only</strong>, static files from <code>public/</code> (served at the url root) are answered there too, so a stylesheet is never queued behind the dev server's startup analysis.</p>
     <p>One case is worth calling out on its own, because the rule gives the right answer and intuition does not: <code>webjs.redirects</code> and <code>webjs.trailingSlash</code> are configured by <em>you</em>, but they are resolved by the framework before your middleware runs. So a request that a redirect rule answers with a 308 never reaches root middleware, and a logging or auth middleware will not see it. If you need middleware to observe those requests, do the redirect in the middleware rather than in config.</p>
-    <p>Two things that look like exceptions are not. In production those <code>/public/*</code> files go through root middleware normally, so a middleware that protects an asset still protects it where it counts. And server actions are routed with your app, not answered early, so root middleware DOES run for an action call: that is what lets you gate actions with auth or rate limiting.</p>
+    <p>Two things that look like exceptions are not. In production those <code>public/</code> files go through root middleware normally, so a middleware that protects an asset still protects it where it counts. And server actions are routed with your app, not answered early, so root middleware DOES run for an action call: that is what lets you gate actions with auth or rate limiting.</p>
     <code-block>my-app/
   middleware.ts          # root middleware: runs on every app request
   app/
@@ -31,6 +31,29 @@ export default async function middleware(
   resp.headers.set('x-response-time', \`\${elapsed}ms\`);
   return resp;
 }</code-block>
+
+    <h2 id="next-conventions">Next.js conventions: proxy, named exports, and matcher</h2>
+    <p>Middleware written for Next.js works as is:</p>
+    <ul>
+      <li><strong>The file</strong> may be <code>proxy.ts</code> (Next 16's name) instead of <code>middleware.ts</code>. Having both is an error: production refuses to start and development answers every request naming the two files.</li>
+      <li><strong>The function</strong> may be the default export, a named <code>middleware</code> export, or a named <code>proxy</code> export.</li>
+      <li><strong>Returning nothing continues</strong>, like <code>NextResponse.next()</code>. Return a <code>Response</code> to answer, or call <code>next()</code> to run the rest of the chain and post-process its response. <code>next()</code> runs the chain once however many times you call it, and <code>next.waitUntil(promise)</code> keeps background work (an analytics write) going after the response is sent.</li>
+      <li><strong><code>export const config = &#123; matcher &#125;</code></strong> scopes it. A matcher is a path pattern (<code>'/dashboard/:path*'</code>, or a regex group such as <code>'/((?!api|_next).*)'</code>), an array of them, or objects <code>&#123; source, has, missing &#125;</code> whose conditions read a <code>header</code>, <code>cookie</code>, <code>query</code> parameter or <code>host</code>, exactly as in Next. A request it does not match skips the middleware. Paths are matched with the <code>webjs.basePath</code> removed, and a trailing slash is tolerated.</li>
+      <li><strong><code>request.cookies</code></strong> is the request's <code>cookies()</code> store, so <code>request.cookies.get('session')?.value</code> reads and <code>request.cookies.set(...)</code> writes a <code>Set-Cookie</code> onto the response.</li>
+      <li><strong><code>request.nextUrl</code></strong> does not exist: middleware receives the platform <code>Request</code>. In development, reading it throws naming the fix, <code>new URL(request.url)</code>.</li>
+    </ul>
+    <code-block>// proxy.ts
+export function proxy(request: Request) {
+  if (!request.cookies.get('session')?.value) {
+    return Response.redirect(new URL('/login', request.url), 307);
+  }
+  // returning nothing continues to the page
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', &#123; source: '/api/:path*', missing: [&#123; type: 'header', key: 'authorization' &#125;] &#125;],
+};</code-block>
+    <p id="middleware-fails-closed"><strong>A middleware that cannot load fails closed.</strong> Middleware is usually a guard, so a syntax error, a missing export, or a bad matcher never lets requests through unguarded. A broken root middleware or proxy stops the app serving (the dev overlay shows the cause, and production readiness stays <code>503</code>), and a broken per-segment middleware answers <code>500</code> for its subtree while the rest of the app keeps serving.</p>
 
     <h2>Per-Segment Middleware</h2>
     <p>Place a <code>middleware.ts</code> inside any directory under <code>app/</code> to scope it to that subtree. It runs only for requests whose URL matches that segment and its children.</p>
@@ -56,13 +79,13 @@ export default async function middleware(
     <code-block>export default async function middleware(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
-): Promise&lt;Response&gt;</code-block>
+): Promise&lt;Response | void&gt;</code-block>
     <ul>
       <li><strong>req</strong>: a standard <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request">Request</a> object. Read headers, cookies, URL, method, body.</li>
       <li><strong>next()</strong>: calls the next middleware in the chain, or the final handler (page render, API route, action). Returns a <code>Promise&lt;Response&gt;</code>.</li>
-      <li><strong>Return value</strong>: you must return a <code>Response</code>. Either pass through the one from <code>next()</code> (optionally modified), or return your own to short-circuit the chain.</li>
+      <li><strong>Return value</strong>: a <code>Response</code>, either the one from <code>next()</code> (optionally modified) or your own to short-circuit the chain. Returning nothing continues, as if you returned <code>next()</code>. Any other value is an error.</li>
     </ul>
-    <p>The file must <code>export default</code> a function. Named exports are ignored.</p>
+    <p>The function is the file's default export, or a named <code>middleware</code> or <code>proxy</code> export (see <a href="#next-conventions">Next.js conventions</a>).</p>
 
     <h2>Chain Order</h2>
     <p>When a request arrives, middleware executes in this order:</p>
@@ -110,7 +133,7 @@ export default async function requireAuth(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
 ): Promise&lt;Response&gt; {
-  const user = await getUserByToken(cookies().get(SESSION_COOKIE));
+  const user = await getUserByToken(cookies().get(SESSION_COOKIE)?.value);
   if (!user) {
     const to = encodeURIComponent(new URL(req.url).pathname);
     return new Response(null, {
@@ -190,15 +213,20 @@ export default rateLimit({ window: '10s', max: 5 });</code-block>
     <p>WebJs provides request-scoped helpers via <code>@webjsdev/server</code> that let you read cookies and headers from anywhere in your server-side code (middleware, pages, server actions, API routes) without explicitly threading the request object:</p>
     <code-block>import { cookies, headers } from '@webjsdev/server';
 
-// In any server-side function:
-const token = cookies().get('session_token');
+// In any server-side function (Next.js's next/headers shape):
+const token = cookies().get('session_token')?.value;   // { name, value } | undefined
 const hasToken = cookies().has('session_token');
-const allCookies = cookies().entries(); // [string, string][]
+const all = cookies().getAll();                         // { name, value }[]
+const theme = (await cookies()).get('theme')?.value;   // also awaitable, as in Next 15
+
+// Writing, from a server action, a route handler, or middleware:
+cookies().set('theme', 'dark', { httpOnly: true, sameSite: 'lax', maxAge: 60 * 60 * 24 });
+cookies().delete('session_token');
 
 const auth = headers().get('authorization');
 const userAgent = headers().get('user-agent');</code-block>
     <p>These are backed by AsyncLocalStorage. The request context is established before your middleware runs, so they work everywhere in the request lifecycle. Calling them outside a request scope (e.g., at module top level) throws an error.</p>
-    <p><strong>Note:</strong> <code>cookies()</code> is read-only. To set a cookie, include a <code>Set-Cookie</code> header on the Response you return from your middleware, API route, or server action.</p>
+    <p><code>cookies()</code> has the same API as Next.js's: <code>get(name)</code> returns <code>{ name, value }</code> (or <code>undefined</code>), so read a value with <code>?.value</code>. <code>set(name, value, options)</code> (or <code>set({ name, value, ...options })</code>) and <code>delete(name)</code> queue a <code>Set-Cookie</code> on this request's response, which WebJs adds for you, redirects included, and a later read in the same request sees the new value. The options are Next's: <code>maxAge</code> is in seconds, <code>path</code> defaults to <code>/</code>, and <code>httpOnly</code>, <code>secure</code>, <code>sameSite</code>, <code>domain</code>, <code>expires</code>, <code>partitioned</code> and <code>priority</code> map to their cookie attributes. Inside middleware, <code>request.cookies</code> is the same store.</p>
 
     <h2>Middleware and Server Actions</h2>
     <p>Root middleware runs on server action RPC calls (<code>POST /__webjs/action/:hash/:fn</code>) just like any other request. Per-segment middleware does not apply to server actions (they bypass the file-based route tree). For action-level guards, check auth inside the action itself, declare per-action <code>middleware</code> on the action, or call the action from a <code>route.ts</code> under a middleware-protected segment.</p>

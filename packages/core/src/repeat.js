@@ -7,8 +7,10 @@
  * html`<ul>${repeat(items, (it) => it.id, (it) => html`<li>${it.title}</li>`)}</ul>`;
  * ```
  *
- * Without `repeat()`, an array re-render rebuilds every child (losing focus,
- * selection, and scroll). With `repeat()`, the client renderer maintains a
+ * Without `repeat()`, an array updates positionally: the DOM for item N is
+ * reused for whatever is now at index N, so focus, selection and component
+ * state follow the position, not the item. With `repeat()`, the client
+ * renderer maintains a
  * `Map<key, TemplateInstance>`: matched items update in place, new items
  * mount fresh, removed items unmount, and the surviving DOM nodes are moved
  * (not recreated) when the order changes.

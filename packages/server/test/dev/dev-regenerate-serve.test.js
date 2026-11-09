@@ -1,6 +1,6 @@
 /**
  * End-to-end serving test for on-request dev regeneration (#967): a GET to a
- * stale `/public/tailwind.css` triggers the declared regenerate command and
+ * stale `/tailwind.css` triggers the declared regenerate command and
  * serves the FRESH bytes, with no `--watch` process anywhere. This is the
  * headline behaviour: a newly added utility class is never served stale.
  *
@@ -34,7 +34,7 @@ function makeApp(files) {
 // Stands in for `tailwindcss -i input.css -o tailwind.css`.
 const COMPILE = `node -e "const fs=require('fs');const src=fs.readFileSync('app/page.ts','utf8');const m=src.match(/[a-z-]+-[0-9]+/);fs.writeFileSync('public/tailwind.css','.'+(m?m[0]:'none')+'{display:grid}')"`;
 
-test('GET /public/tailwind.css recompiles when a source is newer, serving the fresh class', async () => {
+test('GET /tailwind.css recompiles when a source is newer, serving the fresh class', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'home';`,
     'public/input.css': `@import "tailwindcss";`,
@@ -59,7 +59,7 @@ test('GET /public/tailwind.css recompiles when a source is newer, serving the fr
   writeFileSync(join(appDir, 'app', 'page.ts'), `export default () => 'grid-cols-4';`);
 
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/public/tailwind.css'));
+  const resp = await app.handle(new Request('http://x/tailwind.css'));
   assert.equal(resp.status, 200);
   const css = await resp.text();
   assert.match(css, /grid-cols-4/, 'served CSS reflects the newly added class');
@@ -73,7 +73,7 @@ test('GET /public/tailwind.css recompiles when a source is newer, serving the fr
 const COUNTED = `${COMPILE} && node -e "require('fs').appendFileSync('ran.log','x')"`;
 const runs = (appDir) => { try { return readFileSync(join(appDir, 'ran.log'), 'utf8').length; } catch { return 0; } };
 
-test('GET /public/tailwind.css does NOT recompile an output whose recorded build is still fresh (#1672)', async () => {
+test('GET /tailwind.css does NOT recompile an output whose recorded build is still fresh (#1672)', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'grid-cols-4';`,
     'public/input.css': `@import "tailwindcss";`,
@@ -83,11 +83,11 @@ test('GET /public/tailwind.css does NOT recompile an output whose recorded build
     }),
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const first = await app.handle(new Request('http://x/public/tailwind.css'));
+  const first = await app.handle(new Request('http://x/tailwind.css'));
   assert.match(await first.text(), /grid-cols-4/);
   assert.equal(runs(appDir), 1, 'the missing output is built and recorded');
 
-  const second = await app.handle(new Request('http://x/public/tailwind.css'));
+  const second = await app.handle(new Request('http://x/tailwind.css'));
   assert.equal(second.status, 200);
   assert.match(await second.text(), /grid-cols-4/);
   assert.equal(runs(appDir), 1, 'a fresh output is served from disk');
@@ -95,12 +95,12 @@ test('GET /public/tailwind.css does NOT recompile an output whose recorded build
   // An edit that adds no class: the compile runs once and writes the same
   // bytes, and the next request is fresh again (the #1672 loop is gone).
   writeFileSync(join(appDir, 'app', 'page.ts'), `export default () => 'grid-cols-4' + '';`);
-  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
-  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
+  await (await app.handle(new Request('http://x/tailwind.css'))).text();
+  await (await app.handle(new Request('http://x/tailwind.css'))).text();
   assert.equal(runs(appDir), 2, 'one compile for the edit, none after it');
 });
 
-test('GET /public/tailwind.css rebuilds once an output compiled by hand, which carries no record (#1672)', async () => {
+test('GET /tailwind.css rebuilds once an output compiled by hand, which carries no record (#1672)', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'grid-cols-4';`,
     'public/input.css': `@import "tailwindcss";`,
@@ -111,7 +111,7 @@ test('GET /public/tailwind.css rebuilds once an output compiled by hand, which c
     }),
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
-  await (await app.handle(new Request('http://x/public/tailwind.css'))).text();
+  await (await app.handle(new Request('http://x/tailwind.css'))).text();
+  await (await app.handle(new Request('http://x/tailwind.css'))).text();
   assert.equal(runs(appDir), 1);
 });

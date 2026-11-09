@@ -33,7 +33,7 @@
  */
 
 import { hashFile, RPC_CONTENT_TYPE } from './actions.js';
-import { FORM_ACTION_FIELD } from '@webjsdev/core';
+import { FORM_ACTION_FIELD, redirect } from '@webjsdev/core';
 import { getSerializer } from './serializer.js';
 import { join, sep } from 'node:path';
 
@@ -405,6 +405,14 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
   const res = await testRequest(handle, endpoint, { method: 'POST', headers, body });
 
   const text = await res.text();
+  // redirect() in the action: rethrow the sentinel, as the generated client
+  // stub rejects with it (the browser navigates instead of returning).
+  const rd = res.headers.get('x-webjs-redirect');
+  if (rd) {
+    const cut = rd.lastIndexOf(';');
+    const type = rd.slice(cut + 1) === 'replace' ? 'replace' : 'push';
+    redirect(cut === -1 ? rd : rd.slice(0, cut), type);
+  }
   const ct = res.headers.get('content-type') || '';
   let parsed;
   if (ct.includes(RPC_CONTENT_TYPE)) parsed = serializer.deserialize(text);

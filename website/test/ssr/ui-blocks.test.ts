@@ -104,8 +104,8 @@ test('below lg a block viewer shows the block\'s screenshot, not a second frame'
   const one = html.match(/<block-viewer[^>]*id="login-01"[\s\S]*?<\/block-viewer>/)?.[0] ?? '';
   const mobile = one.slice(one.indexOf('data-slot="block-viewer-mobile"'));
   assert.match(mobile, /class="flex flex-col gap-2 lg:hidden"/);
-  assert.match(mobile, /<img src="\/public\/images\/blocks\/login-01-light\.png[^"]*" alt="login-01" data-block="login-01" width="1440" height="900" loading="lazy"[^>]*class="object-cover dark:hidden"/);
-  assert.match(mobile, /<img src="\/public\/images\/blocks\/login-01-dark\.png[^"]*"[^>]*class="object-cover hidden dark:block"/);
+  assert.match(mobile, /<img src="\/images\/blocks\/login-01-light\.png[^"]*" alt="login-01" data-block="login-01" width="1440" height="900" loading="lazy"[^>]*class="object-cover dark:hidden"/);
+  assert.match(mobile, /<img src="\/images\/blocks\/login-01-dark\.png[^"]*"[^>]*class="object-cover hidden dark:block"/);
   assert.doesNotMatch(mobile, /<iframe/);
   assert.equal(one.match(/<iframe/g)?.length, 1, 'one frame per viewer, the desktop one');
 });
@@ -180,17 +180,17 @@ test('/ui/blocks features dashboard-01 first, and /ui/blocks/dashboard lists it'
 test('the sample avatar is the WebJs one, hotlinked by an install and site-relative in the frame', async () => {
   // The registry source carries the absolute URL an installed block hotlinks.
   const source = readFileSync(join(REGISTRY, 'blocks', 'sidebar-07', 'components', 'app-sidebar.ts'), 'utf8');
-  assert.match(source, /https:\/\/webjs\.dev\/public\/avatars\/vivek\.jpg/);
+  assert.match(source, /https:\/\/webjs\.dev\/avatars\/vivek\.jpg/);
   assert.doesNotMatch(source, /github\.com\/shadcn\.png/);
   // The site's mirror rewrites it (scripts/copy-registry.mjs), so the local
   // frame serves the photo from public/ before it is deployed.
   const mirror = readFileSync(join(WEBSITE_ROOT, 'modules', 'ui', 'blocks', 'sidebar-07', 'components', 'app-sidebar.ts'), 'utf8');
-  assert.match(mirror, /'\/public\/avatars\/vivek\.jpg'/);
-  assert.doesNotMatch(mirror, /https:\/\/webjs\.dev\/public\//);
+  assert.match(mirror, /'\/avatars\/vivek\.jpg'/);
+  assert.doesNotMatch(mirror, /https:\/\/webjs\.dev\/avatars\//);
   const html = await page('/ui/view/sidebar-07');
-  assert.match(html, /<img data-slot="avatar-image" src="\/public\/avatars\/vivek\.jpg" alt="@vivek"/);
+  assert.match(html, /<img data-slot="avatar-image" src="\/avatars\/vivek\.jpg" alt="@vivek"/);
   assert.match(html, />VK<\/span>/, 'the initials fallback');
-  assert.equal((await handle('/public/avatars/vivek.jpg')).status, 200, 'the photo is served');
+  assert.equal((await handle('/avatars/vivek.jpg')).status, 200, 'the photo is served');
   // No block anywhere still points at shadcn's avatar.
   for (const b of manifest.items.filter((i) => i.type === 'registry:block')) {
     for (const f of b.files || []) {
@@ -308,8 +308,8 @@ test('the Sidebar docs page leads with the sidebar-07 block', async () => {
   assert.match(html, /data-slot="block-preview"[\s\S]*?<iframe src="\/ui\/view\/sidebar-07"/);
   // Below md the frame gives way to the block's screenshot, as shadcn's does.
   const preview = html.match(/data-slot="block-preview"[\s\S]*?<\/iframe>/)?.[0] ?? '';
-  assert.match(preview, /<img src="\/public\/images\/blocks\/sidebar-07-light\.png[^"]*"[^>]*class="[^"]*md:hidden[^"]*dark:hidden"/);
-  assert.match(preview, /<img src="\/public\/images\/blocks\/sidebar-07-dark\.png[^"]*"[^>]*class="[^"]*hidden dark:block"/);
+  assert.match(preview, /<img src="\/images\/blocks\/sidebar-07-light\.png[^"]*"[^>]*class="[^"]*md:hidden[^"]*dark:hidden"/);
+  assert.match(preview, /<img src="\/images\/blocks\/sidebar-07-dark\.png[^"]*"[^>]*class="[^"]*hidden dark:block"/);
   assert.match(preview, /<div class="absolute inset-0 hidden w-\[1600px\] bg-background md:block">\s*<iframe/);
   assert.match(html, /A sidebar that collapses to icons\./);
   assert.match(html, /<a href="\/ui\/blocks">Browse the Blocks Library<\/a>/);

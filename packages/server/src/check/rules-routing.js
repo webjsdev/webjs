@@ -1,5 +1,5 @@
 /**
- * Routing and template rules: what a route handler may throw, what a non-root
+ * Routing and template rules: what a non-root
  * layout may emit, and which holes a template may carry.
  *
  * Lifted verbatim out of checkConventions, which held all twenty rules inline
@@ -9,82 +9,62 @@
 import {
   isServerActionFile, isComponentFile,
 } from './helpers.js';
+import { buildRouteTable } from '../router.js';
+import { maskComments } from '../js-scan.js';
+import { validateAppLayout } from '../app-layout.js';
+import { buildPublicIndex } from '../public-files.js';
+import { findJsxIsm } from '@webjsdev/core/server';
+import { htmlTemplateStrings } from '../dev-source-locations.js';
+
+/**
+ * Rule: `no-jsx-attributes`.
+ *
+ * `className=`, `htmlFor=`, or a capitalised component tag (`<Link>`) in an
+ * `html` template: JSX that HTML silently ignores. Both renderers refuse it
+ * when the template first compiles; this reports it ahead of time, with the
+ * line the template starts on.
+ *
+ * @param {ScannedFile[]} files
+ * @param {import('./rules.js').Violation[]} violations
+ */
+export function checkNoJsxAttributes(files, violations) {
+  for (const { rel, content } of files) {
+    for (const t of htmlTemplateStrings(content)) {
+      const ism = findJsxIsm(t.strings);
+      if (!ism) continue;
+      violations.push({
+        rule: 'no-jsx-attributes',
+        file: rel,
+        message: ism.kind === 'attr'
+          ? `The html template at line ${t.line} uses \`${ism.name}=\`, a JSX spelling HTML reads as an unknown attribute, so it does nothing (the render throws).`
+          : `The html template at line ${t.line} uses \`<${ism.name}>\`, a JSX component HTML lowercases into an unknown element (the render throws).`,
+        fix: ism.kind === 'attr'
+          ? `Write \`${ism.name === 'className' ? 'class' : 'for'}=\` instead.`
+          : `Render the custom element's registered tag (with a hyphen, such as \`<my-${ism.name.toLowerCase()}>\`), or a plain element such as \`<a href>\` for a link.`,
+      });
+    }
+  }
+}
+
+/**
+ * Rules fed by the route table: `no-page-route-conflict` and the other file
+ * arrangements `validateAppLayout` refuses at boot. The check reports exactly
+ * what boot would refuse, so a clean `webjs check` means a clean boot.
+ *
+ * @param {string} appDir
+ * @param {import('./rules.js').Violation[]} violations
+ */
+export async function checkAppLayout(appDir, violations) {
+  let table;
+  try { table = await buildRouteTable(appDir); } catch { return; }
+  for (const p of validateAppLayout(appDir, table, buildPublicIndex(appDir))) violations.push(p);
+}
 
 /**
  * @typedef {import('./rules.js').Violation} Violation
  * @typedef {{ abs: string, rel: string, content: string, scan: string }} ScannedFile
  */
 
-
-/**
- * Rule: `no-redirect-in-api-route`.
- *
- * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
- * @param {Violation[]} violations  accumulator the rule pushes onto
- * @returns {void}
- */
-export function checkNoRedirectInApiRoute(files, violations) {
-  // --- Rule: no-redirect-in-api-route ---
-  // `redirect()` from `@webjsdev/core` throws a control-flow signal designed
-  // for the SSR page renderer. In a `route.ts` API handler it goes uncaught
-  // and produces a 500. API handlers must use `Response.redirect(url, 303)`
-  // instead. Page functions, layouts, and server actions may still use
-  // `redirect()` (caught by the SSR / action pipeline).
-  {
-    const ROUTE_FILE = /(?:^|\/)route\.m?[jt]s$/;
-    for (const { rel, scan } of files) {
-      if (!ROUTE_FILE.test(rel)) continue;
-      // `redirect` reaches the route file in one of two statically-visible ways:
-      //   1. A NAMED import from `@webjsdev/core` (possibly aliased):
-      //      `import { redirect }`, `import { redirect as r }`, `import { …, redirect, … }`.
-      //   2. A NAMESPACE import then a member call:
-      //      `import * as core from '@webjsdev/core'` then `core.redirect(...)`.
-      // The named case flags a bare `redirect(` call; the namespace case flags
-      // `<ns>.redirect(`. `Response.redirect(` and any other `obj.redirect(` are
-      // the standard API and stay fine. A `redirect()` thrown inside a
-      // '`use server`' action the route calls DIRECTLY (an uncaught 500) needs
-      // cross-file analysis and is left to the AST rework (#753).
-      const namedM = /\bimport\s+\{[^}]*\bredirect\b(?:\s+as\s+(\w+))?\s*[^}]*\}\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
-      const nsM = /\bimport\s+\*\s+as\s+(\w+)\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
-      // A file can carry BOTH a named `redirect` import AND a namespace import,
-      // so check every matcher independently (not mutually exclusive): a named
-      // import means a bare `<localName>(`, a namespace import means
-      // `<ns>.redirect(`. The `member` flag distinguishes the two so a bare
-      // named call can screen out `Response.redirect(` / `obj.redirect(`.
-      /** @type {Array<{ re: RegExp, member: boolean }>} */
-      const matchers = [];
-      if (namedM) {
-        const localName = namedM[1] || 'redirect';
-        matchers.push({ re: new RegExp(`(?<!\\.)\\b${localName}\\s*\\(`, 'g'), member: false });
-      }
-      if (nsM) {
-        matchers.push({ re: new RegExp(`\\b${nsM[1]}\\.redirect\\s*\\(`, 'g'), member: true });
-      }
-      let flagged = false;
-      for (const { re, member } of matchers) {
-        if (flagged) break;
-        let m;
-        while ((m = re.exec(scan)) !== null) {
-          if (!member) {
-            // Screen out `Response.redirect(` / `someObj.redirect(` sharing the
-            // local name: a preceding member-access dot means it is not the import.
-            const before = scan.slice(Math.max(0, m.index - 20), m.index);
-            if (/\w\.$/.test(before)) continue;
-          }
-          violations.push({
-            rule: 'no-redirect-in-api-route',
-            file: rel,
-            message:
-              `\`redirect()\` from \`@webjsdev/core\` throws a control-flow signal for the SSR page renderer; in a \`route.ts\` handler it goes uncaught and returns a 500.`,
-            fix: `Use \`Response.redirect(url, 303)\` for external redirects, or return a 3xx Response directly. The \`redirect()\` sentinel is only valid in page functions, layouts, and server actions (where the SSR pipeline catches it).`,
-          });
-          flagged = true; // one violation per file is enough
-          break;
-        }
-      }
-    }
-  }
-}
 
 /**
  * Rule: `no-interpolation-in-raw-text-element`.
@@ -146,34 +126,70 @@ export function checkNoInterpolationInRawTextElement(files, violations) {
  * @param {Violation[]} violations  accumulator the rule pushes onto
  * @returns {void}
  */
-export function checkNoServerEnvInComponents(files, violations) {
+export function checkNoServerEnvInComponents(files, violations, shipped = new Set()) {
   // --- Rule: no-server-env-in-components ---
-  // Catches `process.env.X` reads in component files where X is not a
-  // WEBJS_PUBLIC_* var and not NODE_ENV. The SSR shim only exposes those
-  // two categories to the browser; any other read either leaks a secret
-  // into the SSR'd HTML or reads as undefined after hydration.
-  {
-    for (const { abs, rel, content } of files) {
-      if (!isComponentFile(rel)) continue;
-      if (isServerActionFile(abs, content)) continue;
-
-      const re = /\bprocess\.env\.([A-Z][A-Z0-9_]*)\b/g;
-      const seen = new Set();
-      let m;
-      while ((m = re.exec(content)) !== null) {
-        const name = m[1];
-        if (name.startsWith('WEBJS_PUBLIC_')) continue;
-        if (name === 'NODE_ENV') continue;
-        if (seen.has(name)) continue;
-        seen.add(name);
-        violations.push({
-          rule: 'no-server-env-in-components',
-          file: rel,
-          message: `Component reads process.env.${name}; server-only env vars must not be read in components (would leak into SSR'd HTML and read as undefined after hydration)`,
-          fix: `Either rename to WEBJS_PUBLIC_${name} if the value is intended for the browser, or read process.env.${name} in a page function / server action / middleware and pass a derived value to the component as an attribute.`,
-        });
-      }
+  // Catches `process.env.X` reads in code the BROWSER runs, where X is not a
+  // WEBJS_PUBLIC_* var and not NODE_ENV: every component file, plus every
+  // module the build ships to the browser (a util a component imports). The
+  // browser env shim only exposes those two categories; any other read either
+  // leaks a secret into the SSR'd HTML or reads as undefined after hydration.
+  // A page / layout / boundary function runs on the server only, so its reads
+  // are fine and it is not scanned. Next.js's NEXT_PUBLIC_ prefix gets a
+  // targeted fix, since it is the usual cause.
+  const ROUTE_MODULE = /(?:^|[\\/])(?:page|layout|error|loading|not-found|forbidden|unauthorized|global-error|global-not-found|route|middleware)\.m?[jt]s$/;
+  for (const { abs, rel, content } of files) {
+    if (!isComponentFile(rel) && !shipped.has(abs)) continue;
+    if (/\.server\.m?[jt]s$/.test(rel) || isServerActionFile(abs, content)) continue;
+    if (!isComponentFile(rel) && ROUTE_MODULE.test(rel)) continue;
+    const masked = maskComments(content);
+    const re = /\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+    const seen = new Set();
+    let m;
+    while ((m = re.exec(masked)) !== null) {
+      const name = m[1];
+      if (name.startsWith('WEBJS_PUBLIC_')) continue;
+      if (name === 'NODE_ENV') continue;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const where = isComponentFile(rel) ? 'Component' : 'Browser-shipped module';
+      const nextPublic = name.startsWith('NEXT_PUBLIC_');
+      violations.push({
+        rule: 'no-server-env-in-components',
+        file: rel,
+        message: nextPublic
+          ? `${where} reads process.env.${name}. NEXT_PUBLIC_ is Next.js's browser prefix; WebJs exposes only WEBJS_PUBLIC_* (and NODE_ENV) to the browser, so this reads as undefined there.`
+          : `${where} reads process.env.${name}; server-only env vars must not be read in code the browser runs (it would leak into the SSR'd HTML and read as undefined after hydration)`,
+        fix: nextPublic
+          ? `Rename the variable to WEBJS_PUBLIC_${name.slice('NEXT_PUBLIC_'.length)} in your .env files and here.`
+          : `Either rename to WEBJS_PUBLIC_${name} if the value is intended for the browser, or read process.env.${name} in a page function / server action / middleware and pass a derived value to the component as an attribute.`,
+      });
     }
+  }
+}
+
+/**
+ * Rule: `no-next-runtime-guard`.
+ *
+ * `process.env.NEXT_RUNTIME` is set by Next.js only (to 'nodejs' or 'edge'),
+ * typically as `if (process.env.NEXT_RUNTIME === 'nodejs')` around an
+ * instrumentation `register()`. Under WebJs it is undefined, so the guarded
+ * code silently never runs.
+ *
+ * @param {ScannedFile[]} files
+ * @param {Violation[]} violations
+ */
+export function checkNoNextRuntimeGuard(files, violations) {
+  for (const { rel, scan } of files) {
+    // `scan` blanks comments and template bodies (a docs page quoting the
+    // guard is not code).
+    const masked = scan;
+    if (!/\bprocess\.env\.NEXT_RUNTIME\b/.test(masked)) continue;
+    violations.push({
+      rule: 'no-next-runtime-guard',
+      file: rel,
+      message: 'Reads process.env.NEXT_RUNTIME, which only Next.js sets. Under WebJs it is undefined, so code guarded by it (an instrumentation register(), say) silently never runs.',
+      fix: "Drop the guard: WebJs runs instrumentation.ts register() once, on the server only. To tell the runtimes apart use process.versions.bun (Bun) and process.versions.node (Node).",
+    });
   }
 }
 

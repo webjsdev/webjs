@@ -101,5 +101,5 @@ export function styleLinks(pathname: string, search?: URLSearchParams) {
  * configurator finds the sheet already in its frame before adding one.
  */
 export function styleLink(name: string) {
-  return html`<link rel="stylesheet" href=${asset(`/public/ui-styles/${name}.css`)} data-style-sheet=${name}>`;
+  return html`<link rel="stylesheet" href=${asset(`/ui-styles/${name}.css`)} data-style-sheet=${name}>`;
 }

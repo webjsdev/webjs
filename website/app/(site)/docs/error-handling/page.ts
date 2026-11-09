@@ -47,13 +47,14 @@ export default function ErrorHandling() {
     <code-block>// app/error.ts: root error boundary
 import { html } from '@webjsdev/core';
 
-export default function ErrorPage({ error }: { error: Error }) {
+export default function ErrorPage({ error }: { error: Error &amp; { digest?: string } }) {
   return html${'`'}
     &lt;h1&gt;Something went wrong&lt;/h1&gt;
-    &lt;p&gt;${'${error.message}'}&lt;/p&gt;
+    &lt;p&gt;${'${error.message}'} (ref ${'${error.digest}'})&lt;/p&gt;
     &lt;a href="/"&gt;Go home&lt;/a&gt;
   ${'`'};
 }</code-block>
+    <p id="error-digest"><strong>What the boundary sees in production.</strong> As in Next.js, <code>error.ts</code> and <code>global-error.ts</code> receive a sanitized error in production: its <code>message</code> is the generic <code>Internal server error</code> and it carries a short <code>digest</code>. The raw message never reaches the page, because a thrown message is not something you control and may name a driver, a path or a connection string. The full error is logged on the server under <code>[digest=...]</code>, and your <code>onError</code> / <code>onRequestError</code> reporters receive the original error carrying the same <code>digest</code>, so a reference a user reads off the page finds the report. In development the boundary receives the real error unchanged.</p>
 
     <h3>Nesting</h3>
     <p>Error boundaries are nested. The framework walks from the throwing component outward until it finds the nearest <code>error.ts</code>:</p>
@@ -149,6 +150,26 @@ export default function GlobalError({ error }: { error: Error }) {
 
     <h2>Server action errors</h2>
     <p>Errors thrown from server actions are sanitized in production: the client gets a generic <code>"Internal server error"</code> message plus a short <code>digest</code>, never the raw thrown message or the stack trace. The full error is logged server-side keyed by that digest, so a client-reported digest maps back to the server log line. A <code>redirect()</code> / <code>notFound()</code> control-flow throw passes through. To surface a specific user-facing message, return an <code>ActionResult</code> <code>{ success: false, error }</code> envelope instead of throwing.</p>
+
+    <h2 id="on-request-error">Reporting errors with onRequestError</h2>
+    <p>An app-root <code>instrumentation.ts</code> may export Next.js's <code>onRequestError</code>. The server calls it for every error a request hits on the server: a page or layout render, a metadata route, a <code>route.ts</code> handler, a server action, or middleware. It receives the same three arguments Next passes, so an existing Sentry or OpenTelemetry reporter works unchanged.</p>
+    <code-block>// instrumentation.ts
+export function register() {
+  // start your APM here
+}
+
+export async function onRequestError(
+  err: Error & { digest: string },
+  request: { path: string; method: string; headers: Record&lt;string, string&gt; },
+  context: { routerKind: 'App Router'; routePath: string; routeType: 'render' | 'route' | 'action' | 'proxy' },
+) {
+  await fetch('https://errors.example.com/report', {
+    method: 'POST',
+    body: JSON.stringify({ message: err.message, digest: err.digest, path: request.path, ...context }),
+  });
+}</code-block>
+    <p><code>err.digest</code> is the same short hash a sanitized production response carries, so a digest a user reports maps to the report. <code>routePath</code> is the route file's folder (<code>/app/blog/[slug]</code>), and <code>routeType</code> is <code>render</code> for pages, layouts and metadata, <code>route</code> for a <code>route.ts</code> handler, <code>action</code> for a server action, and <code>proxy</code> for middleware. Each error is reported once, under the most specific of those. The call is fire-and-forget: the response never waits for it, and a reporter that throws or rejects is logged and ignored. A thrown <code>redirect()</code>, <code>notFound()</code>, <code>forbidden()</code> or <code>unauthorized()</code> is routing, not an error, and is never reported.</p>
+    <p>Inside <code>register()</code> you can also call <code>setOnError(fn)</code> from <code>@webjsdev/server</code>, which receives the original error plus <code>{ request, requestId, phase }</code> and composes with the <code>onError</code> option of <code>createRequestHandler</code>.</p>
 
     <h2>Dev error overlay</h2>
     <p>In development, an SSR render crash, a non-erasable-TypeScript strip failure, and a failed rebuild each push a rich error overlay to the open tab over the live-reload channel, without a manual refresh. The overlay shows the message, the offending <code>file:line:column</code>, and a source code frame of the failing line with context. A TypeScript strip failure also shows the erasable-syntax hint inline (a non-erasable <code>enum</code> / <code>namespace</code> breaks only the client module fetch, so the page still server-renders but hydration is dead; the overlay surfaces that instead of burying the hint in a console comment). The overlay dismisses on the next successful rebuild, and the frame is replayed to a tab opened after the breaking edit.</p>

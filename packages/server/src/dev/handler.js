@@ -26,14 +26,20 @@ import { ensureStripper } from '../ts-strip.js';
 import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
-import { runInstrumentation } from '../instrumentation.js';
-import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from '../context.js';
+import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.js';
+import { validateAppLayout, AppLayoutError, cssImportProblems } from '../app-layout.js';
+import { applyPendingCookies } from '../cookie-store.js';
+import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
+import { loadEnvFiles, envMode } from '../env-files.js';
+import { buildPublicIndex } from '../public-files.js';
+import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
 import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from '../vendor.js';
 import { browserEntryFiles } from '../browser-entries.js';
-import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
+import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport, bareImports, dynamicBareImports } from '../module-graph.js';
+import { foreignImportProblems, registerForeignImportGuard } from '../foreign-imports.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
 import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
 
@@ -73,13 +79,13 @@ import {
   readDevToolingFromApp,
 } from './config.js';
 import {
-  exists, kebab, resolveRequestId, shouldAccessLog, loadAppEnv, collectRouteModules,
+  exists, kebab, resolveRequestId, shouldAccessLog, collectRouteModules,
   appTopLevelDirs, locateCoreDir,
   setReloadIdleMs,
   resolveReloadIdleMs,
 } from './helpers.js';
 import {
-  handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
+  handleCore, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
 import { devImport, clearProdImportCache } from '../dev-import.js';
 
@@ -152,7 +158,8 @@ export async function createRequestHandler(opts) {
   // scaffolded apps with a committed .env.example + .env would fail
   // to boot until the user discovered the missing env-load. See
   // tracker #37.
-  loadAppEnv(appDir);
+  // Next.js's env file order (.env.$mode.local, .env.local, .env.$mode, .env).
+  loadEnvFiles(appDir, envMode(!!opts.dev));
   // Optional boot-time env validation (#236). If <appDir>/env.{js,ts} exists it
   // default-exports a typed schema or a custom validator function; we run it
   // against process.env (now populated by loadAppEnv) BEFORE buildActionIndex
@@ -180,7 +187,7 @@ export async function createRequestHandler(opts) {
   // before traffic. Any error sink it registers via setOnError composes with
   // the programmatic opts.onError (both fire). Fail-open (a throwing hook is
   // logged, not fatal).
-  const { onError: instrumentationOnError } = await runInstrumentation(appDir, { dev, logger });
+  const { onError: instrumentationOnError, onRequestError } = await runInstrumentation(appDir, { dev, logger });
   // APM / Sentry integration point (issue #239). Called whenever the request
   // pipeline catches an unhandled error: the top-level handle() catch (the
   // last-resort 500), an unexpected throw inside the produce() funnel, or a
@@ -234,7 +241,14 @@ export async function createRequestHandler(opts) {
       devStatus.record(frame || buildDevErrorFrame(error, { kind, appDir, url }));
     } catch { /* best effort */ }
   }
-  const hasOnError = onErrorSinks.length > 0;
+  const hasOnError = onErrorSinks.length > 0 || typeof onRequestError === 'function';
+  /** Each error object is reported once PER REQUEST, under the first (most
+   * specific) phase that reaches it: a route handler's throw is reported as
+   * `route` before the top-level catch sees the same error again. Keyed by the
+   * request id rather than held forever, so an error object a module throws
+   * again on every request (a rejected module-scope promise) is reported on
+   * each one. @type {WeakMap<object, string | null>} */
+  const reportedErrors = new WeakMap();
 
   /**
    * Invoke every registered onError sink defensively. The phase is a coarse
@@ -242,13 +256,27 @@ export async function createRequestHandler(opts) {
    * @param {unknown} error
    * @param {Request} request
    * @param {string} phase
+   * @param {string} [routePath] the route file path for `onRequestError`
    */
-  function reportError(error, request, phase) {
+  function reportError(error, request, phase, routePath) {
     // Dev status (#1664). Recorded BEFORE the no-sink return, because an app
     // with no onError sink is exactly the one whose action errors were
     // invisible to an agent. An `ssr` error is a render failure.
     recordDevStatus(error, request, phase === 'ssr' ? 'render' : phase);
     if (!hasOnError) return;
+    if (error && typeof error === 'object') {
+      const rid = getRequestId();
+      if (reportedErrors.has(error) && reportedErrors.get(error) === rid) return;
+      reportedErrors.set(error, rid);
+    }
+    // Next.js's instrumentation `onRequestError(error, request, context)`.
+    // Fire-and-forget like Next: an awaited reporter never delays the response,
+    // and a throwing or rejecting one is logged, never surfaced.
+    if (typeof onRequestError === 'function' && !isControlFlowThrow(error)) {
+      buildRequestErrorReport(error, request, phase, routePath)
+        .then((args) => onRequestError(...args))
+        .catch((e) => logger.error?.('[webjs] onRequestError threw (ignored)', { err: String(e) }));
+    }
     const ctx = { request, requestId: getRequestId(), phase };
     for (const sink of onErrorSinks) {
       try {
@@ -332,7 +360,7 @@ export async function createRequestHandler(opts) {
 
   // Install the resolver behind the isomorphic `asset()` helper (#1194), the
   // same provider seam `cspNonce()` uses. An author writes
-  // `href=${asset('/public/app.css')}` and gets the fingerprinted url on the
+  // `href=${asset('/app.css')}` and gets the fingerprinted url on the
   // server; the browser has no provider and returns the path unchanged.
   //
   // The `public/` gate is defensive rather than decorative. `resolveUrlToFile`
@@ -355,6 +383,9 @@ export async function createRequestHandler(opts) {
   // what a bound `<form action=${action}>` resolves through, so gating the hook
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
+  // Refuse `next/*`, `react` and `lit` imported from the app's own files at
+  // resolve time (Node), even when the package happens to be installed.
+  registerForeignImportGuard(appDir);
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
   // `webjs.dev.sourceLocations: true`) under `webjs dev`
@@ -423,6 +454,18 @@ export async function createRequestHandler(opts) {
   // eagerly: it is a cheap directory scan (no code reads), and routing, Early
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
+  // A file arrangement that can never serve correctly (a page and a route.ts
+  // at one URL, ...) refuses to boot in production, as Next refuses to build.
+  // Dev keeps serving so an edit can fix it: ensureReady re-checks on every
+  // rebuild and answers each request with the problem until then.
+  // Every file under public/, by the root url it is served at (public-files.js).
+  const publicFiles = buildPublicIndex(appDir);
+  if (!dev) {
+    const problems = validateAppLayout(appDir, routeTable, publicFiles);
+    if (problems.length) throw new AppLayoutError(problems);
+    // Both a middleware.* and a proxy.* at the root: also refused at boot.
+    await findRootMiddleware(appDir);
+  }
   // Auto-linked favicons: tell the head builder which icon metadata routes
   // exist, so `app/icon.*` is linked when the app declares no metadata.icons.
   // Bound here rather than threaded through ssrOpts, matching
@@ -494,6 +537,7 @@ export async function createRequestHandler(opts) {
 
   const state = {
     routeTable,
+    publicFiles,
     actionIndex: null,
     middleware: null,
     bodyLimits,
@@ -672,8 +716,22 @@ export async function createRequestHandler(opts) {
         const now = () => performance.now();
         try {
           if (!analysisDone) {
+            const layoutProblems = validateAppLayout(appDir, state.routeTable, state.publicFiles);
+            if (layoutProblems.length) throw new AppLayoutError(layoutProblems);
             let m = now();
             state.moduleGraph = await buildModuleGraph(appDir);
+            // A foreign-framework import (next/*, react, lit) anywhere in the
+            // app is refused before anything renders: the dev overlay shows
+            // it, production readiness stays 503 naming it.
+            {
+              const relApp = (p) => relative(appDir, p).split(sep).join('/');
+              const foreign = [
+                ...foreignImportProblems(new Map([...bareImports(state.moduleGraph), ...dynamicBareImports(state.moduleGraph)]), relApp),
+                // `import './x.css'` too: a bundler feature with no meaning here.
+                ...cssImportProblems(state.moduleGraph, relApp),
+              ];
+              if (foreign.length) throw new AppLayoutError(foreign);
+            }
             t.graph = now() - m; m = now();
             const components = await scanComponents(appDir);
             await primeComponentRegistry(appDir, components);
@@ -683,7 +741,17 @@ export async function createRequestHandler(opts) {
             t.gate = now() - m; m = now();
             state.actionIndex = await buildActionIndex(appDir, dev);
             t.actions = now() - m; m = now();
-            state.middleware = await loadMiddleware(appDir, dev, logger);
+            // Fails CLOSED (middleware-load.js): a root middleware or proxy
+            // that cannot load stops the app serving rather than letting
+            // every request through unguarded.
+            try {
+              state.middleware = await loadRootMiddleware(appDir, dev, logger);
+            } catch (e) {
+              if (e && /** @type {any} */ (e).code === 'WEBJS_APP_LAYOUT') throw e;
+              const err = new Error(`[webjs] the root middleware failed to load, so no request is served (a guard that cannot load must not let requests through): ${/** @type {Error} */ (e).message}`, { cause: e });
+              /** @type {any} */ (err).code = 'WEBJS_APP_LAYOUT';
+              throw err;
+            }
             t.middleware = now() - m; m = now();
             // Client-router opt-out (#629): re-read each pass so toggling
             // `webjs.clientRouter` takes effect on rebuild without a restart.
@@ -1011,6 +1079,7 @@ export async function createRequestHandler(opts) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
+    state.publicFiles = buildPublicIndex(appDir);
     // Adding or deleting app/icon.* changes whether the head auto-links it.
     setMetadataIconRoutes(state.routeTable.metadataRoutes);
     // Refresh the generated route types (#258) so adding/removing a route file
@@ -1179,19 +1248,32 @@ export async function createRequestHandler(opts) {
       let res;
       try {
         res = await produce(req);
+        // `cookies().set()` / `.delete()` anywhere in the request (an action,
+        // a route handler, middleware, a render) lands here as Set-Cookie.
+        res = applyPendingCookies(res, currentCookieStore());
       } catch (e) {
         // A throw escaping produce() is the last-resort 500 (every interior
         // path catches its own errors, but a surprise still must not crash the
         // host). Fire the onError sink (best-effort) and emit a sanitized 500,
         // preserving the prior behavior plus the new APM hook.
-        reportError(e, req, 'handle');
-        logger.error?.('[webjs] request pipeline threw', {
-          requestId: reqId,
-          method: req.method,
-          path: pathname,
-          err: e instanceof Error ? e.stack : String(e),
-        });
-        res = new Response('Server error', { status: 500 });
+        if (dev && e && /** @type {any} */ (e).code === 'WEBJS_APP_LAYOUT') {
+          // A layout problem (see app-layout.js) is the app's to fix, not a
+          // crash: show it on every request and in the overlay until an edit
+          // resolves it.
+          reportDevError(e, { kind: 'rebuild' });
+          res = new Response(`[webjs] ${/** @type {Error} */ (e).message}\n`, {
+            status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' },
+          });
+        } else {
+          reportError(e, req, 'handle');
+          logger.error?.('[webjs] request pipeline threw', {
+            requestId: reqId,
+            method: req.method,
+            path: pathname,
+            err: e instanceof Error ? e.stack : String(e),
+          });
+          res = new Response('Server error', { status: 500 });
+        }
       }
 
       // Merge in the secure-by-default headers plus the per-path config
@@ -1379,7 +1461,7 @@ export async function createRequestHandler(opts) {
       // Default `'ignore'` is a no-op. The root `/` and file paths are
       // exempt; `/__webjs/*` is exempt too (defense in depth, the redirects
       // above already skip it). The funnel in handle() still wraps this.
-      const canonical = applyTrailingSlash(req, trailingSlashPolicy);
+      const canonical = applyTrailingSlash(req, trailingSlashPolicy, (p) => !!state.publicFiles && state.publicFiles.has(p));
       if (canonical) return canonical;
     }
 
@@ -1472,20 +1554,20 @@ export async function createRequestHandler(opts) {
     const earlyStatic = await tryServeFrameworkStatic(path, req.method.toUpperCase(), { coreDir, appDir, dev, versioned: url.searchParams.has('v') });
     if (earlyStatic) return earlyStatic;
 
-    // `/public/*` needs neither the module graph nor the vendor importmap, so
+    // A `public/` file (served at the url root) needs neither the module graph nor the vendor importmap, so
     // in DEV serve it here rather than behind the analysis (#1397). A cold
-    // `/public/tailwind.css` measured 1907ms at 4a335549, of which 1900ms was
+    // `/tailwind.css` measured 1907ms at 4a335549, of which 1900ms was
     // `ensureReady()`, which is why the stylesheet is the request most exposed
     // to the next `node --watch` restart. DEV ONLY on purpose: in prod
     // `/__webjs/ready` already holds traffic off a cold instance until the
     // analysis and the first vendor attempt have both completed, and hoisting
-    // there would silently un-gate a `/public/*` file that an app middleware
+    // there would silently un-gate a public file that an app middleware
     // protects. The consequence in dev is that root middleware does not run
     // for these paths, the same trade the framework statics above already make
     // in both modes. `state.regenerateRules` is loaded at boot inside
     // createRequestHandler, so the #967 on-request rebuild is available here,
     // ahead of ensureReady.
-    if (dev) {
+    if (dev && req.method === 'GET') {
       const publicResp = await tryServePublicAsset(path, {
         appDir, dev, versioned: url.searchParams.has('v'), regenerateRules: state.regenerateRules,
       });
