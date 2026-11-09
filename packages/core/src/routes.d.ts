@@ -150,7 +150,14 @@ export type Awaitable<T> = T & PromiseLike<T>;
 export interface FormActionData {
   success?: boolean;
   error?: string;
-  fieldErrors?: Record<string, string | string[]>;
+  /**
+   * Per-field messages. Typed loosely, as `data` is: the page cannot see the
+   * action's return type, and actions return a `Record<string, string>` as
+   * often as a validator's `Record<string, string[]>`, so either assigns
+   * without a cast.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fieldErrors?: Record<string, any>;
   values?: Record<string, string>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data?: any;

@@ -5,6 +5,7 @@
 // type adds a block here, beside the fix that made it compile.
 import { getRequest, getSession } from '@webjsdev/server';
 import type { Session } from '@webjsdev/server';
+import type { PageProps } from '@webjsdev/core';
 
 // getSession() reads the request in scope, the way cookies() and headers() do.
 // Agents also chained the two WebJs calls, getSession(getRequest()), and
@@ -15,4 +16,13 @@ export function sessionHabits(): Session[] {
   const b = getSession(getRequest());
   a.flash('manage', { slug: 'x', key: 'k' });
   return [a, b];
+}
+
+// actionData.fieldErrors read into the agent's own Record<string, string>: the
+// page cannot see the action's return type, so the field is as loose as data.
+// (Replay r4-after-roomly2: two pages.)
+export function fieldErrorHabits({ actionData }: PageProps<'/rooms/[id]'>): string {
+  const errors: Record<string, string> = actionData?.fieldErrors ?? {};
+  const values = actionData?.values ?? {};
+  return (errors.day ?? '') + (values.day ?? '');
 }
