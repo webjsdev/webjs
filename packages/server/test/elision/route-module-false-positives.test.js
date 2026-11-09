@@ -133,6 +133,48 @@ export function tierOf(n) { return TIER_2.has(n) ? 2 : 1; }`;
   assert.equal(verdict(r, '/app/page.js'), 'import-only', 'a pure-data `new Set` util must not pin the page');
 });
 
+test('B: a module-scope `new Intl.DateTimeFormat(...)` formatter does not pin the page', async () => {
+  // An agent building an app on the scaffold hoisted a date formatter to module
+  // scope in a shared helper, and every page importing it shipped (and then
+  // failed no-server-import-in-browser-module through the helper's other import).
+  const util = `const fmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
+const money = new Intl
+  .NumberFormat('en', { style: 'currency', currency: 'EUR' });
+export function when(d) { return fmt.format(d); }
+export function price(n) { return money.format(n); }`;
+  const page = `
+    import { html } from '@webjsdev/core';
+    import '#components/counter.js';
+    import { when } from '#lib/format.js';
+    export default () => html\`<x-counter></x-counter>\`;
+  `;
+  const r = await run({
+    files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE, '/app/lib/format.js': util },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/counter.js', '/app/lib/format.js'] },
+  });
+  assert.equal(verdict(r, '/app/page.js'), 'import-only', 'an Intl formatter is inert module data');
+});
+
+test('B counterfactual: a dotted constructor outside the list still ships', async () => {
+  const util = `export const chan = new Foo.BroadcastChannel('x');
+export function post(m) { chan.postMessage(m); }`;
+  const page = `
+    import { html } from '@webjsdev/core';
+    import '#components/counter.js';
+    import { post } from '#lib/chan.js';
+    export default () => html\`<x-counter></x-counter>\`;
+  `;
+  const r = await run({
+    files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE, '/app/lib/chan.js': util },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/counter.js', '/app/lib/chan.js'] },
+  });
+  assert.equal(verdict(r, '/app/page.js'), 'ships');
+});
+
 test('B counterfactual: a util with a module-scope `new WebSocket()` still ships the page', async () => {
   const util = `export const sock = new WebSocket('ws://localhost');
 export function send(m) { sock.send(m); }`;

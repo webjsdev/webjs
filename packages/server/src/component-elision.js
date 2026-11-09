@@ -328,6 +328,12 @@ const PURE_DATA_CONSTRUCTORS = new Set([
   'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
   'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array',
   'BigInt64Array', 'BigUint64Array',
+  // The Intl formatters: a module-scope `new Intl.DateTimeFormat('en', {...})`
+  // shared by every render is the idiomatic way to format dates, and it pinned
+  // every page importing the helper (an agent hit it building an app).
+  'Intl.DateTimeFormat', 'Intl.NumberFormat', 'Intl.Collator', 'Intl.PluralRules',
+  'Intl.RelativeTimeFormat', 'Intl.ListFormat', 'Intl.Segmenter', 'Intl.DisplayNames',
+  'Intl.Locale', 'Intl.DurationFormat',
 ]);
 
 /**
@@ -544,8 +550,8 @@ export function hasModuleScopeSideEffect(src, literals) {
   // it stays elidable (#623); any other constructor is a side effect. Catches
   // both `new X` and `new X(...)` (the constructor's own `(`, if present, is
   // then skipped in the call scan below).
-  for (const nm of frame.matchAll(/(?<![.\w])new\s+([A-Za-z_$][\w$]*)/g)) {
-    if (!PURE_DATA_CONSTRUCTORS.has(nm[1])) return true;
+  for (const nm of frame.matchAll(/(?<![.\w])new\s+([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)/g)) {
+    if (!PURE_DATA_CONSTRUCTORS.has(nm[1].replace(/\s+/g, ''))) return true;
   }
   // Top-level `await`.
   if (/(?<![.\w])await\s/.test(frame)) return true;
@@ -580,7 +586,7 @@ export function hasModuleScopeSideEffect(src, literals) {
     // A `new X(...)` constructor call: the `new`-prefixed cases were already
     // vetted above (a non-pure constructor returned true; a pure-data one is
     // inert), so its `(` here is not an independent side-effecting call.
-    if (ident && /(?<![.\w])new\s+$/.test(frame.slice(0, m.index))) continue;
+    if (ident && /(?<![.\w])new\s+(?:[A-Za-z_$][\w$]*\s*\.\s*)*$/.test(frame.slice(0, m.index))) continue;
     return true;                                         // any other top-level call
   }
   return false;

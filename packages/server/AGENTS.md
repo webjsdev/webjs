@@ -501,7 +501,7 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    and the key is a blanked string. The scans avoid the fully blanked mask,
    `redactStringsAndTemplates(src, true)`, which blanks hole code too and
    would hide `${window.innerWidth}`. A module-scope pure-data constructor
-   (`new Set([...])` / `Map` / `Date` / `RegExp` / typed array / `URL`) is inert
+   (`new Set([...])` / `Map` / `Date` / `RegExp` / typed array / `URL` / an `Intl` formatter such as `new Intl.DateTimeFormat(...)`) is inert
    data, not a side effect; any other constructor (`new WebSocket()` / `Worker()`)
    still ships. A `function` declaration's parameter list and the expression
    body of an arrow initializing a `const` / `let` / `var` declarator are

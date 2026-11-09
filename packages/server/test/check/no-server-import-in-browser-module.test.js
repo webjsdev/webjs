@@ -734,12 +734,13 @@ test('message prints the full import chain and names the types-module fix (#804)
 
 test('the message names the helper that makes a page ship, not just the page', async () => {
   // Found by an agent building an app: a page shipped because a plain helper it
-  // imported built an Intl formatter at module scope, and the message blamed
-  // the page, so the agent moved the wrong code. The elision verdict knows the
-  // blocker, so the message names it.
+  // imported did client work at module scope, and the message blamed the page,
+  // so the agent moved the wrong code. The elision verdict knows the blocker, so
+  // the message names it. (The agent's helper built an Intl formatter, which no
+  // longer ships at all; see the next test.)
   const dir = await makeApp({
     'app/layout.ts': "import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html`<html><body>${children}</body></html>`; }\n",
-    'lib/format.ts': "export const fmt = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });\nexport const label = (d: Date) => fmt.format(d);\n",
+    'lib/format.ts': "export const chan = new BroadcastChannel('events');\nexport const label = (d: Date) => d.toISOString();\n",
     'lib/db.server.ts': 'export function listEvents() { return []; }\n',
     'app/page.ts': "import { html } from '@webjsdev/core';\nimport { label } from '../lib/format.ts';\nimport { listEvents } from '../lib/db.server.ts';\nexport default function P() { return html`<p>${label(new Date())} ${listEvents().length}</p>`; }\n",
   });
@@ -747,6 +748,20 @@ test('the message names the helper that makes a page ship, not just the page', a
     const v = find(await checkConventions(dir), 'app/page.ts');
     assert.equal(v.length, 1, JSON.stringify(v));
     assert.match(v[0].message, /It ships because lib\/format\.ts .*fix that module, not this page/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a module-scope Intl formatter in a helper does not make the page ship', async () => {
+  const dir = await makeApp({
+    'app/layout.ts': "import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html`<html><body>${children}</body></html>`; }\n",
+    'lib/format.ts': "export const fmt = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });\nexport const label = (d: Date) => fmt.format(d);\n",
+    'lib/db.server.ts': 'export function listEvents() { return []; }\n',
+    'app/page.ts': "import { html } from '@webjsdev/core';\nimport { label } from '../lib/format.ts';\nimport { listEvents } from '../lib/db.server.ts';\nexport default function P() { return html`<p>${label(new Date())} ${listEvents().length}</p>`; }\n",
+  });
+  try {
+    assert.deepEqual(find(await checkConventions(dir), 'app/page.ts'), [], 'the page stays server-only, so its server import is fine');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
