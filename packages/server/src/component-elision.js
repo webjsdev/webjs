@@ -337,6 +337,24 @@ const PURE_DATA_CONSTRUCTORS = new Set([
 ]);
 
 /**
+ * Builtin calls that only compute a value, so a module-scope
+ * `const HOURS = Array.from({ length: 24 }, (_, h) => h)` is data, not client
+ * work, and does not pin a page that would otherwise elide. Three of three
+ * agents building a booking app wrote exactly that line on a page and were
+ * told the page ships. A call to anything else (a user function, `fetch`,
+ * `setInterval`) still counts. Keyed `Namespace.method`, or a bare global.
+ */
+const PURE_BUILTIN_CALLS = new Set([
+  'Array.from', 'Array.of', 'Array.isArray',
+  'Object.freeze', 'Object.fromEntries', 'Object.entries', 'Object.keys', 'Object.values',
+  'JSON.parse', 'JSON.stringify',
+  'Number.parseInt', 'Number.parseFloat', 'Number.isInteger', 'Number.isFinite',
+  'Date.UTC', 'String.fromCharCode',
+  'Number', 'String', 'Boolean', 'BigInt', 'Symbol', 'parseInt', 'parseFloat',
+  'encodeURIComponent', 'decodeURIComponent',
+]);
+
+/**
  * Marks where `hasModuleScopeSideEffect` dropped a top-level `{...}` body from
  * its depth-0 frame, so an arrow followed by a block body is not mistaken for
  * an expression body that runs on into the next statement. Removed again
@@ -574,6 +592,13 @@ export function hasModuleScopeSideEffect(src, literals) {
     if (ident && /\bfunction\s*\*?\s*$/.test(frame.slice(0, m.index))) continue;
     // The component registration call is the one permitted top-level call.
     if (ident === 'register' || ident === 'define') continue;
+    // A pure builtin call (`Array.from(...)`, `Math.max(...)`, `Object.freeze(...)`):
+    // module data, like a pure-data constructor above.
+    if (ident) {
+      const ns = /(?<![.\w$])([A-Za-z_$][\w$]*)\s*\.\s*$/.exec(frame.slice(0, m.index));
+      if (ns ? ns[1] === 'Math' || PURE_BUILTIN_CALLS.has(`${ns[1]}.${ident}`)
+        : PURE_BUILTIN_CALLS.has(ident) && !/[.\w$]\s*$/.test(frame.slice(0, m.index))) continue;
+    }
     // `extends WebComponent({ … })` is the declare-free reactive-prop DX (#597
     // / #599): a class-declaration construct, not an independent side-effecting
     // statement. Exempt it so a display-only factory-form component stays

@@ -175,6 +175,50 @@ export function post(m) { chan.postMessage(m); }`;
   assert.equal(verdict(r, '/app/page.js'), 'ships');
 });
 
+test('B: a page computing module-scope data with pure builtins still elides', async () => {
+  // Three of three agents building a booking app wrote the HOURS line on a page
+  // that imported a server module, and the page was reported as shipping.
+  const page = `
+    import { html } from '@webjsdev/core';
+    import '#components/counter.js';
+    const HOURS = Array.from({ length: 24 }, (_, h) => h);
+    const LIMIT = Math.max(1, Number('3'));
+    const DAYS = Object.freeze(['Mon', 'Tue']);
+    const DEFAULTS = JSON.parse('{"a":1}');
+    export default () => html\`<x-counter></x-counter>\${HOURS.length}\${LIMIT}\${DAYS}\${DEFAULTS.a}\`;
+  `;
+  const r = await run({
+    files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/counter.js'] },
+  });
+  assert.equal(verdict(r, '/app/page.js'), 'import-only', 'pure builtin calls are module data');
+});
+
+for (const [label, line] of [
+  ['a user function', 'const HOURS = buildHours();'],
+  ['a user function inside the Array.from callback', 'const HOURS = Array.from({ length: 3 }, (_, i) => track(i));'],
+  ['a same-named method on another object', 'const HOURS = api.from(3);'],
+  ['a timer', 'setInterval(() => {}, 1000);'],
+]) {
+  test(`B counterfactual: ${label} at module scope still ships the page`, async () => {
+    const page = `
+      import { html } from '@webjsdev/core';
+      import '#components/counter.js';
+      ${line}
+      export default () => html\`<x-counter></x-counter>\`;
+    `;
+    const r = await run({
+      files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE },
+      components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+      routeModules: ['/app/page.js'],
+      edges: { '/app/page.js': ['/app/components/counter.js'] },
+    });
+    assert.equal(verdict(r, '/app/page.js'), 'ships');
+  });
+}
+
 test('B counterfactual: a util with a module-scope `new WebSocket()` still ships the page', async () => {
   const util = `export const sock = new WebSocket('ws://localhost');
 export function send(m) { sock.send(m); }`;

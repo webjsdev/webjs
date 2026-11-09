@@ -753,6 +753,21 @@ test('the message names the helper that makes a page ship, not just the page', a
   }
 });
 
+test('a page computing its select options with Array.from at module scope is not flagged', async () => {
+  // The exact line three of three agents wrote on a booking page that also
+  // imports a server module: the page stays server-only, so the import is fine.
+  const dir = await makeApp({
+    'app/layout.ts': "import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html`<html><body>${children}</body></html>`; }\n",
+    'lib/bookings.server.ts': 'export function listBookings() { return []; }\n',
+    'app/page.ts': "import { html } from '@webjsdev/core';\nimport { listBookings } from '../lib/bookings.server.ts';\nconst HOURS = Array.from({ length: 24 }, (_, h) => h);\nexport default function P() { return html`<select>${HOURS.map((h) => html`<option>${h}</option>`)}</select>${listBookings().length}`; }\n",
+  });
+  try {
+    assert.deepEqual(find(await checkConventions(dir), 'app/page.ts'), []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('a module-scope Intl formatter in a helper does not make the page ship', async () => {
   const dir = await makeApp({
     'app/layout.ts': "import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html`<html><body>${children}</body></html>`; }\n",
