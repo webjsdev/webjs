@@ -325,7 +325,7 @@ function resolveHoleValue(v) {
  */
 function createInstance(tr, container, hydrating = false) {
   const { templateEl, parts, formActions } = compile(tr);
-  const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+  const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
   // Bookend markers bound the instance so we can tear it down cleanly.
   const startNode = document.createComment(`${MARKER}s`);
   const endNode = document.createComment(`${MARKER}e`);
