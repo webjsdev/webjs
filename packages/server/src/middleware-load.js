@@ -23,7 +23,7 @@
 import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { devImport } from './dev-import.js';
-import { requestCookieStore } from './context.js';
+import { requestCookieStore, markDynamicAccess } from './context.js';
 import { parseCookieHeader } from './cookie-store.js';
 
 const MIDDLEWARE_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'];
@@ -144,7 +144,7 @@ export function compileMatcher(matcher, file) {
 function decorateRequest(req, dev) {
   try {
     if (!Object.prototype.hasOwnProperty.call(req, 'cookies')) {
-      Object.defineProperty(req, 'cookies', { configurable: true, get: () => requestCookieStore() });
+      Object.defineProperty(req, 'cookies', { configurable: true, get: () => { markDynamicAccess(); return requestCookieStore(); } });
     }
     if (!Object.prototype.hasOwnProperty.call(req, 'nextUrl')) {
       Object.defineProperty(req, 'nextUrl', {

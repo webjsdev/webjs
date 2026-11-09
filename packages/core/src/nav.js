@@ -70,8 +70,8 @@ export function unauthorized() {
  *
  * The second argument may instead be `'push'` or `'replace'` (Next's
  * `RedirectType`): how the client records the navigation when the redirect
- * reaches the browser from an action called over RPC. `'replace'` is the
- * default there.
+ * reaches the browser from an action called over RPC. `'push'` is the
+ * default there, as in a Next.js server action.
  *
  * @param {string} url
  * @param {number | RedirectType | { status?: number, type?: RedirectType }} [status]
