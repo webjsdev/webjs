@@ -362,10 +362,11 @@ const HELP = {
     examples: ['webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
   },
   status: {
-    usage: 'webjs status [path...] [--port N] [--json] [--timeout <seconds>]',
-    summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. Use it after each edit instead of sleeping and fetching a page.',
+    usage: 'webjs status [path...] [--port N] [--boot] [--json] [--timeout <seconds>]',
+    summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. With no dev server on the port it boots the app in-process instead and probes every route that needs no parameter, so no server has to be started or stopped. Use it after each edit instead of sleeping and fetching a page.',
     options: [
       { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then 8080, the same resolution `webjs dev` uses.' },
+      { flag: '--boot', description: 'Skip the dev server: boot the app in-process with the dev handler. With no paths it probes every page and GET route handler that needs no parameter (an optional catch-all at its parent path), lists the routes it skipped, and fails only on a server error there; a path you name still fails at 400.' },
       { flag: '--json', description: 'Print one JSON document: { ok, url, settled, ready, rebuilds, paths, errors }, each error carrying kind, message, file, line, column and codeFrame.' },
       { flag: '--timeout <seconds>', description: 'How long to wait for the server to settle (default 30). A restarting Node dev server is retried until then.' },
     ],
@@ -373,10 +374,10 @@ const HELP = {
     notes: [
       '0 when settled, ready, error-free, and every requested path answered below 400.',
       '1 on any recorded error, a path at 400 or above, or no settle before the timeout.',
-      '2 when no dev server answered on the port.',
+      'With no dev server on the port the command boots the app in-process (as --boot) rather than failing.',
       'The same data is GET /__webjs/dev/status?wait=<seconds> on the dev server, which answers 404 in production.',
     ],
-    examples: ['webjs status', 'webjs status / /todos --json', 'webjs status /blog --port 3000'],
+    examples: ['webjs status', 'webjs status --boot', 'webjs status / /todos --json', 'webjs status /blog --port 3000'],
   },
   version: {
     usage: 'webjs version',
@@ -2085,8 +2086,41 @@ Full docs: https://webjs.dev/docs`);
       const timeout = Number(flag(rest, '--timeout')) || 30;
       let basePath = '';
       try { basePath = (await readAppBasePath(process.cwd())) || ''; } catch { /* root mount */ }
+      const port = resolvePort(flag(rest, '--port'));
+      // With no dev server answering on the port, boot the app in-process
+      // instead of retrying for the whole timeout: the brief tells agents to
+      // run `webjs status` after every edit, whether or not a server is up.
+      let boot = rest.includes('--boot');
+      if (!boot) {
+        try {
+          await fetch(`http://localhost:${port}${basePath}/__webjs/dev/status`, { signal: AbortSignal.timeout(1500) });
+        } catch {
+          boot = true;
+          if (!rest.includes('--json')) console.error(`webjs status: no dev server on port ${port}, so booting the app in-process instead.`);
+        }
+      }
+      if (boot) {
+        // No dev server: boot the app in-process with the dev handler and
+        // probe every parameter-free route (or the given paths).
+        const { runStatusBoot } = await import('../lib/status.js');
+        const { createRequestHandler, buildRouteTable } = await import('@webjsdev/server');
+        const { projectRoutes } = await import('@webjsdev/mcp/routes-report');
+        const { extractRouteMethods } = await import('@webjsdev/mcp');
+        const { readFile } = await import('node:fs/promises');
+        const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+        const code = await runStatusBoot({
+          appDir: process.cwd(),
+          paths,
+          basePath,
+          json: rest.includes('--json'),
+          timeoutMs: timeout * 1000,
+          createHandler: (appDir) => createRequestHandler({ appDir, dev: true, logger: quiet }),
+          listRoutes: async (appDir) => projectRoutes(await buildRouteTable(appDir), { appDir, readFile, extractRouteMethods }),
+        });
+        process.exit(code);
+      }
       const code = await runStatus({
-        port: resolvePort(flag(rest, '--port')),
+        port,
         paths,
         basePath,
         json: rest.includes('--json'),

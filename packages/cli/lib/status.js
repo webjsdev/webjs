@@ -27,6 +27,79 @@
 export const NO_SERVER_EXIT_CODE = 2;
 
 /**
+ * The paths `webjs status --boot` requests when none are given: every page
+ * and every GET route handler whose path needs no parameter. A dynamic route
+ * cannot be requested without a real value, so it is listed as skipped.
+ * @param {{ pages: Array<{ path: string }>, apis: Array<{ path: string, methods?: string[] }> }} report
+ * @returns {{ paths: string[], skipped: string[] }}
+ */
+export function bootProbePaths(report) {
+  const paths = [];
+  const skipped = [];
+  const add = (/** @type {string} */ p) => {
+    // An optional catch-all also answers with no segments, at its parent path.
+    const bare = p.replace(/\/\[\[\.\.\.[^\]]+\]\]$/, '') || '/';
+    if (bare.includes('[')) skipped.push(p);
+    else if (!paths.includes(bare)) paths.push(bare);
+  };
+  for (const page of report.pages || []) add(page.path);
+  for (const api of report.apis || []) {
+    if (!api.methods || api.methods.includes('GET')) add(api.path);
+  }
+  return { paths, skipped };
+}
+
+/**
+ * `webjs status --boot`: boot the app in-process with the dev handler and
+ * report every route's status and every error it records, with no dev server
+ * to start, wait for, or stop. With no paths it probes every route that needs
+ * no parameter, failing only on a server error there (a 401 or a redirect is
+ * an answer, not a fault); a path the caller names still fails at 400.
+ * @param {{
+ *   appDir: string,
+ *   paths?: string[],
+ *   basePath?: string,
+ *   json?: boolean,
+ *   timeoutMs?: number,
+ *   createHandler: (appDir: string) => Promise<{ handle: (req: Request) => Promise<Response>, warmup?: () => Promise<unknown> }>,
+ *   listRoutes: (appDir: string) => Promise<{ pages: Array<{ path: string }>, apis: Array<{ path: string, methods?: string[] }> }>,
+ *   out?: (s: string) => void,
+ *   err?: (s: string) => void,
+ * }} opts
+ * @returns {Promise<number>} the exit code
+ */
+export async function runStatusBoot(opts) {
+  const {
+    appDir, paths = [], basePath = '', json = false, timeoutMs = 30_000,
+    createHandler, listRoutes,
+    out = (s) => process.stdout.write(s + '\n'),
+    err = (s) => process.stderr.write(s + '\n'),
+  } = opts;
+  const app = await createHandler(appDir);
+  if (app.warmup) await app.warmup();
+  let toProbe = paths;
+  if (!paths.length) {
+    const { paths: derived, skipped } = bootProbePaths(await listRoutes(appDir));
+    toProbe = derived.length ? derived : ['/'];
+    if (skipped.length && !json) out(`webjs status: skipped ${skipped.length} route${skipped.length === 1 ? '' : 's'} that need${skipped.length === 1 ? 's' : ''} a parameter (pass a real path to probe it): ${skipped.join(', ')}`);
+  }
+  return runStatus({
+    port: 0,
+    host: 'boot',
+    paths: toProbe,
+    basePath,
+    json,
+    timeoutMs,
+    graceMs: 0,
+    namedFailStatus: paths.length ? 400 : 500,
+    fetch: (url, init) => app.handle(new Request(url, init)),
+    out,
+    err,
+    cwd: appDir,
+  });
+}
+
+/**
  * @typedef {{
  *   status: string, settled: boolean, ready: string, boot: string | null,
  *   seq: number | null, rebuilds: number,
@@ -44,6 +117,7 @@ export const NO_SERVER_EXIT_CODE = 2;
  *   timeoutMs?: number,
  *   graceMs?: number,
  *   host?: string,
+ *   namedFailStatus?: number,
  *   fetch?: typeof fetch,
  *   sleep?: (ms: number) => Promise<void>,
  *   now?: () => number,
@@ -56,7 +130,7 @@ export const NO_SERVER_EXIT_CODE = 2;
 export async function runStatus(opts) {
   const {
     port, paths = [], basePath = '', json = false,
-    timeoutMs = 30_000, graceMs = 300, host = 'localhost',
+    timeoutMs = 30_000, graceMs = 300, host = 'localhost', namedFailStatus = 400,
     fetch: doFetch = globalThis.fetch,
     sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
     now = Date.now,
@@ -135,7 +209,7 @@ export async function runStatus(opts) {
     } catch { /* keep the settled body */ }
   }
 
-  const failingPaths = results.filter((r) => r.status === null || r.status >= (named.has(r.path) ? 400 : 500));
+  const failingPaths = results.filter((r) => r.status === null || r.status >= (named.has(r.path) ? namedFailStatus : 500));
   const ok = body.errors.length === 0 && failingPaths.length === 0 && body.ready === 'ok';
   return finish({ ok, url: base, settled: true, ready: body.ready, rebuilds: body.rebuilds, paths: results, errors: body.errors }, ok ? 0 : 1);
 
