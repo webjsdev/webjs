@@ -13,7 +13,7 @@ export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from 
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
-export { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
 export { asset, setAssetUrlProvider } from './src/asset-url.js';
 // Form actions (#1155). `FORM_ACTION_FIELD` is the hidden field both renderers

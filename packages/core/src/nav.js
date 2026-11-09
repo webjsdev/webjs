@@ -66,14 +66,27 @@ export function unauthorized() {
  * options form `redirect('/x', { status: 301 })`. An explicit status wins at
  * every catching site.
  *
+ * The second argument may instead be `'push'` or `'replace'` (Next's
+ * `RedirectType`): how the client records the navigation when the redirect
+ * reaches the browser from an action called over RPC. `'replace'` is the
+ * default there.
+ *
  * @param {string} url
- * @param {number | { status?: number }} [status] explicit status (number) or
- *   `{ status }`; omit to let the catching site pick (302 for a GET gate, 307
- *   for an action).
+ * @param {number | RedirectType | { status?: number, type?: RedirectType }} [status]
+ *   explicit status (number), a `RedirectType`, or `{ status, type }`; omit to
+ *   let the catching site pick.
  * @returns {never}
  */
 export function redirect(url, status) {
-  const code = typeof status === 'object' && status !== null ? status.status : status;
+  /** @type {number | undefined} */
+  let code;
+  /** @type {RedirectType | undefined} */
+  let type;
+  if (status === 'push' || status === 'replace') type = status;
+  else if (typeof status === 'object' && status !== null) {
+    code = status.status;
+    if (status.type === 'push' || status.type === 'replace') type = status.type;
+  } else if (typeof status === 'number') code = status;
   const err = new Error(`webjs: redirect(${url})`);
   /** @type any */ (err).__webjs = REDIRECT;
   /** @type any */ (err).url = url;
@@ -81,8 +94,25 @@ export function redirect(url, status) {
   // can apply its convention (302 GET gate vs 307 action). A caller-supplied
   // code is stored verbatim and overrides that convention.
   /** @type any */ (err).status = typeof code === 'number' ? code : undefined;
+  /** @type any */ (err).redirectType = type;
   throw err;
 }
+
+/**
+ * Throw a PERMANENT redirect sentinel, Next.js's `permanentRedirect()`: a 308
+ * Permanent Redirect at every catching site that answers with a 3xx. Use it
+ * when a URL has moved for good (a renamed slug); browsers and search engines
+ * remember a 308.
+ *
+ * @param {string} url
+ * @param {RedirectType} [type] how an RPC caller's client records the navigation.
+ * @returns {never}
+ */
+export function permanentRedirect(url, type) {
+  return redirect(url, { status: 308, type });
+}
+
+/** @typedef {'push' | 'replace'} RedirectType */
 
 /** @param {unknown} e */
 export function isNotFound(e) {

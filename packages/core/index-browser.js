@@ -29,7 +29,7 @@ export { WebComponent, prop } from './src/component.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { render } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
-export { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
 export { cspNonce } from './src/csp-nonce.js';
 export { asset } from './src/asset-url.js';
 // Form actions (#1155). The field name is shared with the server dispatcher;

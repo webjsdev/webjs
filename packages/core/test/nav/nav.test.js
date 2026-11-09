@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from '../../src/nav.js';
+import { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from '../../src/nav.js';
 
 test('notFound throws an error with the sentinel', () => {
   try {
@@ -117,4 +117,29 @@ test('sentinels use Symbol.for so they match cross-realm', () => {
   const err2 = new Error('test');
   err2.__webjs = Symbol.for('webjs.redirect');
   assert.ok(isRedirect(err2));
+});
+
+test('permanentRedirect throws a redirect sentinel carrying 308', () => {
+  let e;
+  try { permanentRedirect('/moved'); } catch (err) { e = err; }
+  assert.ok(isRedirect(e));
+  assert.equal(e.url, '/moved');
+  assert.equal(e.status, 308);
+  assert.equal(e.redirectType, undefined);
+  try { permanentRedirect('/moved', 'push'); } catch (err) { e = err; }
+  assert.equal(e.status, 308);
+  assert.equal(e.redirectType, 'push');
+});
+
+test('redirect accepts Next RedirectType strings without setting a status', () => {
+  let e;
+  try { redirect('/x', 'replace'); } catch (err) { e = err; }
+  assert.equal(e.status, undefined, 'a type is not a status; the catching site picks the code');
+  assert.equal(e.redirectType, 'replace');
+  try { redirect('/x', { status: 301, type: 'push' }); } catch (err) { e = err; }
+  assert.equal(e.status, 301);
+  assert.equal(e.redirectType, 'push');
+  try { redirect('/x', 307); } catch (err) { e = err; }
+  assert.equal(e.status, 307);
+  assert.equal(e.redirectType, undefined);
 });
