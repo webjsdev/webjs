@@ -65,6 +65,24 @@ export type ActionResult<T = unknown> =
       status?: number;
     };
 
+/**
+ * What a form-bound action receives: a real `FormData` (so `get`, `getAll` and
+ * `instanceof FormData` work, as in Next) that also carries each field as a
+ * property, so `input.title` reads it too. A `name[]` field arrives as an array
+ * under `name`; a file input arrives as a `File`. Pass the field shape for
+ * typed property reads.
+ *
+ * @example
+ * 'use server';
+ * import type { FormInput } from '@webjsdev/server';
+ * export async function createTask(input: FormInput<{ title: string; tags: string[] }>) {
+ *   const title = input.title.trim();          // or input.get('title')
+ *   ...
+ * }
+ */
+export type FormInput<Fields extends Record<string, unknown> = Record<string, string | string[] | File>> =
+  FormData & Fields;
+
 /** The pluggable cache store interface (`memoryStore` / `redisStore` / custom). */
 export interface CacheStore {
   get(key: string): Promise<string | null>;

@@ -44,7 +44,7 @@ import {
   signedUrl,
   verifySignedUrl,
 } from '@webjsdev/server';
-import type { FileStore, MiddlewareRequest } from '@webjsdev/server';
+import type { FileStore, MiddlewareRequest, FormInput } from '@webjsdev/server';
 import { testRequest } from '@webjsdev/server/testing';
 import { checkConventions } from '@webjsdev/server/check';
 
@@ -188,3 +188,14 @@ void check;
 void sameStore;
 void verified;
 void useFileStore;
+
+// A form-bound action's input: FormData methods and typed property reads.
+async function createTask(input: FormInput<{ title: string; tags: string[] }>) {
+  const title: string = input.title.trim();
+  const tags: string[] = input.tags;
+  const raw = input.get('title');
+  // @ts-expect-error a field the shape does not declare
+  void input.titel;
+  return { title, tags, raw, isFormData: input instanceof FormData };
+}
+void createTask;
