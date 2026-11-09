@@ -49,14 +49,17 @@ test('the web-components section pays its DX claim in checkable nouns', async ()
   }
 });
 
-test('the progressive-enhancement and elision claims survive the heading change', async () => {
+test('the progressive-enhancement and zero-JS route claims survive the heading change', async () => {
   const out = await render();
   // The section stopped LEADING with these when it was renamed. They are still
   // the only place the page states either, and the P.S. dare below invites the
   // reader to check the first one, so a chip going missing is a real loss and
   // not a copy tidy.
   assert.ok(out.includes('Reads and submits before JS'), 'the no-JS claim is still on the page');
-  assert.ok(out.includes('Display components ship 0 KB'), 'the elision claim is still on the page');
+  // Component elision is gone (#1686): every component ships, while pages and
+  // layouts never do, so that is the zero-JS claim the page makes now.
+  assert.ok(out.includes('Pages and layouts ship 0 KB'), 'the zero-JS route claim is still on the page');
+  assert.ok(!out.includes('Display components ship 0 KB'), 'the elision claim, false since #1686, is gone');
   assert.ok(out.includes('No whole-page hydration'), 'the precise hydration wording, not a shorter one');
   assert.doesNotMatch(out, /No hydration (runtime|overhead)/, 'those read as zero cost and are false');
   assert.ok(out.includes('P.S. Turn JavaScript off'), 'the dare that lets a reader verify it');
