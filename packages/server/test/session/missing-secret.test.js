@@ -7,26 +7,53 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { session } from '../../src/session.js';
 import { createAuth } from '../../src/auth.js';
+import { devSecret } from '../../src/dev-secret.js';
 
-test('session() without a secret says to set SESSION_SECRET in .env', () => {
-  const saved = process.env.SESSION_SECRET;
-  delete process.env.SESSION_SECRET;
-  try {
-    assert.throws(() => session(), /SESSION_SECRET in \.env/);
-  } finally {
-    if (saved !== undefined) process.env.SESSION_SECRET = saved;
+/** Run fn with the given env overrides and cwd, restoring both. */
+function withEnv(vars, cwd, fn) {
+  const saved = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+  const prevCwd = process.cwd();
+  for (const [k, v] of Object.entries(vars)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  if (cwd) process.chdir(cwd);
+  try { return fn(); } finally {
+    process.chdir(prevCwd);
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   }
+}
+
+test('in production, session() without a secret says to set SESSION_SECRET in .env', () => {
+  withEnv({ SESSION_SECRET: undefined, NODE_ENV: 'production' }, null, () => {
+    assert.throws(() => session(), /SESSION_SECRET in \.env/);
+  });
 });
 
-test('createAuth() without a secret says to set AUTH_SECRET in .env', () => {
-  const saved = process.env.AUTH_SECRET;
-  delete process.env.AUTH_SECRET;
-  try {
+test('in production, createAuth() without a secret says to set AUTH_SECRET in .env', () => {
+  withEnv({ AUTH_SECRET: undefined, NODE_ENV: 'production' }, null, () => {
     assert.throws(() => createAuth({ providers: [] }), /AUTH_SECRET in \.env/);
+  });
+});
+
+test('outside production a missing secret is generated once into .webjs/dev-secret and reused (#1686)', () => {
+  // A fresh clone or a worktree has no .env, and every page behind session()
+  // or createAuth() used to answer 500 until someone wrote one.
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-dev-secret-'));
+  try {
+    withEnv({ SESSION_SECRET: undefined, AUTH_SECRET: undefined, NODE_ENV: undefined }, dir, () => {
+      assert.doesNotThrow(() => session());
+      assert.doesNotThrow(() => createAuth({ providers: [] }));
+      const stored = readFileSync(join(dir, '.webjs', 'dev-secret'), 'utf8').trim();
+      assert.match(stored, /^[0-9a-f]{64}$/, 'a 32-byte hex secret is persisted');
+      assert.equal(devSecret('SESSION_SECRET'), stored, 'a restart reads the same secret back');
+    });
+    assert.equal(devSecret('X', { dir, env: { NODE_ENV: 'production' } }), undefined, 'never in production');
   } finally {
-    if (saved !== undefined) process.env.AUTH_SECRET = saved;
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

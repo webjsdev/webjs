@@ -18,7 +18,7 @@ export default session({
   storage: cookieSessionStorage(),  // or storeSessionStorage() for Redis
 });</code-block>
 
-    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly), the key used to sign session cookies.</p>
+    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly), the key used to sign session cookies. In production it is required; in development and tests a missing one is generated once into the gitignored <code>.webjs/dev-secret</code>, with a warning, so a fresh clone or worktree works before anyone writes an <code>.env</code>.</p>
 
     <h2>SessionStorage Implementations</h2>
 

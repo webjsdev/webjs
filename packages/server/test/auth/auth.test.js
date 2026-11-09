@@ -12,11 +12,15 @@ test('Credentials provider produces expected shape', () => {
   assert.equal(typeof p.authorize, 'function');
 });
 
-test('createAuth throws without secret', () => {
-  assert.throws(
-    () => createAuth({ providers: [], secret: '' }),
-    /secret/,
-  );
+test('createAuth throws without secret in production', () => {
+  const env = { AUTH_SECRET: process.env.AUTH_SECRET, NODE_ENV: process.env.NODE_ENV };
+  delete process.env.AUTH_SECRET;
+  process.env.NODE_ENV = 'production';
+  try {
+    assert.throws(() => createAuth({ providers: [], secret: '' }), /secret/);
+  } finally {
+    for (const [k, v] of Object.entries(env)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
 });
 
 test('signIn with valid credentials returns redirect with cookie', async () => {

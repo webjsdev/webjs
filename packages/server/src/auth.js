@@ -11,6 +11,7 @@ import { getStore } from './cache.js';
 import { getRequest, getBodyLimits, markDynamicAccess, requestCookieStore } from './context.js';
 import { redirect } from '@webjsdev/core';
 import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
+import { devSecret } from './dev-secret.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -258,8 +259,10 @@ export function createAuth(config) {
   // Auth.js reads AUTH_SECRET when `secret` is left out, so an app can write
   // createAuth({ providers }) or pass process.env.AUTH_SECRET (string | undefined)
   // without a cast.
-  const secret = config.secret || process.env.AUTH_SECRET;
-  if (!secret) throw new Error('createAuth() needs a secret to sign its session: set AUTH_SECRET in .env (webjs create writes one), or pass createAuth({ secret }).');
+  // Outside production a missing secret falls back to a generated one kept in
+  // .webjs/dev-secret (dev-secret.js), so a fresh clone or worktree works.
+  const secret = config.secret || process.env.AUTH_SECRET || devSecret('AUTH_SECRET');
+  if (!secret) throw new Error('createAuth() needs a secret to sign its session in production: set AUTH_SECRET in .env (webjs create writes one), or pass createAuth({ secret }).');
 
   const strategy = config.session?.strategy || 'jwt';
   const maxAge = config.session?.maxAge || DEFAULT_MAX_AGE;

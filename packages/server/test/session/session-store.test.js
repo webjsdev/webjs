@@ -113,13 +113,16 @@ function reqWith(cookie) {
   return new Request('http://x/', { headers: cookie ? { cookie } : {} });
 }
 
-test('session(): throws without secret', () => {
+test('session(): throws without secret in production', () => {
   const prev = process.env.SESSION_SECRET;
+  const prevEnv = process.env.NODE_ENV;
   delete process.env.SESSION_SECRET;
+  process.env.NODE_ENV = 'production';
   try {
     assert.throws(() => session(), /secret/);
   } finally {
     if (prev !== undefined) process.env.SESSION_SECRET = prev;
+    if (prevEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prevEnv;
   }
 });
 
