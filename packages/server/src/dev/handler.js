@@ -20,7 +20,7 @@ import {
   hasUseServerDirective,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
-import { installEsmHotHooks, installBunModuleVersions, isServedModule, bumpModuleVersions } from './esm-hot-hooks.js';
+import { installEsmHotHooks, installBunModuleVersions, isServedModule, bumpModuleVersions, movedServedModules, diskStamp } from './esm-hot-hooks.js';
 import { createBrowserVersions } from './specifier-versions.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
@@ -567,6 +567,11 @@ export async function createRequestHandler(opts) {
     // verdict. Never cleared.
     /** @type {Map<string, import('../dev-hot-classify.js').HotSignature>} */
     hotSignatures: new Map(),
+    // The disk stamp of every shipped module as the last analysis found it, on
+    // Bun only (#1689): a rebuild adds each one that moved since to its changed
+    // files, since Bun's `fs.watch` can drop the event (see `missedChanges`).
+    /** @type {Map<string, string>} */
+    shippedStamps: new Map(),
     // Transformed-source cache (stripped TS + applied elision). Per-handler,
     // NOT module-global: the cached bytes bake in THIS handler's elision
     // verdict, so two handlers for the same app with different elision
@@ -758,6 +763,7 @@ export async function createRequestHandler(opts) {
               state.graphFiles = seenFilesFor(state.moduleGraph);
               state.pageFiles = new Set((state.routeTable.pages || []).map((p) => p.file).filter(Boolean));
               state.componentFiles = new Set(components.map((c) => c.file));
+              if (bunVersions) state.shippedStamps = new Map([...state.shippedFiles].map((f) => [f, diskStamp(f)]));
               // The hot-swap baseline of every shipped component the tabs
               // have not had a signature recorded for yet (#1689).
               await Promise.all([...state.componentFiles].map(async (f) => {
@@ -1048,6 +1054,36 @@ export async function createRequestHandler(opts) {
   }
 
   /**
+   * The rebuild's verdict and changed files plus every served or shipped module
+   * whose disk stamp moved without the watcher reporting it (Bun only). Each
+   * extra file is classified against the analysis the tabs hold, the same
+   * ladder the watcher applies, and its stamp is updated so it is reported
+   * once.
+   * @param {import('../dev-classify.js').ReloadVerdict | undefined} verdict
+   * @param {string[]} changed
+   * @returns {{ verdict: import('../dev-classify.js').ReloadVerdict | undefined, changed: string[] }}
+   */
+  function withMissedChanges(verdict, changed) {
+    const seen = new Set(changed);
+    /** @type {string[]} */
+    const missed = [];
+    for (const f of movedServedModules()) if (!seen.has(f)) { seen.add(f); missed.push(f); }
+    for (const [f, stamp] of state.shippedStamps) {
+      const now = diskStamp(f);
+      if (now === stamp) continue;
+      state.shippedStamps.set(f, now);
+      if (!seen.has(f)) { seen.add(f); missed.push(f); }
+    }
+    for (const f of changed) if (state.shippedStamps.has(f)) state.shippedStamps.set(f, diskStamp(f));
+    if (!missed.length) return { verdict, changed };
+    if (verdict) {
+      const ctx = { appDir, shippedFiles: state.shippedFiles, graphFiles: state.graphFiles, pageFiles: state.pageFiles, analysisReady: analysisEverDone, sep };
+      for (const f of missed) verdict = mergeVerdicts(verdict, classifyChangedPath(f, ctx));
+    }
+    return { verdict, changed: [...changed, ...missed] };
+  }
+
+  /**
    * @param {import('../dev-classify.js').ReloadVerdict} [verdict]
    * @param {boolean} [notify] tell the open tabs (`onReload`). False for the
    *   re-derive a `bun --hot` re-run asks for (#1575), whose edit the watcher
@@ -1055,6 +1091,12 @@ export async function createRequestHandler(opts) {
    * @param {string[]} [changed] absolute paths of the files that changed
    */
   async function doRebuild(verdict, notify = true, changed = []) {
+    // Bun's `fs.watch` (1.3.14) reports only the first of two files written
+    // about a millisecond apart in one directory, so the watcher's list can
+    // be short. Add every module that moved on disk without an event, and
+    // classify it into the verdict the tabs get, BEFORE anything below reads
+    // either, so a missed component edit still swaps or reloads (#1689).
+    if (dev && bunVersions && changed.length) ({ verdict, changed } = withMissedChanges(verdict, changed));
     // Version the edited modules and their importers FIRST (#1689), so every
     // import from here on, the re-warm included, gets the new instances. A
     // no-op where the resolve hook is not installed.

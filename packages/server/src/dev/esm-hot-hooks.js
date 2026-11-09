@@ -170,7 +170,7 @@ export function installBunModuleVersions(appDir) {
 }
 
 /** A file's identity on disk, or '' when it is gone. @param {string} abs */
-function diskStamp(abs) {
+export function diskStamp(abs) {
   try {
     const s = statSync(abs);
     return `${s.ino}:${s.size}:${s.mtimeMs}`;
@@ -181,8 +181,8 @@ function diskStamp(abs) {
 
 /**
  * Note that the Bun source plugins just served `abs` as it is on disk now.
- * A rebuild compares every noted file against the disk (`bumpModuleVersions`),
- * because Bun's `fs.watch` (1.3.14) drops the event for a second file written
+ * A rebuild compares every noted file against the disk (`movedServedModules`,
+ * called from the dev handler's rebuild), because Bun's `fs.watch` (1.3.14) drops the event for a second file written
  * a few milliseconds after another in the same directory, so an agent saving
  * two files at once would otherwise leave the second one stale for good. The
  * `bun --hot` registry reset used to hide that, since it re-evaluated
@@ -218,6 +218,25 @@ export function recordModuleImport(importer, target) {
 export function isVersionedModule(abs) {
   const st = state();
   return st.installed && isAppModule(abs, st);
+}
+
+/**
+ * Every module the Bun source plugins served whose disk stamp moved since, the
+ * ones Bun's `fs.watch` may have reported no event for (see
+ * `recordModuleLoad`). Each returned file's stamp is updated, so a later
+ * rebuild does not report the same change again. Empty off Bun.
+ * @returns {string[]}
+ */
+export function movedServedModules() {
+  const st = state();
+  /** @type {string[]} */
+  const moved = [];
+  if (!st.loaded) return moved;
+  for (const [f, stamp] of st.loaded) {
+    const now = diskStamp(f);
+    if (now !== stamp) { st.loaded.set(f, now); moved.push(f); }
+  }
+  return moved;
 }
 
 /**
@@ -285,14 +304,6 @@ export function bumpModuleVersions(absFiles) {
   const n = st.next++;
   const stack = [];
   for (const f of absFiles) stack.push(...spellings(f));
-  // On Bun, also every served module that changed on disk without an event
-  // reaching the watcher (see `recordModuleLoad`).
-  if (st.loaded) {
-    for (const [f, stamp] of st.loaded) {
-      const now = diskStamp(f);
-      if (now !== stamp) { st.loaded.set(f, now); stack.push(f); }
-    }
-  }
   while (stack.length) {
     const f = /** @type {string} */ (stack.pop());
     if (bumped.has(f) || !isAppModule(f, st)) continue;
