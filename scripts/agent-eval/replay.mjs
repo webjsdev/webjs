@@ -32,11 +32,34 @@ import { fileURLToPath } from 'node:url';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = join(REPO, 'packages/cli/bin/webjs.js');
 
-/** Which verification a Bash command is, if any. */
+/**
+ * Which verification a Bash command runs, if any. Only a command SEGMENT that
+ * starts the runner counts (after `cd`, `timeout N`, env assignments and the
+ * like), so `grep -rn "node --test" package.json` or `cat x | grep webjs check`
+ * is not a test or check run: matching the text anywhere counted such greps as
+ * failed first runs.
+ * @param {string} cmd
+ */
 export function verifyKind(cmd) {
-  if (/webjs(\.js)?\s+check\b/.test(cmd) && !/--rules/.test(cmd)) return 'check';
-  if (/webjs(\.js)?\s+typecheck\b|\btsc\b/.test(cmd)) return 'typecheck';
-  if (/webjs(\.js)?\s+test\b|npm (run )?test\b|node --test|bun test/.test(cmd)) return 'test';
+  // Heredoc bodies are file content, and a quoted argument (a grep pattern
+  // with `\|` in it) is never a command boundary, so both are blanked first.
+  const heredocFree = cmd.replace(/<<-?\s*'?(\w+)'?[\s\S]*?\n\1\b/g, '').replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, '""');
+  for (let seg of heredocFree.split(/\s*(?:&&|\|\||;|\n|\|(?!\|))\s*/)) {
+    seg = seg.replace(/^(?:\(|\{)\s*/, '');
+    for (;;) {
+      const next = seg.replace(/^(?:timeout\s+\S+|env|time|[A-Z_][A-Z0-9_]*=\S*|CI=\S*)\s+/, '');
+      if (next === seg) break;
+      seg = next;
+    }
+    const run = /^(?:npx\s+(?:--no-install\s+)?|node\s+(?:\S*\/)?|bunx\s+|\.\/node_modules\/\.bin\/)?(?:webjs(?:\.js)?|\S*\/webjs(?:\.js)?)\s+(check|typecheck|test)\b/.exec(seg);
+    if (run) {
+      if (run[1] === 'check' && /--rules/.test(seg)) continue;
+      return run[1] === 'typecheck' ? 'typecheck' : run[1];
+    }
+    if (/^(?:npx\s+)?tsc\b/.test(seg)) return 'typecheck';
+    if (/^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/.test(seg) || /^node\s+(?:--[\w-]+\s+)*--test\b/.test(seg) || /^bun\s+test\b/.test(seg)) return 'test';
+    if (/^(?:npm|pnpm|yarn|bun)\s+run\s+(?:typecheck|check)\b/.test(seg)) return /typecheck/.test(seg) ? 'typecheck' : 'check';
+  }
   return null;
 }
 
