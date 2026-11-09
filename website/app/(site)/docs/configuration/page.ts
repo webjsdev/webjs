@@ -80,6 +80,8 @@ webjs doctor --strict   # also fail on EVERY remaining warning, not just hard fa
 
     <p>One more check, <code>WORKSPACE_OVERRIDES</code>, warns when the app is a member of an npm or bun workspace and its own <code>package.json</code> carries <code>overrides</code> (or <code>resolutions</code>): package managers honour those only at the workspace root, so the block is silently ignored there. Move it into the root <code>package.json</code>.</p>
 
+    <p><code>JSX_ROUTE_FILES</code> fails when a routing file (a page, layout, route handler, boundary or metadata route) is written as <code>.tsx</code> or <code>.jsx</code>, the Next.js default. WebJs has no build step, so such a file is never loaded and its route does not exist; the server refuses to start on the same condition and <code>webjs check</code> reports it as <code>no-jsx-route-file</code>. Rename it to <code>.ts</code> and return an <code>html</code> template.</p>
+
     <p>And <code>APP_ICON</code> warns while the app's favicon is still the placeholder <code>app/icon.svg</code> the scaffold shipped. Replace it with the app's own icon (see <a href="/docs/metadata-routes#app-icon">App icon and manifest</a>).</p>
 
     <h3>webjs audit</h3>

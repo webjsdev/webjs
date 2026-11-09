@@ -12,6 +12,7 @@ import {
 } from '../js-scan.js';
 import { resolveImport } from '../module-graph.js';
 import { foreignImport, foreignImportAllowed } from '../foreign-imports.js';
+import { CSS_IMPORT_FIX } from '../app-layout.js';
 import {
   hasUseServerDirective, enumerableExports, importedLocalNames, importedValueNames,
 } from './helpers.js';
@@ -200,6 +201,16 @@ export function checkNoForeignFrameworkImport(files, violations) {
         const end = content.indexOf(quote, start);
         if (end < 0) continue;
         const spec = content.slice(start, end);
+        if (/\.css(?:\?.*)?$/i.test(spec) && !seen.has(spec)) {
+          seen.add(spec);
+          violations.push({
+            rule: 'no-css-import',
+            file: rel,
+            message: `Imports '${spec}', a stylesheet. WebJs has no bundler: the import fails on Node, is silently dropped on Bun, and stops the module from loading in the browser.`,
+            fix: CSS_IMPORT_FIX,
+          });
+          continue;
+        }
         const f = foreignImport(spec);
         if (!f || seen.has(spec) || foreignImportAllowed(spec, rel)) continue;
         seen.add(spec);

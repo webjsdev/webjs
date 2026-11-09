@@ -28,6 +28,9 @@ import { sep } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { shared } from './process-shared.js';
 
+/** The stylesheet fix (kept in step with app-layout.js CSS_IMPORT_FIX). */
+const CSS_FIX = 'Load it with <link rel="stylesheet" href="..."> in the root layout, or scope CSS to a component with `static styles = css`...`` and `static shadow = true`.';
+
 /** Where every refusal points for more. */
 export const FOREIGN_IMPORT_DOCS = 'https://webjs.dev/docs/troubleshooting#foreign-framework-import';
 
@@ -140,6 +143,13 @@ export function explainImportError(err, file) {
   const e = /** @type {any} */ (err);
   if (e.webjsForeignImport) return err;
   const msg = String(e.message || '');
+  // `import './x.css'` on Node: a bundler feature WebJs does not have.
+  if (e.code === 'ERR_UNKNOWN_FILE_EXTENSION' && /\.css\b/.test(msg)) {
+    const out = new Error(`${file ? file + ' imports' : 'An import of'} a stylesheet (${/for (\S+)/.exec(msg)?.[1] || '.css'}). WebJs has no bundler, so CSS cannot be imported as a module. ${CSS_FIX} See https://webjs.dev/docs/troubleshooting#css-import`, { cause: err });
+    /** @type {any} */ (out).code = e.code;
+    /** @type {any} */ (out).webjsForeignImport = '.css';
+    return out;
+  }
   const m = /Cannot find (?:package|module) '([^']+)'/.exec(msg) || /Cannot find package "([^"]+)"/.exec(msg);
   if (!m) return err;
   let spec = m[1];

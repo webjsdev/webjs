@@ -27,7 +27,7 @@ import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
 import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.js';
-import { validateAppLayout, AppLayoutError } from '../app-layout.js';
+import { validateAppLayout, AppLayoutError, cssImportProblems } from '../app-layout.js';
 import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
@@ -715,7 +715,11 @@ export async function createRequestHandler(opts) {
             // it, production readiness stays 503 naming it.
             {
               const relApp = (p) => relative(appDir, p).split(sep).join('/');
-              const foreign = foreignImportProblems(new Map([...bareImports(state.moduleGraph), ...dynamicBareImports(state.moduleGraph)]), relApp);
+              const foreign = [
+                ...foreignImportProblems(new Map([...bareImports(state.moduleGraph), ...dynamicBareImports(state.moduleGraph)]), relApp),
+                // `import './x.css'` too: a bundler feature with no meaning here.
+                ...cssImportProblems(state.moduleGraph, relApp),
+              ];
               if (foreign.length) throw new AppLayoutError(foreign);
             }
             t.graph = now() - m; m = now();

@@ -52,6 +52,18 @@ test('production refuses to boot on a page/route conflict', async () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('a routing file written as .tsx refuses to boot in production (no-jsx-route-file)', async () => {
+  const dir = app({ 'app/page.tsx': `export default function P() { return <h1>x</h1>; }\n` });
+  try {
+    const t = await buildRouteTable(dir);
+    assert.deepEqual(t.ignoredJsx.map((f) => f.slice(dir.length + 1)), ['app/page.tsx']);
+    await assert.rejects(
+      () => createRequestHandler({ appDir: dir, dev: false, logger: quiet }),
+      (e) => /no-jsx-route-file.*app\/page\.tsx.*Rename it to app\/page\.ts/s.test(e.message),
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('dev answers each request with the problem and reports it to the overlay', async () => {
   const dir = app(conflicting);
   try {

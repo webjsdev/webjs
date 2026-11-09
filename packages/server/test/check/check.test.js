@@ -1572,3 +1572,35 @@ test('no-jsx-attributes: prose, strings, comments and escaped samples are not fl
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+/* -------------------- no-jsx-route-file -------------------- */
+
+test('no-jsx-route-file: flags page.tsx / layout.jsx, not a .tsx component', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'blog', 'page.tsx'), 'export default function P() { return <h1>x</h1>; }\n');
+    await writeFileEnsureDir(join(appDir, 'app', 'layout.jsx'), 'export default ({ children }) => children;\n');
+    await writeFileEnsureDir(join(appDir, 'app', 'blog', 'card.tsx'), 'export {};\n');
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-jsx-route-file');
+    assert.deepEqual(v.map((x) => x.file).sort(), ['app/blog/page.tsx', 'app/layout.jsx']);
+    assert.match(v.find((x) => x.file === 'app/blog/page.tsx').fix, /app\/blog\/page\.ts/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-css-import -------------------- */
+
+test('no-css-import: flags side-effect and default CSS imports with the <link> fix', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'layout.ts'), "import './globals.css';\nexport default ({ children }) => children;\n");
+    await writeFileEnsureDir(join(appDir, 'components', 'card.ts'), "import styles from './card.module.css';\nexport { styles };\n");
+    await writeFileEnsureDir(join(appDir, 'lib', 'doc.ts'), "export const s = \"import './x.css'\";\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-css-import');
+    assert.deepEqual(v.map((x) => x.file).sort(), ['app/layout.ts', 'components/card.ts']);
+    assert.match(v[0].fix, /<link rel="stylesheet"/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

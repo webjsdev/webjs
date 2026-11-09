@@ -2092,3 +2092,23 @@ test('app-icon: warns on the placeholder; passes on an own icon', () => {
   writeFileSync(join(app, 'app', 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><circle r="8"/></svg>');
   assert.equal(checkAppIcon(app).status, 'pass', 'an own icon passes');
 });
+
+// JSX_ROUTE_FILES: a routing file written as .tsx / .jsx (Next's default) is
+// never loaded, so the route silently does not exist. Doctor fails on it.
+const { checkJsxRouteFiles } = await import(resolve(CLI_LIB_DIR, 'doctor', 'probes', 'jsx-route-files.js'));
+
+test('jsx-route-files: fails on a .tsx routing file; ignores components and private folders', () => {
+  const app = mkdtempSync(join(tmpdir(), 'webjs-doctor-jsx-'));
+  cleanup.push(app);
+  assert.equal(checkJsxRouteFiles(app).status, 'pass', 'no app/ directory');
+  mkdirSync(join(app, 'app', 'blog'), { recursive: true });
+  mkdirSync(join(app, 'app', '_drafts'), { recursive: true });
+  writeFileSync(join(app, 'app', 'blog', 'card.tsx'), 'export {}');
+  writeFileSync(join(app, 'app', '_drafts', 'page.tsx'), 'export {}');
+  assert.equal(checkJsxRouteFiles(app).status, 'pass', 'a non-routing .tsx and a private folder are ignored');
+  writeFileSync(join(app, 'app', 'blog', 'page.tsx'), 'export default () => <h1/>');
+  const r = checkJsxRouteFiles(app);
+  assert.equal(r.status, 'fail');
+  assert.match(r.message, /app\/blog\/page\.tsx/);
+  assert.match(r.fix, /\.ts/);
+});

@@ -38,6 +38,7 @@ import { findInstrumentationClient } from './instrumentation.js';
  *   metadataRoutes: MetadataRoute[],
  *   instrumentationClient: string | null,
  *   conflicts: { page: string, route: string, url: string }[],
+ *   ignoredJsx: string[],
  *   appDir: string
  * }} RouteTable
  */
@@ -97,6 +98,8 @@ export async function buildRouteTable(appDir) {
   let globalNotFound = null;
   /** @type {MetadataRoute[]} */
   const metadataRoutes = [];
+  /** @type {string[]} */
+  const ignoredJsx = [];
 
   /** @type {Set<string>} */
   const METADATA_STEMS = new Set(['sitemap', 'robots', 'manifest', 'icon', 'apple-icon', 'opengraph-image', 'twitter-image']);
@@ -130,6 +133,14 @@ export async function buildRouteTable(appDir) {
         metadataRoutes.push({ ...staticMeta, file, urlPath: '/' + base, static: true });
         continue;
       }
+    }
+
+    // A routing file written as `.tsx` / `.jsx` (Next's default) is never a
+    // route here: JSX needs a build. Recorded so validateAppLayout refuses it
+    // loudly instead of the route silently not existing.
+    {
+      const jsx = /^([A-Za-z0-9_.-]+)\.(?:tsx|jsx)$/.exec(base);
+      if (jsx && ROUTING_STEMS.has(jsx[1])) { ignoredJsx.push(file); continue; }
     }
 
     // Match `<name>.<js|mjs|ts|mts>` conventions. Stem is the name without ext.
@@ -236,7 +247,7 @@ export async function buildRouteTable(appDir) {
       conflicts.push({ page: page.file, route: api.file, url: '/' + urlSegmentsOf(a.routeDir).join('/') });
     }
   }
-  return { pages, apis, notFound, notFounds, globalError, globalNotFound, metadataRoutes, instrumentationClient, conflicts, appDir };
+  return { pages, apis, notFound, notFounds, globalError, globalNotFound, metadataRoutes, instrumentationClient, conflicts, ignoredJsx, appDir };
 }
 
 /**
@@ -277,6 +288,13 @@ export function staticMetadataFile(base) {
   }
   return null;
 }
+
+/** Every routing-file stem, for spotting one written as `.tsx` / `.jsx`. */
+const ROUTING_STEMS = new Set([
+  'page', 'layout', 'route', 'error', 'loading', 'not-found', 'forbidden', 'unauthorized',
+  'global-error', 'global-not-found', 'middleware', 'template', 'default',
+  'sitemap', 'robots', 'manifest', 'icon', 'apple-icon', 'opengraph-image', 'twitter-image',
+]);
 
 function stemOf(base) {
   const m = /^([A-Za-z0-9_.-]+)\.(?:m?[jt]s)$/.exec(base);

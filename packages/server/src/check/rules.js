@@ -117,6 +117,16 @@ export const RULES = [
       'Flags JSX written into an `html` template: a `className=` or `htmlFor=` attribute (HTML reads them as unknown `classname` / `htmlfor` attributes, so the class never applies and the label never targets its control) and a capitalised component tag such as `<Link>` or `<Button>` (HTML lowercases it into an unknown element that renders nothing). Both renderers throw on these when the template first compiles; the rule reports them ahead of time. Write `class=` / `for=`, and render a custom element by its registered hyphenated tag (or a plain `<a href>` for a link). Text in the template (`&lt;Link&gt;`, a `className` mentioned in prose), comments, and script / style bodies are never flagged.',
   },
   {
+    name: 'no-jsx-route-file',
+    description:
+      'Flags a routing file (`page`, `layout`, `route`, a boundary such as `error` / `not-found` / `loading`, `middleware`, or a metadata route) written as `.tsx` or `.jsx`, the Next.js default. WebJs has no build step, so JSX never loads and the router skips the file: the route silently does not exist. Production refuses to boot on it, dev answers every request with the problem, and `webjs doctor` fails (`JSX_ROUTE_FILES`). Rename it to `.ts` / `.js` and return an `html` template.',
+  },
+  {
+    name: 'no-css-import',
+    description:
+      'Flags `import \'./styles.css\'` (or any `.css` import, including `import styles from \'./x.module.css\'`). Importing CSS is a bundler feature WebJs does not have: Node refuses the `.css` extension, Bun silently turns the import into a no-op on the server, and the browser refuses a stylesheet as a module script, so the importing module never loads. The same refusal runs at load time. Load a stylesheet with `<link rel="stylesheet" href="...">` in the root layout (the scaffold links its Tailwind output this way), or scope CSS to a component with `static styles = css` and `static shadow = true`.',
+  },
+  {
     name: 'no-page-route-conflict',
     description:
       'A `page.{js,ts}` and a `route.{js,ts}` must not answer the same URL (including through a route group, `app/(a)/x/page.ts` beside `app/x/route.ts`). Next.js refuses this at build time; WebJs refuses to boot in production and answers every dev request with the problem, because the route handler would shadow the page and it could never render. Move the route handler to its own folder (`app/api/...`) or delete the page.',
