@@ -89,6 +89,7 @@ this.name = 'updated';                       // reactive property assignment
     <h2>requestUpdate(name, oldValue)</h2>
     <p>Manually schedule a re-render. Optionally record a property change so hooks see it in <code>changedProperties</code>. Used by controllers and code that mutates outside the reactive property system.</p>
     <code-block>this.requestUpdate('items', oldItems);</code-block>
+    <p>As in Lit, a named call runs the property's <code>hasChanged</code> against <code>oldValue</code> and schedules nothing when the value is unchanged, so after mutating an array or object in place (same reference) call <code>this.requestUpdate()</code> with no arguments instead.</p>
 
     <h2>renderError(error)</h2>
     <p>Runs when <code>update()</code>/<code>render()</code> throws. Return a fallback template to show instead of crashing the page.</p>
