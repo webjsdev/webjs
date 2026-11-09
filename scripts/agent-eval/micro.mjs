@@ -4,9 +4,12 @@
  * at a fraction of a full build's cost. Each task runs in a fresh scaffold set
  * up exactly as `build.mjs` sets one up (outside the repo, only the scaffold's
  * own settings, the framework linked as npm installs it; the app folder is
- * `site`, since one named `app` made every path read `app/app/...`). The agent may read
- * and write files but runs NO command, so it cannot iterate: what it writes is
- * its first draft. Turns are capped.
+ * `site`, since one named `app` made every path read `app/app/...`). The agent
+ * works as it normally would, shell and `webjs source` included, and the run is
+ * STOPPED the moment it starts its first check, typecheck or test: the files on
+ * disk then are its first draft, and no correction turn is paid for. (A run with
+ * the shell disabled spent its whole turn budget hunting through framework
+ * source, since the one-call `webjs source` lookup needs a shell.)
  *
  *   node scripts/agent-eval/micro.mjs --list                     # the tasks, no model call
  *   node scripts/agent-eval/micro.mjs --task guestbook            # one task
@@ -24,6 +27,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prepareApp, agentEnv, assertNoAncestorInstructions, metricsOf } from './build.mjs';
+import { verifyKind } from './replay.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -81,7 +85,7 @@ Work only inside that directory. Read its AGENTS.md first. Then:
 
 ${task.prompt}
 
-You cannot run any command in this session (no shell, no tests, no dev server), so write the code right the first time. Dependencies are already installed. When you are done, reply with the list of files you wrote.`;
+Dependencies are already installed. When the code is written, verify it with \`npx webjs check\`, \`npx webjs typecheck\` and \`npm test\`.`;
 }
 
 function arg(name, fallback) {
@@ -120,17 +124,38 @@ async function runTask(task, { framework, out, model, label, maxTurns }) {
     '--permission-mode', 'bypassPermissions', '--setting-sources', 'project,local',
     '--strict-mcp-config', '--mcp-config', join(app, '.claude.json'), '--no-session-persistence',
     '--max-turns', String(maxTurns),
-    '--disallowedTools', 'Bash', 'BashOutput', 'KillShell', 'Task', 'WebFetch', 'WebSearch'];
+    '--disallowedTools', 'Task', 'WebFetch', 'WebSearch'];
+  let stoppedAtVerify = false;
   if (process.argv.includes('--no-agent')) writeFileSync(transcript, '');
   else await new Promise((done) => {
     const child = spawn('claude', args, { cwd: app, env: agentEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.pipe(createWriteStream(transcript));
+    // The first draft ends where the agent first checks its work: stop the run
+    // the moment it starts a check, typecheck or test, so the files on disk
+    // are exactly the draft and no correction turn is paid for.
+    let buf = '';
+    child.stdout.on('data', (chunk) => {
+      buf += chunk;
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        let e; try { e = JSON.parse(line); } catch { continue; }
+        if (e.type !== 'assistant') continue;
+        for (const c of e.message?.content || []) {
+          if (c?.type === 'tool_use' && c.name === 'Bash' && verifyKind(String(c.input?.command || ''))) {
+            stoppedAtVerify = true;
+            child.kill('SIGTERM');
+          }
+        }
+      }
+    });
     child.stderr.pipe(createWriteStream(join(parent, 'stderr.log')));
     const timer = setTimeout(() => child.kill('SIGTERM'), 900_000);
     child.on('close', () => { clearTimeout(timer); done(); });
   });
   const m = metricsOf(transcript);
-  const result = { task: task.id, label, model, framework, toolCalls: m.toolCalls, inputTokens: m.inputTokens, outputTokens: m.outputTokens, ...grade(app, join(framework, 'packages/cli/bin/webjs.js'), task.paths) };
+  const result = { task: task.id, label, model, framework, stoppedAtVerify, toolCalls: m.toolCalls, inputTokens: m.inputTokens, outputTokens: m.outputTokens, ...grade(app, join(framework, 'packages/cli/bin/webjs.js'), task.paths) };
   writeFileSync(join(parent, 'result.json'), JSON.stringify(result, null, 2));
   return result;
 }
@@ -146,7 +171,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   assertNoAncestorInstructions(out);
   const only = arg('task');
   const tasks = only ? TASKS.filter((t) => only.split(',').includes(t.id)) : TASKS;
-  const opts = { framework: resolve(arg('framework', REPO)), out, model: arg('model', 'haiku'), label: arg('label', 'after'), maxTurns: Number(arg('max-turns', '15')) };
+  const opts = { framework: resolve(arg('framework', REPO)), out, model: arg('model', 'haiku'), label: arg('label', 'after'), maxTurns: Number(arg('max-turns', '60')) };
   const jobs = Number(arg('jobs', '4'));
   const results = [];
   let next = 0;

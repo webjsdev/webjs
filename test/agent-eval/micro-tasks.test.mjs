@@ -15,9 +15,9 @@ test('every task has a unique id, a prompt and at least one route to probe', () 
   }
 });
 
-test('no prompt names a WebJs API, and the frame forbids running commands', () => {
+test('no prompt names a WebJs API, and the frame asks for a check (where the run stops)', () => {
   for (const t of TASKS) {
     assert.doesNotMatch(microPrompt(t, '/tmp/site'), /WebComponent|createAuth|'use server'|html`|actionData|getSession|cookies\(\)/, t.id);
   }
-  assert.match(microPrompt(TASKS[0], '/tmp/site'), /cannot run any command/);
+  assert.ok(microPrompt(TASKS[0], '/tmp/site').includes('`npx webjs check`'));
 });
