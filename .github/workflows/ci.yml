@@ -371,6 +371,11 @@ jobs:
       # turn a warning into a dead app.
       - name: Config validation warns and boots on Bun
         run: bun test/bun/webjs-config-validate.mjs
+      # Lit's `static properties` spelling (#1686): the merged props map feeds
+      # SSR attribute application and reflection, so a Bun difference in class
+      # statics or the prototype walk would render wrong values.
+      - name: Static properties render and merge on Bun
+        run: bun test/bun/static-properties.mjs
       # Light-DOM slot SSR projection on Bun (#1021): slot substitution
       # (injectDSD / substituteSlotsInRender) is on the SSR hot path, so the
       # projection must be byte-consistent across runtimes: authored children

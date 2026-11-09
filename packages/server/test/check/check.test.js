@@ -381,38 +381,14 @@ customElements.define('native-comp', NativeComp);
   }
 });
 
-test('no-static-properties: flags a static properties field in a class body', async () => {
+test("static properties: Lit's spelling with a declare is clean (#1686)", async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
-      join(appDir, 'components', 'bad.ts'),
+      join(appDir, 'components', 'lit-style.ts'),
       `import { WebComponent } from '@webjsdev/core';
-class BadProp extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-}
-BadProp.register('bad-prop');
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-static-properties');
-    assert.ok(v, 'expected no-static-properties violation');
-    assert.ok(v.message.includes('static properties'));
-    assert.ok(v.fix.includes('WebComponent({'));
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-static-properties: flags even the old declare + constructor form', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'components'), { recursive: true });
-    await writeFile(
-      join(appDir, 'components', 'old.ts'),
-      `import { WebComponent } from '@webjsdev/core';
-class OldStyle extends WebComponent {
+class LitStyle extends WebComponent {
   static properties = { count: { type: Number } };
   declare count: number;
 
@@ -421,16 +397,46 @@ class OldStyle extends WebComponent {
     this.count = 0;
   }
 }
-OldStyle.register('old-style');
+LitStyle.register('lit-style');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-static-properties');
-    assert.ok(v, 'the static-properties + declare pattern is no longer allowed');
+    const v = violations.find((v) => /static-properties|class-field/.test(v.rule));
+    assert.equal(v, undefined, 'static properties plus an erasable declare is a supported spelling');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+for (const [label, decl] of [
+  ['a static properties field', 'static properties = { count: { type: Number } };'],
+  ['static override properties', 'static override properties = { count: { type: Number } };'],
+  ['a typed static properties field', 'static properties: Record<string, object> = { count: { type: Number } };'],
+  ['a static get properties()', 'static get properties() { return { count: { type: Number } }; }'],
+]) {
+  test(`reactive-props-no-class-field: flags a class field beside ${label} (#1686)`, async () => {
+    const appDir = await makeTempApp();
+    try {
+      await mkdir(join(appDir, 'components'), { recursive: true });
+      await writeFile(
+        join(appDir, 'components', 'field.ts'),
+        `import { WebComponent } from '@webjsdev/core';
+class FieldBad extends WebComponent {
+  ${decl}
+  count = 0;
+}
+FieldBad.register('field-bad');
+`,
+      );
+      const violations = await checkConventions(appDir);
+      const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+      assert.ok(v, 'a class field clobbers a static-properties accessor just as it does a factory one');
+      assert.ok(v.message.includes('`count`'));
+    } finally {
+      await rm(appDir, { recursive: true, force: true });
+    }
+  });
+}
 
 test('no-signal-field-assignment: flags every write that replaces a signal field', async () => {
   const appDir = await makeTempApp();
@@ -522,7 +528,7 @@ Reads.register('signal-reads');
   }
 });
 
-test('no-static-properties: passes for the factory form', async () => {
+test('reactive-props-no-class-field: passes for the factory form', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -539,7 +545,7 @@ GoodProp.register('good-prop');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-static-properties');
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
     assert.equal(v, undefined, 'the factory form should be clean');
   } finally {
     await rm(appDir, { recursive: true, force: true });
@@ -1403,7 +1409,7 @@ test('no-non-erasable-typescript: still flags real top-level enum', async () => 
   }
 });
 
-test('no-static-properties / reactive-props-no-class-field: ignore fixture strings in template literals', async () => {
+test('reactive-props-no-class-field: ignores fixture strings in template literals', async () => {
   // Test files write fixture sources to disk as template-literal
   // strings. Pre-fix, the scanner read those fixture strings as real
   // class declarations in the test file itself, flagging the
@@ -1425,7 +1431,7 @@ test('no-static-properties / reactive-props-no-class-field: ignore fixture strin
     );
     const violations = await checkConventions(appDir);
     const v = violations.find(
-      (v) => v.rule === 'no-static-properties' || v.rule === 'reactive-props-no-class-field',
+      (v) => v.rule === 'reactive-props-no-class-field',
     );
     assert.equal(v, undefined,
       'a class inside a template literal must not trigger the rules');

@@ -210,6 +210,36 @@ export function observedAttributeNames(Cls) {
 }
 
 /**
+ * Every reactive property `Cls` declares, its own over its superclasses', the
+ * way Lit's `finalize` merges `elementProperties` down the chain. A class's own
+ * `static properties` (Lit's spelling, a field or a `static get`) and the map
+ * the `WebComponent({ ... })` factory puts on the base it returns are the same
+ * thing here, so a subclass adding props keeps its parent's, and a factory
+ * class may add a `static properties` block of its own.
+ *
+ * Memoized per class: the accessors (`installAccessors`), the attribute list
+ * (`attributeBackedProps`) and reflection all read this one map, so they
+ * cannot disagree about which props exist.
+ *
+ * @param {any} Cls  the component class
+ * @returns {Record<string, any>}
+ */
+export function declaredProperties(Cls) {
+  if (!Cls || typeof Cls !== 'function') return (Cls && Cls.properties) || {};
+  const hit = DECLARED.get(Cls);
+  if (hit) return hit;
+  const parent = Object.getPrototypeOf(Cls);
+  const inherited = parent && parent !== Function.prototype ? declaredProperties(parent) : {};
+  const own = Object.hasOwn(Cls, 'properties') ? Cls.properties : undefined;
+  const merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
+  DECLARED.set(Cls, merged);
+  return merged;
+}
+
+/** @type {WeakMap<Function, Record<string, any>>} */
+const DECLARED = new WeakMap();
+
+/**
  * The attribute-backed props of `Cls` with the names each answers to.
  *
  * `primary` is the custom `attribute` option, matched VERBATIM, or else the
@@ -229,9 +259,8 @@ function attributeBackedProps(Cls) {
   // Memoized per class (#1646): the SSR walk resolves every source attribute
   // of every instance through this list, and rebuilding it (one hyphenate per
   // declared prop) was a measurable share of a component's render. A class's
-  // declarations never change after it is defined (a `static properties`
-  // block throws at runtime, and the factory fixes the set), so the first
-  // walk is the only one.
+  // declarations are fixed once it is defined (`declaredProperties` reads them
+  // once per class), so the first walk is the only one.
   if (Cls && typeof Cls === 'function') {
     const hit = BACKED_PROPS.get(Cls);
     if (hit) return hit;
@@ -246,7 +275,7 @@ function attributeBackedProps(Cls) {
 const BACKED_PROPS = new WeakMap();
 
 function buildAttributeBackedProps(Cls) {
-  const props = (Cls && Cls.properties) || {};
+  const props = declaredProperties(Cls);
   const out = [];
   for (const [k, decl] of Object.entries(props)) {
     const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };

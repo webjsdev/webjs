@@ -7,7 +7,7 @@
  * logic, and its position in the run order.
  */
 import {
-  extractWebComponentClassBodies, matchClosingBrace, parsePropEntries,
+  extractWebComponentClassBodies, matchClosingBrace, parsePropEntries, parsePropsFromObjectLiteral,
 } from '../js-scan.js';
 import {
   isComponentFile, arrayPropUsesObject, findFieldInitializers,
@@ -49,41 +49,6 @@ export function checkComponentsHaveRegister(files, violations) {
         message: "Component extends WebComponent but is never registered. Call ClassName.register('tag-name') at the bottom of the file.",
         fix: "Add `ClassName.register('tag-name')` after the class definition",
       });
-    }
-  }
-}
-
-/**
- * Rule: `no-static-properties`.
- *
- * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
- * @param {Violation[]} violations  accumulator the rule pushes onto
- * @returns {void}
- */
-export function checkNoStaticProperties(files, violations) {
-  // --- Rule: no-static-properties ---
-  // A hand-written `static properties = { … }` in a WebComponent class body is
-  // no longer supported: reactive properties are declared via the
-  // `extends WebComponent({ … })` factory (the runtime throws on a direct
-  // `static properties`). Flag it statically so the editor catches it before
-  // the page 500s.
-  {
-    for (const { rel, scan } of files) {
-      // Use redacted source so fixture-style strings like
-      // `class X extends WebComponent { static properties = {…} }` inside
-      // template literals don't trip the rule. Real declarations live at
-      // top-level code where the redactor leaves them alone.
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
-      for (const { body } of extractWebComponentClassBodies(scan)) {
-        if (!/static\s+properties\s*=\s*\{/.test(body)) continue;
-        violations.push({
-          rule: 'no-static-properties',
-          file: rel,
-          message:
-            '`static properties = { … }` is no longer supported; declare reactive properties via the `extends WebComponent({ … })` factory instead.',
-          fix: 'Move the properties into the factory call: `class X extends WebComponent({ count: Number })`. Use `prop(Number, { reflect: true })` for options and set defaults in the constructor after super(). Delete the `static properties` block and any `declare` fields for those props.',
-        });
-      }
     }
   }
 }
@@ -133,13 +98,17 @@ export function checkReactivePropsNoClassField(files, violations) {
   // semantics (including `erasableSyntaxOnly: true`) every class-field declaration
   // compiles to Object.defineProperty after super() and clobbers the framework's
   // reactive accessor (silent broken re-renders). Catches `count = 0`,
-  // `count: number = 0`, `count!: number`, and `count?: number`.
+  // `count: number = 0`, `count!: number`, and `count?: number`. Props declared
+  // in Lit's `static properties` count the same as factory props, since the
+  // field clobbers the accessor either way; `declare count: number` is erased
+  // and is never flagged.
   {
     for (const { rel, scan } of files) {
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      if (!/class\s+\w+(?:\s*<[^{}();]*?>)?\s+extends\s+WebComponent/.test(scan)) continue;
       for (const { body, factoryProps } of extractWebComponentClassBodies(scan)) {
-        if (factoryProps.size === 0) continue;
-        for (const bad of findFieldInitializers(body, factoryProps)) {
+        const props = new Set([...factoryProps, ...staticPropertyNames(body)]);
+        if (props.size === 0) continue;
+        for (const bad of findFieldInitializers(body, props)) {
           violations.push({
             rule: 'reactive-props-no-class-field',
             file: rel,
@@ -150,6 +119,32 @@ export function checkReactivePropsNoClassField(files, violations) {
       }
     }
   }
+}
+
+/**
+ * The prop names a class body declares through Lit's `static properties`,
+ * spelled as a field (with any of `override` / `readonly` / an access
+ * modifier, and an optional type annotation) or as a `static get` returning an
+ * object literal. Reads the redacted body, so a quoted key is not recovered;
+ * that only means one fewer name to check, never a false positive.
+ *
+ * @param {string} body  a class body from `extractWebComponentClassBodies`
+ * @returns {Set<string>}
+ */
+function staticPropertyNames(body) {
+  const names = new Set();
+  const mods = '(?:(?:override|readonly|public|protected)\\s+)*';
+  const field = new RegExp(`\\bstatic\\s+${mods}properties\\s*(?::[^=;{]*)?=\\s*\\{`, 'g');
+  const getter = new RegExp(`\\bstatic\\s+${mods}get\\s+properties\\s*\\(\\s*\\)[^{]*\\{\\s*return\\s*\\{`, 'g');
+  for (const re of [field, getter]) {
+    let m;
+    while ((m = re.exec(body)) !== null) {
+      const start = m.index + m[0].length;
+      const end = matchClosingBrace(body, start);
+      if (end !== -1) parsePropsFromObjectLiteral(body.slice(start, end), names);
+    }
+  }
+  return names;
 }
 
 /**

@@ -22,7 +22,7 @@ export type PropertyConstructor<T = unknown> =
   | (new (...args: any[]) => T)
   | ((v: any) => T);
 
-/** Runtime-level property declaration: one entry in `WebComponent({ … })`. */
+/** Runtime-level property declaration: one entry in `WebComponent({ … })` or in Lit's `static properties`. */
 export interface PropertyDeclaration<T = unknown> {
   /** Constructor used for string → value coercion when the attribute changes. */
   type?: PropertyConstructor<T>;
@@ -39,6 +39,8 @@ export interface PropertyDeclaration<T = unknown> {
   };
   /** Custom dirty check. Return `true` to schedule an update. */
   hasChanged?: (newValue: T, oldValue: T) => boolean;
+  /** Initial value, or a function called per instance for a fresh object / array. */
+  default?: T | (() => T);
 }
 
 /** Reactive controller protocol (Lit-compatible). */
@@ -52,9 +54,9 @@ export interface ReactiveController {
 /**
  * Base class for interactive web components.
  *
- * Declare reactive properties via the `extends WebComponent({ … })`
- * factory. It installs the reactive accessor AND types each field for
- * you (no `declare`, no `static properties`):
+ * Declare reactive properties in either of two equivalent ways. The
+ * `extends WebComponent({ … })` factory installs the reactive accessor AND
+ * types each field for you (no `declare` needed):
  *
  *     class StudentCard extends WebComponent({ student: prop<Student>(Object) }) {
  *       render() { return html`<p>${this.student.name}</p>`; }
@@ -64,10 +66,18 @@ export interface ReactiveController {
  * A bare constructor type covers the common case (`WebComponent({ count:
  * Number })` gives `this.count: number`); use the `prop()` helper for
  * options (`prop(Number, { reflect: true })`) or to narrow the type
- * (`prop<Student>(Object)`). Set defaults via the `default` option or in
- * the constructor, never a class-field initializer (it runs after super()
- * and clobbers the reactive accessor). A hand-written `static properties`
- * in a class body is no longer supported and throws at construction.
+ * (`prop<Student>(Object)`). Lit's own spelling works too, with an erasable
+ * `declare` for the type:
+ *
+ *     class Counter extends WebComponent {
+ *       static properties = { count: { type: Number, reflect: true } };
+ *       declare count: number;
+ *     }
+ *
+ * Props merge down the class chain as in Lit, so a subclass's own
+ * `static properties` adds to its parent's. Set defaults via the `default`
+ * option or in the constructor, never a class-field initializer (it runs
+ * after super() and clobbers the reactive accessor).
  *
  * See the Editor Setup doc for tooling that gives attribute/tag
  * intelligence inside `html\`…\`` templates.
@@ -154,7 +164,7 @@ export type InferProps<S> = {
 interface WebComponentStatics {
   shadow: boolean;
   hydrate: 'visible' | undefined;
-  properties: Record<string, PropertyDeclaration>;
+  properties: Record<string, PropertyDeclaration | PropertyConstructor>;
   styles: CSSResult | CSSResult[] | null;
   lazy?: boolean;
   /**

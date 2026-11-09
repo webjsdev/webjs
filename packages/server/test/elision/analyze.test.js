@@ -177,6 +177,29 @@ test('async render() + a reactive prop ships (the prop is the signal, #474)', ()
   assert.match(r.reason, /reactive property/);
 });
 
+for (const decl of [
+  'static override properties = { open: { type: Boolean } };',
+  'static readonly properties = { open: { type: Boolean } };',
+  'static public properties = { open: { type: Boolean } };',
+  'static override get properties() { return { open: { type: Boolean } }; }',
+]) {
+  test(`a modifier on static properties still ships: ${decl.slice(0, 32)} (#1686)`, () => {
+    // `static override properties` is the standard Lit form under
+    // `noImplicitOverride`. The gate used to require `static` directly before
+    // `properties`, so this component was wrongly elided and its prop dead.
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      class Toggle extends WebComponent {
+        ${decl}
+        render() { return html\`<p>\${this.open}</p>\`; }
+      }
+      Toggle.register('x-toggle');
+    `;
+    const r = analyzeComponentSource(src);
+    assert.equal(r.interactive, true);
+  });
+}
+
 test('async render() + an @event binding ships (#474)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';

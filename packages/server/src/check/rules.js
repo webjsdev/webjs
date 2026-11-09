@@ -42,11 +42,6 @@ export const RULES = [
       'A custom-element tag name must be registered exactly once across the app. Two `Class.register(\'tag\')` / `customElements.define(\'tag\', …)` calls for the SAME tag resolve INCONSISTENTLY at runtime: SSR overwrites the registry (last registration wins) while the browser keeps the first native upgrade, so the rendered element and the webjs registry disagree. Rename one tag.',
   },
   {
-    name: 'no-static-properties',
-    description:
-      'Reactive properties must be declared via the `extends WebComponent({ … })` factory, never a hand-written `static properties = { … }` field in the class body. The factory types each field for you (no `declare` needed) and the runtime throws on a direct `static properties`. Migrate `class X extends WebComponent { static properties = { count: { type: Number } } }` to `class X extends WebComponent({ count: Number })`; use the `prop()` helper for options (`prop(Number, { reflect: true })`) and set defaults in the constructor after super().',
-  },
-  {
     name: 'no-signal-field-assignment',
     description:
       'A field a WebComponent class creates with `signal(` / `computed(` (a class-field initializer like `readonly #open = signal(false)`, or `this.open = signal(false)` in the constructor) is written through `.set()`, never assigned. `this.open = true` replaces the signal object: the component stays subscribed to the old signal, nothing re-renders, and the next `this.open.get()` throws. Fix: `this.open.set(true)`. Declare signal fields `readonly` in TypeScript so the compiler catches it too; this rule covers plain `.js` and a forgotten `readonly`, for writes inside the declaring class.',
@@ -54,7 +49,7 @@ export const RULES = [
   {
     name: 'reactive-props-no-class-field',
     description:
-      'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field declaration (`count = 0`, `count: number = 0`, `count!: number`, or `count?: number`) in the class body. Under modern class-field semantics (including `erasableSyntaxOnly: true`) every class-field declaration compiles to Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super().',
+      'A reactive property declared via the `extends WebComponent({ … })` factory or Lit\'s `static properties` must NOT also have a plain class-field declaration (`count = 0`, `count: number = 0`, `count!: number`, or `count?: number`) in the class body. Under modern class-field semantics (including `erasableSyntaxOnly: true`) every class-field declaration compiles to Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super(). A type-only `declare count: number` is erased and is fine.',
   },
   {
     name: 'array-prop-uses-array-type',

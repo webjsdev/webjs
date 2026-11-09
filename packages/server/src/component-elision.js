@@ -853,11 +853,12 @@ function importsReactivePrimitive(src, literals) {
 }
 
 /**
- * True if the class body declares a `static properties` block with any
- * entry. A reactive property rides an attribute or a `.prop` binding, the
- * channel through which a parent pushes updates, which is client-side
- * reactivity. Internal state is a signal, not a declared property (the
- * factory refuses a `state` option, #1677), so every entry counts.
+ * True if the class body declares Lit's `static properties` with any entry.
+ * A reactive property rides an attribute or a `.prop` binding, the channel
+ * through which a parent pushes updates, which is client-side reactivity, so
+ * every entry counts. A modifier (`static override properties`, `static
+ * readonly properties`, an access modifier) is part of the spelling: missing
+ * it would elide an interactive component, the unsafe direction.
  *
  * Conservative on parse failure: a `static get properties()` accessor, a
  * non-literal assignment, a spread, or an unbalanced object literal returns
@@ -866,14 +867,20 @@ function importsReactivePrimitive(src, literals) {
  * @param {string} classBody
  * @returns {boolean}
  */
+const STATIC_MODIFIERS = '(?:(?:override|readonly|public|protected)\\s+)*';
+/** Any `static properties` declaration, a field or a `static get`. */
+const STATIC_PROPERTIES_RE = new RegExp(`\\bstatic\\s+${STATIC_MODIFIERS}(?:get\\s+)?properties\\b`);
+/** A `static properties` FIELD initialised with an object literal. */
+const STATIC_PROPERTIES_LITERAL_RE = new RegExp(`\\bstatic\\s+${STATIC_MODIFIERS}properties\\b[^=]*=\\s*\\{`);
+
 function hasReactiveProperty(classBody) {
   // No reactive properties declared at all: nothing rides an attribute.
-  if (!/\bstatic\s+(?:get\s+)?properties\b/.test(classBody)) return false;
+  if (!STATIC_PROPERTIES_RE.test(classBody)) return false;
   // A getter (`static get properties()`) or a non-literal assignment
   // (`= buildProps()`, `= SHARED_PROPS`) cannot be read, so ship
   // conservatively. `[^=]*` tolerates a TS type annotation between the name
   // and `=` without crossing the `=`.
-  const m = /\bstatic\s+properties\b[^=]*=\s*\{/.exec(classBody);
+  const m = STATIC_PROPERTIES_LITERAL_RE.exec(classBody);
   if (!m) return true;
   const objStart = m.index + m[0].length;
   const objEnd = matchClosingBrace(classBody, objStart);

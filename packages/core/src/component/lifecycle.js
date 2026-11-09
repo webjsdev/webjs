@@ -1,5 +1,5 @@
 import { render as clientRender } from '../render-client.js';
-import { readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked } from '../attribute-reader.js';
+import { readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked, declaredProperties } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
 import { isCSS, adoptStyles } from '../css.js';
@@ -105,15 +105,6 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
 // Base class choice: real HTMLElement on the browser, the shim on the server.
 const Base = isBrowser ? HTMLElement : /** @type {any} */ (ServerElement);
 
-/**
- * Marker stamped on the anonymous subclass the `WebComponent({...})` factory
- * produces. It lets `_assertFactoryProperties` tell the framework's own
- * factory-generated `static properties` (allowed) apart from a `static
- * properties` a user wrote by hand in a class body (no longer allowed).
- */
-const FACTORY_PROPS = Symbol('webjs.factoryProps');
-// Per-class memo so the constructor-time enforcement walk runs once per class.
-const _propsChecked = new WeakSet();
 
 /** A settled `updateComplete` shared by every instance until its first update. */
 const RESOLVED_TRUE = Promise.resolve(true);
@@ -306,43 +297,10 @@ class WebComponentBase extends Base {
      */
     this._isUpdating = false;
 
-    // Enforce the declare-free factory DX: a hand-written `static properties`
-    // in a class body is a hard error (use `extends WebComponent({ … })`).
-    this._assertFactoryProperties();
-
-    // Install reactive property accessors for `static properties` declarations.
+    // Install the reactive property accessors. Props come from Lit's
+    // `static properties` and from the `WebComponent({ ... })` factory alike,
+    // merged down the class chain by `declaredProperties`.
     this._initializeProperties();
-  }
-
-  /**
-   * Throw if a class in this instance's constructor chain declares its own
-   * `static properties`. Reactive properties must be declared via the
-   * `extends WebComponent({ … })` factory, which stamps {@link FACTORY_PROPS}
-   * on the subclass it generates; a `static properties` written by hand in a
-   * class body carries no such marker and is rejected here (issue #598).
-   *
-   * The walk stops at {@link WebComponentBase} (whose `static properties = {}`
-   * default is internal) and is memoized per class so it runs once.
-   * @private
-   */
-  _assertFactoryProperties() {
-    const Ctor = /** @type {any} */ (this.constructor);
-    if (_propsChecked.has(Ctor)) return;
-    let C = Ctor;
-    while (C && C !== WebComponentBase) {
-      if (Object.hasOwn(C, 'properties') && !Object.hasOwn(C, FACTORY_PROPS)) {
-        const name = C.name || 'a component';
-        throw new Error(
-          `${name}: \`static properties\` is no longer supported. Declare reactive ` +
-            `properties via the factory instead: \`class ${name} extends WebComponent({ ` +
-            `count: Number })\`. Use the \`prop()\` helper for options ` +
-            `(\`prop(Number, { reflect: true })\`) and set defaults in the ` +
-            `constructor after \`super()\`. See https://webjs.dev/docs/components.`,
-        );
-      }
-      C = Object.getPrototypeOf(C);
-    }
-    _propsChecked.add(Ctor);
   }
 
   /**
@@ -358,8 +316,7 @@ class WebComponentBase extends Base {
    */
   _initializeProperties() {
     const Ctor = /** @type {any} */ (this.constructor);
-    const props = Ctor.properties;
-    if (!props || typeof props !== 'object') return;
+    const props = declaredProperties(Ctor);
 
     /** @type {Record<string, unknown>} */
     this.__propValues = {};
@@ -1177,7 +1134,7 @@ class WebComponentBase extends Base {
    * @private
    */
   _reflectDeclaredAttributes() {
-    const props = /** @type {any} */ (this.constructor).properties || {};
+    const props = declaredProperties(this.constructor);
     for (const name of Object.keys(props)) {
       const decl = props[name];
       if (!decl || !decl.reflect) continue;
@@ -1247,7 +1204,7 @@ class WebComponentBase extends Base {
     const pendingReflection = this.__reflectPending;
     this.__reflectPending = undefined;
     for (const name of pendingReflection || []) {
-      const def = this.constructor.properties[name];
+      const def = declaredProperties(this.constructor)[name];
       this._reflectAttribute(name, this[name], def);
     }
     // The signal reads render() makes are tracked by the watcher
@@ -1620,7 +1577,6 @@ export function WebComponent(properties) {
   } else {
     return class extends WebComponentBase {
       static properties = properties;
-      static [FACTORY_PROPS] = true;
     };
   }
 }

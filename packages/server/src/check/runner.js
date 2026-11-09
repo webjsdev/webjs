@@ -6,7 +6,6 @@ import {
 } from '../js-scan.js';
 import {
   checkComponentsHaveRegister,
-  checkNoStaticProperties,
   checkNoSignalFieldAssignment,
   checkReactivePropsNoClassField,
   checkArrayPropUsesArrayType,
@@ -90,7 +89,6 @@ export async function checkConventions(appDir) {
   }
 
   checkComponentsHaveRegister(files, violations);
-  checkNoStaticProperties(files, violations);
   checkNoSignalFieldAssignment(files, violations);
   checkReactivePropsNoClassField(files, violations);
   checkArrayPropUsesArrayType(files, violations);

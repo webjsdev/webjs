@@ -193,17 +193,23 @@ edit is invisible and a counterfactual passes vacuously), and run
    enforces this.
 5. **Reactive properties are declared via the base-class factory
    `extends WebComponent({ propName: Type })`** (the `prop()` helper
-   carries options), with defaults set via the `default` option or the
-   constructor, never class-field initializers (those clobber the
-   framework's accessor under modern class-field semantics). A direct
-   `static properties` block throws at runtime. `state: true` and
+   carries options) **or Lit's own `static properties = { ... }`** (a field,
+   with any `override` / `readonly` modifier, or a `static get`, #1686), with
+   defaults set via the `default` option or the constructor, never class-field
+   initializers (those clobber the framework's accessor under modern
+   class-field semantics; an erasable `declare count: number` is fine).
+   `declaredProperties(Cls)` in `attribute-reader.js` is the ONE reader: it
+   merges each class's own map over its superclass's, Lit's `finalize`
+   semantics, and memoizes per class, and the accessors, the observed
+   attribute list, SSR attribute application and reflection all read it, so
+   they cannot disagree about which props exist. `state: true` and
    `attribute: false` both mean "no attribute", as in lit, and one
    `isAttributeBacked()` check in `attribute-reader.js` decides it for the
    attribute reader, both renderers and reflection. The SignalWatcher tracks
    every signal the synchronous update cycle reads (`willUpdate`,
    `render()`, `updated()`), leaving only the DOM commit untracked. See
-   `component.js`, the `no-static-properties` rule, and
-   `reactive-props-no-class-field`.
+   `component.js` and the `reactive-props-no-class-field` rule, which
+   covers props from both spellings.
 6. **New interactivity surfaces must update the elision analyser.**
    WebJs elides display-only component modules from the browser by
    static analysis (`packages/server/src/component-elision.js`). It is a
@@ -310,7 +316,7 @@ edit is invisible and a counterfactual passes vacuously), and run
 
 ## Lit JavaScript API compatibility
 
-WebJs keeps `WebComponent({ ... })` for inferred reactive properties, including `state: true` and `attribute: false`. App TypeScript must erase to whitespace; decorators and compiler transforms are unnecessary.
+Reactive properties are declared with Lit's `static properties` (plus an erasable `declare` per prop) or with the `WebComponent({ ... })` factory, which infers the types; both accept `state: true` and `attribute: false`, and both merge down the class chain. App TypeScript must erase to whitespace, so decorators are out; nothing else needs a compiler transform.
 
 - Function event listeners receive the rendering component as `this`. Arrow and bound functions preserve their JavaScript receiver. Listener objects use `handleEvent()` and support `capture`, `once`, and `passive`.
 - Quoted and unquoted single-expression `@event`, `.property`, and `?boolean` bindings behave identically. Surrounding text or multiple expressions are invalid. Form-action bindings retain their separate contract.
