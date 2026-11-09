@@ -282,3 +282,21 @@ test('lookupExport: finds createAuth in the real @webjsdev/server typed declarat
   assert.match(out, /export declare function createAuth</);
   assert.ok(out.split('\n').length < 40, `one export, not the file: ${out.split('\n').length} lines`);
 });
+
+test('lookupExport: a member of an exported type answers by its own name (#1686)', async () => {
+  // actionData was the most grepped term across the eval builds, and it is a
+  // PageProps field rather than an export, so it used to be a miss.
+  const tree = exportTree();
+  const out = await lookupExport(tree, 'secret');
+  assert.match(out, /^"secret" is a member of AuthConfig \(@webjsdev\/server index\.d\.ts:4\); `source AuthConfig` prints the whole type\.$/m);
+  assert.match(out, /^  secret: string;$/m);
+  assert.match(await lookupExport(tree, 'nothingNamedThis'), /No export named/, 'a real miss still says so');
+
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { readFile } = await import('node:fs/promises');
+  const roots = resolveFrameworkRoots(resolve(REPO, 'gallery'), { exists: existsSync });
+  const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+  const real = await lookupExport({ roots, readFile, readdir }, 'actionData', 'core');
+  assert.match(real, /"actionData" is a member of PageProps/);
+  assert.ok(real.split('\n').length < 40, 'one member, not the file');
+});

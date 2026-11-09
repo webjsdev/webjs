@@ -665,6 +665,17 @@ export interface RequestCookies {
  * The in-flight request's cookies, Next.js's `cookies()`: `cookies().get('x')?.value`
  * reads, `set` / `delete` write a `Set-Cookie` onto this request's response. Also
  * awaitable (`(await cookies()).get('x')`). Throws outside a request scope.
+ *
+ * `get` returns a {@link RequestCookie} (`{ name, value }`) or `undefined`, as
+ * in Next.js, never the bare string.
+ *
+ * @example
+ * ```ts
+ * import { cookies } from '@webjsdev/server';
+ * const theme: string = cookies().get('theme')?.value ?? 'light';
+ * cookies().set('theme', 'dark', { path: '/', maxAge: 60 * 60 * 24 * 365, httpOnly: true });
+ * cookies().delete('theme');
+ * ```
  */
 export declare function cookies(): RequestCookies & Promise<RequestCookies>;
 /** The raw `Request` for the in-flight scope, or null at module top-level. */
@@ -891,10 +902,24 @@ export declare function storeSessionStorage(opts?: Record<string, unknown>): Ses
 export declare const cookieSession: typeof cookieSessionStorage;
 /** Alias of `storeSessionStorage`. */
 export declare const storeSession: typeof storeSessionStorage;
-/** Read the session for a request (after the session middleware ran). */
 /**
  * The session for the current request. With no argument it reads the request
  * in scope (as `cookies()` and `headers()` do); passing `getRequest()` also works.
+ * Needs `session()` as root middleware; throws outside it.
+ *
+ * @example
+ * ```ts
+ * // middleware.ts
+ * import { session } from '@webjsdev/server';
+ * export default session();             // SESSION_SECRET from .env
+ *
+ * // in a page, action or route handler
+ * import { getSession } from '@webjsdev/server';
+ * const s = getSession();
+ * s.set('cart', [1, 2]);                // persists across requests
+ * s.flash('notice', 'Saved');           // read once by the next request
+ * const notice = s.get('notice');       // unknown; narrow it before use
+ * ```
  */
 export declare function getSession(req?: Request | null): Session;
 

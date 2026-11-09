@@ -360,6 +360,8 @@ export async function lookupExport(deps, name, pkgFilter) {
   }
   const searched = deps.roots.map((r) => r.pkg).join(', ');
   if (!hits.length) {
+    const members = await lookupMember(deps, roots, n);
+    if (members) return members;
     return `No export named "${n}" in the searched @webjsdev/* packages (${roots.map((r) => r.pkg).join(', ')}${pkgFilter ? `; resolvable: ${searched}` : ''}). Try \`query\` for a substring search, or \`path\` to read a file.`;
   }
   // The typed declarations are the answer; the JS doc is added only when the
@@ -374,6 +376,55 @@ export async function lookupExport(deps, name, pkgFilter) {
     out.push(...h.doc, ...h.decl, '');
   }
   if (shown.length > MAX_EXPORT_HITS) out.push(`... (${shown.length - MAX_EXPORT_HITS} more declarations; narrow with \`package\`)`);
+  return out.join('\n').trimEnd();
+}
+
+/**
+ * A name that is no export but a MEMBER of an exported interface or class
+ * (`actionData` on `PageProps`, `fieldErrors` on `FormActionData`). Agents look
+ * those up by the name they write (#1686: `actionData` was the most grepped
+ * term across the eval builds), so the member's doc and declaration print,
+ * headed by the type that owns it.
+ * @param {{ readFile: Function, readdir: Function }} deps
+ * @param {Array<{ pkg: string, root: string }>} roots
+ * @param {string} n
+ * @returns {Promise<string | null>}
+ */
+async function lookupMember(deps, roots, n) {
+  const memberRe = new RegExp(`^\\s+(?:readonly\\s+)?(?:static\\s+)?${n.replace(/\$/g, '\\$')}\\??\\s*[:(<]`);
+  const ownerRe = /^export\s+(?:declare\s+)?(?:abstract\s+)?(?:interface|class|type)\s+([A-Za-z_$][\w$]*)/;
+  const out = [];
+  let count = 0;
+  for (const r of roots) {
+    for (const file of walkSource(r.root, deps).filter((f) => /\.d\.(?:ts|mts|cts)$/.test(f))) {
+      let text = '';
+      try { text = await deps.readFile(file, 'utf8'); } catch { continue; }
+      if (!text.includes(n)) continue;
+      const lines = text.split('\n');
+      const rel = relative(r.root, file).split(sep).join('/');
+      for (let i = 0; i < lines.length; i++) {
+        if (!memberRe.test(lines[i])) continue;
+        let owner = null;
+        for (let j = i - 1; j >= 0; j--) {
+          const m = ownerRe.exec(lines[j]);
+          if (m) { owner = m[1]; break; }
+          if (/^\S/.test(lines[j]) && !/^\s*(?:\*|\/\/|\/\*)/.test(lines[j]) && /^(?:}|export)/.test(lines[j])) break;
+        }
+        if (!owner) continue;
+        if (++count > MAX_EXPORT_HITS) continue;
+        const decl = [];
+        for (let k = i, depth = 0; k < lines.length && decl.length < MAX_DECL_LINES; k++) {
+          decl.push(lines[k]);
+          for (const ch of lines[k]) { if (ch === '{' || ch === '(') depth++; else if (ch === '}' || ch === ')') depth--; }
+          if (depth <= 0 && /[;,]\s*$/.test(lines[k])) break;
+        }
+        out.push(`"${n}" is a member of ${owner} (@webjsdev/${r.pkg} ${rel}:${i + 1}); \`source ${owner}\` prints the whole type.`);
+        out.push(...docAbove(lines, i), ...decl, '');
+      }
+    }
+  }
+  if (!out.length) return null;
+  if (count > MAX_EXPORT_HITS) out.push(`... (${count - MAX_EXPORT_HITS} more members named "${n}"; narrow with \`package\`)`);
   return out.join('\n').trimEnd();
 }
 

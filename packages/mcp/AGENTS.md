@@ -78,7 +78,11 @@ src/
                          returns ONE export's signature plus the doc above it:
                          the .d.ts declarations under the package root first,
                          the authored src JSDoc as the fallback, overloads all,
-                         a miss naming the searched packages (#837).
+                         a miss naming the searched packages (#837). A name
+                         that is no export but a member of an exported type
+                         (`actionData` on `PageProps`, the most grepped term
+                         in the #1686 eval builds) prints that member's doc and
+                         declaration, headed by the owning type (lookupMember).
   check-report.js        projectCheck(violations) -> { violations, summary }.
                          The shared shape returned by BOTH the MCP `check` tool
                          and `webjs check --json` (the CLI imports it from
