@@ -26,15 +26,29 @@ export const FLASH_COOKIE = '__webjs_flash';
 const MAX_BYTES = 2048;
 const MAX_AGE_SECONDS = 60;
 
-const _key = shared('action-flash-key', () => ({ random: randomBytes(32).toString('hex') }));
+const _key = shared('action-flash-key', () => ({ random: randomBytes(32).toString('hex'), warned: false }));
 
 function key() {
-  return process.env.WEBJS_SECRET || process.env.AUTH_SECRET || _key.random;
+  const secret = process.env.WEBJS_SECRET || process.env.AUTH_SECRET;
+  if (secret) return secret;
+  // A per-process key verifies only on the instance that signed it, so behind
+  // a load balancer a flash whose 303 lands elsewhere is silently dropped. Say
+  // so once in production rather than let it look like a missing feature.
+  if (process.env.NODE_ENV === 'production' && !_key.warned) {
+    _key.warned = true;
+    console.warn('[webjs] neither WEBJS_SECRET nor AUTH_SECRET is set, so form action results (actionData after a redirect, prevState) are signed with a per-process key and are lost when the redirect lands on another instance. Set WEBJS_SECRET.');
+  }
+  return _key.random;
 }
 
-/** @param {string} s */
+/**
+ * HMAC of a flash body. The input is prefixed so the signature is unrelated by
+ * construction to any other HMAC made with the same secret (`AUTH_SECRET` also
+ * signs the session), whatever either format becomes.
+ * @param {string} s
+ */
 function sign(s) {
-  return createHmac('sha256', key()).update(s).digest('base64url');
+  return createHmac('sha256', key()).update(`webjs-flash:${s}`).digest('base64url');
 }
 
 /**
