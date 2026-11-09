@@ -235,7 +235,40 @@ export function headers() {
   // Accept-Language / Cookie read varies the output), so mark the request
   // dynamic so the HTML cache excludes it even under `revalidate` (#241).
   markDynamicAccess();
-  return req.headers;
+  let ro = _readonlyHeaders.get(req);
+  if (!ro) {
+    ro = new ReadonlyHeaders(req.headers);
+    _readonlyHeaders.set(req, ro);
+  }
+  return ro;
+}
+
+/** One read-only copy per request, so repeated `headers()` calls agree. */
+const _readonlyHeaders = shared('readonly-headers', () => new WeakMap());
+
+/**
+ * The request headers `headers()` returns, read-only as Next.js's
+ * `ReadonlyHeaders` is (#1686): writing them changed nothing anyone reads, so
+ * a `set` meant for the RESPONSE vanished silently. A write throws naming the
+ * places a response header or a cookie is actually set.
+ */
+class ReadonlyHeaders extends Headers {
+  /** @returns {never} */
+  append() { throw readonlyHeadersError(); }
+  /** @returns {never} */
+  set() { throw readonlyHeadersError(); }
+  /** @returns {never} */
+  delete() { throw readonlyHeadersError(); }
+}
+
+function readonlyHeadersError() {
+  const e = new Error(
+    'headers() is read-only, as in Next.js: it returns the REQUEST headers. To send a response '
+    + 'header, return it from a route handler or middleware (new Response(body, { headers })) or '
+    + 'set metadata.cacheControl on a page; to set a cookie, use cookies().set().',
+  );
+  e.name = 'ReadonlyHeadersError';
+  return e;
 }
 
 /**
