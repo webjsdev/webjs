@@ -168,6 +168,21 @@ export class Card extends WebComponent {
 }
 Card.register('my-card');</code-block>
 
+    <h3>The css tag, composition and unsafeCSS</h3>
+    <p><code>css</code> follows Lit's contract. A hole may hold another <code>css</code> result, which is composed in as text, or a number. Any other value throws, and the error names <code>unsafeCSS()</code>, because a plain string in a stylesheet is how untrusted text reaches CSS (a <code>url()</code> or an attribute selector can leak data), so a trusted string has to be wrapped on purpose. A result reads back as <code>cssText</code> (or <code>text</code>) and stringifies to its CSS.</p>
+    <code-block>import { css, unsafeCSS } from '@webjsdev/core';
+
+const brand = css\`#e33\`;
+const gap = 8;
+const accent = unsafeCSS(THEME.accent);   // a trusted, author-controlled value only
+
+static styles = [
+  sharedReset,                            // a css result or a CSSStyleSheet
+  css\`a { color: \${brand}; margin: \${gap}px; border-color: \${accent}; }\`,
+];</code-block>
+    <p><code>static styles</code> takes a <code>css</code> result, a constructed <code>CSSStyleSheet</code>, or arrays of them nested to any depth. They are flattened by <code>static finalizeStyles()</code> into <code>static elementStyles</code>; a style listed twice keeps its last position, so a later override still wins. Each <code>css</code> result builds one shared <code>CSSStyleSheet</code> in the browser, so every element adopting it shares a sheet.</p>
+    <p><code>static styles</code> needs <code>static shadow = true</code>. A light-DOM component has no shadow root to adopt them into, so declaring them there is an error, not a silent no-op. <code>webjs check</code> reports <code>static-styles-need-shadow</code>, the dev server logs it once per class during SSR, and the browser logs it once per class on connect.</p>
+
     <p>Shadow-DOM components are SSR'd via Declarative Shadow DOM. Styles paint before JS loads, with no boot script in between, and the browser enforces the boundary. Light-DOM components are SSR'd as direct HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker, and client-side rendering replaces the marker without flash.</p>
 
     <h2>Design tokens via CSS custom properties</h2>

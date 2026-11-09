@@ -5,7 +5,7 @@ import {
 } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
-import { isCSS, adoptStyles } from '../css.js';
+import { adoptStyles, finalizeStyles } from '../css.js';
 import { register, tagOf } from '../registry.js';
 import { parse as deserializeProp } from '../serialize.js';
 import { Signal } from '../signal.js';
@@ -128,6 +128,12 @@ const FINALIZED = new WeakSet();
 /** Per class, the memoized `elementProperties` Map. @type {WeakMap<Function, Map<string, any>>} */
 const ELEMENT_PROPERTIES = new WeakMap();
 
+/** Per class, the memoized `elementStyles` list. @type {WeakMap<Function, any[]>} */
+const ELEMENT_STYLES = new WeakMap();
+
+/** Light-DOM classes already told that `static styles` needs shadow DOM. @type {WeakSet<Function>} */
+const WARNED_LIGHT_STYLES = new WeakSet();
+
 /** What `getPropertyOptions()` answers for an undeclared name, Lit's default declaration. */
 const DEFAULT_DECLARATION = Object.freeze({ type: String });
 
@@ -202,10 +208,39 @@ class WebComponentBase extends Base {
   static properties = {};
 
   /**
-   * Styles to adopt into the shadow root.
-   * @type {import('../css.js').CSSResult | import('../css.js').CSSResult[] | null}
+   * Styles to adopt into the shadow root, Lit's `static styles`: a `css`
+   * result, a `CSSStyleSheet`, or nested arrays of them. Shadow DOM only
+   * (`static shadow = true`); a light-DOM component has no root to adopt
+   * them into, so declaring them there is reported as an error.
+   * @type {unknown}
    */
   static styles = null;
+
+  /**
+   * Lit's `elementStyles`: `static styles` flattened by `finalizeStyles()`,
+   * the list `createRenderRoot()` adopts and the server inlines. Memoized per
+   * class.
+   * @type {(import('../css.js').CSSResult | CSSStyleSheet)[]}
+   */
+  static get elementStyles() {
+    let list = ELEMENT_STYLES.get(this);
+    if (list === undefined) {
+      list = this.finalizeStyles(this.styles);
+      ELEMENT_STYLES.set(this, list);
+    }
+    return list;
+  }
+
+  /**
+   * Lit's `finalizeStyles(styles)`: flatten nested arrays and drop
+   * duplicates, keeping each style's LAST position so a later override still
+   * wins. Override it to post-process the list.
+   * @param {unknown} styles
+   * @returns {(import('../css.js').CSSResult | CSSStyleSheet)[]}
+   */
+  static finalizeStyles(styles) {
+    return finalizeStyles(styles);
+  }
 
   /**
    * Register this class as a custom element under `tag`.
@@ -373,6 +408,7 @@ class WebComponentBase extends Base {
     const parent = Object.getPrototypeOf(this);
     if (parent && typeof parent.finalize === 'function') parent.finalize();
     void this.elementProperties;
+    void this.elementStyles;
   }
 
   /**
@@ -755,13 +791,11 @@ class WebComponentBase extends Base {
     }
     if (Ctor.shadow !== true && this._renderRoot === this) {
       // Light DOM: static styles is not supported (no shadow root for
-      // adoptedStyleSheets). Warn if the developer set both.
-      if (Ctor.styles) {
-        console.warn(
-          `[webjs] <${tagOf(Ctor) || this.tagName?.toLowerCase()}> has static shadow = false AND static styles. ` +
-          `static styles only works with shadow DOM (adoptedStyleSheets). ` +
-          `For light DOM, use global CSS or <style> in render().`
-        );
+      // adoptedStyleSheets), so they would silently never apply. Say so,
+      // loudly, once per class.
+      if (Ctor.styles && !WARNED_LIGHT_STYLES.has(Ctor)) {
+        WARNED_LIGHT_STYLES.add(Ctor);
+        console.error(lightDomStylesMessage(tagOf(Ctor) || this.tagName?.toLowerCase()));
       }
       // Light-DOM slot capture: ONCE per host lifetime (#1015). Three
       // sub-paths, all of which resolve to "the record is populated
@@ -950,8 +984,7 @@ class WebComponentBase extends Base {
     if (Ctor.shadow !== true) return this;
     const existing = this.shadowRoot;
     const root = existing ?? /** @type any */ (this).attachShadow(Ctor.shadowRootOptions ?? { mode: 'open' });
-    const styles = Ctor.styles;
-    const list = Array.isArray(styles) ? styles : isCSS(styles) ? [styles] : [];
+    const list = Ctor.elementStyles;
     if (list.length) {
       // A shadow root that came from Declarative Shadow DOM (SSR) carries the
       // inline <style> the server emitted. Remove it before switching to
@@ -1806,6 +1839,20 @@ class WebComponentBase extends Base {
   renderFallback() {
     return undefined;
   }
+}
+
+/**
+ * The error a light-DOM component with `static styles` gets, on the server
+ * (dev) and in the browser.
+ * @param {string | undefined} tag
+ * @returns {string}
+ */
+function lightDomStylesMessage(tag) {
+  return (
+    `[webjs] <${tag}> declares static styles but renders into light DOM, so the styles are never applied. ` +
+    `Add \`static shadow = true\` to scope them in a shadow root, or style the light-DOM markup with Tailwind ` +
+    `utilities or a global stylesheet (prefix custom class selectors with the tag name).`
+  );
 }
 
 /** @param {string} s */

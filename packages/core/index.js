@@ -7,7 +7,7 @@
  */
 
 export { html, svg, isTemplate, MARKER } from './src/html.js';
-export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
 export { WebComponent, prop } from './src/component.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';

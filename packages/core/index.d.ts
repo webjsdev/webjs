@@ -79,7 +79,8 @@ export { html, svg, isTemplate, MARKER } from './src/html.js';
 // component / route / testing type surfaces; re-exported so an app or the
 // docs/website can annotate a value as `TemplateResult` (#772).
 export type { TemplateResult } from './src/html.js';
-export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export type { CSSResultGroup, CSSResultOrNative, CSSResultArray } from './src/css.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';

@@ -397,7 +397,7 @@ class MyCard extends WebComponent {
 }
 Card.register('my-card');</code-block>
 
-    <p><code>static styles</code> on a light-DOM component is silently ignored. There's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
+    <p><code>static styles</code> on a light-DOM component never applies, since there is no shadow root to adopt it into, so WebJs reports it rather than ignoring it. <code>webjs check</code> flags it, and the dev server and the browser each log an error once per class naming <code>static shadow = true</code> as the fix. A hole in a <code>css</code> template takes another <code>css</code> result or a number; a plain string throws and must be wrapped in <code>unsafeCSS()</code> (see <a href="/docs/styling">Styling</a>).</p>
 
     <h3>shadowRootOptions, createRenderRoot() and renderRoot</h3>
     <p>These are Lit's members with Lit's meaning. <code>static shadowRootOptions</code> holds the <code>attachShadow()</code> options (<code>delegatesFocus</code>, <code>clonable</code>, <code>serializable</code>, a <code>closed</code> mode); the server writes them onto the Declarative Shadow DOM template too (<code>shadowrootdelegatesfocus</code> and friends), so the first paint and the hydrated element agree. <code>this.renderRoot</code> is the node <code>render()</code> commits into: the shadow root here, the element itself in light DOM. It is <code>undefined</code> until the element connects and at SSR.</p>

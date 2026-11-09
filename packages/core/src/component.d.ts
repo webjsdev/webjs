@@ -9,7 +9,7 @@
  * cost: nothing in this file ships to the browser.
  */
 
-import type { CSSResult } from './css.js';
+import type { CSSResultGroup, CSSResultOrNative } from './css.js';
 import type { TemplateResult } from './html.js';
 
 /** Any constructor the framework accepts as the `type:` field of a property. */
@@ -229,7 +229,11 @@ interface WebComponentStatics {
   shadowRootOptions: ShadowRootInit;
   hydrate: 'visible' | undefined;
   properties: Record<string, PropertyDeclaration | PropertyConstructor>;
-  styles: CSSResult | CSSResult[] | null;
+  styles: CSSResultGroup | null | undefined;
+  /** `static styles` flattened by `finalizeStyles()`: what the shadow root adopts. */
+  readonly elementStyles: CSSResultOrNative[];
+  /** Flatten and dedupe `static styles`; override to post-process. */
+  finalizeStyles(styles?: CSSResultGroup | null): CSSResultOrNative[];
   lazy?: boolean;
   /**
    * Force this component to ship (hydrate) even when the elision analyser would
