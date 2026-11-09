@@ -124,7 +124,7 @@ packages/ui/
     index.js                      CLI entry (Commander program + dispatch)
     commands/
       init.js                     init, writes components.json, theme CSS, lib/utils/cn.ts (defaults are fixed constants)
-      add.js                      add, resolve registry items + write into project + install deps
+      add.js                      add, resolve registry items + write into project + install the deps package.json lacks
       list.js                     list, show all registry items
       view.js                     view, print a component's source
       diff.js                     diff, compare local vs registry

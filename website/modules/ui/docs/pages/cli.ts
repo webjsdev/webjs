@@ -56,7 +56,7 @@ Options:
     ${heading(toc, 2, 'add')}
     <p>Use the <code>add</code> command to add components, blocks and their dependencies to your project.</p>
     ${commandBlock(packageCommands('add [component]'))}
-    <p>It resolves each item's registry dependencies transitively, copies the source into your <code>components/ui</code> alias, installs the npm dependencies with your project's package manager and puts back the theme tokens if they are missing. A block's files land at their own targets under the app. See <a href="/ui/docs/blocks">Blocks</a>.</p>
+    <p>It resolves each item's registry dependencies transitively, copies the source into your <code>components/ui</code> alias, installs any npm dependency your <code>package.json</code> does not already declare with your project's package manager, and puts back the theme tokens if they are missing. A block's files land at their own targets under the app. See <a href="/ui/docs/blocks">Blocks</a>.</p>
     <p><strong>Options</strong></p>
     ${usage(`Usage: webjsui add [options] [components...]
 
