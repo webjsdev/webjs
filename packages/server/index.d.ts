@@ -1146,20 +1146,24 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  * keeps compiling unchanged.
  */
 export declare function createAuth<TUser = ResolvedAuthUser>(config: AuthConfig): AuthInstance<TUser>;
-/** Options for the credentials provider, Auth.js's `Credentials`. */
-export interface CredentialsOptions {
+/**
+ * Options for the credentials provider, Auth.js's `Credentials`. `C` is the
+ * shape of the submitted fields, inferred from `authorize`'s annotation
+ * (`authorize(credentials: { email: string; password: string })`).
+ */
+export interface CredentialsOptions<C extends Record<string, unknown> = Record<string, unknown>> {
   /**
    * Check the submitted fields (the sign-in form's fields, or the object passed
    * to `signIn('credentials', data)`). Return the session user, or `null` to
    * refuse the sign-in.
    */
-  authorize: (
-    credentials: Record<string, unknown>,
-  ) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
+  authorize: (credentials: C) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
   [key: string]: unknown;
 }
 /** The credentials (email/password) provider, Auth.js's `Credentials`. */
-export declare function Credentials(opts: CredentialsOptions): ProviderConfig;
+export declare function Credentials<C extends Record<string, unknown> = Record<string, unknown>>(
+  opts: CredentialsOptions<C>,
+): ProviderConfig;
 /** The Google OAuth provider. */
 export declare function Google(opts?: Record<string, unknown>): ProviderConfig;
 /** The GitHub OAuth provider. */
