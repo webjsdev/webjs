@@ -94,6 +94,18 @@ export class CookieStore {
     this.map = parseCookieHeader(cookieHeader);
     /** @type {Map<string, string>} */
     this.pending = new Map();
+    /**
+     * Set once the response's headers are decided (`sealCookies`). A write
+     * after that could never reach the browser, so it throws instead of being
+     * dropped, as Next refuses a cookie write during render.
+     */
+    this.sealed = false;
+  }
+
+  /** @param {string} op */
+  assertWritable(op) {
+    if (!this.sealed) return;
+    throw new Error(`[webjs] cookies().${op}() ran after the response headers were sent, so the cookie can never reach the browser. This happens inside a streamed render (a component under Suspense or <webjs-suspense>). Set cookies in a server action, a route handler, middleware, or the page render before anything streams.`);
   }
 
   /**
@@ -128,6 +140,7 @@ export class CookieStore {
    * @param {Omit<ResponseCookie, 'name' | 'value'>} [options]
    */
   set(a, value, options) {
+    this.assertWritable('set');
     const cookie = typeof a === 'string' ? { ...(options || {}), name: a, value: String(value ?? '') } : { ...a, value: String(a.value ?? '') };
     if (!cookie.name) throw new Error('cookies().set: a cookie name is required');
     const c = normalizeCookie(/** @type {ResponseCookie} */ (cookie));
@@ -141,6 +154,7 @@ export class CookieStore {
    * @param {string | { name: string, path?: string, domain?: string }} a
    */
   delete(a) {
+    this.assertWritable('delete');
     const opts = typeof a === 'string' ? { name: a } : a;
     this.map.delete(opts.name);
     this.pending.set(opts.name, stringifyCookie(normalizeCookie({ ...opts, value: '', expires: new Date(0) })));

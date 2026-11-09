@@ -32,7 +32,7 @@ import { applyPendingCookies } from '../cookie-store.js';
 import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
 import { loadEnvFiles, envMode } from '../env-files.js';
 import { buildPublicIndex } from '../public-files.js';
-import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore, setComponentErrorSink } from '../context.js';
+import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore, setComponentErrorSink, sealCookies } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
@@ -1264,6 +1264,9 @@ export async function createRequestHandler(opts) {
         // `cookies().set()` / `.delete()` anywhere in the request (an action,
         // a route handler, middleware, a render) lands here as Set-Cookie.
         res = applyPendingCookies(res, currentCookieStore());
+        // The headers are decided now; a streamed body still rendering after
+        // this point must not write a cookie that can never be sent.
+        sealCookies();
       } catch (e) {
         // A throw escaping produce() is the last-resort 500 (every interior
         // path catches its own errors, but a surprise still must not crash the

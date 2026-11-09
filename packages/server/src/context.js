@@ -39,7 +39,7 @@ import { shared } from './process-shared.js';
  * `revalidatedPaths` collects every `revalidatePath()` call made while serving
  * the request, so an RPC action response can tell the browser to refresh them.
  *
- * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[], cookieStore?: CookieStore, componentErrorSink?: (tag: string, error: unknown) => void }} Store
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[], cookieStore?: CookieStore, cookiesSealed?: boolean, componentErrorSink?: (tag: string, error: unknown) => void }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -254,8 +254,23 @@ export function cookies() {
  */
 export function requestCookieStore(store = als.getStore()) {
   if (!store) throw new Error('cookies(): called outside a request scope');
-  if (!store.cookieStore) store.cookieStore = new CookieStore(store.req.headers.get('cookie'));
+  if (!store.cookieStore) {
+    store.cookieStore = new CookieStore(store.req.headers.get('cookie'));
+    if (store.cookiesSealed) store.cookieStore.sealed = true;
+  }
   return store.cookieStore;
+}
+
+/**
+ * Seal the request's cookies once its response headers are decided: a later
+ * `cookies().set()` / `.delete()` (a component rendering inside a streamed
+ * boundary) throws instead of being silently lost. Reads stay allowed.
+ */
+export function sealCookies() {
+  const store = als.getStore();
+  if (!store) return;
+  store.cookiesSealed = true;
+  if (store.cookieStore) store.cookieStore.sealed = true;
 }
 
 /**
