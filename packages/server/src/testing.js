@@ -275,9 +275,13 @@ export async function submitForm(handle, path, fields = {}, opts = {}) {
   const html = await page.text();
 
   const forms = findForms(html);
+  // Without `match`, a bound form is the one a test means: a layout's plain
+  // form (a logout POST, a search GET) often comes first on the page, and
+  // picking it reported the page's real form as unbound.
+  const isBound = (/** @type {string} */ f) => /name="__webjs_action"/.test(f);
   const candidates = opts.match
     ? forms.filter((f) => (opts.match instanceof RegExp ? opts.match.test(f) : f.includes(opts.match)))
-    : forms;
+    : (forms.some(isBound) ? forms.filter(isBound) : forms);
   const form = candidates[opts.index || 0];
   if (!form) {
     throw new Error(
@@ -287,30 +291,44 @@ export async function submitForm(handle, path, fields = {}, opts = {}) {
   }
   const id = form.match(/name="__webjs_action"\s+value="([^"]*)"/);
   if (!id) {
+    const openTag = form.slice(0, form.indexOf('>') + 1);
     throw new Error(
-      `submitForm: the <form> on ${path} carries no __webjs_action field, so it `
-      + 'is not bound to a server action. Write it as `<form action=${myAction}>` '
-      + 'with the action imported from a `use server` module.',
+      `submitForm: the <form> on ${path} it picked (${openTag}) carries no __webjs_action `
+      + 'field, so it is not bound to a server action. Write it as `<form action=${myAction}>` '
+      + 'with the action imported from a `use server` module, or pick another form with '
+      + '{ match } / { index }.',
     );
   }
 
-  const body = new URLSearchParams();
-  body.set(FORM_ACTION_FIELD, id[1]);
-  const entries = fields instanceof URLSearchParams || fields instanceof FormData
+  const entries = [...(fields instanceof URLSearchParams || fields instanceof FormData
     ? fields.entries()
-    : Object.entries(fields);
+    : Object.entries(fields))];
+  // A File or Blob value posts multipart, the way a browser submits a file
+  // input; anything else posts URL-encoded.
+  const isBlob = (/** @type {unknown} */ v) => typeof Blob !== 'undefined' && v instanceof Blob;
+  const multipart = entries.some(([, v]) => isBlob(v) || (Array.isArray(v) && v.some(isBlob)));
+  const body = multipart ? new FormData() : new URLSearchParams();
+  body.set(FORM_ACTION_FIELD, id[1]);
+  /** @param {string} k @param {unknown} v */
+  const add = (k, v) => {
+    if (multipart && isBlob(v)) /** @type {FormData} */ (body).append(k, /** @type {Blob} */ (v));
+    else body.append(k, String(v));
+  };
   // An array value posts once per element, the way a checkbox group submits,
   // so a test can exercise the `name[]` convention (#1664).
   for (const [k, v] of entries) {
-    if (Array.isArray(v)) for (const item of v) body.append(k, String(item));
-    else body.append(k, String(v));
+    if (Array.isArray(v)) for (const item of v) add(k, item);
+    else add(k, v);
   }
 
-  const init = {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', ...(opts.headers || {}) },
-    body: body.toString(),
-  };
+  // A FormData body sets its own multipart content type with the boundary.
+  const init = multipart
+    ? { method: 'POST', headers: { ...(opts.headers || {}) }, body }
+    : {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...(opts.headers || {}) },
+      body: body.toString(),
+    };
   return await testRequest(
     handle,
     opts.submitPath || path,

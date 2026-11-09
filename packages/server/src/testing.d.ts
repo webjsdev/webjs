@@ -46,12 +46,14 @@ export declare function withSessionCookie(init: RequestInit | undefined, session
  * Submit a page's `<form action={action}>` the way a browser with JS OFF does:
  * render the page, reuse the identity the server put in its hidden
  * `__webjs_action` field, and POST it back with the given fields. A POST that
- * omits that field is not a form submission and is answered `405`.
+ * omits that field is not a form submission and is answered `405`. Without
+ * `match`, it picks among the forms bound to an action, skipping a layout's
+ * plain form. A `File` / `Blob` value posts the form multipart.
  */
 export declare function submitForm(
   handle: Handle,
   path: string,
-  fields?: Record<string, string | string[]> | URLSearchParams | FormData,
+  fields?: Record<string, string | string[] | Blob | Blob[]> | URLSearchParams | FormData,
   opts?: {
     index?: number;
     match?: string | RegExp;

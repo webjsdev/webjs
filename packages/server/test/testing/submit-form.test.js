@@ -191,3 +191,34 @@ export default () => html\`<form action=\${saveTags}><input type="checkbox" name
   assert.equal(res.status, 303);
   assert.equal(res.headers.get('location'), '/saved/a+b/2', 'two separate values, not one comma-joined string');
 });
+
+// Found by agents building apps: a layout's plain logout form came first, so
+// submitForm picked it and reported the page's real form as unbound; and a
+// File value was posted as the string "[object File]".
+test('submitForm skips an unbound layout form and posts a File multipart', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-submit-form-file-'));
+  await mkdir(join(dir, 'app/upload'), { recursive: true });
+  await mkdir(join(dir, 'modules/u'), { recursive: true });
+  await writeFile(join(dir, 'modules/u/upload.server.ts'),
+    `'use server';
+export async function upload(input) {
+  const f = input.photo;
+  const ok = f instanceof File;
+  return { success: true, redirect: '/got/' + (ok ? f.name + '/' + f.type + '/' + f.size : 'not-a-file') + '/' + input.title };
+}
+`);
+  await writeFile(join(dir, 'app/layout.ts'),
+    `import { html } from ${CORE};
+export default ({ children }) => html\`<!doctype html><html><head></head><body><form method="post" action="/api/auth/signout"><button>Log out</button></form>\${children}</body></html>\`;
+`);
+  await writeFile(join(dir, 'app/upload/page.ts'),
+    `import { html } from ${CORE};
+import { upload } from '../../modules/u/upload.server.ts';
+export default () => html\`<form action=\${upload} enctype="multipart/form-data"><input name="title"><input type="file" name="photo"></form>\`;
+`);
+  const app = await createRequestHandler({ appDir: dir, dev: false });
+  const photo = new File([new Uint8Array([1, 2, 3])], 'cat.png', { type: 'image/png' });
+  const res = await submitForm(app.handle, '/upload', { title: 'Cat', photo });
+  assert.equal(res.status, 303, 'the bound form was submitted, not the layout logout form');
+  assert.equal(res.headers.get('location'), '/got/cat.png/image/png/3/Cat', 'the action received a real File');
+});
