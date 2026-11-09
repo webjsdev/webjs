@@ -1,4 +1,4 @@
-import { isNotFound, isRedirect, isForbidden, isUnauthorized, FORM_ACTION_FIELD } from '@webjsdev/core';
+import { isNotFound, isRedirect, isForbidden, isUnauthorized, FORM_ACTION_FIELD, splitActionId } from '@webjsdev/core';
 import { headerSafeLocation } from './redirect-location.js';
 import { ssrPage, ssrNotFound, ssrForbidden, ssrUnauthorized } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
@@ -490,7 +490,20 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // 422 re-render) from seeing a key it did not put there.
   formData.delete(FORM_ACTION_FIELD);
 
-  const found = await lookupActionIdentity(actionIndex, id);
+  // `<form action=${rsvp.bind(null, slug)}>` submits `<hash>/<fn>#<args>`: the
+  // action's own identity, then the bound arguments, which the call below puts
+  // ahead of the form input. A visitor can rewrite them like any field, so the
+  // action authorizes them (as in Next, where an action is a public endpoint).
+  /** @type {unknown[]} */
+  let bound;
+  let baseId;
+  try {
+    ({ id: baseId, args: bound } = splitActionId(id));
+  } catch {
+    return new Response('Malformed bound action arguments', { status: 400 });
+  }
+
+  const found = await lookupActionIdentity(actionIndex, baseId);
   if (!found.ok) {
     // The action's module threw at import (a bad env var read at module scope,
     // a syntax error in dev). That is a server fault, not skew: telling the
@@ -567,9 +580,12 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // Next.js's `useActionState` contract: an action declaring TWO parameters is
   // called `(prevState, formData)`, prevState being what this same action
   // returned last time (carried by the signed flash cookie; undefined on the
-  // first submission). validate, middleware and invalidates still see the
-  // single input, so only the call changes.
-  const flash = fn.length >= 2 ? await readFlash(req) : null;
+  // first submission). validate sees the single input; middleware and
+  // invalidates see the call's arguments, the bound ones first, as over RPC.
+  // Bound arguments come before both, so `(slug, prevState, formData)` reads
+  // its prevState once the bound parameters are counted off, as in Next.
+  const arity = fn.length - bound.length;
+  const flash = arity >= 2 ? await readFlash(req) : null;
   const prevState = flash && flash.id === id ? flash.result : undefined;
   /** @type {ActionResult | undefined} */
   let result;
@@ -582,7 +598,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     /** @type {string[]} */
     let invalidated = [];
     if (ranAction) {
-      invalidated = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+      invalidated = resolveTags(actionConfigFn(mod, 'invalidates'), [...bound, ...args]);
       if (invalidated.length) await revalidateTags(invalidated);
     }
     /** @type {Record<string, string> | null} */
@@ -598,7 +614,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
         middleware,
         {
           request: actionReq,
-          args,
+          args: [...bound, ...args],
           signal: actionReq.signal,
           // Route context a form middleware may want, absent on the RPC path
           // because an RPC call has no page. Params are awaitable AND
@@ -607,7 +623,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
           searchParams: makeThenable(searchParams),
           url,
         },
-        () => { ranAction = true; return fn.length >= 2 ? fn(prevState, ...args) : fn(...args); },
+        () => { ranAction = true; return arity >= 2 ? fn(...bound, prevState, ...args) : fn(...bound, ...args); },
       ));
   } catch (err) {
     if (isRedirect(err)) {

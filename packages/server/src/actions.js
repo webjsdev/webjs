@@ -325,7 +325,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // `method` is a default POST), so the first client call resolves from the
   // seed with no hydration round-trip. The browser-cache staleness check is
   // GET-only (only a GET is browser-cached).
-  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh', 'followActionRedirect as __redirect',
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh', 'followActionRedirect as __redirect', 'installActionBind as __bindable',
     // Streaming RPC (#489): an action returning a stream / async iterable sends
     // back a framed body; the stub decodes it into an async iterable the caller
     // `for await`s. The imports are small constants + one decoder factory.
@@ -434,7 +434,9 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // load-hook registry instead; both produce the same string, which is what
   // makes the SSR'd form and the re-rendered one submit the same value.
   // Non-enumerable so `import * as actions` and a spread stay unchanged.
-  lines.push(`const __id = (fn, name) => { try { Object.defineProperty(fn, ${J(FORM_ACTION_ID_KEY)}, { value: __HASH + '/' + name }); } catch {} return fn; };`);
+  // `.bind(null, id)` keeps the identity too (installActionBind), so a bound
+  // stub re-renders to the same hidden field the server emitted.
+  lines.push(`const __id = (fn, name) => { try { Object.defineProperty(fn, ${J(FORM_ACTION_ID_KEY)}, { value: __HASH + '/' + name }); } catch {} return __bindable(fn); };`);
   for (const name of fnNames) {
     lines.push(
       name === 'default'

@@ -20,13 +20,16 @@ export { asset, setAssetUrlProvider } from './src/asset-url.js';
 // Form actions (#1155). `FORM_ACTION_FIELD` is the hidden field both renderers
 // emit and the server's form dispatcher reads; `setFormActionResolver` is the
 // server-only wiring that maps a real action function back to its identity.
-export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';
+export {
+  FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver,
+  installActionBind, bindActionId, splitActionId,
+} from './src/form-action.js';
 export { repeat, isRepeat } from './src/repeat.js';
 export { Suspense, isSuspense } from './src/suspense.js';
 export { connectWS } from './src/websocket-client.js';
 export { richFetch } from './src/rich-fetch.js';
 export {
-  stringify, parse,
+  stringify, stringifySync, parse,
   serialize, deserialize,
 } from './src/serialize.js';
 export { enableClientRouter, disableClientRouter, navigate, revalidate, refreshPage, loadFrame } from './src/router-client.js';

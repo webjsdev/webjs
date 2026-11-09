@@ -121,11 +121,14 @@ test('the stamp is non-enumerable, so a namespace import and a spread are unchan
   const line = stub.split('\n').find((l) => l.startsWith('const __id = '));
   assert.ok(line, 'the stub defines the stamp helper');
   // eslint-disable-next-line no-new-func
-  const __id = new Function('__HASH', `${line}\nreturn __id;`)('abc1234567');
+  const { installActionBind, bindActionId } = await import('../../../core/src/form-action.js');
+  const __id = new Function('__HASH', '__bindable', `${line}\nreturn __id;`)('abc1234567', installActionBind);
   const fn = __id(() => {}, 'go');
   assert.equal(fn.$$webjsAction, 'abc1234567/go', 'the identity reads back');
   assert.deepEqual(Object.keys(fn), [], 'and is invisible to Object.keys');
   assert.deepEqual({ ...fn }, {}, 'and to a spread');
+  // `.bind(null, slug)` on the stub keeps the identity, with the arguments.
+  assert.equal(fn.bind(null, 'meetup').$$webjsAction, bindActionId('abc1234567/go', ['meetup']));
 });
 
 test('the stub identity MATCHES the identity the server resolver produces', async () => {

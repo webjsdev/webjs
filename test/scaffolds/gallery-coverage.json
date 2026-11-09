@@ -329,6 +329,18 @@
     "FORM_ACTION_ID_KEY": {
       "exempt": "internal: the property a generated RPC stub carries its own identity on"
     },
+    "installActionBind": {
+      "exempt": "internal: gives actions and stubs the identity-keeping .bind; apps just call action.bind(null, x)"
+    },
+    "bindActionId": {
+      "exempt": "internal: the bound-action identity encoding shared by the renderers"
+    },
+    "splitActionId": {
+      "exempt": "internal: the form dispatcher's decoder for a bound-action identity"
+    },
+    "stringifySync": {
+      "exempt": "internal: synchronous wire serializer for bound action arguments"
+    },
     "svg": {
       "exempt": "deferred: agent-facing (the html tag's SVG-fragment sibling, documented at https://webjs.dev/docs/components); no single-concept gallery demo yet"
     },

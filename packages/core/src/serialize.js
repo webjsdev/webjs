@@ -97,6 +97,23 @@ export async function stringify(value) {
 }
 
 /**
+ * `stringify` for a value holding no Blob, File or FormData file, done
+ * synchronously. A bound form action's arguments need it: `.bind()` returns at
+ * once and the browser renderer reads the identity synchronously. Throws on a
+ * file, whose bytes can only be read asynchronously.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function stringifySync(value) {
+  const ctx = newEncodeCtx();
+  if (walkRefs(value, ctx).length) {
+    throw new TypeError('[webjs] a File or Blob cannot be serialized synchronously (it cannot be a bound argument of a form action).');
+  }
+  return JSON.stringify(encodeOne(value, ctx));
+}
+
+/**
  * Inverse of `stringify`. Synchronous: no async types need awaiting
  * during decode (binary is already inlined as base64).
  *
@@ -153,10 +170,24 @@ function newEncodeCtx() {
 
 /**
  * Pass 1: walk the value, count references, pre-read Blob/File bytes.
- * Async because `Blob.arrayBuffer()` is async. Iterative (uses an
- * explicit stack) to avoid recursion limits on deeply nested values.
+ * Async because `Blob.arrayBuffer()` is async. The walk itself is the
+ * synchronous `walkRefs`; only the byte reads it collects are awaited.
  */
 async function countRefs(value, ctx) {
+  for (const blob of walkRefs(value, ctx)) {
+    ctx.blobBytes.set(blob, new Uint8Array(await blob.arrayBuffer()));
+  }
+}
+
+/**
+ * Count references and assign ids to shared objects, returning the Blob/File
+ * values found (whose bytes the async path then reads). Iterative (an explicit
+ * stack) to avoid recursion limits on deeply nested values.
+ * @returns {Blob[]}
+ */
+function walkRefs(value, ctx) {
+  /** @type {Blob[]} */
+  const blobs = [];
   const stack = [value];
   while (stack.length) {
     const v = stack.pop();
@@ -165,8 +196,7 @@ async function countRefs(value, ctx) {
     ctx.refCount.set(v, cur + 1);
     if (cur > 0) continue;  // already traversed children
     if (typeof Blob !== 'undefined' && v instanceof Blob) {
-      const buf = new Uint8Array(await v.arrayBuffer());
-      ctx.blobBytes.set(v, buf);
+      blobs.push(v);
       continue;
     }
     if (typeof FormData !== 'undefined' && v instanceof FormData) {
@@ -195,6 +225,7 @@ async function countRefs(value, ctx) {
   for (const [obj, count] of ctx.refCount) {
     if (count > 1) ctx.idOf.set(obj, ctx.nextId++);
   }
+  return blobs;
 }
 
 function encodeOne(v, ctx) {

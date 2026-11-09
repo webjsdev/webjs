@@ -1,5 +1,6 @@
 import { isBindingPrefix } from './binding-prefixes.js';
 import { escapeAttr } from './escape.js';
+import { stringifySync, parse } from './serialize.js';
 
 /**
  * Form actions: binding a `'use server'` action straight into a form (#1155),
@@ -109,6 +110,89 @@ export const FORM_ACTION_FIELD = '__webjs_action';
  */
 export const FORM_ACTION_ID_KEY = '$$webjsAction';
 
+/**
+ * Bound form actions, Next.js's way to give a form action an extra argument:
+ * `<form action=${rsvp.bind(null, event.slug)}>` calls `rsvp(slug, formData)`.
+ * The arguments ride in the same hidden field as the identity, after a `#`
+ * (`<hash>/<fn>#<encoded args>`), so the submission works with JavaScript off
+ * and the server renderer, the browser renderer and the dispatcher share one
+ * encoding. They are not signed: an action is a public endpoint anyone can call
+ * with any arguments, so it authorizes them like any other input, as in Next.
+ */
+const BOUND_SEP = '#';
+
+/**
+ * The identity a form submits for `action` bound to `args`.
+ * @param {string} id the action's own `<hash>/<fn>` identity
+ * @param {unknown[]} args
+ * @returns {string}
+ */
+export function bindActionId(id, args) {
+  return args.length ? `${id}${BOUND_SEP}${encodeURIComponent(stringifySync(args))}` : id;
+}
+
+/**
+ * Split a submitted identity into the action's own identity and its bound
+ * arguments. Throws on an argument list that does not decode to an array.
+ * @param {string} value
+ * @returns {{ id: string, args: unknown[] }}
+ */
+export function splitActionId(value) {
+  const at = value.indexOf(BOUND_SEP);
+  if (at === -1) return { id: value, args: [] };
+  const args = parse(decodeURIComponent(value.slice(at + 1)));
+  if (!Array.isArray(args)) throw new TypeError('bound action arguments are not a list');
+  return { id: value.slice(0, at), args };
+}
+
+/**
+ * Bound functions made by an action's own `.bind`, mapped to the unbound
+ * action and every argument bound so far.
+ * @type {WeakMap<Function, { target: Function, args: unknown[] }>}
+ */
+const _bound = new WeakMap();
+
+/**
+ * Give a server action (or its browser stub) a `.bind` that keeps its identity,
+ * so the bound function can still be bound to a form. Called by the server's
+ * action wrapper and by every generated stub. Idempotent.
+ * @template {Function} F
+ * @param {F} fn
+ * @returns {F}
+ */
+export function installActionBind(fn) {
+  if (typeof fn !== 'function' || Object.prototype.hasOwnProperty.call(fn, 'bind')) return fn;
+  try {
+    Object.defineProperty(fn, 'bind', { value: bindAction, configurable: true, writable: true });
+  } catch {}
+  return fn;
+}
+
+/**
+ * `Function.prototype.bind`, plus the record that lets the renderers find the
+ * action and its arguments. The identity is a getter, computed when a form
+ * reads it, so a bound action called directly (over RPC, with a File among its
+ * arguments) never has to encode anything.
+ * @this {Function}
+ * @param {unknown} thisArg
+ * @param {...unknown} args
+ * @returns {Function}
+ */
+function bindAction(thisArg, ...args) {
+  const bound = Function.prototype.bind.call(this, thisArg, ...args);
+  const prev = _bound.get(this);
+  const target = prev ? prev.target : this;
+  const all = prev ? [...prev.args, ...args] : args;
+  _bound.set(bound, { target, args: all });
+  const own = formActionId(target);
+  if (own) {
+    try {
+      Object.defineProperty(bound, FORM_ACTION_ID_KEY, { get: () => bindActionId(own, all) });
+    } catch {}
+  }
+  return installActionBind(bound);
+}
+
 /** @type {((fn: Function) => (string | null | Promise<string | null>)) | null} */
 let _resolver = null;
 
@@ -155,6 +239,11 @@ export async function resolveFormActionId(fn) {
   const own = formActionId(fn);
   if (own) return own;
   if (typeof fn !== 'function' || !_resolver) return null;
+  const bound = _bound.get(fn);
+  if (bound) {
+    const base = await resolveFormActionId(bound.target);
+    return base ? bindActionId(base, bound.args) : null;
+  }
   try {
     const id = await _resolver(/** @type {Function} */ (fn));
     return typeof id === 'string' && id ? id : null;
@@ -555,10 +644,9 @@ export function assertNotFunctionReflectedActionProp(val, propName, tag) {
  * looks right and silently posts nowhere, which is the one outcome a
  * progressive-enhancement form must never have, so this throws instead.
  *
- * A function made with `.bind()` gets its own message: Next.js passes an extra
- * argument to a form action as `updateUser.bind(null, id)`, and the generic
- * "not a server action" text (about inline `'use server'`) sent an agent who
- * wrote that looking in the wrong place.
+ * A function made with the native `Function.prototype.bind` (anything but an
+ * action's own `.bind`, which keeps the identity) gets its own message, since
+ * the inline-`'use server'` advice would send its author the wrong way.
  *
  * @param {string | null} id
  * @param {string} [tag]
@@ -570,11 +658,10 @@ export function assertIdentifiableAction(id, tag, fn) {
   const attr = tag === 'button' || tag === 'input' ? 'formaction=' : 'action=';
   if (typeof fn === 'function' && /^bound /.test(fn.name)) {
     throw new Error(
-      `[webjs] the function in ${attr} on <${tag || 'form'}> was made with .bind(). WebJs does not `
-      + `carry bound arguments through a form submission, so it cannot run it. Bind the action `
-      + `itself and send the value as a field: <input type="hidden" name="id" value=\${id}> `
-      + `inside the form, read as input.id (or formData.get('id')) in the action. `
-      + `See https://webjs.dev/docs/troubleshooting#bound-form-action`,
+      `[webjs] the function in ${attr} on <${tag || 'form'}> is a bound function that is not a `
+      + `server action. Bind the imported action itself: action.bind(null, id) on a function `
+      + `exported from a 'use server' *.server.{js,ts} module keeps its identity, and the bound `
+      + `arguments arrive before the form data. See https://webjs.dev/docs/server-actions#bound-arguments`,
     );
   }
   throw new Error(

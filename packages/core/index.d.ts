@@ -119,7 +119,10 @@ export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } f
 export { signal, computed, effect, batch, isSignal, Signal, SignalWatcher } from './src/signal.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
 export { asset, setAssetUrlProvider } from './src/asset-url.js';
-export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';
+export {
+  FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver,
+  installActionBind, bindActionId, splitActionId,
+} from './src/form-action.js';
 export { takeSeed, scanSeeds, seedStats, SEED_MISS } from './src/action-seed-client.js';
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
 export { applyActionRefresh, followActionRedirect } from './src/action-effects-client.js';
@@ -130,7 +133,7 @@ export { setActiveActionSignal, activeActionSignal } from './src/action-abort-cl
 export {
   STREAM_CONTENT_TYPE, FRAME_CHUNK, FRAME_END, FRAME_ERROR, encodeFrame, createFrameDecoder,
 } from './src/action-stream.js';
-export { stringify, parse, serialize, deserialize } from './src/serialize.js';
+export { stringify, stringifySync, parse, serialize, deserialize } from './src/serialize.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';
 

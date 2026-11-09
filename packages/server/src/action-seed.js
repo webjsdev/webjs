@@ -64,7 +64,7 @@ import * as nodeModule from 'node:module';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { stringify } from '@webjsdev/core';
+import { stringify, installActionBind } from '@webjsdev/core';
 import { hashFile } from './actions.js';
 import { isStreamable } from './action-stream.js';
 import { serverRuntime } from './listener-core.js';
@@ -267,6 +267,10 @@ async function assertDeterministic(prev, next, hash, fnName) {
  */
 export function __actionWrap(file, fnName, orig) {
   if (typeof orig !== 'function') return orig;
+  // `action.bind(null, id)` keeps the identity, so the bound function can be
+  // bound to a form (Next.js's way to pass an extra argument). Installed on the
+  // target, so the seed Proxy below forwards it too.
+  installActionBind(orig);
   // APPEND, defining module first. A barrel is faceted too and its body runs
   // AFTER the module it re-exports from, so the first registration is the
   // defining one: the module that also carries `validate` / `middleware` /

@@ -36,13 +36,13 @@ export { asset } from './src/asset-url.js';
 // Form actions (#1155). The field name is shared with the server dispatcher;
 // `setFormActionResolver` is server-only wiring and is stripped here, because
 // a browser stub carries its own identity and needs no resolver.
-export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY } from './src/form-action.js';
+export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, installActionBind, bindActionId, splitActionId } from './src/form-action.js';
 export { repeat, isRepeat } from './src/repeat.js';
 export { Suspense, isSuspense } from './src/suspense.js';
 export { connectWS } from './src/websocket-client.js';
 export { richFetch } from './src/rich-fetch.js';
 export {
-  stringify, parse,
+  stringify, stringifySync, parse,
   serialize, deserialize,
 } from './src/serialize.js';
 // The client router auto-enables on bundle load: `router-client.js` calls

@@ -87,3 +87,21 @@ test('the gallery GET action is cached, tagged, and invalidated on the wire', as
     restore();
   }
 });
+
+test('the gallery .bind card: each bound form passes its option before the input', async () => {
+  const { submitForm, testRequest } = await import('../../../packages/server/src/testing.js');
+  const restore = mute();
+  try {
+    const h = await createRequestHandler({ appDir, dev: true });
+    const page = await testRequest(h.handle, '/features/server-actions');
+    assert.equal(page.status, 200, 'three bound forms render');
+    // Three bound forms share the note field, so the test names one.
+    const res = await submitForm(h.handle, '/features/server-actions', { note: 'hot' }, { match: /Pick coffee/ });
+    assert.equal(res.status, 303);
+    const cookie = res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+    const after = await testRequest(h.handle, res.headers.get('location'), { headers: { cookie } });
+    assert.match(await after.text(), /You picked <strong>coffee<\/strong>[^.]*\(hot\)/, 'the bound option and the note reached the action');
+  } finally {
+    restore();
+  }
+});
