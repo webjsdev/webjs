@@ -61,10 +61,12 @@ export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
  *   it also carries the original error on `thrown` so a caller can salvage a
  *   schema lib's structured `issues` (the REST path does, for back-compat).
  */
-export function runValidate(validate, input) {
+export async function runValidate(validate, input) {
   let out;
   try {
-    out = validate(input);
+    // Awaited, so an async validator (an async schema check, a lookup) works
+    // like a sync one; a returned Promise must never read as a transformed input.
+    out = await validate(input);
   } catch (e) {
     // Throw-to-reject (the classic `Schema.parse` contract). Map to a sanitized
     // failure result; a thrown validator is a 400 (bad input), not a 500.
@@ -526,7 +528,7 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
   // server-to-server call.
   const validate = actionConfigFn(mod, 'validate');
   if (typeof validate === 'function') {
-    const v = runValidate(validate, args[0]);
+    const v = await runValidate(validate, args[0]);
     if (!v.ok) {
       if (v.thrown !== undefined) {
         // A THROWN validator behaves like a thrown action: a sanitized error

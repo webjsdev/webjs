@@ -544,7 +544,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   let args = [formInput(formData, { warn, label: fnName })];
   const validate = actionConfigFn(mod, 'validate');
   if (typeof validate === 'function') {
-    const v = runValidate(validate, args[0]);
+    const v = await runValidate(validate, args[0]);
     if (!v.ok) {
       if (v.thrown !== undefined) {
         // A THROWN validator is answered here rather than rethrown. Letting it

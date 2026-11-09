@@ -157,7 +157,7 @@ export function route(actionOrModule, opts = {}) {
       // throw, and a transform-return identically. A structured failure becomes
       // a 422 JSON; a throw stays a 400 (keeping a schema lib's `issues`); a
       // transform-return replaces the input.
-      const v = runValidate(validate, arg);
+      const v = await runValidate(validate, arg);
       if (!v.ok) {
         if (v.thrown !== undefined) {
           const msg = v.result.error || 'Invalid input';

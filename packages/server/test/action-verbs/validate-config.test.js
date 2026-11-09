@@ -57,6 +57,16 @@ before(async () => {
     `export const validate = (input) => ({ n: Number(input.n) });\n` +
     `export async function coerce(input) { return { isNumber: typeof input.n === 'number', n: input.n }; }\n`);
 
+  // An ASYNC validator: a returned Promise is awaited, never read as a transform.
+  const asyncFile = write('actions/save-async.server.js',
+    `'use server';\n` +
+    `export const validate = async (input) => {\n` +
+    `  await new Promise((r) => setTimeout(r, 5));\n` +
+    `  if (input.reject) throw new Error('taken');\n` +
+    `  if (!input.name) return { success: false, fieldErrors: { name: 'required' } };\n` +
+    `  return { success: true, data: { name: String(input.name).trim() } };\n` +
+    `};\n` +
+    `export async function saveAsync(input) { return { saved: input.name }; }\n`);
   write('app/layout.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ({children})=>html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
   write('app/page.js', `import { html } from ${JSON.stringify(CORE_URL)};\nexport default ()=>html\`<main>ok</main>\`;\n`);
 
@@ -66,6 +76,7 @@ before(async () => {
   hashes.struct = await hashFile(structFile);
   hashes.throw = await hashFile(throwFile);
   hashes.xform = await hashFile(xformFile);
+  hashes.async = await hashFile(asyncFile);
 });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
@@ -111,4 +122,22 @@ test('a transform-return validator replaces the input the action receives', asyn
   const res = await handle(new Request(url(`/__webjs/action/${hashes.xform}/coerce`), { method: 'POST', body: await stringify([{ n: '5' }]), headers }));
   assert.equal(res.status, 200);
   assert.deepEqual(parse(await res.text()), { isNumber: true, n: 5 }, 'the action saw the coerced number, not the string');
+});
+
+test('an ASYNC validator is awaited: its failure, its transform and its rejection all apply', async () => {
+  const headers = await csrfHeaders();
+  const call = async (arg) => handle(new Request(url(`/__webjs/action/${hashes.async}/saveAsync`), { method: 'POST', body: await stringify([arg]), headers }));
+
+  const failed = await call({});
+  assert.equal(failed.status, 200);
+  const result = parse(await failed.text());
+  assert.equal(result.success, false, 'the awaited failure envelope stops the action');
+  assert.deepEqual(result.fieldErrors, { name: 'required' });
+
+  const passed = await call({ name: '  Ada  ' });
+  assert.deepEqual(parse(await passed.text()), { saved: 'Ada' }, 'the awaited data replaces the input');
+
+  const rejected = await call({ name: 'x', reject: true });
+  assert.equal(rejected.status, 500, 'a rejected validator is a thrown validator');
+  assert.match(parse(await rejected.text()).error, /taken/);
 });
