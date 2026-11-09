@@ -646,7 +646,7 @@ test('handle: middleware that throws → 500', async () => {
   assert.ok(logs.some(l => /middleware/.test(l.m)), 'error was logged');
 });
 
-test('handle: broken middleware.js fails to load → logger.error, request continues', async () => {
+test('handle: broken middleware.js fails to load → fails CLOSED (500 naming it), never runs unguarded', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
@@ -656,10 +656,10 @@ test('handle: broken middleware.js fails to load → logger.error, request conti
   const errors = [];
   const logger = { info: () => {}, warn: () => {}, error: (m, o) => errors.push({ m, o }) };
   const app = await createRequestHandler({ appDir, dev: true, logger });
-  // Broken middleware: loadMiddleware catches and returns null → request runs straight.
+  // A middleware that cannot load must not let requests through unguarded.
   const resp = await app.handle(new Request('http://x/'));
-  assert.equal(resp.status, 200);
-  assert.ok(errors.some(l => /middleware/.test(l.m)));
+  assert.equal(resp.status, 500);
+  assert.match(await resp.text(), /root middleware failed to load/);
 });
 
 /* ------------ routeFor / rebuild ------------ */
@@ -907,7 +907,7 @@ test('handle: segment middleware.js wraps matching routes', async () => {
   assert.equal(resp.headers.get('x-admin-mw'), '1');
 });
 
-test('handle: broken segment middleware is skipped without crashing', async () => {
+test('handle: broken segment middleware fails CLOSED (500), never skipping its guard', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
@@ -919,7 +919,10 @@ test('handle: broken segment middleware is skipped without crashing', async () =
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/admin'));
-  assert.equal(resp.status, 200);
+  assert.equal(resp.status, 500, 'the subtree the middleware guards is not served unguarded');
+  assert.match(await resp.text(), /app\/admin\/middleware\.js failed to load/);
+  const root = await app.handle(new Request('http://x/'));
+  assert.equal(root.status, 200, 'pages outside the broken segment still serve');
 });
 
 test('handle: POST to /__webjs/action/<hash>/<fn> invokes the action', async () => {

@@ -36,6 +36,7 @@ import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
 import { devImport } from '../dev-import.js';
 import { runMetadataRoute } from '../metadata-routes.js';
+import { loadMiddlewareFile } from '../middleware-load.js';
 
 /**
  * Serve framework-internal static assets that depend on NEITHER the whole-app
@@ -607,10 +608,15 @@ export async function runWithSegmentMiddleware(req, files, terminal, dev) {
   const handlers = [];
   for (const f of files) {
     try {
-      const mod = await devImport(f, dev);
-      if (typeof mod.default === 'function') handlers.push(mod.default);
-    } catch {
-      // Bad middleware file: skip; top-level error handler will catch real problems.
+      handlers.push(await loadMiddlewareFile(f, dev));
+    } catch (e) {
+      // FAIL CLOSED: a segment middleware usually guards its subtree (auth,
+      // a paywall), so one that cannot load must never let the request
+      // through unguarded. Log the cause and answer 500.
+      console.error(`[webjs] segment middleware ${f} failed to load; answering 500 rather than skipping the guard:`, e);
+      return new Response(dev ? `[webjs] middleware ${f} failed to load: ${/** @type {Error} */ (e).message}\n` : 'Server error', {
+        status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' },
+      });
     }
   }
   let i = 0;
@@ -620,43 +626,6 @@ export async function runWithSegmentMiddleware(req, files, terminal, dev) {
     return fn(req, next);
   };
   return next();
-}
-
-/**
- * Root-middleware filename candidates, in resolution order.
- *
- * Every other routing convention accepts all four extensions (the router
- * matches on the STEM, so `app/<segment>/middleware.ts` has always worked),
- * and both the scaffold and the dev supervisor write / watch `middleware.ts`.
- * This lookup used to be the single literal `middleware.js`, so a root
- * `middleware.ts` was silently never loaded: no error, no warning, the app
- * just ran with no global middleware. TypeScript is the documented default
- * for an app, so that was the common case, and it went unnoticed because the
- * failure is invisible (a missing middleware looks exactly like an app that
- * has none). `.ts` is tried first to match the dev supervisor's order.
- */
-const ROOT_MIDDLEWARE_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'];
-
-/**
- * Load the optional top-level `middleware.{ts,js,mts,mjs}`.
- * @param {string} appDir
- * @param {boolean} dev
- * @param {import('../logger.js').Logger} logger
- */
-export async function loadMiddleware(appDir, dev, logger) {
-  let file = null;
-  for (const name of ROOT_MIDDLEWARE_FILES) {
-    const candidate = join(appDir, name);
-    if (await exists(candidate)) { file = candidate; break; }
-  }
-  if (!file) return null;
-  try {
-    const mod = await devImport(file, dev);
-    return typeof mod.default === 'function' ? mod.default : null;
-  } catch (e) {
-    logger.error('failed to load root middleware', { file, err: String(e) });
-    return null;
-  }
 }
 
 /**

@@ -212,6 +212,11 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> only Next.js sets <code>NEXT_RUNTIME</code>. Under WebJs it is <code>undefined</code>, so the guarded branch never runs.</p>
     <p><strong>Fix:</strong> drop the guard. WebJs runs <code>instrumentation.ts</code> <code>register()</code> once, on the server only. To tell Node from Bun, read <code>process.versions.bun</code>.</p>
 
+    <h2 id="middleware-failed-to-load">Every request answers 500: the root middleware failed to load</h2>
+    <p><strong>Symptom:</strong> every request answers <code>500</code> naming <code>the root middleware failed to load</code> (and the dev overlay shows the cause), production readiness stays <code>503</code>, or one subtree answers <code>500</code> naming its <code>middleware.ts</code>.</p>
+    <p><strong>Cause:</strong> a middleware or proxy file has a syntax error, exports no function (WebJs accepts the default export, a named <code>middleware</code>, or a named <code>proxy</code>), or declares a <code>config.matcher</code> that is not a valid path pattern. Middleware is usually a guard, so WebJs fails closed: it never lets requests through unguarded. A <code>middleware.ts</code> and a <code>proxy.ts</code> side by side is refused the same way.</p>
+    <p><strong>Fix:</strong> correct the file the message names, or keep only one of <code>middleware.ts</code> and <code>proxy.ts</code>. Reading <code>request.nextUrl</code> also throws in development: middleware receives the platform <code>Request</code>, so use <code>new URL(request.url)</code>. See <a href="/docs/middleware#next-conventions">Middleware</a>.</p>
+
     <h2 id="still-stuck">Still stuck</h2>
     <p>The framework source is in <code>node_modules/@webjsdev/</code> with no build step, so what you read is what runs. Grep the relevant file (the SSR pipeline in <code>@webjsdev/server/src/ssr.js</code>, client hydration in <code>@webjsdev/core/src/render-client.js</code>, the convention rules in <code>@webjsdev/server/src/check.js</code>). Run <code>webjs check</code> to surface most of the issues above before they reach the browser, and run <code>webjs check --rules</code> to read what each rule enforces.</p>
   `;

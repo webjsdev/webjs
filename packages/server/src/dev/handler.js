@@ -29,6 +29,7 @@ import { applyEnvValidation } from '../env-schema.js';
 import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.js';
 import { validateAppLayout, AppLayoutError, cssImportProblems } from '../app-layout.js';
 import { applyPendingCookies } from '../cookie-store.js';
+import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
 import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
@@ -82,7 +83,7 @@ import {
   resolveReloadIdleMs,
 } from './helpers.js';
 import {
-  handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
+  handleCore, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
 import { devImport, clearProdImportCache } from '../dev-import.js';
 
@@ -457,6 +458,8 @@ export async function createRequestHandler(opts) {
   if (!dev) {
     const problems = validateAppLayout(appDir, routeTable);
     if (problems.length) throw new AppLayoutError(problems);
+    // Both a middleware.* and a proxy.* at the root: also refused at boot.
+    await findRootMiddleware(appDir);
   }
   // Auto-linked favicons: tell the head builder which icon metadata routes
   // exist, so `app/icon.*` is linked when the app declares no metadata.icons.
@@ -732,7 +735,17 @@ export async function createRequestHandler(opts) {
             t.gate = now() - m; m = now();
             state.actionIndex = await buildActionIndex(appDir, dev);
             t.actions = now() - m; m = now();
-            state.middleware = await loadMiddleware(appDir, dev, logger);
+            // Fails CLOSED (middleware-load.js): a root middleware or proxy
+            // that cannot load stops the app serving rather than letting
+            // every request through unguarded.
+            try {
+              state.middleware = await loadRootMiddleware(appDir, dev, logger);
+            } catch (e) {
+              if (e && /** @type {any} */ (e).code === 'WEBJS_APP_LAYOUT') throw e;
+              const err = new Error(`[webjs] the root middleware failed to load, so no request is served (a guard that cannot load must not let requests through): ${/** @type {Error} */ (e).message}`, { cause: e });
+              /** @type {any} */ (err).code = 'WEBJS_APP_LAYOUT';
+              throw err;
+            }
             t.middleware = now() - m; m = now();
             // Client-router opt-out (#629): re-read each pass so toggling
             // `webjs.clientRouter` takes effect on rebuild without a restart.

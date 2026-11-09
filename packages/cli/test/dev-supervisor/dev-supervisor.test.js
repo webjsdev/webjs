@@ -31,6 +31,8 @@ const WATCH = {
   watchDirs: ['app', 'components', 'modules', 'lib', 'actions', 'db'],
   watchFiles: [
     'middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs',
+    // Next 16's name for the root middleware.
+    'proxy.ts', 'proxy.js', 'proxy.mts', 'proxy.mjs',
     // The boot hooks run once per process, so an edit restarts it (#1575).
     'instrumentation.ts', 'instrumentation.js', 'instrumentation.mts', 'instrumentation.mjs',
     'env.ts', 'env.js', 'env.mts', 'env.mjs',
@@ -129,14 +131,16 @@ test('the watched middleware extensions match the ones the server loads', () => 
       if (e.isFile() && e.name.endsWith('.js')) files.push(join(devDir, e.name));
     }
   }
-  const src = files.map((f) => readFileSync(f, 'utf8')).join('\n');
-  const m = src.match(/const ROOT_MIDDLEWARE_FILES = \[([^\]]+)\]/);
-  assert.ok(m, 'the server declares its root-middleware candidates in one place');
-  const serverExts = m[1].match(/'([^']+)'/g).map((q) => q.slice(1, -1));
+  files.push(join(serverSrc, 'middleware-load.js'));
+  const src = files.map((f) => (existsSync(f) ? readFileSync(f, 'utf8') : '')).join('\n');
+  const m = src.match(/const MIDDLEWARE_FILES = \[([^\]]+)\]/);
+  const px = src.match(/const PROXY_FILES = \[([^\]]+)\]/);
+  assert.ok(m && px, 'the server declares its root-middleware and proxy candidates in one place');
+  const serverExts = [...m[1].match(/'([^']+)'/g), ...px[1].match(/'([^']+)'/g)].map((q) => q.slice(1, -1));
 
   const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
   assert.ok(plan.mode === 'supervise');
-  const watched = plan.watchFiles.filter((a) => a.startsWith('middleware.'));
+  const watched = plan.watchFiles.filter((a) => a.startsWith('middleware.') || a.startsWith('proxy.'));
 
   assert.deepEqual(
     [...watched].sort(),

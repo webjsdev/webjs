@@ -762,6 +762,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'test/**/*',
       'middleware.js',
       'middleware.ts',
+      'proxy.ts',
       '.webjs/routes.d.ts',
     ],
     exclude: ['node_modules', '.webjs/vendor', 'db/migrations'],

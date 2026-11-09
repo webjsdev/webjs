@@ -53,7 +53,7 @@ export const WATCH_DIRS = ['app', 'components', 'modules', 'lib', 'actions', 'db
  * never restarts the dev server when edited, which is the quiet half of the
  * bug where a `middleware.ts` was loaded by neither.
  */
-export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', ...bootFiles()];
+export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', 'proxy.ts', 'proxy.js', 'proxy.mts', 'proxy.mjs', ...bootFiles()];
 
 /**
  * The app-root boot hooks the server runs ONCE per process (#1575):

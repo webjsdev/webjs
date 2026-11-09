@@ -32,6 +32,29 @@ export default async function middleware(
   return resp;
 }</code-block>
 
+    <h2 id="next-conventions">Next.js conventions: proxy, named exports, and matcher</h2>
+    <p>Middleware written for Next.js works as is:</p>
+    <ul>
+      <li><strong>The file</strong> may be <code>proxy.ts</code> (Next 16's name) instead of <code>middleware.ts</code>. Having both is an error: production refuses to start and development answers every request naming the two files.</li>
+      <li><strong>The function</strong> may be the default export, a named <code>middleware</code> export, or a named <code>proxy</code> export.</li>
+      <li><strong>Returning nothing continues</strong>, like <code>NextResponse.next()</code>. Return a <code>Response</code> to answer, or call <code>next()</code> to run the rest of the chain and post-process its response. <code>next()</code> runs the chain once however many times you call it, and <code>next.waitUntil(promise)</code> keeps background work (an analytics write) going after the response is sent.</li>
+      <li><strong><code>export const config = &#123; matcher &#125;</code></strong> scopes it. A matcher is a path pattern (<code>'/dashboard/:path*'</code>, or a regex group such as <code>'/((?!api|_next).*)'</code>), an array of them, or objects <code>&#123; source, has, missing &#125;</code> whose conditions read a <code>header</code>, <code>cookie</code>, <code>query</code> parameter or <code>host</code>, exactly as in Next. A request it does not match skips the middleware. Paths are matched with the <code>webjs.basePath</code> removed, and a trailing slash is tolerated.</li>
+      <li><strong><code>request.cookies</code></strong> is the request's <code>cookies()</code> store, so <code>request.cookies.get('session')?.value</code> reads and <code>request.cookies.set(...)</code> writes a <code>Set-Cookie</code> onto the response.</li>
+      <li><strong><code>request.nextUrl</code></strong> does not exist: middleware receives the platform <code>Request</code>. In development, reading it throws naming the fix, <code>new URL(request.url)</code>.</li>
+    </ul>
+    <code-block>// proxy.ts
+export function proxy(request: Request) {
+  if (!request.cookies.get('session')?.value) {
+    return Response.redirect(new URL('/login', request.url), 307);
+  }
+  // returning nothing continues to the page
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', &#123; source: '/api/:path*', missing: [&#123; type: 'header', key: 'authorization' &#125;] &#125;],
+};</code-block>
+    <p id="middleware-fails-closed"><strong>A middleware that cannot load fails closed.</strong> Middleware is usually a guard, so a syntax error, a missing export, or a bad matcher never lets requests through unguarded. A broken root middleware or proxy stops the app serving (the dev overlay shows the cause, and production readiness stays <code>503</code>), and a broken per-segment middleware answers <code>500</code> for its subtree while the rest of the app keeps serving.</p>
+
     <h2>Per-Segment Middleware</h2>
     <p>Place a <code>middleware.ts</code> inside any directory under <code>app/</code> to scope it to that subtree. It runs only for requests whose URL matches that segment and its children.</p>
     <code-block>my-app/
@@ -56,13 +79,13 @@ export default async function middleware(
     <code-block>export default async function middleware(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
-): Promise&lt;Response&gt;</code-block>
+): Promise&lt;Response | void&gt;</code-block>
     <ul>
       <li><strong>req</strong>: a standard <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request">Request</a> object. Read headers, cookies, URL, method, body.</li>
       <li><strong>next()</strong>: calls the next middleware in the chain, or the final handler (page render, API route, action). Returns a <code>Promise&lt;Response&gt;</code>.</li>
-      <li><strong>Return value</strong>: you must return a <code>Response</code>. Either pass through the one from <code>next()</code> (optionally modified), or return your own to short-circuit the chain.</li>
+      <li><strong>Return value</strong>: a <code>Response</code>, either the one from <code>next()</code> (optionally modified) or your own to short-circuit the chain. Returning nothing continues, as if you returned <code>next()</code>. Any other value is an error.</li>
     </ul>
-    <p>The file must <code>export default</code> a function. Named exports are ignored.</p>
+    <p>The function is the file's default export, or a named <code>middleware</code> or <code>proxy</code> export (see <a href="#next-conventions">Next.js conventions</a>).</p>
 
     <h2>Chain Order</h2>
     <p>When a request arrives, middleware executes in this order:</p>
