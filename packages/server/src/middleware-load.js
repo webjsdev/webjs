@@ -197,11 +197,22 @@ export function wrapMiddleware(fn, matcher, opts) {
  */
 export async function loadMiddlewareFile(file, dev, logger) {
   const mod = await devImport(file, dev);
+  // Segment middleware is loaded on every request, so the wrapper (and the
+  // URLPattern compile of its matcher) is memoized on the module object: the
+  // same module until its source changes (devImport keys a dev re-import on
+  // the file's content), so an edit gets a fresh wrapper and nothing else does.
+  const hit = WRAPPED.get(mod);
+  if (hit && hit.dev === dev && hit.logger === logger) return hit.wrapped;
   const fn = resolveMiddlewareExport(mod, file);
   const config = mod.config && typeof mod.config === 'object' ? /** @type {any} */ (mod.config) : {};
   const matcher = compileMatcher(config.matcher, file);
-  return wrapMiddleware(fn, matcher, { dev, file, logger });
+  const wrapped = wrapMiddleware(fn, matcher, { dev, file, logger });
+  WRAPPED.set(mod, { dev, logger, wrapped });
+  return wrapped;
 }
+
+/** @type {WeakMap<object, { dev: boolean, logger: unknown, wrapped: Function }>} */
+const WRAPPED = new WeakMap();
 
 /**
  * Load the optional root middleware (or proxy). Null when there is none;

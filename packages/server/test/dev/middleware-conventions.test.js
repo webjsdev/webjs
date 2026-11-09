@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { createRequestHandler } from '../../src/dev.js';
-import { compileMatcher, matchHas } from '../../src/middleware-load.js';
+import { compileMatcher, matchHas, loadMiddlewareFile } from '../../src/middleware-load.js';
 
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
 let tmpRoot;
@@ -113,4 +113,18 @@ test('a non-Response return is an error naming the fix', async () => {
   const app = await createRequestHandler({ appDir, dev: true, logger: { ...quiet, error: (m) => errors.push(String(m)) } });
   const r = await app.handle(new Request('http://x/'));
   assert.equal(r.status, 500);
+});
+
+test('a middleware is wrapped once per module, and again only when its source changes', async () => {
+  const appDir = makeApp({ 'app/admin/middleware.js': "export const config = { matcher: '/admin/:path*' };\nexport default async (req, next) => next();\n" });
+  const file = join(appDir, 'app/admin/middleware.js');
+  const a = await loadMiddlewareFile(file, false);
+  const b = await loadMiddlewareFile(file, false);
+  assert.equal(a, b, 'production reuses one wrapper (no matcher recompile per request)');
+  const d1 = await loadMiddlewareFile(file, true);
+  assert.equal(await loadMiddlewareFile(file, true), d1, 'dev reuses it while the source is unchanged');
+  writeFileSync(file, "export default async () => new Response('edited');\n");
+  const d2 = await loadMiddlewareFile(file, true);
+  assert.notEqual(d2, d1, 'an edit gets a fresh wrapper');
+  assert.equal(await (await d2(new Request('http://x/admin'), async () => new Response('next'))).text(), 'edited');
 });
