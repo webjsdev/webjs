@@ -66,7 +66,12 @@ headless `claude -p` builds one spec from `specs/` (Roomly, Pollster, Trackr,
 Inbox) in a fresh scaffold OUTSIDE this repo, with `--setting-sources
 project,local` and `--strict-mcp-config` over the app's own `.claude.json`, so
 only what a real scaffold ships applies: none of the machine's user settings,
-hooks, skills or MCP servers. The transcript is stream-json, so `replay.mjs`
+hooks, skills or MCP servers. Builds go under `/var/tmp/webjs-builds` by
+default, and an `--out` with a `CLAUDE.md` or `AGENTS.md` in any directory
+above it is refused: Claude Code loads those from every ancestor, so a build
+under `~/.claude/` would follow the machine owner's own instructions. The app's
+`node_modules` links the framework checkout's entries except the in-repo apps
+(`@webjsdev/example-blog`, `gallery`, `website`), which no real install has. The transcript is stream-json, so `replay.mjs`
 reads it as it is.
 
 ```sh

@@ -28,6 +28,7 @@
  * Local only: it calls a model and costs money per build.
  */
 import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, createWriteStream } from 'node:fs';
+import { parse as parsePath } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -133,7 +134,7 @@ async function oneBuild({ spec, specName, index, out, framework, model, label, t
   git('add', '-A');
   git('commit', '-q', '-m', 'scaffold');
   git('checkout', '-q', '-b', `feature/${specName}`);
-  symlinkSync(join(framework, 'node_modules'), join(app, 'node_modules'));
+  linkNodeModules(framework, app);
   const transcript = join(parent, 'transcript.jsonl');
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_CODE') || k === 'CLAUDECODE') delete env[k];
@@ -157,6 +158,50 @@ async function oneBuild({ spec, specName, index, out, framework, model, label, t
   };
   writeFileSync(join(parent, 'result.json'), JSON.stringify(result, null, 2));
   return result;
+}
+
+/**
+ * The workspace apps this monorepo's `node_modules` carries under
+ * `@webjsdev/` (the blog example, the gallery, the website). A real install
+ * has none of them, and an agent that finds one learns from it instead of
+ * from the brief, so the build never sees them.
+ */
+const WORKSPACE_APPS = new Set(['example-blog', 'gallery', 'website']);
+
+/**
+ * Give the app a `node_modules` of links to the framework checkout's, minus
+ * the workspace apps.
+ * @param {string} framework @param {string} app
+ */
+function linkNodeModules(framework, app) {
+  const src = join(framework, 'node_modules');
+  const dst = join(app, 'node_modules');
+  mkdirSync(dst);
+  for (const name of readdirSync(src)) {
+    if (name !== '@webjsdev') { symlinkSync(join(src, name), join(dst, name)); continue; }
+    mkdirSync(join(dst, name));
+    for (const pkg of readdirSync(join(src, name))) {
+      if (!WORKSPACE_APPS.has(pkg)) symlinkSync(join(src, name, pkg), join(dst, name, pkg));
+    }
+  }
+}
+
+/**
+ * Claude Code reads a CLAUDE.md (and an AGENTS.md through it) from every
+ * directory above the working one, so a build under `~/.claude/` would carry
+ * the machine owner's own instructions. Refuse an output directory with one
+ * above it.
+ * @param {string} out
+ */
+function assertNoAncestorInstructions(out) {
+  let dir = resolve(out);
+  const { root } = parsePath(dir);
+  while (dir !== root) {
+    for (const f of ['CLAUDE.md', 'AGENTS.md']) {
+      if (existsSync(join(dir, f))) throw new Error(`build.mjs: ${join(dir, f)} sits above --out, so every build would load it. Pick an output directory outside it (the default is under /var/tmp).`);
+    }
+    dir = dirname(dir);
+  }
 }
 
 const yn = (v) => (v === true ? 'pass' : v === false ? 'FAIL' : '-');
@@ -183,7 +228,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   const spec = readFileSync(join(HERE, 'specs', `${specName}.md`), 'utf8');
   const runs = Number(arg('runs', '1'));
   const jobs = Number(arg('jobs', '3'));
-  const out = resolve(arg('out', join(tmpdir(), 'webjs-builds')));
+  const out = resolve(arg('out', join('/var/tmp', 'webjs-builds')));
+  assertNoAncestorInstructions(out);
   const opts = { spec, specName, out, framework: resolve(arg('framework', REPO)), model: arg('model', 'haiku'), label: arg('label', 'after'), timeoutS: Number(arg('timeout', '5400')) };
   const results = [];
   let next = 0;
