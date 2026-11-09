@@ -11,7 +11,7 @@ export default function Configuration() {
     <h3>webjs dev</h3>
     <code-block>webjs dev [--port 8080]</code-block>
     <ul>
-      <li><code>--port</code>: dev server port. Precedence is <code>--port</code> &gt; <code>PORT</code> (a real env var <em>or</em> a <code>PORT</code> in the app's <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> still wins over the <code>.env</code> value, matching the auto-load's shell-wins-over-file rule.</li>
+      <li><code>--port</code>: dev server port. Precedence is <code>--port</code> &gt; <code>PORT</code> (a real env var <em>or</em> a <code>PORT</code> in any of the app's env files, <code>.env.$mode.local</code>, <code>.env.local</code>, <code>.env.$mode</code> or <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> still wins over a file value, matching the auto-load's shell-wins-over-file rule.</li>
       <li>File watching via Node's built-in <code>fs.watch</code> (automatic)</li>
       <li>Live reload via SSE (<code>/__webjs/events</code>)</li>
       <li>TypeScript files transformed on the fly</li>
@@ -25,7 +25,7 @@ export default function Configuration() {
     <h3>webjs start</h3>
     <code-block>webjs start [--port 8080]</code-block>
     <ul>
-      <li><code>--port</code>: production server port. Same precedence as <code>dev</code>: <code>--port</code> &gt; <code>PORT</code> (real env var or <code>.env</code>) &gt; <code>8080</code>.</li>
+      <li><code>--port</code>: production server port. Same precedence as <code>dev</code>: <code>--port</code> &gt; <code>PORT</code> (real env var or one of the env files) &gt; <code>8080</code>.</li>
       <li>Speaks plain HTTP/1.1. TLS termination + HTTP/2 to the browser is the proxy's job (PaaS edges or nginx/Caddy/Traefik)</li>
       <li>gzip/brotli compression enabled by default</li>
       <li>Static file ETag + Cache-Control headers</li>
@@ -249,7 +249,7 @@ webjs routes --help     # one command's help (flag form)</code-block>
       <li><code>.env.$mode</code>;</li>
       <li><code>.env</code>.</li>
     </ol>
-    <p>The mode is <code>development</code> under <code>npm run dev</code>, <code>production</code> under <code>npm run start</code>, and <code>test</code> when <code>NODE_ENV=test</code>. <code>dev</code> and <code>start</code> set <code>NODE_ENV</code> to <code>development</code> / <code>production</code> when it is not already set. Commit <code>.env</code> and <code>.env.$mode</code> defaults; keep <code>.local</code> files and real secrets out of git. The files are parsed the same way on Node and Bun, and a Bun app's scaffolded scripts pass <code>--no-env-file</code> so Bun's own loader does not read a different set first.</p>
+    <p>The mode is <code>development</code> under <code>npm run dev</code>, <code>production</code> under <code>npm run start</code>, and <code>test</code> when <code>NODE_ENV=test</code>. <code>dev</code> and <code>start</code> set <code>NODE_ENV</code> to <code>development</code> / <code>production</code> when it is not already set. Keep the <code>.env*</code> files out of git (the scaffold ignores them) and commit <code>.env.example</code> with placeholder values. The files are parsed the same way on Node and Bun, and a Bun app's scaffolded scripts pass <code>--no-env-file</code> so Bun's own loader does not read a different set first.</p>
 
     <p><strong>No file, no problem.</strong> A missing or malformed file is skipped silently. The server still boots; only the missing values are <code>undefined</code> (the same way a typo would be).</p>
 

@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: { params: Promise&lt;{ id: s
     <p>Every handler receives two arguments:</p>
     <code-block>export async function GET(
   req: Request,
-  { params }: { params: Record&lt;string, string&gt; }
+  { params }: { params: Record&lt;string, string | string[]&gt; }
 ): Promise&lt;Response | object&gt;</code-block>
     <ul>
       <li><strong>req</strong>: a standard Web API <code>Request</code>. Read headers, cookies, URL, query params, body.</li>

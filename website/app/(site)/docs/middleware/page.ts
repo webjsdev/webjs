@@ -195,7 +195,7 @@ export default rateLimit({ window: '10s', max: 5 });</code-block>
     <code-block>rateLimit({
   window: '1m',       // time window: number (ms) or string: '30s', '1m', '1h'
   max: 60,            // max requests per window per key
-  key: req =&gt; {       // custom key function (default: IP from x-forwarded-for)
+  key: req =&gt; {       // custom key function (default: the socket IP; forwarded headers only with trustProxy: true)
     return \`login:\${req.headers.get('x-forwarded-for') || 'anon'}\`;
   },
   message: 'Slow down' // custom 429 error message
@@ -239,7 +239,7 @@ const userAgent = headers().get('user-agent');</code-block>
     <ul>
       <li><strong>Keep middleware fast.</strong> It runs on every request in its scope. Defer heavy work to the route handler when possible.</li>
       <li><strong>Avoid mutating the request.</strong> The Web <code>Request</code> API is largely immutable. If you need to pass data downstream (e.g., a resolved user object), store it in a module-scoped <code>AsyncLocalStorage</code> or use a header.</li>
-      <li><strong>One default export.</strong> Each <code>middleware.ts</code> must export a single default function. Multiple middleware in one file are not supported. If you need composition, chain them manually inside your export.</li>
+      <li><strong>One function per file.</strong> Export it as the default, or as a named <code>middleware</code> or <code>proxy</code> function, as in Next.js. Multiple middleware in one file are not supported. If you need composition, chain them manually inside your export.</li>
       <li><strong>Use <code>rateLimit()</code> from <code>@webjsdev/server</code></strong> rather than writing your own. It handles cleanup, header injection, and per-bucket IP resolution that defaults to the framework-stamped socket address (spoof-safe) and only honours <code>X-Forwarded-For</code> / <code>CF-Connecting-IP</code> / <code>X-Real-IP</code> when you opt in with <code>trustProxy: true</code> and <code>WEBJS_NO_TRUST_PROXY=1</code> is not set (that env var outranks the option). See <a href="/docs/rate-limiting">Rate limiting</a> for the threat model.</li>
     </ul>
   `;

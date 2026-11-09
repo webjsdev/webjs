@@ -612,7 +612,8 @@ export default async function ProtectedPage() {
     <p>
       Next.js's <code>permanentRedirect</code>, exported from
       <code>@webjsdev/core</code>, behaves as <code>redirect(url, 308)</code>
-      and answers a <code>308</code> Permanent Redirect, which browsers and
+      and answers a <code>308</code> Permanent Redirect (a form-bound server
+      action still answers <code>303</code>), which browsers and
       search engines remember. Use it when a URL has moved for good, such as a
       renamed slug.
     </p>
@@ -711,7 +712,7 @@ page.ts           Page component (SSR)                 /about
 layout.ts         Wrapping layout (nested)             wraps children
 route.ts          API / WebSocket handler              /api/users
 error.ts          Error boundary (nearest wins)        catches render errors
-not-found.ts      Custom 404 page (app root only)      404 fallback
+not-found.ts      404 boundary (nearest wins)          404 fallback
 loading.ts        Loading UI (reserved for Suspense)   shown while loading
 middleware.ts     Request middleware (nested)           runs before handlers
 [param]/          Dynamic segment                      /users/:id

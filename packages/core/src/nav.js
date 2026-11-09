@@ -65,8 +65,8 @@ export function unauthorized() {
  *   - thrown from a server action called over RPC: the client router
  *     navigates to the target.
  * Pass an explicit status to override: `redirect('/x', 308)` (permanent) or the
- * options form `redirect('/x', { status: 301 })`. An explicit status wins at
- * every catching site.
+ * options form `redirect('/x', { status: 301 })`. An explicit status wins
+ * everywhere except a form-bound action, which always answers 303.
  *
  * The second argument may instead be `'push'` or `'replace'` (Next's
  * `RedirectType`): how the client records the navigation when the redirect
@@ -93,8 +93,9 @@ export function redirect(url, status) {
   /** @type any */ (err).__webjs = REDIRECT;
   /** @type any */ (err).url = url;
   // Left undefined when the caller did not specify one, so the catching site
-  // can apply its convention (302 GET gate vs 307 action). A caller-supplied
-  // code is stored verbatim and overrides that convention.
+  // can apply its convention (302 GET gate, 307 route handler, 303 form action).
+  // A caller-supplied code is stored verbatim and overrides that convention,
+  // except at a form-bound action, which always answers 303.
   /** @type any */ (err).status = typeof code === 'number' ? code : undefined;
   /** @type any */ (err).redirectType = type;
   throw err;
@@ -102,7 +103,7 @@ export function redirect(url, status) {
 
 /**
  * Throw a PERMANENT redirect sentinel, Next.js's `permanentRedirect()`: a 308
- * Permanent Redirect at every catching site that answers with a 3xx. Use it
+ * Permanent Redirect everywhere except a form-bound action, which answers 303. Use it
  * when a URL has moved for good (a renamed slug); browsers and search engines
  * remember a 308.
  *

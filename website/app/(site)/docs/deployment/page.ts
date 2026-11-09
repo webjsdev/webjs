@@ -275,7 +275,7 @@ Deno.serve({ port: 8080 }, (req) =&gt; app.handle(req));</code-block>
     <h2>Environment Variables</h2>
     <p>WebJs reads the following environment variables:</p>
     <ul>
-      <li><strong>PORT</strong>: server port (default: 8080). Resolved with precedence <code>--port</code> &gt; <code>PORT</code> (a real exported env var <em>or</em> a <code>PORT</code> in the app's <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> wins over the <code>.env</code> value, matching the auto-load's shell-wins-over-file rule.</li>
+      <li><strong>PORT</strong>: server port (default: 8080). Resolved with precedence <code>--port</code> &gt; <code>PORT</code> (a real exported env var <em>or</em> a <code>PORT</code> in any of the app's env files, <code>.env.$mode.local</code>, <code>.env.local</code>, <code>.env.$mode</code> or <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> wins over a file value, matching the auto-load's shell-wins-over-file rule.</li>
       <li><strong>NODE_ENV</strong>: not directly used by webjs (it uses the <code>dev</code> flag from the CLI command), but your app code and dependencies may read it.</li>
     </ul>
     <p>There is no deploy-id env var to set. WebJs detects a deploy automatically from the CONTENT of what it serves (the no-build model, where the source hashes ARE the version): a change to your app source or a <code>@webjsdev/server</code> upgrade turns over the client's stale caches on the next navigation (soft, no reload), and a vendor pin or a <code>@webjsdev/core</code> upgrade hard-reloads. A framework upgrade reflects once the app has installed the new <code>@webjsdev/*</code> version (governed by your dependency range and lockfile).</p>
