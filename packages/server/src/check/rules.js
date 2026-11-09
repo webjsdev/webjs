@@ -107,6 +107,11 @@ export const RULES = [
       'Flags `<form action=${someAction}>` bound to a `\'use server\'` action whose file declares `export const method = \'GET\'` (#488). A GET action is a READ: it is CSRF-exempt and rides its arguments in the url, while a form submission is a CSRF-checked POST carrying a body, so the two contracts contradict each other and the submission is answered with a 405 at runtime. The rule reads the imported action\'s own file, so it only fires when the binding really does resolve to a GET-declared action. Fix by dropping the `method` export (an action with no `method` is a POST, which is what a form wants) or by binding a different action; if the form really is a read, use a plain `<form method="get" action="/search">` with no bound action.',
   },
   {
+    name: 'no-foreign-framework-import',
+    description:
+      'Flags an import of `next` / `next/*`, `react` / `react-dom`, `lit` / `lit-html` / `lit-element` / `lit/*`, `@lit/*` or `@lit-labs/*`, in any form (named, default, namespace, `import type`, side-effect, `export ... from`, or a string-literal dynamic `import()`). WebJs never aliases or loads those packages: a Next import fails to resolve, and a Lit import quietly loads a second component runtime from the CDN. The violation names the exact `@webjsdev/*` replacement (for example `next/navigation` -> `redirect` / `notFound` from `@webjsdev/core`, `lit` -> `WebComponent` / `html` / `css` from `@webjsdev/core`, `@lit/context` -> `@webjsdev/core/context`). `react` / `react-dom` stay allowed inside a `*.server.*` module (an email renderer, say), which never reaches the browser. The same refusal runs at load time: the dev overlay and production readiness name the import, and a server import is rewritten to the same fix.',
+  },
+  {
     name: 'no-page-route-conflict',
     description:
       'A `page.{js,ts}` and a `route.{js,ts}` must not answer the same URL (including through a route group, `app/(a)/x/page.ts` beside `app/x/route.ts`). Next.js refuses this at build time; WebJs refuses to boot in production and answers every dev request with the problem, because the route handler would shadow the page and it could never render. Move the route handler to its own folder (`app/api/...`) or delete the page.',

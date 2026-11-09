@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { BUILTIN, FRAMEWORK_SERVER_ONLY, extractPackageName, scanBareImports } from './scanner.js';
+import { foreignImport } from '../foreign-imports.js';
 import { getPackageVersion, getPackageDeps } from './manifest.js';
 import { SUPPORTED_PROVIDERS } from './providers.js';
 import { PIN_BUNDLE_TIMEOUT_MS, fetchIntegrity, sha384Integrity } from './integrity.js';
@@ -699,7 +700,7 @@ export async function pinAll(appDir, opts = {}) {
   for (const spec of bare) {
     if (BUILTIN.has(spec)) continue;
     const pkg = extractPackageName(spec);
-    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg)) continue;
+    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg) || foreignImport(spec)) continue;
     const version = getPackageVersion(pkg, appDir);
     if (!version) {
       droppedUnresolvable.push(spec);

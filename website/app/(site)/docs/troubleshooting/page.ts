@@ -159,6 +159,19 @@ export default function Troubleshooting() {
     <p><strong>Cause:</strong> a <code>page.ts</code> and a <code>route.ts</code> answer the same URL, either in one folder or through a route group (<code>app/(site)/about/page.ts</code> beside <code>app/about/route.ts</code>). The route handler would shadow the page, so it could never render. Next.js refuses the same layout at build time.</p>
     <p><strong>Fix:</strong> keep one. Move the route handler under its own path (<code>app/api/about/route.ts</code>) or delete the page. <code>webjs check</code> reports the same problem ahead of time.</p>
 
+    <h2 id="foreign-framework-import">An import of <code>next</code>, <code>react</code>, or <code>lit</code> is refused (<code>no-foreign-framework-import</code>)</h2>
+    <p><strong>Symptom:</strong> <code>webjs check</code> reports <code>no-foreign-framework-import</code>, the dev server answers every request with a 500 naming the import (and the error overlay shows it), production readiness stays <code>503</code>, or a server module fails to load with <code>imports 'next/headers', a Next.js package</code>.</p>
+    <p><strong>Cause:</strong> a file imports <code>next</code> or <code>next/*</code>, <code>react</code> or <code>react-dom</code>, <code>lit</code>, <code>lit-html</code>, <code>lit-element</code>, <code>lit/*</code>, <code>@lit/*</code> or <code>@lit-labs/*</code>, usually from habit. WebJs implements those APIs itself and never loads the packages: a Next import has nothing to resolve to, and a Lit import would load a second component runtime from the CDN beside WebJs's own. Every import form counts, <code>import type</code> included.</p>
+    <p><strong>Fix:</strong> import the WebJs equivalent, which the message names. The common ones:</p>
+    <ul>
+      <li><code>next/navigation</code> (<code>redirect</code>, <code>permanentRedirect</code>, <code>notFound</code>, <code>forbidden</code>, <code>unauthorized</code>) becomes <code>@webjsdev/core</code>; client navigation is <code>navigate()</code> from <code>@webjsdev/core</code>.</li>
+      <li><code>next/headers</code> (<code>cookies</code>, <code>headers</code>) and <code>next/cache</code> (<code>revalidatePath</code>, <code>revalidateTag</code>) become <code>@webjsdev/server</code>.</li>
+      <li><code>next/server</code> is the platform: a route handler or middleware takes a <code>Request</code> and returns a <code>Response</code>.</li>
+      <li><code>next/link</code> is a plain <code>&lt;a href&gt;</code>, <code>next/image</code> a plain <code>&lt;img&gt;</code>, and types such as <code>Metadata</code> come from <code>@webjsdev/core</code> with <code>import type</code>.</li>
+      <li><code>lit</code>, <code>lit-html</code> and <code>lit-element</code> become <code>@webjsdev/core</code> (<code>LitElement</code> is <code>WebComponent</code>), <code>lit/directives/*</code> becomes <code>@webjsdev/core/directives</code>, <code>@lit/context</code> becomes <code>@webjsdev/core/context</code>, and <code>@lit/task</code> becomes <code>@webjsdev/core/task</code>.</li>
+      <li><code>react</code> components become a <code>WebComponent</code> class. A <code>*.server.ts</code> module may still use <code>react</code> or <code>react-dom</code> (an email renderer, for example), since it never reaches the browser.</li>
+    </ul>
+
     <h2 id="still-stuck">Still stuck</h2>
     <p>The framework source is in <code>node_modules/@webjsdev/</code> with no build step, so what you read is what runs. Grep the relevant file (the SSR pipeline in <code>@webjsdev/server/src/ssr.js</code>, client hydration in <code>@webjsdev/core/src/render-client.js</code>, the convention rules in <code>@webjsdev/server/src/check.js</code>). Run <code>webjs check</code> to surface most of the issues above before they reach the browser, and run <code>webjs check --rules</code> to read what each rule enforces.</p>
   `;

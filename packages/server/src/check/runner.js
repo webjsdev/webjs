@@ -35,6 +35,7 @@ import { checkServerImportInBrowserModule } from './runner-support.js';
 import {
   checkNoMissingLocalImport,
   checkFormActionNotAGetAction,
+  checkNoForeignFrameworkImport,
 } from './rules-imports.js';
 
 /**
@@ -107,6 +108,7 @@ export async function checkConventions(appDir) {
   await checkServerImportInBrowserModule(appDir, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
+  checkNoForeignFrameworkImport(files, violations);
   await checkAppLayout(appDir, violations);
 
   return violations;

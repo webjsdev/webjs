@@ -34,7 +34,8 @@ import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
 import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from '../vendor.js';
 import { browserEntryFiles } from '../browser-entries.js';
-import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
+import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport, bareImports, dynamicBareImports } from '../module-graph.js';
+import { foreignImportProblems, registerForeignImportGuard } from '../foreign-imports.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
 import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
 
@@ -377,6 +378,9 @@ export async function createRequestHandler(opts) {
   // what a bound `<form action=${action}>` resolves through, so gating the hook
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
+  // Refuse `next/*`, `react` and `lit` imported from the app's own files at
+  // resolve time (Node), even when the package happens to be installed.
+  registerForeignImportGuard(appDir);
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
   // `webjs.dev.sourceLocations: true`) under `webjs dev`
@@ -706,6 +710,14 @@ export async function createRequestHandler(opts) {
             if (layoutProblems.length) throw new AppLayoutError(layoutProblems);
             let m = now();
             state.moduleGraph = await buildModuleGraph(appDir);
+            // A foreign-framework import (next/*, react, lit) anywhere in the
+            // app is refused before anything renders: the dev overlay shows
+            // it, production readiness stays 503 naming it.
+            {
+              const relApp = (p) => relative(appDir, p).split(sep).join('/');
+              const foreign = foreignImportProblems(new Map([...bareImports(state.moduleGraph), ...dynamicBareImports(state.moduleGraph)]), relApp);
+              if (foreign.length) throw new AppLayoutError(foreign);
+            }
             t.graph = now() - m; m = now();
             const components = await scanComponents(appDir);
             await primeComponentRegistry(appDir, components);
