@@ -126,7 +126,7 @@ export function checkNoInterpolationInRawTextElement(files, violations) {
  * @param {Violation[]} violations  accumulator the rule pushes onto
  * @returns {void}
  */
-export function checkNoServerEnvInComponents(files, violations, shipped = new Set()) {
+export function checkNoServerEnvInComponents(files, violations, shipped = new Set(), routeFiles = new Set()) {
   // --- Rule: no-server-env-in-components ---
   // Catches `process.env.X` reads in code the BROWSER runs, where X is not a
   // WEBJS_PUBLIC_* var and not NODE_ENV: every component file, plus every
@@ -136,11 +136,11 @@ export function checkNoServerEnvInComponents(files, violations, shipped = new Se
   // A page / layout / boundary function runs on the server only, so its reads
   // are fine and it is not scanned. Next.js's NEXT_PUBLIC_ prefix gets a
   // targeted fix, since it is the usual cause.
-  const ROUTE_MODULE = /(?:^|[\\/])(?:page|layout|error|loading|not-found|forbidden|unauthorized|global-error|global-not-found|route|middleware)\.m?[jt]s$/;
   for (const { abs, rel, content } of files) {
     if (!isComponentFile(rel) && !shipped.has(abs)) continue;
     if (/\.server\.m?[jt]s$/.test(rel) || isServerActionFile(abs, content)) continue;
-    if (!isComponentFile(rel) && ROUTE_MODULE.test(rel)) continue;
+    // Route-ness comes from the route table, never a file name (#1686).
+    if (!isComponentFile(rel) && routeFiles.has(abs)) continue;
     const masked = maskComments(content);
     const re = /\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
     const seen = new Set();

@@ -37,6 +37,7 @@ import {
   checkNoDuplicateTag,
 } from './rules-registry.js';
 import { checkServerImportInBrowserModule } from './runner-support.js';
+import { checkRouteModuleBoundaries } from './rules-route-modules.js';
 import {
   checkNoMissingLocalImport,
   checkFormActionNotAGetAction,
@@ -112,8 +113,9 @@ export async function checkConventions(appDir) {
   checkNoInlineUseServer(files, violations);
   checkTagNameHasHyphen(files, violations);
   await checkNoDuplicateTag(appDir, files, violations);
-  const shipped = await checkServerImportInBrowserModule(appDir, violations);
-  checkNoServerEnvInComponents(files, violations, shipped);
+  const browser = await checkServerImportInBrowserModule(appDir, violations);
+  checkNoServerEnvInComponents(files, violations, browser.shipped, browser.routeFiles);
+  checkRouteModuleBoundaries(appDir, files, violations, browser);
   checkNoNextRuntimeGuard(files, violations);
   checkNoNextUrl(files, violations);
   checkNoMissingLocalImport(appDir, files, violations);

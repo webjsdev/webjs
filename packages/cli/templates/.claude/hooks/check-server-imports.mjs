@@ -18,13 +18,17 @@ const input = data.tool_input || {};
 const filePath = input.file_path || input.filePath || '';
 if (!filePath) process.exit(0);
 
-// Only browser-facing app modules matter. A `.server.*` file (the boundary) or a
-// route.ts / middleware.ts (never shipped) is allowed to import server code.
+// Only browser-facing app modules matter: components and what they import. A
+// `.server.*` file (the boundary), a route.ts / middleware.ts, and every page,
+// layout and boundary under app/ run only on the server, so each may import
+// server code. Route-ness follows the router: a convention file name under
+// app/, outside an `_private` folder.
 const rel = filePath.replace(/\\/g, '/');
 const isAppModule = /\/(app|components|modules|lib)\/.*\.(ts|js|mts|mjs)$/.test('/' + rel) || /(^|\/)(app|components|modules|lib)\//.test(rel);
 if (!isAppModule) process.exit(0);
 if (/\.server\.(ts|js|mts|mjs)$/.test(rel)) process.exit(0);
 if (/(^|\/)(route|middleware)\.(ts|js|mts|mjs)$/.test(rel)) process.exit(0);
+if (/(^|\/)app\/(?:(?!_)[^/]+\/)*(page|layout|error|loading|not-found|forbidden|unauthorized|global-error|global-not-found)\.(ts|js|mts|mjs)$/.test(rel)) process.exit(0);
 
 // Proposed content: Write has `content`; Edit has `new_string`; else read disk.
 let content = input.content ?? input.new_string ?? '';
@@ -74,8 +78,8 @@ const msg =
   `A browser-facing module (${rel}) imports a server-only utility: ${offenders.join(', ')}. ` +
   `A .server.{ts,js} file with NO 'use server' directive throws at load in the browser, ` +
   `so this would crash the page (webjs check flags it as no-server-import-in-browser-module). ` +
-  `Fix: add 'use server' to make it an RPC action, or reach it from a 'use server' action / route.ts / ` +
-  `middleware.ts, or share only a type via 'import type'. See https://webjs.dev/docs/server-actions.`;
+  `Fix: add 'use server' to make it an RPC action, load the data in the page (pages run only on the server) ` +
+  `and pass it in as a property, or share only a type via 'import type'. See https://webjs.dev/docs/server-actions.`;
 
 if (process.env.WEBJS_SERVER_IMPORT_GATE === 'block') {
   process.stderr.write(`BLOCKED: ${msg}\n`);

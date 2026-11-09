@@ -109,7 +109,7 @@ export const RULES = [
   {
     name: 'no-server-import-in-browser-module',
     description:
-      'A page / layout / component module that SHIPS to the browser (the build does NOT elide it) must not transitively import a server-only `.server.{ts,js}` module. The server module is replaced by a stub in the browser, so the import is fine while the module never loads client-side: a display-only page is elided, and a page whose only client relevance is importing shipping components is import-only (#605/#963), dropped from the boot in favour of its components. But the moment the page does its OWN client work (the client router, a reactive primitive, a module-scope browser-global access, a client-effecting non-component util) it ships whole, dragging the server import with it. The stub then throws (or a server-only export like `auth` is missing) the instant the module loads, a runtime browser crash that `webjs typecheck` and the rest of `webjs check` miss. The rule reuses the build\'s own elision verdict, so it ONLY fires on modules that genuinely ship; an elided, inert, or import-only page is never flagged. The fix is to keep the server call off the browser-shipped module: gate the route in `middleware.ts`, call the server through a `\'use server\'` action, or move the module\'s own client work into a component so the page is dropped again. Server-to-server imports (`.server.ts` importing `.server.ts`) and `middleware.ts` / `route.ts` (never shipped) are never flagged.',
+      'A module that loads in the browser (a component the build does not elide, `instrumentation-client`, or anything either imports) must not transitively import a server-only `.server.{ts,js}` utility: in the browser that import is a stub that throws when the module loads, so the page crashes while typecheck passes. A `\'use server\'` action is fine (it becomes a working RPC stub). Pages, layouts and boundaries are never checked, because they run only on the server and never load in a browser (#1686), so a server import there is always fine. Uses the same component elision verdict the server uses, so a display-only component that is elided is not flagged.',
   },
   {
     name: 'one-action-per-configured-file',
@@ -120,6 +120,26 @@ export const RULES = [
     name: 'form-action-not-a-get-action',
     description:
       'Flags `<form action=${someAction}>` bound to a `\'use server\'` action whose file declares `export const method = \'GET\'` (#488). A GET action is a READ: it is CSRF-exempt and rides its arguments in the url, while a form submission is a CSRF-checked POST carrying a body, so the two contracts contradict each other and the submission is answered with a 405 at runtime. The rule reads the imported action\'s own file, so it only fires when the binding really does resolve to a GET-declared action. Fix by dropping the `method` export (an action with no `method` is a POST, which is what a form wants) or by binding a different action; if the form really is a read, use a plain `<form method="get" action="/search">` with no bound action.',
+  },
+  {
+    name: 'no-component-in-route-module',
+    description:
+      'Flags a component class defined in a page, layout or boundary file. A route module runs only on the server and never loads in the browser (#1686), so the element renders its server markup and never upgrades. Move the class into its own file (`components/my-widget.ts`) and import it. Route-ness comes from the route table, so a helper that happens to be called `page.ts` outside `app/` is not a route module.',
+  },
+  {
+    name: 'no-event-binding-in-route-module',
+    description:
+      'Flags an event binding (`@click=${...}`) on a tag in a page, layout or boundary template. A route module renders only on the server and never hydrates, so the handler never runs, the same reason Next.js refuses an event handler in a server component. Put the interactive part in a component, or use a `<form action=${action}>` or `<a href>` that works without JavaScript. A binding written as escaped text in a code sample (`&lt;button @click=...`) is not flagged.',
+  },
+  {
+    name: 'no-route-module-import-in-browser-module',
+    description:
+      'Flags a module that loads in the browser (a component or anything it imports) importing a page, layout or boundary file. Route modules run only on the server and are never served to the browser (#1686), so the import 404s and the importing module fails to load. Move the shared code into its own file and import it from both.',
+  },
+  {
+    name: 'no-node-builtin-in-browser-module',
+    description:
+      'Flags a `node:` import, or a bare Node builtin such as `fs`, in a module that loads in the browser (a component or anything it imports). It can never resolve there, so the module fails to load. Do the work in the page (pages run only on the server) and pass the result in as a property, or behind a `\'use server\'` action. An `import type` is erased and never flagged.',
   },
   {
     name: 'no-foreign-framework-import',

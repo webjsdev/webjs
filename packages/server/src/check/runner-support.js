@@ -12,7 +12,7 @@ import { buildModuleGraph, transitiveDeps } from '../module-graph.js';
 import { scanComponents } from '../component-scanner.js';
 import { buildRouteTable } from '../router.js';
 import { analyzeElision } from '../component-elision.js';
-import { collectBootRouteModules } from '../route-frontier.js';
+import { collectBootRouteModules, routeTableFiles } from '../route-frontier.js';
 import {
   hasUseServerDirective,
 } from './helpers.js';
@@ -127,7 +127,7 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
   // No `app/` directory means this is not a routable WebJs app (e.g. a bare
   // component library, or a fixture with only `lib/`); nothing ships, so the
   // rule has nothing to police. Skip rather than do the heavy analysis.
-  if (!(await pathExists(join(appDir, 'app')))) return shipped;
+  if (!(await pathExists(join(appDir, 'app')))) return { shipped, routeFiles: new Set(), componentFiles: new Set(), moduleGraph: new Map() };
 
   let moduleGraph, components, routeTable;
   try {
@@ -137,7 +137,7 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
   } catch {
     // A malformed app the analysis can't process is left to the other rules
     // (and the dev server) to surface; this rule degrades to a no-op.
-    return shipped;
+    return { shipped, routeFiles: new Set(), componentFiles: new Set(), moduleGraph: new Map() };
   }
 
   // What the browser loads (#1686): the components the build does not elide,
@@ -153,7 +153,7 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
     ? await analyzeElision(components, moduleGraph, (f) => readFile(f, 'utf8'), appDir,
       { entries: routeTable.instrumentationClient ? [routeTable.instrumentationClient] : [] })
     : { elidableComponents: new Set() };
-  const routeFiles = new Set(routeModules);
+  const routeFiles = routeTableFiles(routeTable);
 
   /** @type {Map<string, { kind: string }>} keyed by ABS path */
   const candidates = new Map();
@@ -226,7 +226,7 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
       fix: fixText,
     });
   }
-  return shipped;
+  return { shipped, routeFiles, componentFiles: new Set(components.map((c) => c.file)), moduleGraph };
 }
 
 /**

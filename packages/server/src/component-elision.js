@@ -237,7 +237,7 @@ const escapeForCharClass = (c) => c.replace(/[\\\]^-]/g, '\\$&');
  * client-behaviour sigil added to core is detected here automatically once it
  * is classified above. (unquoted per invariant 4)
  */
-const EVENT_BINDING_RE = new RegExp(
+export const EVENT_BINDING_RE = new RegExp(
   `[${SSR_DROPPED_PREFIXES.map(escapeForCharClass).join('')}][A-Za-z][\\w-]*\\s*=\\s*[\"']?\\$\\{`,
 );
 
