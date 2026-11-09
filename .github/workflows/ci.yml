@@ -271,7 +271,9 @@ jobs:
       # is polled instead, over each runtime's own fs.watch and statSync.
       # dev-rebuild-order rides here too (#1689): a rebuild invalidates the
       # analysis before its route scan, through the in-process dev handler.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll + rebuild-order on Bun
+      # dev-late-rerun rides here too (#1689): a bun --hot re-run that lands
+      # after the poke fallback must notify the tab again. Bun only.
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll + rebuild-order + late-rerun on Bun
         run: |
           bun test/bun/dev-hot-server-fresh.mjs
           bun test/bun/dev-hot-served-versions.mjs
@@ -279,6 +281,7 @@ jobs:
           bun test/bun/dev-service-worker.mjs
           bun test/bun/dev-watch-poll.mjs
           bun test/bun/dev-rebuild-order.mjs
+          bun test/bun/dev-late-rerun.mjs
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-watch-error.mjs
           bun test/bun/dev-watch-replaced.mjs

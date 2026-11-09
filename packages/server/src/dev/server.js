@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mergeVerdicts } from '../dev-classify.js';
 import { createWatchIgnore } from './watch-ignore.js';
 import { watchTree } from './watch-tree.js';
+import { createPokeState } from './poke-state.js';
 import { relative, resolve } from 'node:path';
 import {
   hotRerunCapable, hotHostKey, getHotHost, setHotHost, deleteHotHost,
@@ -32,6 +33,16 @@ const SERVER_VERSION = (() => {
  * did not see.
  */
 const POKE_FALLBACK_MS = 1500;
+
+/**
+ * An internal test seam (like `__WEBJS_DEV_CHILD`): how long a `bun --hot`
+ * re-run waits before taking its batch, so `test/bun/dev-late-rerun.mjs` can
+ * land it after the poke fallback every time, the race #1689 fixed. Unset is 0.
+ */
+function rerunDelayMs() {
+  const n = Number(process.env.__WEBJS_RERUN_DELAY_MS || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
 function debounce(fn, ms) {
   let t;
@@ -314,10 +325,8 @@ export async function startServer(opts) {
 
   /** @type {AbortController | null} */
   let watcherAbort = null;
-  /** The merged verdict and changed files of the edits a poked re-run has yet to apply. */
-  /** @type {{ verdict: import('../dev-classify.js').ReloadVerdict | null, changed: Set<string> }} */
-  const poked = { verdict: null, changed: new Set() };
-  /** @type {any} */ let pokeFallback = null;
+  /** The edits a poked re-run has yet to apply, and the fallback's late re-run (#1689). */
+  const poked = createPokeState({ fallbackMs: POKE_FALLBACK_MS });
   if (dev) {
     // Watch the app tree with Node's built-in `fs.watch` (no external dep):
     // `watchTree` (#1521) watches the root plus each non-ignored top-level dir,
@@ -349,17 +358,8 @@ export async function startServer(opts) {
       pending.changed.clear();
       if (pendingPoke) {
         pendingPoke = false;
-        poked.verdict = mergeVerdicts(poked.verdict, v);
-        for (const f of files) poked.changed.add(f);
+        poked.poke(v, files, (pv, pf) => { if (pv) app.rebuild(pv, { changed: pf }); });
         pokeHotSentinel(app.appDir);
-        clearTimeout(pokeFallback);
-        pokeFallback = setTimeout(() => {
-          const pv = poked.verdict;
-          const pf = [...poked.changed];
-          poked.verdict = null;
-          poked.changed.clear();
-          if (pv) app.rebuild(pv, { changed: pf });
-        }, POKE_FALLBACK_MS);
         return;
       }
       app.rebuild(v || undefined, { changed: files });
@@ -459,17 +459,16 @@ export async function startServer(opts) {
          * then re-derive the analysis so it re-imports the app's modules (the
          * middleware, the components it primes) from that registry. A re-run a
          * poke asked for carries the verdict of the edits behind it and tells the
-         * browser; any other is silent, since the watcher already sent that
-         * edit's own reload frame.
+         * browser, and so does one that arrives after the poke's fallback
+         * already rebuilt against the old registry (#1689), so the tab picks up
+         * the fresh modules; any other is silent, since the watcher already
+         * sent that edit's own reload frame.
          */
         rerun: async () => {
           await armHotSentinel(app.appDir);
-          const pv = poked.verdict;
-          const pf = [...poked.changed];
-          poked.verdict = null;
-          poked.changed.clear();
-          clearTimeout(pokeFallback);
-          await app.rebuild(pv || undefined, { notify: !!pv, changed: pf });
+          if (rerunDelayMs()) await new Promise((r) => setTimeout(r, rerunDelayMs()));
+          const { verdict: pv, changed: pf, notify } = poked.takeForRerun();
+          await app.rebuild(pv || undefined, { notify, changed: pf });
           return owned;
         },
         poke: () => pokeHotSentinel(app.appDir),
