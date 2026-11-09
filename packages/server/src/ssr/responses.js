@@ -1,4 +1,5 @@
-import { cspNonce, renderToString } from '@webjsdev/core';
+import { cspNonce, renderToString, isRedirect } from '@webjsdev/core';
+import { headerSafeLocation } from '../redirect-location.js';
 import { BUFFERED_MARKER, STREAM_MARKER } from '../conditional-get.js';
 import { publishedBuildId, appSourceId } from '../importmap.js';
 import { escapeAttr, escapeHtml } from './escape.js';
@@ -160,6 +161,14 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
                 for (const n of sub.pending) ctx.pending.push(n);
                 return { id: p.id, html };
               } catch (e) {
+                // A redirect() thrown inside a streamed boundary arrives after
+                // the 200 is sent, so it becomes a client redirect, as Next.js
+                // does (#1686): a marker the soft-navigation path follows, plus
+                // a refresh and a script for a first load (below).
+                if (isRedirect(e)) {
+                  const to = headerSafeLocation(/** @type {any} */ (e).url);
+                  return { id: p.id, html: `<meta data-webjs-redirect="${escapeAttr(to)}">`, redirect: to };
+                }
                 // Match the SSR error-isolation policy (render-server.js's
                 // defaultSSRErrorTemplate): dev surfaces the message so the
                 // failure is obvious, prod stays SILENT so no internal detail
@@ -181,9 +190,13 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
             // <script> is here for legacy / extremely-restrictive
             // environments. Either way it must be nonce-signed.
             const scriptNonce = nonce ? ` nonce="${escapeAttr(nonce)}"` : '';
+            const go = r.redirect
+              ? `<meta http-equiv="refresh" content="0;url=${escapeAttr(r.redirect)}">`
+                + `<script${scriptNonce}>location.replace(${JSON.stringify(r.redirect).replace(/</g, '\\u003c')})</script>`
+              : '';
             const chunk =
               `<template data-webjs-resolve="${r.id}">${r.html}</template>` +
-              `<script${scriptNonce}>window.__webjsResolve&&__webjsResolve("${r.id}")</script>`;
+              `<script${scriptNonce}>window.__webjsResolve&&__webjsResolve("${r.id}")</script>` + go;
             controller.enqueue(encoder.encode(chunk));
           }
         }

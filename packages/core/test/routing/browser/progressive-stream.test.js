@@ -14,6 +14,7 @@ import { html } from '../../../src/html.js';
 
 const { suite, test } = window.Mocha ? Mocha : { suite, test };
 import { assert } from '../../../../../test/browser-assert.js';
+import { installNavGuard } from '../../../../../test/browser-nav-guard.js';
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
 let host;
@@ -91,5 +92,33 @@ suite('progressive streaming (DOM)', () => {
     assert.ok(host.querySelector('.rc'), 'the first boundary applied before supersession');
     assert.ok(host.querySelector('#d') && !host.querySelector('.rd'), 'the second boundary did NOT apply after supersession (its fallback wrapper remains)');
     assert.ok(reader.cancelled(), 'the reader was cancelled');
+  });
+
+  test('a boundary whose content threw redirect() navigates there instead of applying (#1686)', async () => {
+    // The server streams `<meta data-webjs-redirect>` in a boundary whose
+    // content threw redirect() after the shell was sent; a soft navigation
+    // follows it as a first load follows the refresh beside it.
+    const navGuard = installNavGuard();
+    const origFetch = window.fetch;
+    const origUrl = location.href;
+    const fetched = [];
+    window.fetch = (u) => {
+      fetched.push(String(typeof u === 'string' ? u : u.url));
+      return Promise.resolve(new Response('<!doctype html><html><head></head><body><p>login</p></body></html>', { headers: { 'content-type': 'text/html' } }));
+    };
+    try {
+      const target = new URL(location.href);
+      target.searchParams.set('wj1686', 'login');
+      container().innerHTML = `<webjs-suspense id="r1"><i class="fb">loading</i></webjs-suspense>`;
+      _applyStreamedResolve('r1', `<meta data-webjs-redirect="${target.pathname + target.search}">`);
+      assert.ok(host.querySelector('#r1 .fb'), 'the boundary is left as it was');
+      await tick(20);
+      const went = [...fetched, ...navGuard.hardNavigations.map((h) => String(h.url || h))];
+      assert.ok(went.some((u) => u.includes('wj1686=login')), `the router navigated to the redirect target (${went.join(', ')})`);
+    } finally {
+      window.fetch = origFetch;
+      history.replaceState(null, '', origUrl);
+      navGuard.remove();
+    }
   });
 });

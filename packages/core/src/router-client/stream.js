@@ -8,6 +8,7 @@
  */
 import { warnDropped } from './diagnostics.js';
 import { upgradeTree } from './upgrade.js';
+import { navigate } from './navigator.js';
 
 /**
  * Forward streamed Suspense resolver templates from the fetched body to
@@ -155,6 +156,12 @@ export function applyStreamedResolve(id, content) {
   const tpl = document.createElement('template');
   tpl.innerHTML = content;
   const inserted = [...tpl.content.childNodes];
+  // A boundary whose content threw redirect() on the server streams a marker
+  // (#1686): follow it the way a first load follows its refresh.
+  for (const n of inserted) {
+    const to = n.nodeType === 1 ? /** @type {Element} */ (n).getAttribute('data-webjs-redirect') : null;
+    if (to) { navigate(to, { replace: true }); return; }
+  }
   boundary.replaceWith(tpl.content);
   // Upgrade any custom elements now that they are connected (belt-and-braces:
   // a connected, defined element upgrades on insertion, but a fragment that was

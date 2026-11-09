@@ -61,6 +61,9 @@ With Suspense:     TTFB = shell render = ~40ms
   })(),
 })}</code-block>
 
+    <h2>redirect() Inside a Boundary</h2>
+    <p>A boundary's content that throws <code>redirect()</code> resolves after the page's 200 has been sent, so, as in Next.js, the redirect happens on the client: the stream carries a <code>&lt;meta http-equiv="refresh"&gt;</code> (which works with JavaScript off) and a script that replaces the location, and a client-router navigation that streams the boundary follows it. Prefer a redirect before the first <code>Suspense</code> when you can (an auth check in the page itself), so the visitor never sees the page shell.</p>
+
     <h2>Without a Suspense Context</h2>
     <p>If <code>renderToString</code> is called without a <code>suspenseCtx</code> (e.g., in a static pre-render), Suspense boundaries render the fallback only, and the promise is dropped. This is the safe default for contexts where streaming isn't available.</p>
 
