@@ -1,5 +1,5 @@
 import { nothing, noChange } from '../sentinels.js';
-import { isTemplate, MARKER } from '../html.js';
+import { isTemplate, MARKER, html } from '../html.js';
 import {
   reconcileFormAction, isBoundFormAction, ABSENT, assertSubmitterHasNoName, assertSubmitterType,
   assertSubmitterHasNoValue, assertSubmitterHasNoStaticFormAction,
@@ -18,6 +18,13 @@ import {
 } from './parts.js';
 
 /**
+ * A top-level list as one child binding. One call site, so its strings are a
+ * stable identity and a re-render updates the list in place.
+ * @param {unknown} list
+ */
+const rootList = (list) => html`${list}`;
+
+/**
  * Render a value into a container, reusing DOM where possible.
  *
  * @param {unknown} value
@@ -26,6 +33,14 @@ import {
  */
 export function render(value, container, options = {}) {
   if (value === noChange) return;
+  // An array or any other iterable (a `map()` / `join()` / `range()`
+  // generator, a Set) renders through a child binding, as Lit's `render()`
+  // renders every value: each item a template, a node or text (#1686). It used
+  // to be written as text, "[object Generator]" or "[object Object]".
+  if (value !== null && typeof value === 'object' && !isTemplate(value)
+      && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
+    value = rootList(value);
+  }
   const host = /** @type any */ (container);
   // Open the renderer-write window for the whole commit: every host-receiver
   // write below (and in createInstance / updateInstance / clearInstance / all
@@ -76,13 +91,6 @@ export function render(value, container, options = {}) {
     host[INSTANCE] = null;
     container.replaceChildren();
     if (value == null || value === nothing) return;
-    if (Array.isArray(value)) {
-      for (const v of value) {
-        const text = document.createTextNode(String(v ?? ''));
-        container.appendChild(text);
-      }
-      return;
-    }
     container.appendChild(document.createTextNode(String(value)));
   } finally {
     setCurrentRenderRoot(prevRenderRoot);

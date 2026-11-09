@@ -125,7 +125,7 @@ html\`\${error ? html\`&lt;p role="alert"&gt;\${error}&lt;/p&gt;\` : nothing}\`;
     <p>A ternary, a <code>switch</code>, and <code>Array</code> methods work just as well; pick whichever reads better.</p>
 
     <h3>Any iterable renders like an array</h3>
-    <p>A child hole accepts any iterable, not only an array: a generator (which is what <code>map</code>, <code>join</code>, and <code>range</code> return), a <code>Set</code>, a <code>Map</code>'s <code>values()</code>. Each item renders in order, exactly as the items of an array do. A string is the one exception: it renders as text, never character by character.</p>
+    <p>A child hole accepts any iterable, not only an array: a generator (which is what <code>map</code>, <code>join</code>, and <code>range</code> return), a <code>Set</code>, a <code>Map</code>'s <code>values()</code>. Each item renders in order, exactly as the items of an array do. A string is the one exception: it renders as text, never character by character. The same holds for a value passed straight to <code>render(value, container)</code>, as in Lit: <code>render(map(items, fn), el)</code> renders the list.</p>
 
     <h2>svg / mathml template tags</h2>
     <p>An <code>html</code> template is parsed as HTML on the client, so a fragment built for the inside of an <code>&lt;svg&gt;</code> or <code>&lt;math&gt;</code> element (a <code>&lt;rect&gt;</code> per data point, a <code>&lt;mi&gt;</code> a helper returns) needs the <code>svg</code> or <code>mathml</code> tag from <code>@webjsdev/core</code>. The client then parses it in that namespace. The server renders all three tags alike. A whole <code>&lt;svg&gt;</code> element still belongs in <code>html</code>.</p>
