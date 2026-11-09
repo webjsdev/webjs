@@ -899,6 +899,7 @@ export type User = typeof users.$inferSelect;
 
   const connSqlite = `import { isAbsolute, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { NodeSQLiteDatabase } from 'drizzle-orm/node-sqlite';
 import * as schema from './schema.server.ts';
 
 // The only file that opens the driver. Runtime-neutral and ZERO native deps:
@@ -932,12 +933,17 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
   return client;
 }
 
-async function connect() {
+// One concrete type for db. Both drivers share the same synchronous SQLite
+// query builder, but typed as a union of the two, TypeScript cannot resolve an
+// overloaded method across it and db.select({ id: users.id }) fails to compile.
+type Db = NodeSQLiteDatabase<Record<string, never>, typeof schema.relations>;
+
+async function connect(): Promise<Db> {
   if ((globalThis as { Bun?: unknown }).Bun) {
     // @ts-expect-error bun:sqlite is a Bun builtin with no Node typings
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: cached(() => tune(new Database(url))), relations: schema.relations });
+    return drizzle({ client: cached(() => tune(new Database(url))), relations: schema.relations }) as unknown as Db;
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
