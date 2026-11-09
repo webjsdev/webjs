@@ -56,6 +56,14 @@ lib/
                          (98, #1527): a server start that fails on a taken port
                          prints the server's message (it names the holder's PID)
                          and exits 98.
+                         `shellEnvOf(env, appDir, isBun?)` (#1689) is the env
+                         the dev child starts from: a copy of the shell's, and
+                         on Bun, which loads `.env`, `.env.<NODE_ENV>` and
+                         `.env.local` before any code runs, minus every key
+                         whose value one of those files set, so a child
+                         restarted for a `.env` edit reads the edited file on
+                         Bun too (tests: `test/port/port.test.js`,
+                         `test/bun/dev-restart-files.mjs`).
                          `loadAppEnv(appDir)` loads `<appDir>/.env` into
                          `process.env` (same guard + shell-wins semantics as the
                          server's own load); `resolvePort(portFlag, env?)` is the
@@ -85,8 +93,12 @@ lib/
                          `loadAppEnv` and spawns the child from the snapshot,
                          since `process.loadEnvFile` never overrides a set
                          variable, so a child restarted for a `.env` edit reads
-                         the new values. Tests: `test/dev-supervisor/
-                         dev-env-snapshot.test.js` too.
+                         the new values. Both plans also hand the child the
+                         restart-file pattern in `__WEBJS_DEV_RESTART_FILES`
+                         (`RESTART_FILES_ENV`), and the child's own watcher
+                         skips those files, since the restart is the reload and
+                         a frame of its own was a second one (#1689). Tests:
+                         `test/dev-supervisor/dev-env-snapshot.test.js` too.
                          Node no longer runs under `node --watch`, which crashed
                          on an unhandled watcher error and never came back.
                          Tests: `test/dev-supervisor/`

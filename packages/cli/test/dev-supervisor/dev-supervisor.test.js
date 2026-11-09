@@ -24,7 +24,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { planDevSupervisor, sourceLocationsOn, isRestartFile, RESTART_FILES, WATCH_FILES } from '../../lib/dev-supervisor.js';
+import { planDevSupervisor, sourceLocationsOn, isRestartFile, RESTART_FILES, RESTART_FILES_ENV, WATCH_FILES } from '../../lib/dev-supervisor.js';
 
 const ARGV = ['/path/to/webjs.js', 'dev', '--port', '8080'];
 const WATCH = {
@@ -99,8 +99,9 @@ test('Node restarts the child on a change, and never runs it under `node --watch
   // supervisor owns the watching now, so the child's argv is the plain script.
   const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
   assert.ok(plan.mode === 'supervise');
-  const { restartFor, inPlaceRestartFor, ...rest } = plan;
+  const { restartFor, inPlaceRestartFor, env, ...rest } = plan;
   assert.deepEqual(rest, { mode: 'supervise', args: [...ARGV], restartOnChange: true, ...WATCH });
+  assert.deepEqual(Object.keys(env || {}), [RESTART_FILES_ENV], 'the only extra env is the restart-file pattern (#1689)');
   for (const flag of ['--watch', '--watch-preserve-output', '--watch-path']) {
     assert.ok(!plan.args.includes(flag), `Node args must not include ${flag}`);
   }
@@ -145,6 +146,28 @@ test('isRestartFile: the boot hooks, .env, package.json and every lockfile, at t
     assert.ok(WATCH_FILES.includes(f), `${f} is watched`);
     assert.equal(isRestartFile(f), true, `${f} restarts`);
   }
+});
+
+// #1689: a restart-file edit used to reload the tab twice, once for the
+// child's own watcher frame and once for the restart. The child now skips
+// exactly what the supervisor restarts for, from a pattern the plan hands it.
+test('both plans hand the child the restart-file pattern, and the server reads the same set', async () => {
+  const { supervisorRestartFile } = await import('../../../server/src/dev/server.js');
+  for (const isBun of [false, true]) {
+    const plan = planDevSupervisor({ isBun, argv: ARGV, noHot: false });
+    assert.ok(plan.mode === 'supervise');
+    const src = plan.env && plan.env[RESTART_FILES_ENV];
+    assert.equal(typeof src, 'string', `the ${isBun ? 'Bun' : 'Node'} plan passes the pattern`);
+    const re = supervisorRestartFile({ __WEBJS_DEV_CHILD: '1', [RESTART_FILES_ENV]: src });
+    assert.ok(re, 'the server parses it');
+    for (const p of [...RESTART_FILES, 'app/page.ts', '.env.example', 'app/package.json', 'middleware.ts', 'lib/env.ts']) {
+      assert.equal(re.test(p), isRestartFile(p), `the child and the supervisor agree on ${p}`);
+    }
+  }
+  const bun = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
+  assert.equal(bun.mode === 'supervise' && bun.env && bun.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH, '0', 'the Bun child keeps its transpiler-cache env');
+  assert.equal(supervisorRestartFile({ [RESTART_FILES_ENV]: 'x' }), null, 'only a supervised child skips them');
+  assert.equal(supervisorRestartFile({ __WEBJS_DEV_CHILD: '1' }), null, 'and only when the supervisor says what it restarts for');
 });
 
 test('`--no-hot` opts out of the supervisor on Bun (run in-process)', () => {
@@ -215,12 +238,14 @@ test('the in-place IPC message matches the one @webjsdev/server sends (#1575)', 
   assert.equal(cli.HOT_IN_PLACE_MESSAGE, server.HOT_IN_PLACE_MESSAGE);
 });
 
-test('the Bun child runs with the transpiler cache off; Node gets no extra env', () => {
+test('the Bun child runs with the transpiler cache off; Node gets only the restart-file pattern', () => {
   // Bun's on-disk transpiler cache keys a large module by content and bakes in
   // the absolute paths the dev alias resolver returned, so another checkout of
   // the same file imports from the first one. The child must never write it.
   const bun = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
-  assert.deepEqual(bun.env, { BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' });
+  const { [RESTART_FILES_ENV]: bunPattern, ...bunRest } = bun.env;
+  assert.deepEqual(bunRest, { BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' });
   const node = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
-  assert.equal(node.env, undefined);
+  // Both carry the restart-file pattern (#1689), and nothing else on Node.
+  assert.deepEqual(node.env, { [RESTART_FILES_ENV]: bunPattern });
 });

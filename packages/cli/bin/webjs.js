@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
-import { loadAppEnv, resolvePort, failFastOnPortInUse } from '../lib/port.js';
+import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse } from '../lib/port.js';
 import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -615,8 +615,9 @@ async function main() {
       // from the snapshot, not from this process's env (#1689). `.env` is a
       // restart file, and `process.loadEnvFile` never overrides a variable that
       // is already set, so a child handed the values loaded here would keep
-      // the OLD ones after an edit to `.env` restarted it.
-      const shellEnv = { ...process.env };
+      // the OLD ones after an edit to `.env` restarted it. On Bun, which loads
+      // `.env` itself before any code runs, `shellEnvOf` drops those values.
+      const shellEnv = shellEnvOf(process.env, process.cwd());
       loadAppEnv(process.cwd());
       await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd());
       const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());

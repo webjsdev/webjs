@@ -13,7 +13,9 @@
  * one implementation and the logic is unit-testable without spawning a
  * server.
  */
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseEnv } from 'node:util';
 
 /**
  * Load `<appDir>/.env` into `process.env`, guarded exactly like the server's
@@ -37,6 +39,36 @@ export function loadAppEnv(appDir) {
     // silently: the app may not need any env vars, or they may be set via
     // the shell.
   }
+}
+
+/**
+ * The environment the user's shell set, for the `webjs dev` child (#1689).
+ *
+ * The dev child is started from the shell's env rather than the CLI's own, so a
+ * child restarted for a `.env` edit loads the EDITED file (a loaded variable is
+ * never overridden). Node gives the CLI exactly the shell's env until
+ * `loadAppEnv` runs, but Bun loads the app's `.env` files into `process.env`
+ * before any code runs, so on Bun the snapshot already holds the values from
+ * before the edit and the restarted child kept them. So on Bun each key whose
+ * value is exactly what `.env`, `.env.<NODE_ENV>` or `.env.local` sets is
+ * dropped, and the child's own Bun reads the files fresh. A shell variable
+ * that happens to equal the file's value is dropped too, which changes
+ * nothing, since the file supplies the same value.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} appDir
+ * @param {boolean} [isBun]
+ * @returns {Record<string, string | undefined>}
+ */
+export function shellEnvOf(env, appDir, isBun = !!process.versions.bun) {
+  const out = { ...env };
+  if (!isBun) return out;
+  for (const file of ['.env', `.env.${env.NODE_ENV || 'development'}`, '.env.local']) {
+    let parsed;
+    try { parsed = parseEnv(readFileSync(join(appDir, file), 'utf8')); } catch { continue; }
+    for (const [k, v] of Object.entries(parsed)) if (out[k] === v) delete out[k];
+  }
+  return out;
 }
 
 /**

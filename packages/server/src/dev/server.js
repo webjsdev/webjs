@@ -35,6 +35,19 @@ const SERVER_VERSION = (() => {
 const POKE_FALLBACK_MS = 1500;
 
 /**
+ * The root files the `webjs dev` supervisor restarts this child for (#1689),
+ * as the pattern the supervisor hands over in `__WEBJS_DEV_RESTART_FILES`, or
+ * null when no supervisor will (`--no-hot`, an embedder, an older CLI). This
+ * watcher sees the same files, and a reload frame it sent for one would reload
+ * the tab a second time on top of the restart, which already reloads it.
+ * @returns {RegExp | null}
+ */
+export function supervisorRestartFile(env = process.env) {
+  if (env.__WEBJS_DEV_CHILD !== '1' || !env.__WEBJS_DEV_RESTART_FILES) return null;
+  try { return new RegExp(env.__WEBJS_DEV_RESTART_FILES); } catch { return null; }
+}
+
+/**
  * An internal test seam (like `__WEBJS_DEV_CHILD`): how long a `bun --hot`
  * re-run waits before taking its batch, so `test/bun/dev-late-rerun.mjs` can
  * land it after the poke fallback every time, the race #1689 fixed. Unset is 0.
@@ -376,6 +389,7 @@ export async function startServer(opts) {
       logger.warn(`file watcher skipped ${err && err.path ? err.path : 'a path'} (${err && err.code ? err.code : String(err)})`);
     };
     let pollFallbackWarned = false;
+    const restartFile = supervisorRestartFile();
     const watchRoot = (root) => {
       // Output nothing serves (`*.log`, coverage/, ...) and the root's
       // `.gitignore` never reload the page: `npm run dev > dev.log` made every
@@ -390,6 +404,9 @@ export async function startServer(opts) {
           // db/dev.db carve-out above. `app` exposes the check because `state`
           // lives in createRequestHandler's scope, not here.
           if (app.isRegenerateOutput(filename)) return;
+          // The supervisor restarts the process for this one, and the restart
+          // is the reload; a frame from here would be a second one (#1689).
+          if (restartFile && root === app.appDir && restartFile.test(filename)) return;
           pending.verdict = mergeVerdicts(pending.verdict, app.classifyWatchPath(filename, root));
           pending.changed.add(resolve(root, filename));
           if (hotKey && needsHotReset(filename, (f) => !app.needsRegistryReset(f, root))) pendingPoke = true;

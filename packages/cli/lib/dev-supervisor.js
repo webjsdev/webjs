@@ -92,6 +92,17 @@ export function isRestartFile(path) {
 }
 
 /**
+ * The env var that hands the child the restart-file pattern (#1689). The child's
+ * own watcher sees the same root files, and a frame it sent for one would be a
+ * second reload on top of the restart, so it skips exactly what the supervisor
+ * restarts for. Passed as the regex source rather than restated in
+ * `@webjsdev/server`, which the CLI does not depend on, so the two can never
+ * disagree.
+ */
+export const RESTART_FILES_ENV = '__WEBJS_DEV_RESTART_FILES';
+const RESTART_CHILD_ENV = Object.freeze({ [RESTART_FILES_ENV]: RESTART_FILE.source });
+
+/**
  * The app-root files the supervisor watches: every extension the server's
  * root-middleware lookup accepts, in the same order, plus every restart file.
  * If the middleware list diverges from the server's, an app gets a middleware
@@ -131,7 +142,7 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
     return {
       mode: 'supervise',
       args: ['--hot', ...argv],
-      env: BUN_CHILD_ENV,
+      env: { ...BUN_CHILD_ENV, ...RESTART_CHILD_ENV },
       restartOnChange: true,
       restartFor: (p) => plugin(p) || isRestartFile(p),
       inPlaceRestartFor: isRestartFile,
@@ -144,6 +155,7 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
   return {
     mode: 'supervise',
     args: [...argv],
+    env: RESTART_CHILD_ENV,
     restartOnChange: true,
     restartFor: () => true,
     inPlaceRestartFor: isRestartFile,
