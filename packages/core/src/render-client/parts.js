@@ -1436,8 +1436,9 @@ function applyRepeatFresh(marker, state, value, reconcileFormActionsCb) {
   const parent = marker.parentNode;
   if (!parent) return;
   const bulk = document.createDocumentFragment();
+  const seen = new Map();
   for (let i = 0; i < items.length; i++) {
-    const key = keyFn(items[i], i);
+    const key = slotKey(state, keyFn(items[i], i), seen);
     const tr = templateFn(items[i], i);
     if (!isTemplate(tr)) continue;
     const { inst, frag } = buildDetached(/** @type any */ (tr), reconcileFormActionsCb);
@@ -1445,6 +1446,28 @@ function applyRepeatFresh(marker, state, value, reconcileFormActionsCb) {
     bulk.appendChild(frag);
   }
   parent.insertBefore(bulk, marker);
+}
+
+/**
+ * The map key for one occurrence of `key` in a pass (#1686). The first
+ * occurrence is the key itself; the nth repeat of it is a placeholder object
+ * kept on the state, the same one every pass, so a list with duplicate keys
+ * gives each row its own entry. A plain key map let the second row overwrite
+ * the first, whose nodes then stayed in the document tracked by nothing, and
+ * each re-render added another copy. Lit leaves duplicate keys undefined but
+ * never leaks a row.
+ * @param {any} state
+ * @param {unknown} key
+ * @param {Map<unknown, number>} seen occurrences so far in this pass
+ */
+function slotKey(state, key, seen) {
+  const n = seen.get(key) ?? 0;
+  seen.set(key, n + 1);
+  if (n === 0) return key;
+  const dups = (state.dups ??= new Map());
+  let list = dups.get(key);
+  if (!list) dups.set(key, (list = []));
+  return (list[n - 1] ??= { duplicateOf: key, n });
 }
 
 /**
@@ -1464,11 +1487,12 @@ function reconcileRepeat(part, value, reconcileFormActionsCb) {
   const state = /** @type {{ kind: 'repeat', map: Map<any, TemplateInstance> }} */ (part.child);
   const { items, keyFn, templateFn } = value;
   const newMap = new Map();
+  const seen = new Map();
 
   try {
     // Walk the new list and position each item's nodes immediately before the marker.
     for (let i = 0; i < items.length; i++) {
-      const key = keyFn(items[i], i);
+      const key = slotKey(state, keyFn(items[i], i), seen);
       const tr = templateFn(items[i], i);
       if (!isTemplate(tr)) continue;
       const existing = state.map.get(key);
