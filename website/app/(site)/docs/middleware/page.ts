@@ -39,11 +39,13 @@ export default async function middleware(
       <li><strong>The function</strong> may be the default export, a named <code>middleware</code> export, or a named <code>proxy</code> export.</li>
       <li><strong>Returning nothing continues</strong>, like <code>NextResponse.next()</code>. Return a <code>Response</code> to answer, or call <code>next()</code> to run the rest of the chain and post-process its response. <code>next()</code> runs the chain once however many times you call it, and <code>next.waitUntil(promise)</code> keeps background work (an analytics write) going after the response is sent.</li>
       <li><strong><code>export const config = &#123; matcher &#125;</code></strong> scopes it. A matcher is a path pattern (<code>'/dashboard/:path*'</code>, or a regex group such as <code>'/((?!api|_next).*)'</code>), an array of them, or objects <code>&#123; source, has, missing &#125;</code> whose conditions read a <code>header</code>, <code>cookie</code>, <code>query</code> parameter or <code>host</code>, exactly as in Next. A request it does not match skips the middleware. Paths are matched with the <code>webjs.basePath</code> removed, and a trailing slash is tolerated.</li>
-      <li><strong><code>request.cookies</code></strong> is the request's <code>cookies()</code> store, so <code>request.cookies.get('session')?.value</code> reads and <code>request.cookies.set(...)</code> writes a <code>Set-Cookie</code> onto the response.</li>
+      <li><strong><code>request.cookies</code></strong> is the request's <code>cookies()</code> store, so <code>request.cookies.get('session')?.value</code> reads and <code>request.cookies.set(...)</code> writes a <code>Set-Cookie</code> onto the response. Type the request as <code>MiddlewareRequest</code> from <code>@webjsdev/server</code>, where Next.js code writes <code>NextRequest</code>.</li>
       <li><strong><code>request.nextUrl</code></strong> does not exist: middleware receives the platform <code>Request</code>. In development, reading it throws naming the fix, <code>new URL(request.url)</code>.</li>
     </ul>
     <code-block>// proxy.ts
-export function proxy(request: Request) {
+import type { MiddlewareRequest } from '@webjsdev/server';
+
+export function proxy(request: MiddlewareRequest) {
   if (!request.cookies.get('session')?.value) {
     return Response.redirect(new URL('/login', request.url), 307);
   }

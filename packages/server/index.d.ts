@@ -34,6 +34,13 @@ export * from './src/testing.js';
 
 /** A webjs middleware: receives the request + a `next()` continuation. */
 export type Middleware = (req: Request, next: () => Promise<Response>) => Promise<Response> | Response;
+/**
+ * The request an app's `middleware.ts` / `proxy.ts` (and a segment middleware)
+ * receives: the platform `Request` plus Next's `request.cookies`, the same
+ * store `cookies()` returns. Annotate with it where Next.js code writes
+ * `NextRequest`.
+ */
+export type MiddlewareRequest = Request & { readonly cookies: RequestCookies };
 
 // `Handle` is re-exported from ./src/testing.js (the `export *` above), so it
 // is not re-declared here. It is IMPORTED as well, because `export *` re-exports

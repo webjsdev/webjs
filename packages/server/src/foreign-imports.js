@@ -45,7 +45,7 @@ const FOREIGN_PREFIX = /^(?:next|react|lit|@lit)/;
 const TABLE = [
   [/^next\/navigation$/, { framework: 'Next.js', fix: "import { redirect, permanentRedirect, notFound, forbidden, unauthorized, navigate } from '@webjsdev/core'. A page's params and searchParams arrive as props; a component reads location for the current URL." }],
   [/^next\/headers$/, { framework: 'Next.js', fix: "import { cookies, headers } from '@webjsdev/server' (same API: await cookies() then .get(name)?.value)." }],
-  [/^next\/server$/, { framework: 'Next.js', fix: "middleware and route handlers use the platform Request and Response: return a Response to answer, call next() to continue (returning undefined also continues). Use Response.json() for NextResponse.json() and new URL(request.url) for request.nextUrl." }],
+  [/^next\/server$/, { framework: 'Next.js', fix: "middleware and route handlers use the platform Request and Response: return a Response to answer, call next() to continue (returning undefined also continues). Type a middleware's request as MiddlewareRequest from '@webjsdev/server' (it carries request.cookies, as NextRequest does). Use Response.json() for NextResponse.json() and new URL(request.url) for request.nextUrl." }],
   [/^next\/cache$/, { framework: 'Next.js', fix: "import { revalidatePath, revalidateTag, cache } from '@webjsdev/server'." }],
   [/^next\/link$/, { framework: 'Next.js', fix: 'write a plain <a href="/path">. The client router intercepts it automatically, with prefetch on hover.' }],
   [/^next\/image$/, { framework: 'Next.js', fix: 'write a plain <img src="/photo.png" width height loading="lazy"> (public/photo.png is served at /photo.png).' }],

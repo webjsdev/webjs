@@ -34,6 +34,7 @@ async function app(files) {
 test('the table maps each foreign package to a WebJs replacement', () => {
   assert.match(foreignImport('next/navigation').fix, /'@webjsdev\/core'/);
   assert.match(foreignImport('next/headers').fix, /'@webjsdev\/server'/);
+  assert.match(foreignImport('next/server').fix, /MiddlewareRequest/);
   assert.match(foreignImport('next/cache').fix, /revalidatePath/);
   assert.match(foreignImport('next/link').fix, /<a href/);
   assert.match(foreignImport('next/image').fix, /<img/);

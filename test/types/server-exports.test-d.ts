@@ -44,7 +44,7 @@ import {
   signedUrl,
   verifySignedUrl,
 } from '@webjsdev/server';
-import type { FileStore } from '@webjsdev/server';
+import type { FileStore, MiddlewareRequest } from '@webjsdev/server';
 import { testRequest } from '@webjsdev/server/testing';
 import { checkConventions } from '@webjsdev/server/check';
 
@@ -86,6 +86,14 @@ async function invalidate() {
   await revalidatePath('/blog');
   await revalidateTag('post:5');
 }
+
+// A middleware's request carries Next's request.cookies.
+function guard(request: MiddlewareRequest) {
+  return request.cookies.get('session')?.value;
+}
+void guard;
+// @ts-expect-error the platform Request alone has no cookies.
+(new Request('http://x') as Request).cookies;
 
 // Auth factory.
 const authInst = createAuth({ secret: 's', providers: [] });
