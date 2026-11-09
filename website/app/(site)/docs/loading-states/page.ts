@@ -61,7 +61,7 @@ export default async function BlogPage() {
 
     <h2>Loading states on client navigation</h2>
     <p>The same <code>loading.ts</code> also feeds client-side navigation. The SSR pipeline emits each segment's loading content as a hidden <code>&lt;template id="wj-loading:&lt;segment-path&gt;"&gt;</code> at body end. When a user clicks a link, the router clones the deepest matching template into the swap slot <strong>immediately</strong>, before the fetch even completes, so the user sees the skeleton instantly instead of stale content from the previous page.</p>
-    <p>If the fetch fails (network error, server crash), the optimistic loading content is reverted and the router falls back to a full page navigation. The same files serve both server-side SSR Suspense and client-side nav optimistic UI. Write one <code>loading.ts</code>, get both behaviors.</p>
+    <p>If the fetch fails (network error, server crash), the optimistic loading content is reverted and the router recovers in place (see <code>webjs:navigation-error</code> on the <a href="/docs/client-router">Client Router</a> page). The same files serve both server-side SSR Suspense and client-side nav optimistic UI. Write one <code>loading.ts</code>, get both behaviors.</p>
 
     <h2>Manual Suspense</h2>
     <p>For more control, use <code>Suspense()</code> directly in your page template instead of a <code>loading.ts</code> file:</p>

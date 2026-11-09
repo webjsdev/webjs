@@ -46,8 +46,7 @@ if (cmd !== 'help' && cmd !== undefined && !wantsHelp && !wantsVersion) {
 }
 
 // Exactly two scaffolds exist. Keep this list as the single source of
-// truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
-// .agents/rules/workflow.md / .github/copilot-instructions.md mirror it.
+// truth. README.md and the docs site mirror it.
 const TEMPLATES = ['full-stack', 'api'];
 
 /**
@@ -1070,7 +1069,7 @@ async function main() {
         console.log('  security leak, a reactive prop that silently stops');
         console.log('  re-rendering, or a build/type-strip failure. They always');
         console.log('  run. Project conventions (layout, style, process) are');
-        console.log('  guidance in CONVENTIONS.md, not rules here.\n');
+        console.log('  guidance in the docs (webjs.dev/docs), not rules here.\n');
         for (const r of RULES) {
           console.log(`  ${r.name.padEnd(30)} ${r.description}`);
         }

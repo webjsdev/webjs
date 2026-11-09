@@ -5,7 +5,7 @@ export const metadata = { title: 'Server-Side Rendering | WebJs' };
 export default function SSR() {
   return html`
     <h1>Server-Side Rendering</h1>
-    <p>Every WebJs page is <strong>server-rendered by default</strong>. There is no client-only mode and no opt-in flag. When a request arrives, the server executes your page function, renders the result to an HTML string, injects Declarative Shadow DOM for every web component that appeared, and streams the response. The browser paints meaningful content before a single byte of JavaScript has been parsed.</p>
+    <p>Every WebJs page is <strong>server-rendered by default</strong>. There is no client-only mode and no opt-in flag. When a request arrives, the server executes your page function, renders the result to an HTML string, renders each web component in place (inline for light-DOM components, the default, and as Declarative Shadow DOM for <code>static shadow = true</code>), and streams the response. The browser paints meaningful content before a single byte of JavaScript has been parsed.</p>
 
     <h2>How SSR Works</h2>
     <p>Pages are plain async functions that return <code>html\`\`</code> tagged templates (a <code>TemplateResult</code>). The server imports the page module, calls its default export, and passes the result through <code>renderToString()</code>. That function walks the template tree, resolves every <code>Promise</code> it encounters in template holes, and produces a complete HTML string.</p>
@@ -31,7 +31,7 @@ export default async function Home() {
     <p>When the server receives a GET request for a page URL, the pipeline runs in this order:</p>
     <ol>
       <li><strong>Route match</strong>: the router scans the <code>app/</code> directory tree (at startup) and matches the URL pathname against the file-based route table. Dynamic segments (<code>[slug]</code>), catch-all segments (<code>[...rest]</code>), and route groups (<code>(marketing)</code>) all use the file-based conventions documented under <a href="/docs/routing">Routing</a>.</li>
-      <li><strong>103 Early Hints</strong>: before SSR begins, the server calls <code>res.writeEarlyHints()</code> with <code>&lt;link rel="modulepreload"&gt;</code> headers for every module URL that the page will need (the page file itself, its layout chain, and any web component modules discovered on a previous render). This lets the browser start fetching scripts while the server is still computing HTML.</li>
+      <li><strong>103 Early Hints</strong>: before SSR begins, the server calls <code>res.writeEarlyHints()</code> with <code>Link: &lt;url&gt;; rel=preload; as=script; crossorigin=anonymous</code> headers (never <code>modulepreload</code>, which Firefox treats as starting module loading before the import map arrives) for every module URL that the page will need (the page file itself, its layout chain, and any web component modules discovered on a previous render). This lets the browser start fetching scripts while the server is still computing HTML.</li>
       <li><strong>Segment middleware</strong>: if any <code>middleware.ts</code> files exist on the path from root to the matched route, they execute outermost-first as a chain: <code>(req, next) =&gt; Response</code>.</li>
       <li><strong>Load page module</strong>: the server dynamically imports the matched <code>page.ts</code> file. In dev mode, the import URL carries a query naming the file's content, so an edit takes effect immediately without restarting while an unchanged file reuses the module already loaded.</li>
       <li><strong>Load layout chain</strong>: layout files are loaded outermost-first (<code>app/layout.ts</code>, then <code>app/blog/layout.ts</code>, etc.). Each layout wraps the previous result via its <code>children</code> prop.</li>
@@ -61,7 +61,7 @@ export default async function Home() {
     </ul>
 
     <h3>Components Without Shadow DOM</h3>
-    <p>If a component sets <code>static shadow = false</code>, DSD injection is skipped. The component renders into the light DOM and its styles are not scoped. This is useful for components that need to participate in the parent document's layout or inherit global styles.</p>
+    <p>Components render into the light DOM unless they set <code>static shadow = true</code>, so no DSD is emitted for them and their styles are not scoped. This is useful for components that need to participate in the parent document's layout or inherit global styles.</p>
 
     <h2>The Server Element Shim</h2>
     <p>The SSR walk instantiates each component server-side, but there is no real DOM, so a naive <code>this.getAttribute(...)</code> or <code>this.addEventListener(...)</code> in the constructor or <code>render()</code> would throw. WebJs backs the SSR-time instance with a server element shim, so the attribute and event surface a component reads during the pre-render lifecycle is safe and does not crash.</p>
@@ -234,16 +234,16 @@ export const metadata = {
     <p>The per-file modulepreload model is what makes webjs's no-build, ESM-native architecture competitive with bundling: the SSR pass knows every module the page needs, the browser fetches them in parallel over an HTTP/2 connection, granular cache invalidation means edits only invalidate the changed file. Same model as Rails 7+ with importmap-rails.</p>
 
     <h2>103 Early Hints</h2>
-    <p>Before SSR even starts, the server sends HTTP 103 Early Hints to the browser with the same modulepreload URLs that will appear in the <code>&lt;head&gt;</code>. This uses the Node.js <code>res.writeEarlyHints()</code> API. The browser can begin DNS resolution, TLS negotiation, and module fetching while the server is still executing page code and rendering templates.</p>
+    <p>Before SSR even starts, the server sends HTTP 103 Early Hints to the browser naming the same module URLs that will appear in the <code>&lt;head&gt;</code>, as plain <code>rel=preload; as=script</code> links. This uses the Node.js <code>res.writeEarlyHints()</code> API. The browser can begin DNS resolution, TLS negotiation, and module fetching while the server is still executing page code and rendering templates.</p>
     <p>Early Hints are sent only in production mode (dev-mode file churn would send stale URLs after rebuilds) and only for GET/HEAD requests to page routes.</p>
 
     <code-block>// Conceptual flow:
 // 1. Browser sends GET /blog/hello
 // 2. Server matches route, resolves module URLs
 // 3. Server sends 103 Early Hints:
-//      Link: &lt;/app/blog/[slug]/page.ts&gt;; rel=modulepreload
-//      Link: &lt;/app/layout.ts&gt;; rel=modulepreload
-//      Link: &lt;/components/post-card.ts&gt;; rel=modulepreload
+//      Link: &lt;/app/blog/[slug]/page.ts&gt;; rel=preload; as=script; crossorigin=anonymous
+//      Link: &lt;/app/layout.ts&gt;; rel=preload; as=script; crossorigin=anonymous
+//      Link: &lt;/components/post-card.ts&gt;; rel=preload; as=script; crossorigin=anonymous
 // 4. Server runs SSR (may take 50-200ms for DB queries)
 // 5. Server sends 200 OK with full HTML
 // 6. Browser already has modules cached from step 3</code-block>
@@ -304,6 +304,6 @@ async function recentPosts() {
   \`;
 }</code-block>
 
-    <p>When a browser requests <code>/</code>, it receives the full HTML with the hero banner painted via DSD, the "Loading recent posts..." fallback visible immediately, and (milliseconds later) the real post list streamed in, all before the page's JavaScript has finished loading.</p>
+    <p>When a browser requests <code>/</code>, it receives the full HTML with the hero banner already painted, the "Loading recent posts..." fallback visible immediately, and (milliseconds later) the real post list streamed in, all before the page's JavaScript has finished loading.</p>
   `;
 }

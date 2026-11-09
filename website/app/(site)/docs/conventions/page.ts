@@ -59,7 +59,7 @@ webjs check --rules</code-block>
     <code-block># Run all unit tests
 webjs test
 
-# Test files live in test/unit/*.test.{ts,js}</code-block>
+# Test files live in test/&lt;feature&gt;/*.test.{ts,js}</code-block>
 
     <p>Unit tests use <code>node:test</code> and <code>node:assert/strict</code>. Test server actions (via direct import), component rendering (via <code>renderToString</code>), and utility functions:</p>
 
@@ -81,9 +81,9 @@ test('action validates input', async () =&gt; {
 
     <h3>E2E Tests</h3>
     <code-block># Run unit + E2E tests
-webjs test --e2e
+WEBJS_E2E=1 webjs test
 
-# Test files live in test/browser/*.test.{ts,js}</code-block>
+# Test files live in test/&lt;feature&gt;/browser/*.test.{ts,js}</code-block>
 
     <p>E2E tests use WTR + Playwright to launch a real browser and test complete user flows: navigation, form submission, auth, and live interactions.</p>
 
@@ -133,9 +133,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</code-block>
         <tr><td><code>AGENTS.md</code></td><td>All agents (Cursor, opencode, Antigravity, Copilot coding agent read it natively)</td><td>Framework API, conventions, recipes (the source of truth)</td></tr>
         <tr><td><code>.agents/rules/workflow.md</code></td><td>All agents</td><td>Git, test, and review workflow rules</td></tr>
         <tr><td><code>CLAUDE.md</code></td><td>Claude Code</td><td>Thin bridge pointing at AGENTS.md</td></tr>
-        <tr><td><code>GEMINI.md</code></td><td>Gemini CLI</td><td>Thin bridge pointing at AGENTS.md</td></tr>
-        <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>PreToolUse hook guarding git merge/push to main</td></tr>
-        <tr><td><code>.github/copilot-instructions.md</code></td><td>Copilot in VS Code</td><td>Thin bridge pointing at AGENTS.md</td></tr>
+        <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>Hooks: the branch guard, the server-import guard, the tests gate, and a check-on-edit loop that runs <code>webjs check</code> on every edited file</td></tr>
         <tr><td><code>.github/pull_request_template.md</code></td><td>All (via GitHub)</td><td>PR checklist: tests, docs, convention check</td></tr>
         <tr><td><code>.editorconfig</code></td><td>All editors</td><td>Consistent indent/encoding/line endings</td></tr>
       </tbody>
@@ -176,12 +174,12 @@ cd my-app && npm run dev</code-block>
       <li><code>modules/</code> skeleton for feature-scoped code</li>
       <li><code>components/</code> with a theme toggle component</li>
       <li><code>db/schema.server.ts</code>: the Drizzle schema, SQLite by default, example <code>User</code> model. <code>db/connection.server.ts</code> exports the <code>db</code> connection.</li>
-      <li><code>test/unit/</code> and <code>test/browser/</code> with example tests</li>
+      <li><code>test/&lt;feature&gt;/</code> with example tests, and <code>browser/</code> and <code>e2e/</code> subfolders</li>
       <li><code>.agents/rules/workflow.md</code>: git, test, and review workflow rules</li>
       <li><code>AGENTS.md</code>: full framework API reference</li>
-      <li>Thin bridges pointing at AGENTS.md (<code>CLAUDE.md</code>, <code>GEMINI.md</code>, <code>.github/copilot-instructions.md</code>)</li>
+      <li>A thin <code>CLAUDE.md</code> bridge pointing at AGENTS.md</li>
       <li><code>.editorconfig</code> for consistent formatting</li>
-      <li><code>package.json</code> with scripts (<code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>)</li>
+      <li><code>package.json</code> with scripts (<code>dev</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>ci</code>, <code>doctor</code>, <code>typecheck</code>, <code>db:migrate</code>, <code>db:generate</code>, <code>db:studio</code>)</li>
     </ul>
 
     <p>Every file is ready to use immediately. The project works out of the box with <code>webjs dev</code>, and every AI agent that opens the project will automatically read the config files and follow the conventions.</p>
@@ -193,7 +191,7 @@ cd my-app && npm run dev</code-block>
 modules/contact/actions/send-message.server.ts # the server action
 modules/contact/types.ts                       # type definitions
 test/unit/contact.test.ts                      # unit test for the action
-test/browser/contact.test.ts                       # E2E test for the form flow
+test/contact/e2e/contact.test.ts                   # E2E test for the form flow
 AGENTS.md                                      # updated if new API/conventions
 docs/app/docs/contact/page.ts                  # doc page (if docs/ exists)</code-block>
 

@@ -234,7 +234,7 @@ export default function Troubleshooting() {
 
     <h2 id="binding-in-page-template">A dev render error about an <code>@event</code> or <code>.prop</code> in a page or layout</h2>
     <p><strong>Symptom:</strong> in development a page answers 500 with <code>an @click event listener on &lt;button&gt; in a page or layout template</code> (or a <code>.value</code> property binding).</p>
-    <p><strong>Cause:</strong> pages and layouts render only on the server and never hydrate, so an event listener or a native-element property binding written in their template is dropped and never runs. In production it would silently do nothing; development makes it an error so you notice.</p>
+    <p><strong>Cause:</strong> pages and layouts render only on the server and never hydrate, so an event listener or a native-element property binding written in their template is dropped and never runs. In production it would silently do nothing; development makes it an error so you notice. The same applies to anything else rendered outside a component, an <code>error.ts</code> / <code>not-found.ts</code> boundary included, since those never hydrate either.</p>
     <p><strong>Fix:</strong> move the interactive markup into a component and render its tag from the page. The component's <code>render()</code> runs in the browser, where <code>@click</code> works. For a value that only needs to reach the HTML, write a plain attribute (<code>value=\${x}</code>). A <code>.prop</code> on a custom element in a page is fine: it is serialized for the component to read when it hydrates.</p>
 
     <h2 id="jsx-route-file">A <code>page.tsx</code> route does not exist, or the server refuses to start naming <code>no-jsx-route-file</code></h2>

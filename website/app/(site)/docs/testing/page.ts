@@ -138,10 +138,10 @@ const out = await invokeActionForTest(
     <p><strong>Prefer this over a direct import of the action.</strong> A direct import calls the function in-process and bypasses three production concerns the endpoint enforces:</p>
     <ul>
       <li><strong>the wire serializer</strong> (a <code>Date</code> / <code>Map</code> / <code>BigInt</code> arg or return is genuinely encoded and decoded, not passed by reference),</li>
-      <li><strong>CSRF</strong> (a missing token is a 403),</li>
+      <li><strong>CSRF</strong> (a cross-origin request is a 403),</li>
       <li><strong>prod error sanitization</strong> (a thrown error surfaces as a sanitized message-only payload, never the stack or extra error fields).</li>
     </ul>
-    <p>So <code>invokeActionForTest</code> catches a serializer / CSRF / error-sanitization regression a direct import cannot see. For the negative cases (assert a 403 on missing CSRF, or inspect a sanitized 500 body), <code>rawActionRequest(...)</code> returns the raw <code>Response</code> and never throws on a non-2xx. Pass <code>{ omitCsrf: true }</code> to deliberately drop the CSRF pair.</p>
+    <p>So <code>invokeActionForTest</code> catches a serializer / CSRF / error-sanitization regression a direct import cannot see. For the negative cases (assert a 403 on a cross-origin request, or inspect a sanitized 500 body), <code>rawActionRequest(...)</code> returns the raw <code>Response</code> and never throws on a non-2xx. Pass <code>{ crossOrigin: true }</code> to deliberately drop the CSRF pair.</p>
 
     <h2>API Route Tests</h2>
     <p>Drive route handlers through the same <code>handle()</code> entry (here via <code>testRequest</code>), or call them directly:</p>
@@ -192,7 +192,7 @@ test('WS echo works', async () =&gt; {
     <code-block># Run unit tests
 webjs test
 
-# Run unit + browser tests (WTR + Playwright)
+# Run only the browser tests (WTR + Playwright)
 webjs test --browser</code-block>
 
     <p>It discovers test files by feature folder, with the kind as a subfolder inside the feature only when that kind is present:</p>
@@ -261,7 +261,7 @@ webjs check
 
 # List the checks and their descriptions
 webjs check --rules</code-block>
-    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), reactive props use <code>declare</code> (broken reactivity), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, and erasable TypeScript only. They always run. Project conventions (layout, testing, styling) are guidance in <code>AGENTS.md</code> and these docs, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
+    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), a reactive prop is not also a plain class field (it clobbers the accessor), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, and erasable TypeScript only. They always run. Project conventions (layout, testing, styling) are guidance in <code>AGENTS.md</code> and these docs, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
 
     <h2>Recommended Test Structure</h2>
     <p>Feature folders are primary, and the test kind is a subfolder inside the feature only when that kind is present:</p>

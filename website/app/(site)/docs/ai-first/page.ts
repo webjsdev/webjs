@@ -21,14 +21,13 @@ export default function AIFirst() {
     <h2>How WebJs Solves This</h2>
 
     <h3>1. AGENTS.md: The Machine-Readable Contract</h3>
-    <p>Every WebJs app has an <code>AGENTS.md</code> at the root. This is a structured document that AI agents read before touching any code. It contains:</p>
+    <p>Every WebJs app has an <code>AGENTS.md</code> at the root, and it is short on purpose. WebJs follows Next.js App Router routing and Lit's component APIs, so an agent's existing habits already write most of an app correctly. The file holds only what differs:</p>
     <ul>
-      <li><strong>File conventions table</strong>: which filename means what (page.ts, route.ts, middleware.ts, .server.ts, etc.).</li>
-      <li><strong>Public API surface</strong>: every exported function from <code>webjs</code> and <code>@webjsdev/server</code> with a one-line description.</li>
-      <li><strong>Invariants</strong>: rules that must never be broken ("never import node:sqlite from a component", "a form binds its action with <code>action=\${importedAction}</code>").</li>
-      <li><strong>Recipes</strong>: step-by-step instructions for "add a page", "add a server action", "add a component", "add a DB model".</li>
-      <li><strong>What's deliberately deferred</strong>, so agents don't try to implement features that aren't supported yet.</li>
+      <li><strong>The WebJs brief</strong>: the handful of places WebJs departs from Next.js and Lit (light DOM by default, erasable TypeScript, server code in <code>*.server.ts</code>, imports from <code>@webjsdev/*</code>), and the instruction to run <code>webjs check</code> and <code>webjs status</code> after each edit.</li>
+      <li><strong>A build checklist</strong> for the template the app was created from.</li>
+      <li><strong>Types and data</strong>: derive every type from its source, and keep data in the database.</li>
     </ul>
+    <p>Everything else is enforced rather than documented: <code>webjs check</code> and the runtime refuse a habit that cannot work, with the WebJs fix in the message, and the framework source in <code>node_modules/@webjsdev/*</code> is the exact reference, since there is no build.</p>
     <p>An AI agent reads AGENTS.md once and knows: the shape of the app, what's safe to change, what's not, and how to add any feature. No guessing.</p>
 
     <h3>2. The WebJs MCP Server</h3>
@@ -112,7 +111,7 @@ export async function createPost(
     <ul>
       <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent, opening with the WebJs brief: what differs from Next.js routing and Lit components</li>
       <li><code>.agents/rules/workflow.md</code>, the git, test, and review workflow rules</li>
-      <li>Thin bridges for tools that do not read <code>AGENTS.md</code> natively: <code>CLAUDE.md</code> (Claude Code), <code>GEMINI.md</code> (Gemini CLI), and <code>.github/copilot-instructions.md</code> (Copilot in VS Code), each pointing at <code>AGENTS.md</code></li>
+      <li>A thin bridge for Claude Code, <code>CLAUDE.md</code>, which imports <code>AGENTS.md</code> (Cursor, opencode, Antigravity and the Copilot coding agent read <code>AGENTS.md</code> natively)</li>
     </ul>
     <p>Every agent gets the same rules from that one source: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
 
@@ -148,7 +147,7 @@ HTTP/JSON API only, no UI                                --template api</code-bl
       <li><strong>Add a new API endpoint</strong>: create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
       <li><strong>Add a server action</strong>: create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
       <li><strong>Add a component</strong>: create a file, extend the <code>WebComponent({ ... })</code> factory with your property shape, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
-      <li><strong>Add authentication</strong>: follow the recipe in AGENTS.md. Create lib/session.server.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
+      <li><strong>Add authentication</strong>: start from the auth gallery card (<code>app/features/auth/</code> and <code>modules/auth/</code>), which wires a login, a signed session and a protected route.</li>
       <li><strong>Add a database model</strong>: edit <code>db/schema.server.ts</code>, run <code>webjs db generate</code> then <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
       <li><strong>Debug an issue</strong>: read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>
     </ul>
@@ -171,7 +170,7 @@ HTTP/JSON API only, no UI                                --template api</code-bl
 ──────────────────────────────────────────────────────────
 AGENTS.md contract     ✅ built-in   ❌ none       ❌ none
 MCP server (read-only) ✅ webjs mcp  ❌ none       ❌ none
-Cross-agent configs    ✅ 5 agents   ❌ none       ❌ none
+Cross-agent config     ✅ AGENTS.md  ❌ none       ❌ none
 Auto tests + docs      ✅ enforced   ❌ manual     ❌ manual
 Branch guardrails      ✅ hooks      ❌ none       ❌ none
 Convention validator   ✅ webjs check ❌ none      ❌ none
@@ -182,19 +181,11 @@ Typed RPC (no schema)  ✅ rich types ⚠️ Flight     ❌ manual
 Autonomous mode        ✅ defaults   ❌ n/a        ❌ n/a</code-block>
 
     <h2>The AGENTS.md File</h2>
-    <p>Here's what a WebJs app's <code>AGENTS.md</code> contains (the blog example ships a complete one):</p>
-    <code-block>## What webjs is
-## App layout (file conventions table)
-## Public API: webjs
-## Public API: @webjsdev/server
-## Modules architecture
-## File conventions in detail (pages, layouts, routes, actions, components)
-## Invariants (rules agents must follow)
-## Recipes (step-by-step: add a page, add an action, add a component...)
-## Security checklist for REST endpoints
-## Advanced features (Suspense, bundling, rate limiting, WebSockets...)
-## Runtime targets (Node, embedded, edge)
-## Deliberately deferred (what NOT to implement)</code-block>
-    <p>You can read the full <a href="https://github.com/webjsdev/webjs/blob/main/AGENTS.md">AGENTS.md on GitHub</a>.</p>
+    <p>Here is the outline of the <code>AGENTS.md</code> a new app gets:</p>
+    <code-block>## The WebJs brief
+## Build a full-stack app (default template)   (or the api template's checklist)
+### Commands
+## Types and data (all templates)</code-block>
+    <p>You can read the <a href="https://github.com/webjsdev/webjs/blob/main/packages/cli/templates/AGENTS.md">template on GitHub</a>.</p>
   `;
 }

@@ -77,7 +77,7 @@ export default rateLimit({ window: '1m', max: 10, trustProxy: true });</code-blo
     <code-block>// express adapter
 import { createRequestHandler, stampRemoteIp } from '@webjsdev/server';
 
-const handler = createRequestHandler({ appDir: './app' });
+const handler = await createRequestHandler({ appDir: process.cwd() });
 
 app.use(async (req, res) => {
   const webReq = new Request(/* ... */, { method: req.method, headers: req.headers, /* ... */ });

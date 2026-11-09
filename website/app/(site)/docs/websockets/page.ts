@@ -48,7 +48,7 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;
       <li>The <code>WS</code> function is called with the upgraded socket.</li>
       <li>If no match is found or the route does not export <code>WS</code>, the socket is rejected with an HTTP error (404 or 426) and destroyed.</li>
     </ol>
-    <p>WebSocket connections use HTTP/1.1 Upgrade. Even when the server is configured for HTTP/2 (with <code>allowHTTP1: true</code>), WebSocket upgrades happen over the HTTP/1.1 fallback path, which is the universally supported approach.</p>
+    <p>WebSocket connections use the HTTP/1.1 Upgrade, which is what the WebJs server speaks. TLS and HTTP/2 are terminated by the proxy in front of it.</p>
     <p>On <strong>Bun</strong>, the same <code>WS(ws, req, ctx)</code> export works unchanged. Bun's native WebSocket dispatches messages through server-level handlers rather than the <code>ws</code>-library per-socket events, so WebJs wraps Bun's socket in a thin adapter that re-exposes the core contract: <code>ws.on('message', …)</code>, <code>ws.on('close', …)</code>, <code>ws.send(…)</code>, <code>ws.readyState</code>, and <code>ws.close()</code>. The typical message/close/broadcast handler and your <code>broadcast()</code> code are identical across runtimes. The lower-level <code>'error'</code> / <code>'ping'</code> / <code>'pong'</code> events of the node <code>ws</code> library are not forwarded on Bun; a socket failure surfaces as a <code>'close'</code> event there, so connection-cleanup logic keyed on <code>'close'</code> still runs. One payload nuance: a text message arrives as a <code>Buffer</code> on Node (the <code>ws</code> default) and as a <code>string</code> on Bun, so call <code>String(data)</code> / <code>data.toString()</code> (works on both) before parsing rather than branching on the type. The examples below already do.</p>
 
     <h3>Accessing Cookies, Headers, and Auth</h3>
@@ -258,7 +258,7 @@ export function WS(ws: WebSocket) {
 
     <h3>Client Component</h3>
     <code-block>// components/live-chat.ts
-import { WebComponent, html, css, connectWS } from '@webjsdev/core';
+import { WebComponent, html, css, connectWS, signal } from '@webjsdev/core';
 
 export class LiveChat extends WebComponent {
   static shadow = true;   // static styles apply inside a shadow root
@@ -393,7 +393,7 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: { postId: 
 
     <h3>Client Component</h3>
     <code-block>// components/live-comments.ts
-import { WebComponent, html, css, connectWS } from '@webjsdev/core';
+import { WebComponent, html, css, connectWS, signal } from '@webjsdev/core';
 
 export class LiveComments extends WebComponent({ postId: Number }) {
   static shadow = true;   // static styles apply inside a shadow root

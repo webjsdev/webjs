@@ -5,16 +5,18 @@ export const metadata = { title: 'Architecture | WebJs' };
 export default function Architecture() {
   return html`
     <h1>Architecture</h1>
-    <p>WebJs is a monorepo with three packages that together form the framework. Understanding the split helps when you need to import something specific or embed WebJs into another runtime.</p>
+    <p>WebJs is a monorepo whose three core packages form the framework, beside the MCP server, the UI kit and the editor plugins. Understanding the split helps when you need to import something specific or embed WebJs into another runtime.</p>
 
     <p><strong>Mental model, especially if you come from React Server Components:</strong> WebJs has no server/client component split. Pages, layouts, and components are <em>isomorphic</em> modules, the same source runs on the server to produce SSR'd HTML and then loads in the browser to add interactivity. There is no Flight protocol and no "server component" identity. The one server boundary is the <code>.server.{js,ts}</code> file, which is an RPC + source-protection mechanism (server actions and server-only utilities), not a server-rendered component. <code>route.{js,ts}</code> is a server-only HTTP handler. And elision (skipping the JS download of a module that does no client work) is a build-free optimization on those isomorphic modules, not a boundary, it never changes behaviour because progressive enhancement is the no-JS baseline.</p>
 
     <h2>Package Overview</h2>
     <code-block>webjs/
 ├── packages/
-│   ├── core/     # webjs       : browser + server runtime
+│   ├── core/     # @webjsdev/core   : browser + server runtime
 │   ├── server/   # @webjsdev/server : dev/prod server, router, SSR, actions
-│   └── cli/      # @webjsdev/cli   : webjs dev/start/build/db commands
+│   ├── cli/      # @webjsdev/cli    : webjs create/dev/start/check/db/... (no build command)
+│   ├── mcp/      # @webjsdev/mcp    : read-only MCP server for agents
+│   └── ui/       # @webjsdev/ui     : the component kit and its CLI
 ├── examples/
 │   └── blog/     # reference app exercising every feature
 └── website/      # webjs.dev, including this documentation at /docs
@@ -102,7 +104,7 @@ import { listPosts } from '#modules/posts/queries/list-posts.server.ts';</code-b
 
     <h2>Request Lifecycle</h2>
     <ol>
-      <li><strong>HTTP request arrives</strong> at the listener shell (<code>node:http</code>, or <code>Bun.serve</code> on Bun; HTTP/2 if TLS is configured).</li>
+      <li><strong>HTTP request arrives</strong> at the listener shell (<code>node:http</code> speaking HTTP/1.1, or <code>Bun.serve</code> on Bun; TLS and HTTP/2 terminate at the proxy in front).</li>
       <li><strong>The listener shell answers what does not fit the request/response model</strong>, before the app handler is called at all: a <strong>WebSocket upgrade</strong> bound for a <code>route.ts</code> that exports <code>WS</code>, and in dev the live-reload <strong>SSE stream</strong> at <code>/__webjs/events</code>. Both are intercepted on the node and Bun shells alike. The node shell also emits <strong>103 Early Hints</strong> here in production, with script preloads (never <code>modulepreload</code>, which would start module loading before the import map) for the matched page's modules; Bun has no informational-response API, so that step does not exist on the Bun shell.</li>
       <li><strong>Declarative redirects from your <code>webjs</code> config are answered</strong>: <code>webjs.redirects</code> and the <code>webjs.trailingSlash</code> canonical-form policy, both of which reply with a redirect status and a <code>Location</code> header rather than routing the request onward. These are configured by your app but resolved by the framework ahead of everything below, so a 308 from a redirect rule is answered without your root middleware running. That is the case most likely to surprise you, so it is worth remembering specifically.</li>
       <li><strong>Framework-internal assets and probes are answered next</strong>, because they depend on neither the app analysis nor the vendor importmap and a cold instance must not gate them: the health, readiness and build-info probes (<code>/__webjs/health</code>, <code>/__webjs/ready</code>, <code>/__webjs/version</code>), the core runtime (<code>/__webjs/core/*</code>), the dev reload client and its SharedWorker (<code>/__webjs/reload.js</code>, <code>/__webjs/reload-worker.js</code>), and downloaded vendor bundles (<code>/__webjs/vendor/*</code>). Not everything under <code>/__webjs/*</code> is here: the server-action RPC endpoint is routed with the app, below. In <strong>development only</strong>, files from <code>public/</code> (served at the url root, so <code>public/app.css</code> is <code>/app.css</code>) are served here too, so a stylesheet is never queued behind the startup analysis.</li>

@@ -70,6 +70,7 @@ webjs create my-app --runtime bun</code-block>
     <code-block>{
   "name": "my-app",
   "type": "module",
+  "imports": { "#*": "./*" },
   "scripts": {
     "dev": "webjs dev",
     "start": "webjs start"
