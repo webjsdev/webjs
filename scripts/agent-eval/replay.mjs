@@ -99,6 +99,9 @@ export function firstDraftOps(transcript, appDir) {
         if (!op) continue;
         const out = typeof c.content === 'string' ? c.content
           : (c.content || []).map((x) => (x && x.text) || '').join('\n');
+        // A shell command that was refused or failed changed nothing, so
+        // replaying it would invent a change the agent never made.
+        if (op.type === 'sh') { op.ran = !c.is_error; continue; }
         op.ok = !c.is_error && verifyPassed(op.kind, out);
       }
       continue;
@@ -121,7 +124,11 @@ export function firstDraftOps(transcript, appDir) {
         const cmd = String(inp.command || '');
         const kind = verifyKind(cmd);
         if (kind) { const op = { type: 'verify', kind, cmd, ok: null }; ops.push(op); pendingVerify.set(c.id, op); }
-        else if (MUTATES_RE.test(cmd) && !/^\s*(?:cd\s+\S+\s*&&\s*)?git\b/.test(cmd)) ops.push({ type: 'sh', cmd });
+        else if (MUTATES_RE.test(cmd) && !/^\s*(?:cd\s+\S+\s*&&\s*)?git\b/.test(cmd)) {
+          const op = { type: 'sh', cmd, ran: true };
+          ops.push(op);
+          pendingVerify.set(c.id, op);
+        }
         else if (/\bui\s+add\b|db[: ]generate/.test(cmd)) ops.push({ type: 'cmd', cmd });
       }
     }
@@ -189,22 +196,13 @@ export function replayBuild(build, opts = {}) {
 
     const ranUiAdd = ops.some((o) => o.type === 'cmd' && /\bui\s+add\b/.test(o.cmd));
     const ranDbGenerate = ops.some((o) => o.type === 'cmd' && /db[: ]generate/.test(o.cmd));
-    // The kit files `webjs ui add` copies in are never agent-authored, and an
-    // agent may have brought them in several ways (`ui add`, a copy from another
-    // checkout), so they always come from the finished app.
-    void ranUiAdd;
-    {
-      for (const rel of [...listFiles(join(appDir, 'components/ui')).map((f) => join('components/ui', f)), 'lib/utils/cn.ts', 'lib/utils/dom.ts', 'components.json']) {
-        const from = join(appDir, rel);
-        if (existsSync(from) && !existsSync(join(draft, rel))) { mkdirSync(dirname(join(draft, rel)), { recursive: true }); cpSync(from, join(draft, rel)); }
-      }
-    }
     const appPathRe = new RegExp(appDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
       '(?:/(?:\\.wt-build|\\.worktrees/[^/\\s]+|\\.claude/worktrees/[^/\\s]+|\\.wt/[^/\\s]+))?', 'g');
     result.shell = 0;
     for (const op of ops) {
       if (op.type === 'cmd') continue;
       if (op.type === 'sh') {
+        if (!op.ran) continue;
         const cmd = op.cmd.replace(appPathRe, draft);
         spawnSync('bash', ['-c', cmd], { cwd: draft, encoding: 'utf8', timeout: 60_000, env: { ...process.env, CI: '1' } });
         result.shell++;
@@ -223,6 +221,17 @@ export function replayBuild(build, opts = {}) {
         src = ed.all ? src.split(ed.old).join(ed.new) : src.replace(ed.old, () => ed.new);
       }
       if (src !== null) { writeFileSync(abs, src); result.edits++; }
+    }
+    // The kit files `webjs ui add` copies in are never agent-authored, and an
+    // agent may have brought them in several ways (`ui add`, a copy from another
+    // checkout, then removing the stray copy), so they always come from the
+    // finished app, AFTER the replay so a replayed `rm` cannot remove them.
+    void ranUiAdd;
+    {
+      for (const rel of [...listFiles(join(appDir, 'components/ui')).map((f) => join('components/ui', f)), 'lib/utils/cn.ts', 'lib/utils/dom.ts', 'components.json']) {
+        const from = join(appDir, rel);
+        if (existsSync(from) && !existsSync(join(draft, rel))) { mkdirSync(dirname(join(draft, rel)), { recursive: true }); cpSync(from, join(draft, rel)); }
+      }
     }
     if (ranDbGenerate) run(['db', 'generate'], draft, 120_000);
     // Grade only the tests the agent wrote: a scaffold's own example tests
