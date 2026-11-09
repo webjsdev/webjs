@@ -588,6 +588,8 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
   // last rendered value. Essential for <input> two-way binding.
   if (isLive(value)) {
     const liveVal = /** @type any */ (value).value;
+    // live(noChange) keeps whatever the element holds now, as in Lit (#1686).
+    if (liveVal === noChange) return;
     if (part.kind === 'prop' && /** @type any */ (part.el)[part.name] === liveVal) return;
     if (part.kind === 'attr' && part.el.getAttribute(part.name) === String(liveVal)) return;
     if (part.kind === 'bool' && part.el.hasAttribute(part.name) === !!liveVal) return;
@@ -676,6 +678,7 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       // on the first render, which is what SSR serves), so it never stringifies
       // the sentinel itself.
       const committed = /** @type any */ (part).__pieces ??= [];
+      let hasLive = false;
       for (let j = 0; j < mp.group.length; j++) {
         let piece = allValues ? allValues[mp.group[j]] : value;
         // A custom directive in this piece: one instance per piece, its
@@ -704,7 +707,11 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         // server now emits correctly would be rewritten to the wrapper's
         // stringification on the next client commit. Mirrors the reconciler's
         // effectiveFormAttr, which already unwraps each group piece.
-        if (isLive(piece)) piece = /** @type any */ (piece).value;
+        if (isLive(piece)) {
+          piece = /** @type any */ (piece).value;
+          hasLive = true;
+          if (piece === noChange) piece = committed[j] ?? '';
+        }
         piece = mixedPieceValue(part, j, piece, committed, mp);
         // #1154: same function guard for each piece of a mixed attribute.
         assertNotFunctionActionAttr(piece, part.name, part.el.localName);
@@ -713,6 +720,9 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         val += committed[j];
         val += mp.statics[j + 1] || '';
       }
+      // A live() piece checks the DOM, not the last render: an identical value
+      // is not written again (Lit's live, #1686).
+      if (hasLive && part.el.getAttribute(part.name) === val) break;
       part.el.setAttribute(part.name, val);
       break;
     }
@@ -1047,7 +1057,7 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     teardownChild(part);
     const tpl = /** @type any */ (value).template;
     if (tpl && tpl.content) {
-      const frag = tpl.content.cloneNode(true);
+      const frag = document.importNode(tpl.content, true);
       const nodes = [...frag.childNodes];
       marker.parentNode?.insertBefore(frag, marker);
       part.child = nodes;
@@ -1193,7 +1203,7 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   if (isTemplate(value)) {
     const tr = /** @type any */ (value);
     const { templateEl, parts, formActions } = compile(tr);
-    const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+    const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
     const startNode = document.createComment(`${MARKER}s`);
     const endNode = document.createComment(`${MARKER}e`);
     const bound = parts.map((p) => bindPart(p, frag));
@@ -1337,7 +1347,7 @@ export function nodesToFrag(nodes) {
  */
 export function buildDetached(tr, reconcileFormActionsCb) {
   const { templateEl, parts, formActions } = compile(tr);
-  const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+  const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
   const startNode = document.createComment(`${MARKER}s`);
   const endNode = document.createComment(`${MARKER}e`);
   const bound = parts.map((p) => bindPart(p, frag));
@@ -2549,7 +2559,7 @@ function renderToNodes(value, reconcileFormActionsCb) {
   if (isTemplate(value)) {
     const tr = /** @type any */ (value);
     const { templateEl, parts, formActions } = compile(tr);
-    const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+    const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
     const bound = parts.map((p) => bindPart(p, frag));
     for (let i = 0; i < tr.values.length; i++) {
       applyPart(bound[i], tr.values[i], undefined, tr.values, reconcileFormActionsCb);

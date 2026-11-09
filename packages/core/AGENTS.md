@@ -300,6 +300,7 @@ Reactive properties are declared with Lit's `static properties` (plus an erasabl
 - Ordinary attribute values stringify booleans; nullish values become empty strings. Use `?disabled=${disabled}` for boolean attributes and `title=${value ?? nothing}` for omission, including inside mixed attributes.
 - Boolean child values render text. Use `${condition ? html`<p>Visible</p>` : nothing}` for conditional content.
 - `nothing` clears children, removes attributes, and assigns `undefined` to properties. `noChange` preserves the previously committed value.
+- `live()` compares against the DOM in every binding position, a quoted attribute included, so an unchanged value is not written again, and `live(noChange)` keeps what the element holds (#1686).
 - `classMap`, `styleMap`, and `ifDefined` are available from `@webjsdev/core/directives`. Map helpers require their matching class/style attribute with one expression; static text around it is supported. They preserve static tokens while removing obsolete dynamic entries.
 - Normal lifecycle timing follows Lit: skipped updates consume their change map; `hasChanged` gates updates without discarding assignments; post-update writes schedule a new cycle; `updateComplete` reports whether another cycle is pending. WebJs retains its component error boundaries and recovery.
 
