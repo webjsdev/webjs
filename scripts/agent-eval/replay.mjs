@@ -41,6 +41,21 @@ export function verifyKind(cmd) {
 }
 
 /**
+ * Whether a verification run's output reports success.
+ * @param {'check'|'typecheck'|'test'} kind @param {string} out
+ */
+/** A shell command that changes files: an in-place edit, a move, a copy, a delete, a redirect into a file, or the gallery reset. */
+const MUTATES_RE = /\bsed\s+-i|\bmv\s|\bcp\s|\brm\s|cat\s*>|\btee\s|>\s*[\w./#-]+\.(?:ts|js|mjs|json|css|md)\b|gallery:clear|clear-gallery/;
+
+export function verifyPassed(kind, out) {
+  if (kind === 'check') return /all checks pass/.test(out) && !/\d+ violation/.test(out);
+  if (kind === 'typecheck') return !/error TS\d+/.test(out) && !/[Ee]xit code [1-9]/.test(out);
+  const fails = [...out.matchAll(/ℹ fail (\d+)/g), ...out.matchAll(/(\d+) failed/g)].map((m) => Number(m[1]));
+  if (fails.length) return fails.every((n) => n === 0);
+  return /all tests passed|ℹ pass \d+/.test(out) && !/[Ee]xit code [1-9]/.test(out);
+}
+
+/**
  * An absolute path an agent wrote, mapped to the app-relative path. Agents
  * sometimes worked in a git worktree inside the app (`.wt-build/`,
  * `.worktrees/<x>/`, `.claude/worktrees/<x>/`), which folds back onto the app.
@@ -70,11 +85,24 @@ export function appRelative(abs, appDir) {
 export function firstDraftOps(transcript, appDir) {
   /** @type {Array<{ type: 'write', path: string, content: string } | { type: 'edit', path: string, edits: Array<{ old: string, new: string, all: boolean }> } | { type: 'cmd', cmd: string }>} */
   const ops = [];
+  /** @type {Map<string, any>} tool_use id -> its verify op, to fill in the outcome */
+  const pendingVerify = new Map();
 
   for (const line of readFileSync(transcript, 'utf8').split('\n')) {
     if (!line) continue;
     let e;
     try { e = JSON.parse(line); } catch { continue; }
+    if (e.type === 'user') {
+      for (const c of e.message?.content || []) {
+        if (c?.type !== 'tool_result') continue;
+        const op = pendingVerify.get(c.tool_use_id);
+        if (!op) continue;
+        const out = typeof c.content === 'string' ? c.content
+          : (c.content || []).map((x) => (x && x.text) || '').join('\n');
+        op.ok = !c.is_error && verifyPassed(op.kind, out);
+      }
+      continue;
+    }
     if (e.type !== 'assistant') continue;
     for (const c of e.message?.content || []) {
       if (c?.type !== 'tool_use') continue;
@@ -92,7 +120,8 @@ export function firstDraftOps(transcript, appDir) {
       } else if (c.name === 'Bash') {
         const cmd = String(inp.command || '');
         const kind = verifyKind(cmd);
-        if (kind) ops.push({ type: 'verify', kind, cmd });
+        if (kind) { const op = { type: 'verify', kind, cmd, ok: null }; ops.push(op); pendingVerify.set(c.id, op); }
+        else if (MUTATES_RE.test(cmd) && !/^\s*(?:cd\s+\S+\s*&&\s*)?git\b/.test(cmd)) ops.push({ type: 'sh', cmd });
         else if (/\bui\s+add\b|db[: ]generate/.test(cmd)) ops.push({ type: 'cmd', cmd });
       }
     }
@@ -102,18 +131,20 @@ export function firstDraftOps(transcript, appDir) {
   let lastNew = -1;
   ops.forEach((o, i) => { if (o.type === 'write' && !seen.has(o.path)) { seen.add(o.path); lastNew = i; } });
   const cut = ops.findIndex((o, i) => i > lastNew && o.type === 'verify');
-  // Strict: after the agent's FIRST verification, an edit or a rewrite of a
-  // file it already wrote is likely a correction prompted by that run's
-  // output, so only first-time writes (and generator commands) are kept.
-  const firstAny = ops.findIndex((o) => o.type === 'verify');
+  // An edit or a rewrite of a file the agent already wrote, made after a
+  // verification run that FAILED, is a correction prompted by that output, so
+  // it is dropped. After a passing run the agent is still building, so its
+  // edits are part of the draft.
   const written = new Set();
-  const kept = (cut === -1 ? ops : ops.slice(0, cut)).filter((o, i) => {
-    if (o.type === 'write') { const isNew = !written.has(o.path); written.add(o.path); return firstAny === -1 || i < firstAny || isNew; }
-    if (o.type === 'edit') return firstAny === -1 || i < firstAny;
+  let afterFailure = false;
+  const kept = (cut === -1 ? ops : ops.slice(0, cut)).filter((o) => {
+    if (o.type === 'verify') { if (o.ok === false) afterFailure = true; else if (o.ok === true) afterFailure = false; return false; }
+    if (o.type === 'write') { const isNew = !written.has(o.path); written.add(o.path); return isNew || !afterFailure; }
+    if (o.type === 'edit' || o.type === 'sh') return !afterFailure;
     return true;
   });
   const firstVerify = cut === -1 ? null : { kind: ops[cut].kind, cmd: ops[cut].cmd };
-  return { ops: kept.filter((o) => o.type !== 'verify'), firstVerify };
+  return { ops: kept, firstVerify };
 }
 
 /** Every file under `dir`, relative to it. */
@@ -162,8 +193,17 @@ export function replayBuild(build, opts = {}) {
         if (existsSync(from) && !existsSync(join(draft, rel))) { mkdirSync(dirname(join(draft, rel)), { recursive: true }); cpSync(from, join(draft, rel)); }
       }
     }
+    const appPathRe = new RegExp(appDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+      '(?:/(?:\\.wt-build|\\.worktrees/[^/\\s]+|\\.claude/worktrees/[^/\\s]+|\\.wt/[^/\\s]+))?', 'g');
+    result.shell = 0;
     for (const op of ops) {
       if (op.type === 'cmd') continue;
+      if (op.type === 'sh') {
+        const cmd = op.cmd.replace(appPathRe, draft);
+        spawnSync('bash', ['-c', cmd], { cwd: draft, encoding: 'utf8', timeout: 60_000, env: { ...process.env, CI: '1' } });
+        result.shell++;
+        continue;
+      }
       const abs = join(draft, op.path);
       if (op.type === 'write') {
         mkdirSync(dirname(abs), { recursive: true });
