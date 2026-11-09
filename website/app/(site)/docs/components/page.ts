@@ -20,9 +20,9 @@ export default function Components() {
     </ul>
 
     <h2 id="server-only">Server-only components</h2>
-    <p>A component runs in the browser, as in Lit: it always ships. Markup that only the server should render is written one of two ways, the same split Next.js draws between client and server components.</p>
+    <p>A component runs in the browser, as in Lit. One that provably does no client work is elided automatically: its HTML is already server-rendered, so its JavaScript is never downloaded (see <a href="/docs/elision">Elision</a>). When you want that as a guarantee rather than an inference, or the markup needs server code, write it one of two ways, the same split Next.js draws between client and server components.</p>
     <ul>
-      <li><strong>Needs the browser</strong> (state, events, lifecycle): a <code>WebComponent</code> in an ordinary file. It always ships and hydrates.</li>
+      <li><strong>Needs the browser</strong> (state, events, lifecycle): a <code>WebComponent</code> in an ordinary file. It ships and hydrates (and is elided when it does no client work).</li>
       <li><strong>Server only, as a custom element</strong>: a <code>WebComponent</code> in a <code>*.server.ts</code> file. It renders on the server and is never defined in the browser, so it costs no JavaScript and may import server code directly.</li>
       <li><strong>Server only, as a function</strong>: a function returning <code>html</code>, called from a page or layout. It may be <code>async</code> and query the database, like a Next.js server component, and it never ships.</li>
     </ul>
