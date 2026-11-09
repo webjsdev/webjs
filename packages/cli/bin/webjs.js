@@ -854,10 +854,19 @@ async function main() {
           const testArgs = process.versions.bun
             ? ['test', ...testFiles]
             : ['--test', ...testFiles];
+          // A SQLite app with migrations gets a fresh migrated test database,
+          // so tests never write into db/dev.db (the Rails test-database habit).
+          const { wantsTestDatabase, prepareTestDatabase } = await import('../lib/test-db.js');
+          let testDb = null;
+          if (wantsTestDatabase(cwd, process.env)) {
+            testDb = prepareTestDatabase(cwd, { cliBin: fileURLToPath(import.meta.url) });
+            console.log('webjs test: using a fresh migrated test database (set WEBJS_TEST_DB=0 to use DATABASE_URL instead)\n');
+          }
           const child = spawn(process.execPath, testArgs, {
-            stdio: 'inherit', cwd, env: { ...process.env },
+            stdio: 'inherit', cwd, env: { ...process.env, ...(testDb ? { DATABASE_URL: testDb.url } : {}) },
           });
           const code = await new Promise(r => child.on('exit', r));
+          testDb?.cleanup();
           if (code !== 0) process.exit(code ?? 1);
         }
       }

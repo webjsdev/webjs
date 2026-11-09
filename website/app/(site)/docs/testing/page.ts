@@ -23,6 +23,7 @@ test('listPosts returns an array', async () =&gt; {
   const posts = await listPosts();
   assert.ok(Array.isArray(posts));
 });</code-block>
+    <p><strong>Server tests get their own database.</strong> For a SQLite app with migrations, <code>webjs test</code> creates a temporary database, applies the app's migrations to it with <code>webjs db migrate</code>, and runs the server tests with <code>DATABASE_URL</code> pointing there, the way Rails prepares a test database. So a test can import the app's <code>db</code> and write to it without touching <code>db/dev.db</code>, and every run starts empty (insert what a test needs; the seed file is not applied). A <code>DATABASE_URL</code> set in the shell is used as is (CI, or a Postgres test database), and <code>WEBJS_TEST_DB=0</code> turns it off.</p>
 
     <h2>Renderer Tests</h2>
     <p>Test <code>renderToString</code> for SSR output. Import it from <code>@webjsdev/core/server</code>, not the root, so your test stays explicit about which side it runs on:</p>
