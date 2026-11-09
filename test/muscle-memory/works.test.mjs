@@ -91,7 +91,10 @@ test('the corpus behaves the Next.js way on the server', async () => {
     const perm = await go('/old-about');
     assert.equal(perm.status, 308, 'permanentRedirect() is a 308');
     const greeting = await (await go('/greeting')).text();
-    assert.match(greeting, /Greeting: from-env-local/, '.env.local overrides .env');
+    // Next's order: .env.local overrides .env, except in test mode (NODE_ENV=test,
+    // which `bun test` sets), where it is skipped so tests are reproducible.
+    if (process.env.NODE_ENV === 'test') assert.match(greeting, /Greeting: from-env</, '.env.local is skipped in test mode');
+    else assert.match(greeting, /Greeting: from-env-local/, '.env.local overrides .env');
     const logo = await go('/logo.svg');
     assert.equal(logo.status, 200, 'public/logo.svg is served at /logo.svg');
     assert.match(await logo.text(), /<svg/);

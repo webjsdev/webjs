@@ -58,7 +58,9 @@ for (const c of REFUSED) {
       assert.ok(hit, `${c.rule} did not fire on ${c.file}; got ${JSON.stringify(violations.map((v) => v.rule))}`);
       assert.match(`${hit.message} ${hit.fix || ''}`, c.fix, 'the check report carries the fix');
 
-      if (c.load) {
+      // Bun's transpiler drops an import used only as a type, so that case loads on a
+      // Bun server (the browser still fails, and the check above is the refusal).
+      if (c.load && !(process.versions.bun && c.serverLoadsOnBun)) {
         const { text } = await devRequest(appDir, c.load.path);
         assert.match(text, c.load.match, `requesting ${c.load.path} in dev names the fix`);
       }

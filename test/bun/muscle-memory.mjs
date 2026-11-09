@@ -66,7 +66,9 @@ const quiet = { info() {}, warn() {}, error() {}, debug() {} };
     assert.equal((await go('/api/items/2')).status, 404, `${runtime}: notFound() in a route handler`);
     assert.equal((await go('/api/items/first')).status, 307, `${runtime}: redirect() in a route handler`);
     assert.match(await (await go('/docs/a/b')).text(), /Path: a \/ b/, `${runtime}: catch-all arrays`);
-    assert.match(await (await go('/greeting')).text(), /Greeting: from-env-local/, `${runtime}: .env.local overrides .env`);
+    // Next's order skips .env.local in test mode (NODE_ENV=test, set by `bun test`).
+    const expected = process.env.NODE_ENV === 'test' ? /Greeting: from-env</ : /Greeting: from-env-local/;
+    assert.match(await (await go('/greeting')).text(), expected, `${runtime}: env files load in Next's order`);
     assert.equal((await go('/logo.svg')).status, 200, `${runtime}: public/ at the root`);
   } finally {
     rmSync(join(app, '.env'), { force: true });
