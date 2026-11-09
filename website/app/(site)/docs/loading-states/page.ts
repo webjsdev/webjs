@@ -78,6 +78,9 @@ export default function Page() {
 
     <p>Each <code>Suspense</code> boundary resolves independently, so the feed can appear before the stats if it's faster.</p>
 
+    <h2>Status codes once streaming has started</h2>
+    <p>As in Next.js, the status goes out with the shell, so a boundary that resolves later cannot change it. <code>redirect()</code> thrown inside a <code>Suspense</code> boundary redirects on the client (a refresh tag with JavaScript off). <code>notFound()</code>, <code>forbidden()</code> and <code>unauthorized()</code> render the nearest <code>not-found.ts</code>, <code>forbidden.ts</code> or <code>unauthorized.ts</code> in place of the streamed content, keep the <code>200</code>, and mark the page <code>noindex</code>. Call them before the boundary (in the page itself) to answer with the real <code>404</code>, <code>403</code> or <code>401</code>.</p>
+
     <h2>Component re-fetch loading: renderFallback()</h2>
     <p>The loading states above are for a PAGE or REGION (a <code>loading.ts</code> skeleton, a <code>Suspense</code> boundary, a streamed <code>&lt;webjs-suspense&gt;</code>). A component that fetches its own data with <a href="/docs/data-fetching">async render</a> has a separate concern: what to show when it RE-FETCHES on the client (a prop / dependency change re-runs <code>async render()</code>).</p>
     <p>The default is stale-while-revalidate: the component keeps its current content until the new render resolves (no blank, no flash). Define <code>renderFallback()</code> ONLY to override that with an explicit loading state DURING the re-fetch. It is shown only on a client re-fetch, <strong>never on the first paint</strong>, and it does NOT trigger SSR streaming (to stream slow data on the first paint, wrap the component in <code>&lt;webjs-suspense&gt;</code> instead).</p>

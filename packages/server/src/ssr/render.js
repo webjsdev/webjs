@@ -778,6 +778,33 @@ function boundaryCtx(params, url, actionData) {
 }
 
 /**
+ * The markup a streamed Suspense boundary renders when its content throws
+ * notFound(), forbidden() or unauthorized() after the 200 went out (#1686):
+ * the nearest matching boundary file, else the default heading. Null for any
+ * other throw, which keeps the streamed-error behaviour.
+ * @param {unknown} e
+ * @param {any} route
+ * @param {Record<string, unknown>} ctx
+ * @param {{ dev: boolean, globalNotFound?: string | null, onError?: (e: unknown) => void }} opts
+ * @returns {Promise<string | null>}
+ */
+async function streamedAccessFallback(e, route, ctx, opts) {
+  const kind = isNotFound(e) ? 'notFounds' : isForbidden(e) ? 'forbiddens' : isUnauthorized(e) ? 'unauthorizeds' : null;
+  if (!kind) return null;
+  const heading = kind === 'notFounds' ? '404: Not found' : kind === 'forbiddens' ? '403: Forbidden' : '401: Unauthorized';
+  const file = nearest(route[kind]) || (kind === 'notFounds' ? opts.globalNotFound : null);
+  if (!file) return `<h1>${heading}</h1>`;
+  try {
+    const mod = await loadModule(file, opts.dev);
+    if (typeof mod.default !== 'function') return `<h1>${heading}</h1>`;
+    return await renderToString(await mod.default(ctx), { ssr: true, dev: opts.dev });
+  } catch (err) {
+    reportBoundaryLayoutError(err, opts, { what: STAGE_BOUNDARY, overlay: true });
+    return `<h1>${heading}</h1>`;
+  }
+}
+
+/**
  * Render a simple boundary page (forbidden / unauthorized, #848) at the given
  * default heading. Loads the nearest boundary module when one exists, else
  * emits the default heading. Mirrors ssrNotFoundHtml.
@@ -1318,6 +1345,7 @@ export async function ssrPage(route, params, url, opts) {
       metadata,
       nonce,
       opts.dev,
+      (e) => streamedAccessFallback(e, route, ctx, opts),
     );
     // Dev-only seeding diagnostics (#1309). A miss is indistinguishable from a
     // hit from the outside, so an app whose seeding silently broke looks exactly

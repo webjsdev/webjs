@@ -115,8 +115,10 @@ export function noindexErrorPage(html, status) {
  * @param {Record<string, any>} [metadata]
  * @param {string} [nonce]
  * @param {boolean} [dev]  dev surfaces a streamed-boundary error message; prod stays silent
+ * @param {(e: unknown) => Promise<string | null>} [accessFallback] the markup of the
+ *   nearest not-found / forbidden / unauthorized boundary for such a throw, else null
  */
-export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce, dev) {
+export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce, dev, accessFallback) {
   const encoder = new TextEncoder();
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
   // Default: no caching. Pages are dynamic by default: the developer
@@ -153,6 +155,7 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
       // still arriving" and would block its progressive swap until the slow
       // boundary (#473). The comment is inert for the native initial-load parse.
       controller.enqueue(encoder.encode(prefix + bodyHtml + '<!--wj-stream-shell-->'));
+      let noindexSent = /<meta\s[^>]*name=["']?robots/i.test(prefix);
       try {
         // Loop: resolve all currently-pending promises in parallel; nested
         // Suspense inside resolved content adds more pending entries.
@@ -184,6 +187,14 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
                   const to = headerSafeLocation(/** @type {any} */ (e).url);
                   return { id: p.id, html: `<meta data-webjs-redirect="${escapeAttr(to)}">`, redirect: to };
                 }
+                // notFound() / forbidden() / unauthorized() after the 200 went
+                // out: the nearest boundary renders in place of the streamed
+                // content and the page is marked noindex, as Next.js documents
+                // ("keeps its 200 status. Next.js adds a noindex tag", #1686).
+                if (accessFallback) {
+                  const fb = await accessFallback(e);
+                  if (fb !== null) return { id: p.id, html: fb, noindex: true };
+                }
                 // Match the SSR error-isolation policy (render-server.js's
                 // defaultSSRErrorTemplate): dev surfaces the message so the
                 // failure is obvious, prod stays SILENT so no internal detail
@@ -195,6 +206,14 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
             })
           );
           for (const r of settled) {
+            if (r.noindex && !noindexSent) {
+              noindexSent = true;
+              const n = nonce ? ` nonce="${escapeAttr(nonce)}"` : '';
+              controller.enqueue(encoder.encode(
+                `<meta name="robots" content="noindex">` +
+                `<script${n}>document.head.insertAdjacentHTML('beforeend','<meta name="robots" content="noindex">')</script>`,
+              ));
+            }
             // Emit just the <template>: the MutationObserver-based resolver
             // in the boot script detects it and swaps it into the placeholder.
             // Falls back to the __webjsResolve global for browsers without MO.
