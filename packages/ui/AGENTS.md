@@ -1066,7 +1066,9 @@ the server stringified it to `attr=""`, so a component that "omitted" ARIA via a
 null hole passed every browser assertion while serving the empty attribute.
 Three real defects shipped that way before this layer existed, and the
 components still branch those templates so they render right on an older
-`@webjsdev/core`. Both renderers now omit a nullish hole, but the served markup
+`@webjsdev/core`. Since #1682 both renderers follow Lit, so a nullish hole renders an
+EMPTY attribute on both sides and a conditional attribute is omitted with
+`attr=${cond ? 'x' : nothing}` or `attr=${ifDefined(value)}`. The served markup
 is still what a screen reader meets first. Any conditional ARIA needs an assertion here, not just in the
 browser suite.
 

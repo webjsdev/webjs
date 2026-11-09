@@ -156,11 +156,11 @@ async function loadExpensiveItems() {
       </thead>
       <tbody>
         <tr><td><code>&lt;div&gt;\${x}&lt;/div&gt;</code> (text)</td><td>Rendered with HTML escaping</td><td>Same</td></tr>
-        <tr><td><code>class=\${x}</code> (attribute)</td><td>Serialized as <code>class="x"</code>. <code>null</code> / <code>undefined</code> omit the attribute, and so does <code>false</code> except on <code>aria-*</code>, where it is <code>"false"</code>. <code>true</code> on a boolean attribute such as <code>checked</code> emits <code>checked=""</code>, like <code>?checked</code></td><td>Same</td></tr>
+        <tr><td><code>class=\${x}</code> (attribute)</td><td>Serialized as <code>class="x"</code>, following Lit: <code>null</code> / <code>undefined</code> render an empty attribute and a boolean stringifies. Omit the attribute with <code>\${value ?? nothing}</code> or <code>\${ifDefined(value)}</code>, and bind a boolean attribute such as <code>checked</code> with <code>?checked</code>. In an interpolated value (<code>class="a \${x}"</code>) a <code>nothing</code> piece removes the whole attribute.</td><td>Same</td></tr>
         <tr><td><code>?disabled=\${b}</code> (boolean)</td><td>Emits <code>disabled=""</code> iff truthy</td><td>Same</td></tr>
         <tr><td><code>.prop=\${v}</code> on a <strong>custom element</strong></td><td>Round-trips via <code>data-webjs-prop-*</code> attribute carrying the wire-encoded value; consumed by the SSR walker before <code>render()</code></td><td>Applied + stripped on <code>connectedCallback</code></td></tr>
         <tr><td><code>.prop=\${v}</code> on a <strong>native element</strong></td><td>Dropped (no SSR walker for native tags). Use the attribute form for SSR-visible values.</td><td>Applied directly as <code>el[prop] = v</code> when the template runs in the browser</td></tr>
-        <tr><td><code>@click=\${fn}</code> (event listener)</td><td>Dropped (no event loop on the server)</td><td>Bound via <code>addEventListener</code></td></tr>
+        <tr><td><code>@click=\${fn}</code> (event listener)</td><td>Dropped (no event loop on the server)</td><td>Bound via <code>addEventListener</code>, as in Lit: a plain function runs with the component as <code>this</code>, and a listener object with <code>handleEvent()</code> and <code>capture</code> / <code>once</code> / <code>passive</code> works</td></tr>
       </tbody>
     </table>
     <p>The custom-element <code>.prop</code> path supports rich types out of the box: Array, Object, Date, Map, Set, BigInt, and reference cycles. Functions, class instances with private state, and DOM nodes are unserializable; they drop with a dev warning. See <a href="/docs/components">Components</a> for the full property-binding semantics.</p>

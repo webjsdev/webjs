@@ -1296,9 +1296,10 @@ function init(modules) {
    *    type is not assignable to the member's `declare`d type. Covers plain
    *    attributes, `.prop` bindings, and `?bool` (must be boolean-ish);
    *    `@event` must be callable.
-   *  - **unquoted-binding** (code 9002, invariant 4): an `@event` / `.prop` /
-   *    `?bool` binding whose value is quoted (`@click="${fn}"`). The hole is
-   *    dropped at SSR; it must be unquoted.
+   *  - **specialized-binding-shape** (code 9002, invariant 4): an `@event` /
+   *    `.prop` / `?bool` binding with surrounding text or more than one
+   *    expression (`@click="x${fn}"`). Quoted and unquoted single-expression
+   *    bindings are the same binding, as in Lit, so neither is flagged.
    *  - **expressionless-property-binding** (code 9003): a `.prop` binding with
    *    no `${}` expression (`.value="x"` sets the property to a literal string,
    *    almost always a mistake).

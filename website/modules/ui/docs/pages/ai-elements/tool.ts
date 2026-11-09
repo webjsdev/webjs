@@ -87,7 +87,7 @@ import {
     const failed = part.state === 'output-error';
     return html\`<details data-slot="trace-collapsible" class=\${cn(traceCollapsibleClass(), 'group/trace-collapsible')}>
       <summary data-slot="trace-collapsible-trigger" class=\${traceCollapsibleTriggerClass()}>
-        <span data-slot="trace-line" data-status=\${failed ? 'error' : null} class=\${traceLineClass()}>
+        <span data-slot="trace-line" data-status=\${failed ? 'error' : nothing} class=\${traceLineClass()}>
           \${icon}<span data-slot="trace-title" class=\${traceTitleClass()}>\${failed ? 'Failed to run' : 'Ran'} \${command}</span>
         </span>
       </summary>
