@@ -188,7 +188,7 @@ class UserProfile extends WebComponent({ userId: String }) {
 }</code-block>
 
     <h3>ContextProvider</h3>
-    <p>Provides a value to all descendant components via the context protocol. Imported from <code>webjs/context</code>. See the <a href="/docs/context">Context Protocol</a> page for full documentation.</p>
+    <p>Provides a value to all descendant components via the context protocol, a port of Lit's <code>@lit/context</code>. Imported from <code>@webjsdev/core/context</code>. See the <a href="/docs/context">Context Protocol</a> page for full documentation.</p>
 
     <code-block>import { createContext, ContextProvider } from '@webjsdev/core/context';
 
@@ -208,7 +208,7 @@ class AppShell extends WebComponent {
 }</code-block>
 
     <h3>ContextConsumer</h3>
-    <p>Consumes a value from an ancestor provider. Imported from <code>webjs/context</code>.</p>
+    <p>Consumes a value from an ancestor provider. Imported from <code>@webjsdev/core/context</code>.</p>
 
     <code-block>import { createContext, ContextConsumer } from '@webjsdev/core/context';
 

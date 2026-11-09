@@ -341,6 +341,12 @@
     "noChange": {
       "demo": "modules/directives/components/directive-demo.ts"
     },
+    "ContextProviderEvent": {
+      "exempt": "deferred: agent-facing (Lit's @lit/context provider announcement event, dispatched by ContextProvider itself; documented on the docs-site context page); no single-concept gallery demo yet"
+    },
+    "ContextRoot": {
+      "exempt": "deferred: agent-facing (Lit's late-provider request buffer, documented on the docs-site context page); no single-concept gallery demo yet"
+    },
     "initialState": {
       "exempt": "deferred: agent-facing (Lit's Task sentinel that returns a task to INITIAL, documented on the docs-site task page); no single-concept gallery demo yet"
     },

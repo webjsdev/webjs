@@ -106,7 +106,7 @@ export {
   until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
   watch, isWatch,
 } from './src/directives.js';
-export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
+export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent, ContextProviderEvent, ContextRoot } from './src/context.js';
 export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';
 
 // Signals (the default state primitive, invariant 5), the CSP nonce reader,

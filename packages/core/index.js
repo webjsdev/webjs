@@ -64,7 +64,7 @@ export {
 } from './src/directives.js';
 
 // Context Protocol, also available via '@webjsdev/core/context'
-export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
+export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent, ContextProviderEvent, ContextRoot } from './src/context.js';
 
 // Task controller, also available via '@webjsdev/core/task'
 export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';

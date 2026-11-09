@@ -84,3 +84,8 @@ in `devDependencies` so it's available for that case.
 ## License
 
 MIT
+
+Portions are derived from [Lit](https://github.com/lit/lit), Copyright Google
+LLC, under the BSD-3-Clause license: the `Task` controller (`src/task.js`,
+from `@lit/task`) and the context protocol (`src/context.js`, from
+`@lit/context`). Each such file carries the notice in its header.

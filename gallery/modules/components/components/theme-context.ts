@@ -1,11 +1,13 @@
 // The context API: pass a value down to descendant components WITHOUT threading
-// it through every level as an attribute. `createContext(name)` mints a typed
-// key; a `ContextProvider` on an ancestor holds the value; a `ContextConsumer`
-// on any descendant reads it (and, with `subscribe: true`, re-renders when it
-// changes). Under the hood a consumer dispatches a `ContextRequestEvent` that
-// bubbles up to the nearest provider, which is the low-level protocol the two
-// controllers automate. All light DOM, so the provider's <slot> projects its
-// children normally.
+// it through every level as an attribute. It is Lit's `@lit/context` API.
+// `createContext<T>(key)` returns the key itself, typed with the value type, so
+// the KEY is the identity (the same string in two modules is the same
+// context); a `ContextProvider` on an ancestor holds the value; a
+// `ContextConsumer` on any descendant reads it (once by default, and on every
+// change with `subscribe: true`). Under the hood a consumer dispatches a
+// `ContextRequestEvent` that bubbles up to the nearest provider, which is the
+// low-level protocol the two controllers automate. All light DOM, so the
+// provider's <slot> projects its children normally.
 import { WebComponent, html, signal } from '@webjsdev/core';
 import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { cardClass } from '#modules/gallery/ui/card.ts';
@@ -14,12 +16,13 @@ import { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } 
 type Theme = 'light' | 'dark';
 
 // One shared key. Descendants that read `themeContext` get the provider's value.
+// A Symbol key would keep it from colliding with any other 'demo-theme'.
 export const themeContext = createContext<Theme>('demo-theme');
 
 export class ThemeProvider extends WebComponent {
   // The provider holds the value. setValue() pushes it to every subscribing
   // consumer in one shot.
-  private provider = new ContextProvider<Theme>(this, { context: themeContext, initialValue: 'light' });
+  private provider = new ContextProvider(this, { context: themeContext, initialValue: 'light' });
 
   private toggle() {
     this.provider.setValue(this.provider.value === 'light' ? 'dark' : 'light');
@@ -42,15 +45,17 @@ ThemeProvider.register('theme-provider');
 
 export class ThemeConsumer extends WebComponent {
   // subscribe: true re-renders this element whenever the provider calls setValue.
-  private consumer = new ContextConsumer<Theme>(this, { context: themeContext, subscribe: true });
+  private consumer = new ContextConsumer(this, { context: themeContext, subscribe: true });
   readonly #lastRead = signal<Theme | 'not read yet'>('not read yet');
 
   // The imperative escape hatch: dispatch a ContextRequestEvent yourself to
-  // grab the current value ONCE without subscribing. It bubbles up to the
-  // nearest provider, which answers via the callback.
+  // grab the current value ONCE without subscribing. Its arguments are the
+  // context, the requesting element, the callback, and `subscribe` (false by
+  // default). It bubbles up to the nearest provider, which answers via the
+  // callback.
   private readOnce() {
     this.dispatchEvent(
-      new ContextRequestEvent<Theme>(themeContext, (value) => this.#lastRead.set(value), false),
+      new ContextRequestEvent(themeContext, this, (value) => this.#lastRead.set(value)),
     );
   }
 

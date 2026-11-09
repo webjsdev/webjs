@@ -22,10 +22,12 @@ import {
   createContext,
   ContextProvider,
   ContextConsumer,
+  ContextRequestEvent,
   repeat,
   html,
 } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
+import type { ContextType } from '@webjsdev/core/context';
 import { register } from '@webjsdev/core/registry';
 
 /* ---- register(tag, cls): accepts a user component class (#1033) ---- */
@@ -95,18 +97,30 @@ void html`<input ${ref('nope')} />`;
 /* ---- repeat: keyed list directive (items, keyFn, template) ---- */
 void html`<ul>${repeat([1, 2, 3], (n) => n, (n) => html`<li>${n}</li>`)}</ul>`;
 
-/* ---- context: createContext<T>, ContextProvider<T>, ContextConsumer<T> ---- */
+/* ---- context: Lit's shape, createContext<V>(key) returns the typed key ---- */
 const themeCtx = createContext<string>('theme');
-const provider = new ContextProvider<string>(host, { context: themeCtx, initialValue: 'dark' });
+// With the value type given and the key type left out, the key is typed
+// `unknown` and carries the value type, exactly as in Lit.
+type _CtxValue = Assert<Equal<ContextType<typeof themeCtx>, string>>;
+const provider = new ContextProvider(host, { context: themeCtx, initialValue: 'dark' });
 const _pv: string = provider.value;
 void _pv;
 provider.setValue('light');
 // @ts-expect-error the provided value must match the context type (string)
 provider.setValue(123);
+// The positional form (host, context, initialValue).
+const positionalProvider = new ContextProvider(host, themeCtx, 'dark');
+void positionalProvider;
+// @ts-expect-error the positional initial value must match the context type
+new ContextProvider(host, themeCtx, 5);
 
-const consumer = new ContextConsumer<string>(host, { context: themeCtx, subscribe: true });
-// Exact-type pin: a consumer's value is EXACTLY T | undefined (provider's is T).
+const consumer = new ContextConsumer(host, { context: themeCtx, subscribe: true });
+// Exact-type pin: a consumer's value is EXACTLY V | undefined (provider's is V).
 type _ConsumerValue = Assert<Equal<typeof consumer.value, string | undefined>>;
 type _ProviderValue = Assert<Equal<typeof provider.value, string>>;
-// @ts-expect-error a consumer needs a host + options, not a bare context
-new ContextConsumer<string>(themeCtx);
+// The callback option receives the typed value.
+new ContextConsumer(host, { context: themeCtx, callback: (v) => { const _s: string = v; void _s; } });
+// @ts-expect-error a consumer needs a host before the context
+new ContextConsumer(themeCtx);
+// @ts-expect-error the request event takes the requesting element second
+new ContextRequestEvent(themeCtx, (v: string) => v);

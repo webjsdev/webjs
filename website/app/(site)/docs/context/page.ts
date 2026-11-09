@@ -7,7 +7,9 @@ export default function Context() {
     <h1>Context Protocol</h1>
     <p>The context protocol lets you share data across deeply nested components without threading attributes through every intermediate element. It uses DOM events under the hood, which means it works across shadow DOM boundaries, so a provider at the top of the tree can reach consumers buried many levels deep.</p>
 
-    <code-block>import { createContext, ContextProvider, ContextConsumer } from '@webjsdev/core/context';</code-block>
+    <p>It is a port of Lit's <code>@lit/context</code>, which implements the Web Components Community Group context protocol: <code>createContext</code>, <code>ContextProvider</code>, <code>ContextConsumer</code>, <code>ContextRequestEvent</code>, <code>ContextProviderEvent</code> and <code>ContextRoot</code> take the same arguments and behave the same way, so Lit context code runs unchanged once its import points at <code>@webjsdev/core/context</code>. The <code>@provide</code> and <code>@consume</code> decorators are the one part with no WebJs form, because WebJs TypeScript is erasable and has no decorators: construct the controllers as fields instead, as every example below does.</p>
+
+    <code-block>import { createContext, ContextProvider, ContextConsumer, ContextRoot } from '@webjsdev/core/context';</code-block>
 
     <h2>When to Use Context</h2>
     <p>Context is the right tool when:</p>
@@ -26,15 +28,18 @@ export default function Context() {
     </ul>
 
     <h2>Creating a Context</h2>
-    <p><code>createContext(name)</code> returns a unique context key. The name is for debugging, while uniqueness comes from the object identity.</p>
+    <p><code>createContext(key)</code> returns the key itself, typed with the value it carries. The KEY is the identity: <code>createContext('theme')</code> in two modules is the same context, and a provider of one answers a consumer of the other. When a context must never collide with another one of the same name, use a <code>Symbol</code> as the key and export it from one module.</p>
 
     <code-block>// contexts/theme.ts (or .js)
 import { createContext } from '@webjsdev/core/context';
 
-export const themeContext = createContext('theme');
-export type Theme = 'light' | 'dark' | 'system';</code-block>
+export type Theme = 'light' | 'dark' | 'system';
+export const themeContext = createContext&lt;Theme&gt;('theme');
 
-    <p>Define your context keys in shared modules so both providers and consumers import the same object.</p>
+// Collision-proof: only code importing this binding can reach it.
+export const sessionIdContext = createContext&lt;string&gt;(Symbol('session-id'));</code-block>
+
+    <p>The type argument is what flows into <code>provider.value</code>, <code>consumer.value</code> and the callbacks.</p>
 
     <h2>Providing a Value</h2>
     <p><code>ContextProvider</code> is a reactive controller that provides a value to all descendants. Attach it to any component:</p>
@@ -44,7 +49,7 @@ import { ContextProvider } from '@webjsdev/core/context';
 import { themeContext } from '#contexts/theme.ts';
 
 class AppShell extends WebComponent {
-
+  static shadow = true;
   static styles = css\`
     :host { display: block; }
   \`;
@@ -72,7 +77,9 @@ class AppShell extends WebComponent {
 }
 AppShell.register('app-shell');</code-block>
 
-    <p>When you call <code>provider.setValue(newValue)</code>, every subscribed consumer is notified and its host component re-renders automatically.</p>
+    <p>When you call <code>provider.setValue(newValue)</code> (or assign <code>provider.value = newValue</code>), every subscribed consumer is notified and its host component re-renders automatically. Setting the same value again notifies nobody; <code>setValue(value, true)</code> forces the notification, which is how you announce an object you mutated in place.</p>
+
+    <p>The provider listens for requests from the moment it is constructed, and it never answers its own host: a component that provides a context and also consumes the same one reads the value from an ancestor. The positional form <code>new ContextProvider(this, themeContext, 'light')</code> is equivalent to the options object.</p>
 
     <h2>Consuming a Value</h2>
     <p><code>ContextConsumer</code> is a reactive controller that reads the nearest provider's value. Attach it to any descendant component:</p>
@@ -82,7 +89,7 @@ import { ContextConsumer } from '@webjsdev/core/context';
 import { themeContext } from '#contexts/theme.ts';
 
 class ThemedCard extends WebComponent {
-
+  static shadow = true;
   static styles = css\`
     :host { display: block; padding: 16px; border-radius: 8px; }
     :host(.dark) { background: #1a1a2e; color: #eee; }
@@ -107,9 +114,9 @@ class ThemedCard extends WebComponent {
 ThemedCard.register('themed-card');</code-block>
 
     <h2>Subscribe vs One-Shot Mode</h2>
-    <p>The <code>subscribe</code> option controls whether the consumer receives ongoing updates:</p>
+    <p>The <code>subscribe</code> option controls whether the consumer receives ongoing updates. It defaults to <code>false</code>, as in Lit, so pass <code>subscribe: true</code> whenever the value can change.</p>
 
-    <h3>subscribe: true (default for most use cases)</h3>
+    <h3>subscribe: true</h3>
     <p>The consumer re-renders whenever the provider calls <code>setValue()</code>. This is what you want for live data like theme, auth state, or locale.</p>
 
     <code-block>// Consumer re-renders every time the provider's value changes
@@ -118,26 +125,39 @@ ThemedCard.register('themed-card');</code-block>
   subscribe: true,
 });</code-block>
 
-    <h3>subscribe: false (one-shot)</h3>
-    <p>The consumer reads the provider's value once during <code>connectedCallback</code> and never updates afterward. This is useful for configuration that is set once and never changes, like a base URL or API key:</p>
+    <h3>subscribe: false (the default, one-shot)</h3>
+    <p>The consumer reads the provider's value each time its host connects and never updates in between. This is useful for configuration that is set once and never changes, like a base URL:</p>
 
     <code-block>// Consumer reads the value once and ignores future changes
-#apiBase = new ContextConsumer(this, {
-  context: apiBaseContext,
-  subscribe: false,
-});</code-block>
+#apiBase = new ContextConsumer(this, { context: apiBaseContext });</code-block>
 
     <p>With <code>subscribe: false</code>, calling <code>provider.setValue()</code> does not notify this consumer.</p>
+
+    <h3>The callback option</h3>
+    <p>Pass <code>callback</code> to run code when a value arrives: once for a one-shot consumer, on every change for a subscribing one. The positional form is <code>new ContextConsumer(this, context, callback, subscribe)</code>.</p>
+
+    <code-block>#locale = new ContextConsumer(this, {
+  context: localeContext,
+  subscribe: true,
+  callback: (locale) =&gt; document.documentElement.lang = locale,
+});</code-block>
 
     <h2>How It Works Under the Hood</h2>
     <p>The context protocol uses standard DOM events:</p>
 
     <ol>
-      <li>When a consumer connects, it dispatches a <code>ContextRequestEvent</code> that bubbles up through the DOM (including across shadow DOM boundaries, since it is composed).</li>
-      <li>The nearest ancestor with a matching <code>ContextProvider</code> intercepts the event.</li>
-      <li>If <code>subscribe: true</code>, the provider stores a callback reference and calls it whenever <code>setValue()</code> is invoked.</li>
-      <li>If <code>subscribe: false</code>, the provider responds with the current value and the event stops.</li>
+      <li>When a consumer connects, it dispatches a <code>ContextRequestEvent(context, contextTarget, callback, subscribe)</code> that bubbles up through the DOM (including across shadow DOM boundaries, since it is composed). <code>contextTarget</code> is the requesting element.</li>
+      <li>The nearest ancestor with a matching <code>ContextProvider</code> intercepts the event and stops it.</li>
+      <li>If <code>subscribe</code> is true, the provider stores the callback and calls it, with an unsubscribe function, whenever the value changes.</li>
+      <li>Otherwise the provider calls back once with the current value.</li>
+      <li>When a provider connects it dispatches a <code>ContextProviderEvent</code>. A provider of the same context further up re-sends its subscribers' requests, so a consumer that now sits below a nearer provider moves to it.</li>
     </ol>
+
+    <p>You can dispatch a request yourself for a one-time read:</p>
+
+    <code-block>this.dispatchEvent(new ContextRequestEvent(themeContext, this, (theme) =&gt; {
+  console.log('current theme', theme);
+}));</code-block>
 
     <p>This means context works with any DOM tree structure (including components from different libraries) as long as they follow the same context protocol. There is no framework-specific wiring.</p>
 
@@ -192,12 +212,25 @@ AppRoot.register('app-root');</code-block>
 
     <p>This mirrors how CSS custom properties cascade. Inner values shadow outer ones.</p>
 
+    <h2>Late Providers: ContextRoot</h2>
+    <p>A request that reaches the top of the tree unanswered is lost, which happens when a consumer connects before its provider's element has upgraded (a lazily loaded provider, or a consumer defined first). <code>ContextRoot</code> buffers subscribing requests at the root and replays them when a provider for that context connects. Attach it once, early, before your components load:</p>
+
+    <code-block>import { ContextRoot } from '@webjsdev/core/context';
+
+new ContextRoot().attach(document.body);</code-block>
+
+    <p>Only subscribing consumers are replayed, as in Lit; a one-shot request that found no provider stays unanswered.</p>
+
+    <h2>Server Rendering</h2>
+    <p>Context is a client-side protocol. During server rendering no element is connected, so a consumer's value is <code>undefined</code> in the first paint and arrives when the page hydrates. Render a sensible fallback (<code>this.#theme.value ?? 'light'</code>), or pass first-paint data down as attributes from the page.</p>
+
     <h2>Full Example: Auth Context</h2>
     <p>A complete provider + consumer pair for authentication state:</p>
 
     <code-block>// contexts/auth.ts
 import { createContext } from '@webjsdev/core/context';
-export const authContext = createContext('auth');
+export type Auth = { user: { name: string } | null; loading: boolean };
+export const authContext = createContext&lt;Auth&gt;(Symbol('auth'));
 
 // components/auth-provider.ts
 import { WebComponent, html } from '@webjsdev/core';
