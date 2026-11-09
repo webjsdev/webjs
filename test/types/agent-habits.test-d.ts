@@ -3,7 +3,7 @@
 // WebJs type, not on the agent's own logic. It must compile clean with no
 // casts. The rule from now on: an eval typecheck failure caused by a framework
 // type adds a block here, beside the fix that made it compile.
-import { getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler } from '@webjsdev/server';
+import { getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler, revalidateTag } from '@webjsdev/server';
 import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
 import type { LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
@@ -92,4 +92,12 @@ export async function requestHabits() {
   const { cookies: jar } = await loginAndGetCookies(app.handle, { email: 'a@b.c', password: 'secret-123' });
   const sent = await submitForm(app.handle, '/rooms/1', { day: '2026-11-10', hours: ['1', '2'] }, { cookies: jar });
   return [ua, fromHeaders, theme, res.status, sent.headers.get('location')];
+}
+
+// Next.js 16 passes a cache-life profile to revalidateTag; the one-argument
+// form is what Next.js 15 taught. Both compile.
+export async function revalidateHabits() {
+  await revalidateTag('posts', 'max');
+  await revalidateTag('posts', { expire: 3600 });
+  await revalidateTag('posts');
 }

@@ -59,7 +59,7 @@ export const listPosts = cache(
   { key: 'posts', ttl: 60, tags: ['posts'] }                // static tag
 );</code-block>
 
-    <p>A mutating server action then calls <code>revalidateTag(tag)</code> after the write. It works across modules (the comments module evicts a posts-module read with no import of the wrapper):</p>
+    <p>A mutating server action then calls <code>revalidateTag(tag)</code> after the write. Next.js 16's two-argument form, <code>revalidateTag(tag, 'max')</code>, is accepted too; WebJs evicts at once whatever the profile, since <code>cache()</code> has no stale-while-revalidate window. It works across modules (the comments module evicts a posts-module read with no import of the wrapper):</p>
 
     <code-block>// modules/comments/actions/create-comment.server.ts
 'use server';

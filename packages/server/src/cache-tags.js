@@ -134,10 +134,14 @@ export async function addKeyToTags(tags, cacheKey, ttlMs) {
  * }
  * ```
  *
+ * Next.js 16's second argument (a cache-life profile, `'max'` or
+ * `{ expire }`) is accepted and ignored: eviction is immediate (#1686).
+ *
  * @param {string} tag
+ * @param {string | { expire?: number }} [_profile]
  * @returns {Promise<void>}
  */
-export async function revalidateTag(tag) {
+export async function revalidateTag(tag, _profile) {
   if (typeof tag !== 'string' || !tag) return;
   const store = getStore();
   const keys = await readTagKeys(tag);

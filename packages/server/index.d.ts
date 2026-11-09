@@ -816,8 +816,13 @@ export declare function cache<T extends (...args: any[]) => Promise<any>>(
 // cache-tags.js (#242) + html-cache.js (#241): server cache invalidation
 // ---------------------------------------------------------------------------
 
-/** Evict every `cache()` entry tagged with `tag`. */
-export declare function revalidateTag(tag: string): Promise<void>;
+/**
+ * Evict every `cache()` entry tagged with `tag`. Takes Next.js 16's second
+ * argument, `revalidateTag(tag, 'max')` (a cache-life profile, or
+ * `{ expire }`), for source compatibility: WebJs evicts at once whatever the
+ * profile, since `cache()` has no stale-while-revalidate window to honour.
+ */
+export declare function revalidateTag(tag: string, profile?: string | { expire?: number }): Promise<void>;
 /** Evict every `cache()` entry tagged with any of `tags`. */
 export declare function revalidateTags(tags: string[]): Promise<void>;
 /**
