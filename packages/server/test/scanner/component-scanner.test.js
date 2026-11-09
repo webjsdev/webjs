@@ -197,6 +197,23 @@ test('findOrphanComponents: a SIBLING-registered class is not an orphan (#1308)'
   }
 });
 
+test('findOrphanComponents: a BASE class its registered subclasses extend is not an orphan (#1686)', async () => {
+  // The UI kit's carousel declares UiCarouselButton extends WebComponent({...})
+  // and registers only its two subclasses; the website warned about the base
+  // on every dev boot. A base class is never meant to have a tag of its own.
+  const dir = await scaffold({
+    'components/carousel.ts': `export class CarouselButton extends WebComponent({ disabled: Boolean }) {\n  render() {}\n}\n`
+      + `export class CarouselNext extends CarouselButton {}\nCarouselNext.register('my-carousel-next');\n`,
+    'components/forgotten.ts': `export class Forgotten extends WebComponent {\n  render() {}\n}\n`,
+  });
+  try {
+    const orphans = await findOrphanComponents(dir);
+    assert.deepEqual(orphans.map((o) => o.className), ['Forgotten'], 'the base is not reported; a real orphan still is');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('findOrphanComponents: a class in a CODE SAMPLE is not an orphan (#1308)', async () => {
   // Every docs page writes `class X extends WebComponent` inside an `html`
   // template to SHOW the reader what a component looks like. Scanning raw

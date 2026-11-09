@@ -169,7 +169,7 @@ export async function primeComponentRegistry(appDir, components) {
  * Per-file results of the orphan scan, validated on the exact source (#1575):
  * the dev server runs `findOrphanComponents` after every rebuild, and on a
  * large app re-scanning every unchanged file cost about 100 ms an edit.
- * @type {Map<string, { src: string, declared: Set<string>, registered: string[] }>}
+ * @type {Map<string, { src: string, declared: Set<string>, registered: string[], extended: Set<string> }>}
  */
 const ORPHAN_SCAN_CACHE = new Map();
 
@@ -177,7 +177,7 @@ const ORPHAN_SCAN_CACHE = new Map();
  * The classes one file declares as WebComponents and the ones it registers.
  * @param {string} file
  * @param {string} src
- * @returns {{ declared: Set<string>, registered: string[] }}
+ * @returns {{ declared: Set<string>, registered: string[], extended: Set<string> }}
  */
 function orphanScan(file, src) {
   const hit = ORPHAN_SCAN_CACHE.get(file);
@@ -198,7 +198,14 @@ function orphanScan(file, src) {
   // component NOR an orphan and vanished from every surface, which is the
   // exact shape the orphan report exists to catch.
   const registered = extractComponents(src).map((c) => c.className);
-  const entry = { src, declared, registered };
+  // Every class some other class extends. A base class its registered
+  // subclasses share (the kit's UiCarouselButton under UiCarouselPrevious and
+  // UiCarouselNext) is never meant to have a tag of its own, so it is not an
+  // orphan (#1686: the website warned about two of them on every boot).
+  const extended = new Set();
+  const baseRe = /\bclass\s+[A-Za-z_$][\w$]*\s+extends\s+([A-Z][A-Za-z0-9_$]*)\b/g;
+  while ((m = baseRe.exec(redacted)) !== null) if (m[1] !== 'WebComponent') extended.add(m[1]);
+  const entry = { src, declared, registered, extended };
   ORPHAN_SCAN_CACHE.set(file, entry);
   return entry;
 }
@@ -258,6 +265,8 @@ export async function findOrphanComponents(appDir) {
   const declaredPerFile = [];
   /** @type {Set<string>} every class name registered ANYWHERE in the app */
   const registeredAnywhere = new Set();
+  /** @type {Set<string>} every class name another class extends, anywhere */
+  const extendedAnywhere = new Set();
 
   for await (const file of walk(appDir, filter)) {
     let src;
@@ -276,14 +285,15 @@ export async function findOrphanComponents(appDir) {
     // blank-strings argument: the default form keeps plain-string bodies and
     // single-line untagged templates verbatim, so a sample written either way
     // would match again and the false orphan would be back.
-    const { declared, registered } = orphanScan(file, src);
+    const { declared, registered, extended } = orphanScan(file, src);
     for (const cls of registered) registeredAnywhere.add(cls);
+    for (const cls of extended) extendedAnywhere.add(cls);
     if (declared.size) declaredPerFile.push({ file, declared });
   }
 
   for (const { file, declared } of declaredPerFile) {
     for (const cls of declared) {
-      if (!registeredAnywhere.has(cls)) orphans.push({ className: cls, file });
+      if (!registeredAnywhere.has(cls) && !extendedAnywhere.has(cls)) orphans.push({ className: cls, file });
     }
   }
   return orphans;
