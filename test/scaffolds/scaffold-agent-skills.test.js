@@ -7,9 +7,8 @@
  * symlinks). None of them belongs in a generated app: they are monorepo
  * process (how we file issues, sync docs, review our own PRs), and shipping
  * any of it would push our process onto a team that already has its own. A
- * generated app's agent docs are the brief in `AGENTS.md` plus
- * `.agents/rules/workflow.md`; the app-facing teaching skill was removed, so
- * `.agents/skills/` must not exist at all.
+ * generated app's agent docs are the brief in `AGENTS.md` and nothing else,
+ * so `.agents/` must not exist at all.
  *
  * Nothing structural enforces that: a future change that copies the skills
  * DIRECTORY would ship the lot silently, and the app would look fine. These
@@ -25,7 +24,7 @@ import { tmpdir } from 'node:os';
 import { scaffoldApp } from '../../packages/cli/lib/create.js';
 
 for (const template of ['full-stack', 'api']) {
-  test(`${template} scaffold ships no agent skills, only AGENTS.md and the workflow rules`, async () => {
+  test(`${template} scaffold ships no agent skills or rules, only AGENTS.md`, async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'webjs-scaffold-skills-'));
     try {
       await scaffoldApp('demo', cwd, { template, install: false });
@@ -33,7 +32,7 @@ for (const template of ['full-stack', 'api']) {
       assert.ok(!existsSync(join(app, '.agents', 'skills')),
         'a generated app ships no .agents/skills/ (the brief in AGENTS.md replaces the skill)');
       assert.ok(existsSync(join(app, 'AGENTS.md')), 'AGENTS.md ships');
-      assert.ok(existsSync(join(app, '.agents', 'rules', 'workflow.md')), 'the workflow rules ship');
+      assert.ok(!existsSync(join(app, '.agents')), 'no .agents/ at all (the brief is the whole agent doc set)');
       const agents = await readFile(join(app, 'AGENTS.md'), 'utf8');
       assert.doesNotMatch(agents, /SKILL\.md|\.agents\/skills/, 'AGENTS.md points at no skill');
     } finally {

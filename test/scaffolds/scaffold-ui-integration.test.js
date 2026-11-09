@@ -32,18 +32,13 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     const appDir = join(cwd, 'demo');
 
     // Bootstrap for `webjs ui add`: the config + cn() helper + theme ship, so an
-    // app can add more components on demand. The gallery ALSO ships its example
-    // design system (class helpers in modules/gallery/ui/, OUT of components/ui/
-    // where `add` writes, plus lib/utils/ui.ts fragment helpers) that the demos
-    // use; gallery:clear removes those examples.
+    // app can add components on demand. No component ships until it is added.
     assert.ok(await exists(join(appDir, 'components.json')), 'components.json should exist');
     assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
     assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
-    assert.ok(await exists(join(appDir, 'modules', 'gallery', 'ui', 'button.ts')), 'the gallery ships its design system in its own module');
-    assert.ok(await exists(join(appDir, 'modules', 'gallery', 'ui', 'badge.ts')), 'the gallery ships badgeClass');
     assert.equal(existsSync(join(appDir, 'components', 'ui')), false, 'components/ui is left empty for webjs ui add');
-    assert.ok(await exists(join(appDir, 'lib', 'utils', 'ui.ts')), 'the gallery ships the ui.ts fragment helpers');
+    assert.deepEqual(readdirSync(join(appDir, 'modules')), [], 'modules/ ships empty (no demo modules)');
 
     // The scaffold and `webjsui init` must emit the SAME components.json, so
     // that initialising a bare app and scaffolding a new one land on one
@@ -55,11 +50,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.equal(cfg.tailwind.baseColor, 'neutral');
     assert.deepEqual(cfg.aliases, DEFAULT_ALIASES);
 
-    // The gallery home builds its feature/example cards on the design system.
     const layout = await readFile(join(appDir, 'app', 'layout.ts'), 'utf8');
-    const page = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.match(page, /Explore the gallery/, 'home is the gallery index page');
-    assert.match(page, /cardClass|badgeClass/, 'the home cards use the design-system helpers');
 
     // CSS delivery (#947): the layout links a STATIC compiled stylesheet (works
     // with JS off), not the browser runtime. The Tailwind @theme maps live in
@@ -242,25 +233,18 @@ function tsFiles(dir) {
     e.isDirectory() ? tsFiles(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []);
 }
 
-test('webjs ui add in a fresh app never touches the gallery design system', async () => {
-  // A fresh app's `add dialog` pulls the kit's card and input. When the
-  // gallery's own helpers sat at components/ui/{card,input}.ts, the add
-  // overwrote them: two gallery files lost bareInputClass and webjs check
-  // failed, and every gallery card lost its padding.
+test('webjs ui add in a fresh app replaces nothing the app imports', async () => {
+  // A fresh app's `add dialog` pulls the kit's card, input, button and badge
+  // into components/ui/. Nothing the scaffold writes may import from there,
+  // or an add with --overwrite would replace a file the shell depends on.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const appDir = join(cwd, 'demo');
-    const galleryUi = join(appDir, 'modules', 'gallery', 'ui');
-    const before = Object.fromEntries(await Promise.all(readdirSync(galleryUi).map(async (f) => [f, await readFile(join(galleryUi, f), 'utf8')])));
+    const shell = [...tsFiles(join(appDir, 'app')), ...tsFiles(join(appDir, 'components'))];
     await add.parseAsync(['dialog', 'card', 'input', 'button', 'badge', '--cwd', appDir, '--overwrite', '--yes', '--no-deps'], { from: 'user' });
     assert.ok(existsSync(join(appDir, 'components', 'ui', 'card.ts')), 'the kit card landed where add writes');
-    for (const [f, text] of Object.entries(before)) {
-      assert.equal(await readFile(join(galleryUi, f), 'utf8'), text, `modules/gallery/ui/${f} is untouched`);
-    }
-    // No gallery file reaches into components/ui/, so nothing it imports can be replaced.
-    for (const file of [...tsFiles(join(appDir, 'app')), ...tsFiles(join(appDir, 'modules')), ...tsFiles(join(appDir, 'components'))]) {
-      if (file.includes(join('components', 'ui'))) continue;
+    for (const file of shell) {
       assert.doesNotMatch(await readFile(file, 'utf8'), /#components\/ui\//, `${file} imports nothing from components/ui/`);
     }
   } finally {

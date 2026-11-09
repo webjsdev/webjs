@@ -20,7 +20,6 @@ import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi, bunifyEnvExample } from './runtime-rewrite.js';
 import { postgresCompose, postgresCi } from './db-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
-import { isGalleryAppShellFile } from './gallery-shell-files.js';
 import { PLACEHOLDER_ICON_SVG, appManifest } from './app-icon.js';
 import { detectPackageManager } from './package-manager.js';
 
@@ -95,55 +94,6 @@ function resolveUiRegistryRoot() {
 const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 
 /**
- * Copy the example gallery (idiomatic, densely-commented working examples) into
- * the scaffolded app. Merges `templates/gallery/{app,modules}` over the app so
- * single-feature demos land under `app/features/<name>/`, whole example apps
- * under `app/examples/<name>/`, and their logic under `modules/<name>/`, the
- * app-thin + modules-logic split WebJs prescribes.
- *
- * Ships verbatim (no `{{APP_NAME}}` substitution): the examples are self-
- * contained and reference only `@webjsdev/*`, drizzle, `#db/*`, and each other.
- * The scaffold's own `app/page.ts` / `app/layout.ts` are written AFTER this and
- * are filtered out of the copy here (see GALLERY_APP_SHELL_FILES), so there is
- * no clobber. `cp` merges into existing `app/` and `modules/` dirs rather than
- * replacing them.
- *
- * The source is the canonical repo-root `gallery/` app in monorepo dev, and the
- * `templates/gallery/` copy `prepack` bundles into the tarball when installed
- * from npm. Both are filtered identically, so the two modes emit the same app.
- *
- * @param {string} appDir
- */
-async function copyGallery(appDir) {
-  const bundledGallery = join(TEMPLATES, 'gallery');
-  const repoRootGallery = resolve(__dirname, '..', '..', '..', 'gallery');
-  const galleryDir = existsSync(bundledGallery) ? bundledGallery : repoRootGallery;
-  // `test` carries the auth card's real request-pipeline test (test/auth); it
-  // ships with the gallery and is pruned by gallery:clear alongside the card.
-  // The gallery's EXAMPLE design system (its class helpers) lives in its own
-  // module, modules/gallery/ui/, NOT in components/ui/: that is where
-  // `webjs ui add` writes, so a fresh app's `add dialog` (which pulls the kit's
-  // card and input) would otherwise overwrite the gallery's helpers and break
-  // the demos. gallery:clear removes it with modules/gallery. `components`
-  // carries nothing the scaffold does not write itself (the theme toggle is an
-  // app shell file), and is kept in the list for a gallery that adds one.
-  // `lib` merges the gallery's markup-chunk helpers (lib/utils/ui.ts) alongside
-  // the ui bootstrap's cn.ts/dom.ts (written earlier); gallery:clear removes just
-  // ui.ts. cp is recursive-merge, so the pre-written lib/utils/ files are kept.
-  for (const sub of ['app', 'modules', 'test', 'components', 'lib']) {
-    const srcSub = join(galleryDir, sub);
-    if (!existsSync(srcSub)) continue;
-    await cp(srcSub, join(appDir, sub), {
-      recursive: true,
-      // Skip the gallery's own app shell (root layout, home page, theme toggle,
-      // cn.ts). Those exist because gallery/ is a live app; the scaffold writes
-      // its own, with the app's displayName and the ui-registry cn.ts.
-      filter: (src) => !isGalleryAppShellFile(relative(galleryDir, src)),
-    });
-  }
-}
-
-/**
  * Write `lib/utils/cn.ts` (the `cn()` helper) and `components.json` so the
  * scaffolded app is pre-initialised for `webjs ui add`. Reads the registry's
  * `lib/utils.ts` verbatim and writes it under `lib/utils/cn.ts` in the
@@ -209,11 +159,11 @@ async function writeUiBootstrap(appDir) {
     join(UI_REGISTRY_ROOT, 'themes', 'index.css'), 'utf8',
   );
   await mkdir(join(appDir, 'styles'), { recursive: true });
-  await writeFile(join(appDir, 'styles', 'globals.css'), galleryTheme(css));
+  await writeFile(join(appDir, 'styles', 'globals.css'), scaffoldTheme(css));
 }
 
 /**
- * The gallery's palette and type, written INTO the kit's theme block rather
+ * The scaffold's palette and type, written INTO the kit's theme block rather
  * than onto :root in app/layout.ts. The block is what `webjs ui init --preset`
  * replaces, so a preset repaints a fresh app, and a token defined in the
  * layout (later in the cascade) would silently override every preset. The
@@ -224,7 +174,7 @@ async function writeUiBootstrap(appDir) {
  *
  * @param {string} css the kit's themes/index.css
  */
-function galleryTheme(css) {
+function scaffoldTheme(css) {
   const pairs = {
     background: ['#ffffff', '#1e2226'],
     foreground: ['#191c20', '#dee2e6'],
@@ -355,12 +305,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     );
   }
   const isApi = template === 'api';
-  // The example gallery ships in the one UI template (not api, which has no UI),
-  // so the copyGallery gate below is !isApi. Auth is one of the gallery cards
-  // (app/features/auth + modules/auth), so a UI app ships a real, prunable auth
-  // baseline. `isFullStack` names the UI template for the parts that differ from
-  // api (the todos table + the passwordHash column the auth card needs).
-  const isFullStack = !isApi;
+  // The UI-only steps below are gated on !isApi (the api template has no UI).
 
   // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
   // the schema/queries/actions are identical across dialects, only db/columns
@@ -462,15 +407,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // app runs the compiler under Bun (its image has no Node), a Node app runs
       // it directly.
       ...(isApi ? {} : { 'css:build': cssBuildCmd }),
-      // Shed the demo gallery / backend-features showcase to a clean, buildable
-      // base. The UI template runs clear-gallery.mjs; the api template runs
-      // clear-api-gallery.mjs (its showcase is app/api/features, not app/features).
-      'gallery:clear': (() => {
-        const script = isApi ? 'clear-api-gallery.mjs' : 'clear-gallery.mjs';
-        return isBun ? `bun scripts/${script}` : `node scripts/${script}`;
-      })(),
-      // --no-env-file: WebJs loads .env files itself in Next's order; Bun's
-      // auto-load would read .env.development under `start` too.
       dev: isBun ? 'bun --bun --no-env-file webjs dev' : 'webjs dev',
       start: isBun ? 'bun --bun --no-env-file webjs start' : 'webjs start',
       test: 'webjs test',
@@ -782,7 +718,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Single cross-agent source: AGENTS.md carries the brief; the .agents/rules
     // workflow rules and the Claude enforcement hooks back it up.
     'AGENTS.md',
-    '.agents/rules/workflow.md',
     'CLAUDE.md',
     // Claude Code config + the protective enforcement hooks (no design ceremony).
     '.claude.json',
@@ -829,7 +764,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // every file is copied byte-identical (the map is empty).
   const PROSE_REWRITE = new Set([
     'AGENTS.md', 'CLAUDE.md',
-    '.agents/rules/workflow.md',
     'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
     // Comments that name a command (#1527): `npm run ci` in the hook, the
     // Tailwind build note in the ignore file.
@@ -863,16 +797,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       await mkdir(dirname(join(appDir, dest)), { recursive: true });
       let content = await readFile(src, 'utf8');
       content = content.replace(/\{\{APP_NAME\}\}/g, name);
-      // AGENTS.md carries a template-specific build playbook: the full-stack
-      // (UI) playbook or the api (backend) one. The shared meta-rules (required
-      // context-gathering, strict typing, data) live in AGENTS.md itself; only
-      // the `{{PLAYBOOK}}` section swaps, so the two stay single-sourced. The
-      // partials live under templates/partials/ and are NOT copied as app files.
-      if (f === 'AGENTS.md') {
-        const playbookFile = isApi ? 'agents-playbook-api.md' : 'agents-playbook-fullstack.md';
-        const playbook = await readFile(join(TEMPLATES, 'partials', playbookFile), 'utf8');
-        content = content.replace('{{PLAYBOOK}}', () => playbook.trimEnd());
-      }
       if (DB_REWRITE[f]) content = DB_REWRITE[f](content);
       if (isBun) {
         if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
@@ -953,7 +877,7 @@ export const index = (...cols: PgColumn[]) =>
 
   // Example schema (dialect-agnostic). Replace the User model with your own.
   await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
-import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}json, createdAt } from './columns.server.ts';
+import { table, pk, text, json, createdAt } from './columns.server.ts';
 
 // Example model. Feel free to delete or extend.
 export const users = table('users', {
@@ -962,25 +886,12 @@ export const users = table('users', {
   name: text(),
   // JSON column: a structured value persisted as JSON, typed via json<T>().
   // Same helper works on SQLite and Postgres. Delete if you do not need it.
-  settings: json<{ theme?: string }>(),${isFullStack ? `
-  // The auth gallery card (app/features/auth) signs credentials against this.
-  // gallery:clear removes this column with the rest of the auth surface.
-  passwordHash: text(),` : ''}
+  settings: json<{ theme?: string }>(),
   createdAt: createdAt(),
 });
-${isFullStack ? `
-// Backs the example-gallery /examples/todo route (modules/todo). Delete it with
-// the gallery when you prune the examples you do not use.
-export const todos = table('todos', {
-  id: uuidPk(),
-  title: text().notNull(),
-  completed: bool().notNull().default(false),
-  createdAt: createdAt(),
-});
-` : ''}
 // Relations live here (one defineRelations for the whole schema). Empty
 // for now; add per-model relations as your schema grows.
-export const relations = defineRelations({ users${isFullStack ? ', todos' : ''} }, () => ({}));
+export const relations = defineRelations({ users }, () => ({}));
 
 // Derived types, never hand-written.
 export type User = typeof users.$inferSelect;
@@ -1182,14 +1093,6 @@ export default cors({
       health: \`\${base}/api/health\`,
       users: \`\${base}/api/users\`,
     },
-    // The backend-features showcase (delete app/api/features + its modules to prune).
-    features: {
-      validate: \`\${base}/api/features/validate\`,
-      'rate-limit': \`\${base}/api/features/rate-limit\`,
-      stream: \`\${base}/api/features/stream\`,
-      files: \`\${base}/api/features/files\`,
-      ws: \`\${base.replace(/^http/, 'ws')}/api/features/ws\`,
-    },
   });
 }
 `);
@@ -1289,20 +1192,6 @@ export type ActionResult<T> =
   | { success: false; error: string; status: number };
 `);
 
-    // The api backend-features showcase: endpoints under app/api/features/**
-    // (the route() adapter + validation, rate limiting, streaming, file storage,
-    // WebSockets + broadcast) that the root api index above links. The api
-    // counterpart of the UI gallery. Prune what you skip.
-    const { writeApiGallery } = await import('./api-gallery.js');
-    await writeApiGallery(appDir);
-
-    // The showcase-reset script (wired as `gallery:clear` for the api template).
-    // It sheds app/api/features + its modules back to the health + users base.
-    const apiClearSrc = join(TEMPLATES, 'scripts', 'clear-api-gallery.mjs');
-    if (existsSync(apiClearSrc)) {
-      await mkdir(join(appDir, 'scripts'), { recursive: true });
-      await cp(apiClearSrc, join(appDir, 'scripts', 'clear-api-gallery.mjs'));
-    }
   }
 
   if (!isApi) {
@@ -1328,26 +1217,11 @@ export type ActionResult<T> =
     // the agent replaces with the app's own icon; `webjs doctor` warns while it
     // is still there) and `app/manifest.webmanifest` (the app's name). The
     // framework links both into <head> and answers /favicon.ico with the icon,
-    // so the layout declares nothing. They ship with the app, not the gallery,
-    // so they survive `gallery:clear`.
+    // so the layout declares nothing.
     await mkdir(join(appDir, 'app'), { recursive: true });
     await writeFile(join(appDir, 'app', 'icon.svg'), PLACEHOLDER_ICON_SVG);
     await writeFile(join(appDir, 'app', 'manifest.webmanifest'), appManifest(displayName));
 
-    // The gallery-reset script (wired as `gallery:clear`). Only UI templates have
-    // a gallery, so it ships here (NOT in the flat templateFiles list, which would
-    // copy it into the api app where it has no gallery and would clobber app/).
-    const clearScriptSrc = join(TEMPLATES, 'scripts', 'clear-gallery.mjs');
-    if (existsSync(clearScriptSrc)) {
-      await mkdir(join(appDir, 'scripts'), { recursive: true });
-      // A Bun app gets the Bun spelling of the ui-kit command the script
-      // prints and writes into the reset layout (#1527): `bunx`, never `npx`.
-      const clearScript = await readFile(clearScriptSrc, 'utf8');
-      await writeFile(
-        join(appDir, 'scripts', 'clear-gallery.mjs'),
-        isBun ? clearScript.replaceAll('npx webjsdev ', 'bunx webjsdev ') : clearScript,
-      );
-    }
 
     // Fail loudly if the @webjsdev/ui registry sources aren't on disk.
     // Without this, downstream copy helpers would silently skip and the
@@ -1361,7 +1235,7 @@ export type ActionResult<T> =
     // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
 
-    // The gallery cards style with plain Tailwind (the app is pre-initialised for
+    // Pages style with plain Tailwind (the app is pre-initialised for
     // `webjs ui add <name>` via writeUiBootstrap above, but ships no components
     // until you add them on demand).
 
@@ -1431,13 +1305,6 @@ html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-to
 }
 `);
 
-    // The gallery: idiomatic, densely-commented single-feature demos under
-    // app/features/ plus one whole example app under app/examples/, with logic
-    // in modules/, all linked from the home page below. Shipped in the UI
-    // scaffold so an agent gains context by browsing real working code; prune
-    // per-feature (delete the route + its module) for what the app does not use,
-    // or shed the whole gallery at once with `gallery:clear`.
-    await copyGallery(appDir);
 
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
@@ -1556,7 +1423,7 @@ export default function RootLayout({ children }: LayoutProps) {
     <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
         <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
-        WebJs Gallery
+        ${displayName}
       </a>
       <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">Docs</a>
@@ -1573,82 +1440,21 @@ export default function RootLayout({ children }: LayoutProps) {
 }
 `);
 
-  // Home page: a gallery index. A masthead, then a grid that links every feature
-  // demo and the example app, and a footer with the docs + source links. Treat it
-  // as a starting point: prune the demos you do not use (delete the
-  // app/features/<x> route AND its modules/<x>), then reshape this page into the
-  // app's real landing page.
+  // Home page: a neutral starting point, written by the generator so the app
+  // boots with no demo to delete. Reshape it into the app's real landing page.
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
-import { cardClass } from '#modules/gallery/ui/card.ts';
-import { badgeClass } from '#modules/gallery/ui/badge.ts';
-// The demo index is defined once in modules/gallery/nav.ts (the same source the
-// left sidebar reads), so the home cards and the sidebar can never drift.
-import { featureList, EXAMPLES } from '#modules/gallery/nav.ts';
 
 export const metadata = {
   title: '${displayName}',
 };
 
 export default function Home() {
-  // Flattened HERE rather than at module scope. A top-level call is a module
-  // side effect, which would ship this page to the browser for nothing.
-  const FEATURES = featureList();
   return html\`
-    <div class="py-8 flex flex-col items-center gap-16">
-      <!-- Hero -->
-      <section class="flex flex-col items-center text-center gap-5">
-        <h1 class="text-5xl sm:text-6xl font-bold tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent" style="font-family: var(--font-display); letter-spacing: -0.02em;">
-          Explore the gallery
-        </h1>
-        <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
-          Each demo isolates a single WebJs capability in real, runnable code. Read the ones you need, then build your app on the same patterns.
-        </p>
-      </section>
-
-      <!-- Gallery: every feature demo + the example app -->
-      <section class="w-full flex flex-col gap-6">
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          \${FEATURES.map(f => html\`
-            <a href="\${f.href}" class=\${cardClass('group flex flex-col gap-1.5 rounded-xl p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
-              <span class="flex items-center justify-between gap-2">
-                <span class="text-sm font-medium text-foreground">\${f.title}</span>
-                <span class="text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
-              </span>
-              <span class="text-xs leading-relaxed text-muted-foreground">\${f.blurb}</span>
-            </a>
-          \`)}
-        </div>
-        \${EXAMPLES.map(e => html\`
-          <a href="\${e.href}" class=\${cardClass('group flex flex-col gap-2 rounded-xl p-5 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
-            <span class="flex items-center gap-2.5">
-              <span class=\${badgeClass({ variant: 'outline' })}>Example app</span>
-              <span class="text-sm font-medium text-foreground">\${e.title}</span>
-              <span class="ml-auto text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
-            </span>
-            <span class="text-xs leading-relaxed text-muted-foreground">\${e.blurb}</span>
-          </a>
-        \`)}
-      </section>
-
-      <!-- Footer: docs + source -->
-      <footer class="flex flex-col items-center gap-3">
-        <nav class="flex items-center gap-6 text-sm text-muted-foreground" aria-label="WebJs links">
-          <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconBook()}<span>Docs</span></a>
-          <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconGithub()}<span>GitHub</span></a>
-        </nav>
-        <p class="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground m-0 text-center">
-          Built with WebJs &middot; MIT License
-        </p>
-      </footer>
-    </div>
+    <section class="py-16 flex flex-col items-center text-center gap-4">
+      <h1 class="text-4xl font-bold tracking-tight m-0">${displayName}</h1>
+      <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
+    </section>
   \`;
-}
-
-function iconBook() {
-  return html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>\`;
-}
-function iconGithub() {
-  return html\`<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>\`;
 }
 `);
 
@@ -1659,7 +1465,6 @@ function iconGithub() {
 
   await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
-import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 type Theme = 'system' | 'light' | 'dark';
 
@@ -1708,7 +1513,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class=\${cn(buttonClass({ variant: 'secondary', size: 'none' }), 'w-9 h-9 rounded-full text-muted-foreground duration-150 hover:text-foreground active:scale-[0.94]')}
+        class=\${cn('inline-flex items-center justify-center w-9 h-9 rounded-full text-muted-foreground duration-150 hover:text-foreground active:scale-[0.94]')}
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"
@@ -1750,8 +1555,7 @@ ThemeToggle.register('theme-toggle');
 `);
   } else {
     console.log(`  ${name}/
-    app/{layout,page}.ts          ← gallery home; gallery:clear grows in place
-    app/features/*, modules/*     ← browsable demos (incl. auth: login + protected route)
+    app/{layout,page}.ts          ← the starting page, grow it in place
     components/theme-toggle.ts
     public/input.css              ← Tailwind entry (compiles to public/tailwind.css)
     db/{schema,columns,connection}.server.ts  ← Drizzle

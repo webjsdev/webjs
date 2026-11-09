@@ -38,7 +38,7 @@ Both `webjs create` and `create-webjs-app` auto-install dependencies in the new 
 ## Commands
 
 ```sh
-webjs create <name>            # scaffold a full-stack app (default; auth ships as a gallery card)
+webjs create <name>            # scaffold a full-stack app (the default)
                                # <name> must be a valid package name: letters, digits,
                                # and - . _ , starting with a letter or a digit
 webjs create <name> --template api   # backend-only API app (routes + modules + Drizzle)

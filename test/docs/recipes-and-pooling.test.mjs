@@ -1,8 +1,7 @@
 /**
  * Tests for #272 (updated in #969, and again when the agent skill was replaced
  * by the brief): the canonical recipes are now the brief itself (routing, server
- * actions, components) plus the scaffold AGENTS.md (schema-first data, one
- * function per query/action file, the persistence anti-pattern), and the
+ * actions, components) plus the scaffold AGENTS.md's persistence rule, and the
  * deployment doc carries the Postgres connection-pool section.
  */
 import { test } from 'node:test';
@@ -24,10 +23,6 @@ test('the brief and the scaffold AGENTS.md carry the canonical recipes and the p
     assert.ok(BRIEF.includes(p), `the brief must name ${p}`);
   }
   const scaffold = await readFile(resolve(ROOT, 'packages', 'cli', 'templates', 'AGENTS.md'), 'utf8');
-  const playbook = await readFile(resolve(ROOT, 'packages', 'cli', 'templates', 'partials', 'agents-playbook-fullstack.md'), 'utf8');
-  // Schema-first + the data layer.
-  assert.ok(/schema\.server\.ts/.test(playbook), 'covers the Drizzle schema');
-  assert.ok(/queries\/|actions\//.test(playbook), 'covers one-file-per query/action');
   // The persistence anti-pattern (never JSON files).
   assert.ok(/never in a JSON file/i.test(scaffold), 'the scaffold AGENTS.md warns against JSON-file persistence');
 });

@@ -31,13 +31,5 @@ contract read the framework source in `node_modules/@webjsdev/*` (there is no
 build, so it is the code that runs) or run `npx webjs source <Export>`. The
 human docs are at https://webjs.dev/docs.
 
-Git, tests and review rules are in `.agents/rules/workflow.md`. Follow them too.
-
-{{PLAYBOOK}}
-
-## Types and data (all templates)
-
-Derive every type from its source and never reach for `any`: a database row
-from `typeof table.$inferSelect`, an action's result from `ActionResult<T>`, a
-page's props from `PageProps<'/blog/[slug]'>`. Keep app data in the wired-up
-Drizzle database, never in a JSON file, an in-memory array, or localStorage.
+Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
+or an in-memory array.

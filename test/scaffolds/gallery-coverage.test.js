@@ -190,6 +190,9 @@ function scaffoldAnalysis() {
         await scaffoldApp(t, base, { template: t, install: false });
         walk(join(base, t));
       }
+      // The repo-root gallery app (gallery.webjs.dev) is the demo surface now
+      // that the scaffold ships no gallery, so it counts as a demonstration.
+      walk(GALLERY);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

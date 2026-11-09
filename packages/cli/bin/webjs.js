@@ -871,7 +871,7 @@ async function main() {
         // `webjs test` with no browser tests stays a no-op (not a hard error).
         // Zero browser test files is a pass, not a failure (#1491). WTR throws
         // `Could not find any test files` on an empty match, so an app with no
-        // browser tests yet (what `gallery:clear` leaves) would fail its own CI
+        // browser tests yet (one that deleted the starter test) would fail its own CI
         // on this layer. Check the globs first and skip with a note. `null`
         // patterns mean the config's `files` is not a plain literal, so WTR
         // runs unchanged and reports for itself.
@@ -1715,10 +1715,8 @@ async function main() {
         console.error(`Error: unknown template '${template}'.
 
 Only two scaffolds exist:
-  full-stack   (default): pages + components + API + Drizzle/SQLite, plus a
-                browsable feature gallery. Auth is one of the gallery cards
-                (login + session + a protected route), so a full-stack app
-                already carries a real auth baseline. Pick this for any app
+  full-stack   (default): pages + components + API + Drizzle/SQLite. Pick
+                this for any app
                 the user describes in product terms (todo, blog, dashboard,
                 marketplace, social feed, a SaaS with accounts, …).
   api          backend-only: route handlers + modules + Drizzle/SQLite, no

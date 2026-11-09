@@ -142,17 +142,13 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
   try {
     await scaffoldApp('bunapp', cwd, { template: 'full-stack', runtime: 'bun' });
     const appDir = join(cwd, 'bunapp');
-    for (const f of ['AGENTS.md', 'CLAUDE.md', '.agents/rules/workflow.md']) {
+    for (const f of ['AGENTS.md', 'CLAUDE.md']) {
       const md = read(appDir, f);
       assert.doesNotMatch(md, /\bnpm run /, `${f} should not contain "npm run"`);
       assert.doesNotMatch(md, /\bnpx /, `${f} should not contain "npx "`);
     }
     const agents = read(appDir, 'AGENTS.md');
-    assert.match(agents, /bun --bun run dev/);
-    // The injected template playbook (#1076) is bunified too: the substitution
-    // runs BEFORE bunifyProse, so the playbook's commands arrive in bun form.
-    assert.match(agents, /bun run check/, 'playbook check command is bunified');
-    assert.match(agents, /bunx webjsdev ui add/, 'playbook ui add is bunified');
+    assert.match(agents, /bunx w[e]bjs check/, 'the brief check command is bunified');
 
     // The starter test files' header comments are bun-ified too (no npm/npx).
     const browserTest = read(appDir, 'test/hello/browser/hello.test.js');
@@ -165,7 +161,7 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
   }
 });
 
-test('bun scaffold: the ui-kit hint, gallery reset, hook and env hints use bun (#1527)', async () => {
+test('bun scaffold: the ui-kit hint, hook and env hints use bun (#1527)', async () => {
   const cwd = await tempCwd();
   const lines = [];
   const log = console.log, err = console.error;
@@ -176,9 +172,6 @@ test('bun scaffold: the ui-kit hint, gallery reset, hook and env hints use bun (
     const banner = lines.join('\n');
     assert.match(banner, /bunx webjsdev ui add <name>/, 'the closing banner names bunx');
     assert.doesNotMatch(banner, /npx webjsdev/);
-    const clear = read(appDir, 'scripts/clear-gallery.mjs');
-    assert.match(clear, /bunx webjsdev ui add <name>/);
-    assert.doesNotMatch(clear, /npx webjsdev/, 'the reset script and the layout it writes say bunx');
     assert.doesNotMatch(read(appDir, '.hooks/pre-commit'), /npm run /);
     assert.doesNotMatch(read(appDir, '.gitignore'), /npm run /);
     assert.match(read(appDir, '.env.example'), /# Generate: bun -e /);
@@ -245,9 +238,8 @@ test('node mode (default) is unchanged: no bun flavor leaks in', async () => {
     assert.match(read(appDir, 'Dockerfile'), /FROM node:24-alpine/);
     assert.match(read(appDir, 'compose.yaml'), /test: \["CMD", "node", "-e"/);
     assert.match(read(appDir, '.github/workflows/ci.yml'), /actions\/setup-node/);
-    assert.match(read(appDir, 'AGENTS.md'), /npm run dev/);
     // #1527 counterfactual: the node app keeps its npx / node spellings.
-    assert.match(read(appDir, 'scripts/clear-gallery.mjs'), /npx webjsdev ui add/);
+    assert.match(read(appDir, 'AGENTS.md'), /npx w[e]bjs check/);
     assert.match(read(appDir, '.env.example'), /# Generate: node -e /);
     assert.match(read(appDir, '.hooks/pre-commit'), /npm run ci/);
   } finally {

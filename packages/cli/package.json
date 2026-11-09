@@ -6,10 +6,6 @@
   "bin": {
     "webjs": "bin/webjs.js"
   },
-  "scripts": {
-    "prepack": "node ../../scripts/sync-scaffold-gallery.mjs",
-    "postpack": "node ../../scripts/sync-scaffold-gallery.mjs --clean"
-  },
   "files": [
     "bin",
     "lib",

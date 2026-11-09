@@ -3,9 +3,8 @@
 Measures the claim WebJs is built on: an agent that knows Lit and the Next.js
 App Router writes correct WebJs from the brief alone.
 
-For each task in `tasks.mjs` the runner scaffolds a fresh full-stack app, clears
-the feature gallery so the brief in the app's `AGENTS.md` is the only WebJs
-documentation in the project, and runs an agent CLI inside it with the task's
+For each task in `tasks.mjs` the runner scaffolds a fresh full-stack app, whose
+only WebJs documentation is the brief in its `AGENTS.md`, and runs an agent CLI inside it with the task's
 prompt. The prompts name no WebJs API. Then it grades the app:
 
 - `webjs check` reports no violation,

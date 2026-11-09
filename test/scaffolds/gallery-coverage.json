@@ -693,7 +693,7 @@
       "demoed": true
     },
     "route": {
-      "demoed": true
+      "exempt": "deferred: agent-facing (the route-handler validation adapter, documented at https://webjs.dev/docs/api-routes); its demo lived in the api scaffold showcase, which the scaffold no longer ships"
     },
     "runInstrumentation": {
       "exempt": "internal: the framework runs it; apps write instrumentation.ts register()"

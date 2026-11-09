@@ -3,8 +3,8 @@
  * The agent eval: can an agent write correct WebJs from Lit and Next.js habits
  * plus the five-line brief alone?
  *
- * For each task it scaffolds a fresh app, clears the feature gallery (so the
- * brief in AGENTS.md is the only WebJs documentation in the project), hands the
+ * For each task it scaffolds a fresh app (whose only WebJs documentation is
+ * the brief in AGENTS.md), hands the
  * task's prompt to an agent CLI running inside the app, then grades the result
  * with `grade.mjs`. It prints a pass table and writes JSON next to it.
  *
@@ -22,7 +22,6 @@
  */
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -61,18 +60,13 @@ export function agentArgv(template, prompt) {
 }
 
 /**
- * Scaffold a gallery-free app whose only WebJs documentation is the brief.
+ * Scaffold an app whose only WebJs documentation is the brief.
  * @param {string} cwd @param {string} name
  */
 export async function prepareApp(cwd, name) {
   await scaffoldApp(name, cwd, { template: 'full-stack' });
   const appDir = join(cwd, name);
   await symlink(join(ROOT, 'node_modules'), join(appDir, 'node_modules'));
-  const clear = join(appDir, 'scripts', 'clear-gallery.mjs');
-  if (existsSync(clear)) {
-    const r = spawnSync(process.execPath, [clear], { cwd: appDir, encoding: 'utf8' });
-    if (r.status !== 0) throw new Error(`clear-gallery failed: ${r.stderr || r.stdout}`);
-  }
   return appDir;
 }
 

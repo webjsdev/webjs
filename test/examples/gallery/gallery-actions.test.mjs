@@ -1,8 +1,8 @@
 /**
- * Behaviour test for the gallery's HTTP-verb card (#1151): the scaffold-gallery
- * suite next door asserts the demo's SOURCE declares `method` / `cache` / `tags`
+ * Behaviour test for the gallery's HTTP-verb card (#1151): gallery-app.test.mjs
+ * next door asserts the demo's SOURCE declares `method` / `cache` / `tags`
  * / `invalidates`, which cannot tell whether the framework actually honours them.
- * This boots a freshly generated app through the in-process handler and asserts
+ * This boots the repo gallery app through the in-process handler and asserts
  * the WIRE the card describes: a private, max-age'd, tagged, ETagged GET, and a
  * mutation that reports its invalidated tag.
  *
@@ -13,22 +13,16 @@
  * caches a GET action server-side, so every call through the handler executes.
  * The headers are therefore the load-bearing assertions, and the demo's own
  * cache behaviour is verified in a browser.
- *
- * The generated app is symlinked to the repo's node_modules so its bare
- * `@webjsdev/*` imports resolve; a scaffolded app in a bare tmpdir cannot boot.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { createRequestHandler } from '@webjsdev/server';
-import { hashFile } from '../../packages/server/src/actions.js';
-import { scaffoldApp } from '../../packages/cli/lib/create.js';
+import { hashFile } from '../../../packages/server/src/actions.js';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'gallery');
 
 function mute() {
   const log = console.log, err = console.error;
@@ -37,13 +31,8 @@ function mute() {
 }
 
 test('the gallery GET action is cached, tagged, and invalidated on the wire', async () => {
-  const cwd = await mkdtemp(join(tmpdir(), 'webjs-gallery-actions-'));
   const restore = mute();
   try {
-    await scaffoldApp('demo', cwd, { template: 'full-stack' });
-    const appDir = join(cwd, 'demo');
-    await symlink(join(ROOT, 'node_modules'), join(appDir, 'node_modules'));
-
     const h = await createRequestHandler({ appDir, dev: false });
     if (h.warmup) await h.warmup();
     const get = (url, init) => h.handle(new Request('http://localhost' + url, init));
@@ -96,6 +85,5 @@ test('the gallery GET action is cached, tagged, and invalidated on the wire', as
     assert.ok(afterBody.serving > firstBody.serving, 'the serving counter advances on each execution');
   } finally {
     restore();
-    await rm(cwd, { recursive: true, force: true });
   }
 });
