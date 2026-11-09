@@ -84,6 +84,13 @@ test('A: a `#` alias mapped (via package.json imports) to a real package ships',
   }
 });
 
+test("A2: a component opening with 'use client' always ships, the Next.js marker for browser code (#1686)", async () => {
+  assert.equal(await verdict(`'use client';\n${badge('')}`), 'ships', "'use client' is a ship override");
+  assert.equal(await verdict(`// a badge\n"use client"\n${badge('')}`), 'ships', 'a leading comment does not hide it');
+  assert.equal(await verdict(badge("const note = 'use client';")), 'elided', 'the string elsewhere is just data');
+  assert.equal(await verdict(badge('')), 'elided', 'without it the same badge is display-only');
+});
+
 // ---------------------------------------------------------------------------
 // B. module-scope data constants and pure builtin calls
 // ---------------------------------------------------------------------------

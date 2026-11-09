@@ -61,7 +61,7 @@ export default function Elision() {
     </p>
 
     <p>
-      <code>static interactive = true</code> is the explicit author override. It forces the module to ship when the component's interactivity is invisible to static analysis:
+      <code>static interactive = true</code> is the explicit author override. It forces the module to ship when the component's interactivity is invisible to static analysis. A <code>'use client'</code> directive at the top of the component file does the same, so the Next.js way of marking browser code works here too; neither is ever required, since every component ships unless it is provably display-only. Reach for one when:
     </p>
 
     <ul>

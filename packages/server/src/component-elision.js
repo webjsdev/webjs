@@ -185,6 +185,9 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
  */
 export const INTERACTIVITY_STATIC_FIELDS = ['shadow', 'interactive'];
 
+/** A `'use client'` directive opening the module, after any comments. */
+const USE_CLIENT_DIRECTIVE_RE = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*(['"])use client\1\s*;?/;
+
 /** Why each INTERACTIVITY_STATIC_FIELDS entry forces a ship (analyser reason). */
 const STATIC_FIELD_REASONS = {
   shadow: 'declares static shadow (DSD must re-attach on a client swap)',
@@ -745,6 +748,13 @@ const CORE_IMPORT_RE =
  * @returns {{ interactive: boolean, reason: string | null }}
  */
 export function analyzeComponentSource(src, appDir) {
+  // `'use client'` at the top of a component file is the Next.js way of saying
+  // "this runs in the browser" (#1686). A component already does, so the
+  // directive means what `static interactive = true` means: never elide it.
+  // It is never required, since a Lit component carries no directive.
+  if (USE_CLIENT_DIRECTIVE_RE.test(src)) {
+    return { interactive: true, reason: "declares 'use client' (author-declared ship override)" };
+  }
   // A reactive primitive imported from core is the strongest signal and
   // is file-scoped, so check it first against the whole source.
   const reactiveImport = importsReactivePrimitive(src);
