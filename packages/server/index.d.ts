@@ -1219,18 +1219,14 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
 }
 
 /**
- * Create the auth system. Parameterise with the session-user shape
- * (`createAuth<MyUser>(...)`) for per-instance typing, or augment the
- * {@link AuthUser} interface for global typing; both make `auth().user` typed
- * with no cast. Defaults to the open {@link AuthUser}, so existing untyped code
- * keeps compiling unchanged.
+ * Create the auth system, Auth.js's API. `createAuth<MyUser>(...)` (or an
+ * augmented {@link AuthUser}) types `auth().user` with no cast.
  *
  * @example
  * ```ts
  * // modules/auth/auth.server.ts
- * import { createAuth, Credentials } from '@webjsdev/server';
  * export const { auth, signIn, signOut, handlers } = createAuth({
- *   secret: process.env.AUTH_SECRET ?? 'dev-only-secret',
+ *   secret: process.env.AUTH_SECRET!,
  *   providers: [Credentials({
  *     async authorize(c: { email: string; password: string }) {
  *       const user = await findUserByEmail(c.email); // your own query
@@ -1238,21 +1234,12 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  *       return { id: String(user.id), email: user.email };
  *     },
  *   })],
- *   pages: { error: '/login' }, // a failed sign-in lands on /login?error=CredentialsSignin
+ *   pages: { error: '/login' }, // an uncaught failure lands on /login?error=CredentialsSignin
  * });
+ * // app/api/auth/[...path]/route.ts: export const { GET, POST } = handlers;
+ * // Read the user anywhere on the server: const session = await auth();
  *
- * // app/api/auth/[...path]/route.ts mounts it, as in Auth.js:
- * //   import { handlers } from '#modules/auth/auth.server.ts';
- * //   export const { GET, POST } = handlers;
- *
- * // A page, layout or action reads the signed-in user:
- * //   const session = await auth();   // null when signed out
- *
- * // modules/auth/actions/log-in.server.ts, bound as <form action=${logIn}>
- * // (works with JavaScript off), exactly as in a Next app with Auth.js:
- * 'use server';
- * import { AuthError } from '@webjsdev/server';
- * import { signIn } from '../auth.server.ts';
+ * // A 'use server' action bound as <form action=${logIn}>, as with Auth.js in Next:
  * export async function logIn(formData: FormData) {
  *   try {
  *     await signIn('credentials', formData, { redirectTo: '/dashboard' });
@@ -1261,8 +1248,7 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  *     throw error; // the success redirect
  *   }
  * }
- * // Signing out is the same: an action that awaits signOut({ redirectTo: '/' }).
- * // Plain forms posting to /api/auth/signin/credentials and /api/auth/signout work too.
+ * // Sign out the same way: await signOut({ redirectTo: '/' }).
  * ```
  */
 export declare function createAuth<TUser = ResolvedAuthUser>(config: AuthConfig): AuthInstance<TUser>;

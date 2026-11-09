@@ -407,6 +407,12 @@
     "Credentials": {
       "demoed": true
     },
+    "AuthError": {
+      "demoed": true
+    },
+    "CredentialsSignin": {
+      "exempt": "internal: thrown by signIn; an action catches it as AuthError and reads error.type, as in Auth.js"
+    },
     "DEFAULT_UPLOAD_DIR": {
       "exempt": "internal: framework/CLI plumbing"
     },

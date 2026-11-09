@@ -81,6 +81,19 @@ test('signup -> login -> dashboard renders for the authenticated user', async (t
     return;
   }
 
+  // The login page's bound logIn action, the Auth.js v5 shape: a wrong password
+  // is caught as an AuthError and re-renders the page with the message and the
+  // typed email; the right one signs in with a 303 to the dashboard.
+  const wrong = await submitForm(app.handle, '/features/auth/login', { email, password: 'not-the-password' });
+  assert.equal(wrong.status, 422, 'a wrong password re-renders the login page');
+  const wrongBody = await wrong.text();
+  assert.match(wrongBody, /Invalid email or password\./, 'with the message from the caught AuthError');
+  assert.ok(wrongBody.includes(`value="${email}"`), 'and the typed email kept');
+  const right = await submitForm(app.handle, '/features/auth/login', { email, password });
+  assert.equal(right.status, 303, 'the right password signs in');
+  assert.equal(right.headers.get('location'), '/features/auth/dashboard');
+  assert.ok(right.headers.getSetCookie().some((c) => /webjs\.auth=[^;]/.test(c)), 'with the session cookie');
+
   // Real login captures the genuine signed session cookie.
   const { cookies } = await loginAndGetCookies(app.handle, { email, password });
 
