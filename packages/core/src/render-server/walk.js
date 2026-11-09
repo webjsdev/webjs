@@ -812,7 +812,7 @@ export async function streamValue(value, ctx, controller) {
  * @param {string} tag
  */
 function isReflectedFormProp(name, tag) {
-  return /^(?:action|method|enctype|encoding|form(?:action|method|enctype))$/i.test(name)
+  return /^(?:action|method|enctype|encoding|formaction|formmethod|formenctype)$/i.test(name)
     && /^(?:form|button|input)$/.test(tag);
 }
 
