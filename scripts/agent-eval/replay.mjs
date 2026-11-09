@@ -70,6 +70,8 @@ export function verifyKind(cmd) {
 /** A shell command that changes files: an in-place edit, a move, a copy, a delete, a redirect into a file, or the gallery reset. */
 // `git show REF:path > dest`, the one git command that writes a file.
 const RESTORE_RE = /\bgit show [^:\s]+:("[^"]+"|\S+)\s*>\s*("[^"]+"|\S+)/g;
+/** A command that starts a dev / prod server or leaves a process running in the background. */
+export const STARTS_PROCESS_RE = /\b(?:npx\s+)?webjs(?:\.js)?\s+(?:dev|start)\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start)\b|\bnohup\b|\bdisown\b|&\s*(?:$|\n|;|\))/m;
 const MUTATES_RE = /\bpython3?\s+-\s*<<|\bnode\s+(?:-e|--eval)\b[^\n]*writeFileSync|\bmkdir\s|\bsed\s+-i|\bmv\s|\bcp\s|\brm\s|cat\s*>|\btee\s|>\s*[\w./#-]+\.(?:ts|js|mjs|json|css|md)\b|gallery:clear|clear-gallery/;
 
 export function verifyPassed(kind, out) {
@@ -312,6 +314,10 @@ export function replayBuild(build, opts = {}) {
       }
       if (op.type === 'sh') {
         if (!op.ran) continue;
+        // A command that starts a server or backgrounds a process changes no
+        // source file, and replaying it left the server running after the
+        // draft was gone: one held a port a later clean build then collided on.
+        if (STARTS_PROCESS_RE.test(op.cmd)) continue;
         const cmd = op.cmd.replace(appPathRe, draft);
         spawnSync('bash', ['-c', cmd], { cwd: draft, encoding: 'utf8', timeout: 60_000, env: { ...process.env, CI: '1' } });
         result.shell++;

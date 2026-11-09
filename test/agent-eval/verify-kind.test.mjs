@@ -37,3 +37,13 @@ for (const [cmd, kind] of CASES) {
     assert.equal(verifyKind(cmd), kind);
   });
 }
+
+test('the replay never re-runs a command that starts a server or a background process', async () => {
+  const { STARTS_PROCESS_RE } = await import('../../scripts/agent-eval/replay.mjs');
+  for (const cmd of ['npx webjs dev --port 8921 > /tmp/dev.log 2>&1 &', 'npm run dev', 'nohup node server.js', 'mkdir -p x && (npx webjs start &)']) {
+    assert.ok(STARTS_PROCESS_RE.test(cmd), cmd);
+  }
+  for (const cmd of ["sed -i 's/a/b/' x.ts", 'cat > a.ts <<EOF\nx && y\nEOF', 'mkdir -p app/x && cp a b']) {
+    assert.ok(!STARTS_PROCESS_RE.test(cmd), cmd);
+  }
+});
