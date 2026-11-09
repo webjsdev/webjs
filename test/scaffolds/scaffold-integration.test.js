@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -297,6 +297,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       .flatMap((g) => g.hooks.map((h) => h.command));
     assert.ok(postCommands.includes('.claude/hooks/cleanup-merged-worktree.sh'),
       'settings.json wires cleanup-merged-worktree into PostToolUse');
+    // The check-on-edit feedback loop: `webjs check` runs after each edit and
+    // the edited file's violations go back to the agent.
+    assert.ok(postCommands.includes('.claude/hooks/check-on-edit.sh'),
+      'settings.json wires check-on-edit into PostToolUse');
+    for (const h of ['check-on-edit.sh', 'check-on-edit.mjs']) {
+      assert.ok(existsSync(join(appDir, '.claude/hooks', h)), `${h} is scaffolded`);
+    }
+    assert.ok(statSync(join(appDir, '.claude/hooks/check-on-edit.sh')).mode & 0o111,
+      'check-on-edit.sh is executable');
 
     // The design-review ceremony (a skill + a UserPromptSubmit router + a Stop
     // hook) was retired in #969; only the protective hooks above ship now.

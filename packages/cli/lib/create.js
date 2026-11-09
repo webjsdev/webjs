@@ -787,6 +787,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/require-tests-with-src.sh',
     '.claude/hooks/check-server-imports.sh',
     '.claude/hooks/check-server-imports.mjs',
+    '.claude/hooks/check-on-edit.sh',
+    '.claude/hooks/check-on-edit.mjs',
     // Git pre-commit hook (blocks commits directly to main).
     '.hooks/pre-commit',
     // Starter tests under the feature-folder layout.
@@ -873,7 +875,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // Make the Claude enforcement hooks + the git pre-commit executable.
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['block-prose-punctuation.sh', 'block-raw-htmlelement.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'check-server-imports.sh']) {
+  for (const hook of ['block-prose-punctuation.sh', 'block-raw-htmlelement.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'check-server-imports.sh', 'check-on-edit.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }

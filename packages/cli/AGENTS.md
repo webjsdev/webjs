@@ -211,7 +211,12 @@ templates/               Verbatim files copied into every new app.
                          .agents/rules/workflow.md
                          / .github/copilot-instructions.md / .editorconfig
                          / .env.example / .claude.json / .claude/hooks/
-                         all live here. AGENTS.md ALSO gets a template-specific
+                         all live here. .claude/hooks/check-on-edit.{sh,mjs}
+                         is the PostToolUse feedback loop: after an edit to
+                         app source it runs the app's own `webjs check --json`
+                         (never npx) and returns only the edited file's
+                         violations as decision: block feedback. Test:
+                         test/hooks/check-on-edit.test.mjs. AGENTS.md ALSO gets a template-specific
                          {{PLAYBOOK}} injection: create.js substitutes the
                          full-stack or api build playbook from
                          templates/partials/agents-playbook-{fullstack,api}.md

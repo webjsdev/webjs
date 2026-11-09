@@ -110,12 +110,13 @@ export async function createPost(
     <h3>9. Cross-Agent Config, One Source</h3>
     <p>The scaffold ships a single cross-agent source of truth rather than a per-tool rule duplicate for each agent:</p>
     <ul>
-      <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent</li>
-      <li><code>AGENTS.md</code>, opening with the WebJs brief: what differs from Next.js routing and Lit components</li>
+      <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent, opening with the WebJs brief: what differs from Next.js routing and Lit components</li>
       <li><code>.agents/rules/workflow.md</code>, the git, test, and review workflow rules</li>
       <li>Thin bridges for tools that do not read <code>AGENTS.md</code> natively: <code>CLAUDE.md</code> (Claude Code), <code>GEMINI.md</code> (Gemini CLI), and <code>.github/copilot-instructions.md</code> (Copilot in VS Code), each pointing at <code>AGENTS.md</code></li>
     </ul>
     <p>Every agent gets the same rules from that one source: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
+
+    <p>For Claude Code the scaffold also wires a <code>PostToolUse</code> hook, <code>.claude/hooks/check-on-edit.sh</code>, that runs <code>webjs check --json</code> after each edit to an app source file and hands that file's violations back to the agent with their fixes, so a wrong Lit or Next.js habit is corrected in the same turn. It is silent when the file is clean, and <code>WEBJS_NO_CHECK_ON_EDIT=1</code> turns it off.</p>
 
     <h3>10. Autonomous Mode</h3>
     <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
