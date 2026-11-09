@@ -116,15 +116,20 @@ function grade(appDir, cli) {
   return { check: run(['check']), typecheck: run(['typecheck']), test: run(['test', '--server']) };
 }
 
-async function oneBuild({ spec, specName, index, out, framework, model, label, timeoutS, port }) {
-  const name = `${label}-${specName}${index}`;
-  const parent = join(out, name);
+/**
+ * A fresh app for one run: the framework checkout's own scaffold, committed as
+ * the root commit, on a feature branch, with the framework linked as npm would
+ * install it.
+ * @param {{ framework: string, parent: string, appName: string }} opts
+ * @returns {Promise<string>} the app directory
+ */
+export async function prepareApp({ framework, parent, appName }) {
   mkdirSync(parent, { recursive: true });
   const { scaffoldApp } = await import(pathToFileURL(join(framework, 'packages/cli/lib/create.js')).href);
   const log = console.log;
   console.log = () => {};
-  try { await scaffoldApp(specName, parent, { template: 'full-stack', install: false, skipCi: true }); } finally { console.log = log; }
-  const app = join(parent, specName);
+  try { await scaffoldApp(appName, parent, { template: 'full-stack', install: false, skipCi: true }); } finally { console.log = log; }
+  const app = join(parent, appName);
   // The scaffold is the root commit, made with the app's own hooks off (its
   // pre-commit hook refuses a commit on main) and BEFORE node_modules is
   // linked, so the link is never staged. The agent works on a feature branch,
@@ -133,11 +138,24 @@ async function oneBuild({ spec, specName, index, out, framework, model, label, t
   git('init', '-q', '-b', 'main');
   git('add', '-A');
   git('commit', '-q', '-m', 'scaffold');
-  git('checkout', '-q', '-b', `feature/${specName}`);
+  git('checkout', '-q', '-b', `feature/${appName}`);
   linkNodeModules(framework, app);
-  const transcript = join(parent, 'transcript.jsonl');
+  return app;
+}
+
+/** The environment a headless agent runs in: none of this session's markers. */
+export function agentEnv() {
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_CODE') || k === 'CLAUDECODE') delete env[k];
+  return env;
+}
+
+async function oneBuild({ spec, specName, index, out, framework, model, label, timeoutS, port }) {
+  const name = `${label}-${specName}${index}`;
+  const parent = join(out, name);
+  const app = await prepareApp({ framework, parent, appName: specName });
+  const transcript = join(parent, 'transcript.jsonl');
+  const env = agentEnv();
   const args = ['-p', promptFor(spec, app, port), '--model', model, '--output-format', 'stream-json', '--verbose',
     '--permission-mode', 'bypassPermissions', '--setting-sources', 'project,local',
     '--strict-mcp-config', '--mcp-config', join(app, '.claude.json'), '--no-session-persistence'];
@@ -220,7 +238,7 @@ function linkPublished(pkgDir, dst) {
  * above it.
  * @param {string} out
  */
-function assertNoAncestorInstructions(out) {
+export function assertNoAncestorInstructions(out) {
   let dir = resolve(out);
   const { root } = parsePath(dir);
   while (dir !== root) {
