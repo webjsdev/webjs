@@ -36,6 +36,7 @@ import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
 import { devImport } from '../dev-import.js';
 import { runMetadataRoute } from '../metadata-routes.js';
+import { findDecorator, decoratorReport } from '../lit-hints.js';
 
 /**
  * Serve framework-internal static assets that depend on NEITHER the whole-app
@@ -339,7 +340,7 @@ export async function handleCore(req, ctx) {
         return tsResponse(abs, dev, elideOpts, state.tsCache, versioned, reportDevError);
       }
       if (/\.m?js$/.test(abs)) {
-        return jsModuleResponse(abs, dev, elideOpts, versioned);
+        return jsModuleResponse(abs, dev, elideOpts, versioned, reportDevError);
       }
       return fileResponse(abs, { dev, immutable: versioned });
     }
@@ -720,11 +721,14 @@ export async function fileResponse(abs, opts) {
  * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, lazyComponentFiles?: Map<string, string[]>, appDir: string }} elideOpts
  * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
  *   serve `immutable` (1 year) instead of the 1h fallback. Dev stays `no-cache`.
+ * @param {(error: unknown, info?: object) => void} [reportDevError]  dev overlay hook
  */
-export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
+export async function jsModuleResponse(abs, dev, elideOpts, immutable, reportDevError) {
   let source;
   try { source = await readFile(abs, 'utf8'); }
   catch { return new Response('Not found', { status: 404 }); }
+  const refused = decoratorRefusal(source, abs, dev, elideOpts && elideOpts.appDir, reportDevError);
+  if (refused) return refused;
   let code = elideImportsFromSource(
     annotateServedModule(source, abs, elideOpts), abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
   );
@@ -741,6 +745,44 @@ export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
     [BUFFERED_MARKER]: '1',
   };
   return new Response(code, { status: 200, headers });
+}
+
+/**
+ * Refuse an app module that carries a decorator (`@customElement`,
+ * `@property`, `@state`, `@query`, ...) with a 500 naming the decorator and
+ * its WebJs spelling, the same shape a TypeScript strip failure answers with.
+ * Neither Node's type stripper nor the browser runs decorators, so serving the
+ * module would only move the failure to a bare `SyntaxError` in the browser
+ * console. Scoped to the app's own files outside node_modules; the scan runs
+ * only when the source contains an `@` at all.
+ *
+ * @param {string} code  the served source (stripped for TypeScript)
+ * @param {string} abs
+ * @param {boolean} dev
+ * @param {string | undefined} appDir
+ * @param {((error: unknown, info?: object) => void) | undefined} reportDevError
+ * @returns {Response | null}
+ */
+function decoratorRefusal(code, abs, dev, appDir, reportDevError) {
+  if (!code.includes('@')) return null;
+  if (appDir && !abs.startsWith(appDir + sep)) return null;
+  if (abs.includes(sep + 'node_modules' + sep)) return null;
+  const hit = findDecorator(code);
+  if (!hit) return null;
+  const { message, fix } = decoratorReport(hit);
+  const where = abs + ':' + hit.line + ':' + hit.column;
+  const err = new SyntaxError('Decorator @' + hit.name + ' in ' + where);
+  // eslint-disable-next-line no-console
+  console.error('[webjs] ' + err.message + '. ' + fix);
+  reportDevError?.(err, { kind: 'ts-strip', file: abs, line: hit.line, column: hit.column, hint: message + ' ' + fix });
+  const msg = dev
+    ? '[webjs] ' + err.message + '\n\n' + message + '\n' + fix +
+      '\nThe no-non-erasable-typescript check rule reports this at edit time. Docs: https://webjs.dev/docs/troubleshooting#decorators'
+    : '[webjs] server error transforming a module response. Check server logs.';
+  return new Response('/* ' + msg.replace(/\*\//g, '*\\/') + ' */', {
+    status: 500,
+    headers: { 'content-type': 'application/javascript; charset=utf-8' },
+  });
 }
 
 /**
@@ -888,6 +930,12 @@ export async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDe
     }
     throw err;
   }
+  // The stripper passes a decorator through untouched, so without this the
+  // browser receives the module and fails it with a bare SyntaxError that
+  // names neither the decorator nor the fix. Not cached, so the next request
+  // after the edit re-strips and re-checks.
+  const refused = decoratorRefusal(code, abs, dev, elideOpts && elideOpts.appDir, reportDevError);
+  if (refused) return refused;
   if (elideOpts) {
     code = annotateServedModule(code, abs, elideOpts);
     code = elideImportsFromSource(

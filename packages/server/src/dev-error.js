@@ -14,7 +14,9 @@
  * offending source file for the code frame (a read failure degrades to no
  * frame, never throws).
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { findDecorator, decoratorReport } from './lit-hints.js';
 
 /**
  * Pull the first useful `file:line:column` out of an error stack. Prefers a
@@ -40,7 +42,9 @@ export function parseStackLocation(stack, appDir) {
   // (the `file:///` URL form, whose path uses forward slashes, still resolves).
   // That matches the framework's POSIX-first dev posture; it degrades, never
   // crashes.
-  const re = /(?:file:\/\/)?(\/[^\s:()?]+)(?:\?[^\s:()]*)?:(\d+):(\d+)/g;
+  // The lookbehind keeps a runtime-internal frame (`node:internal/modules/...`)
+  // from reading as the path `/modules/...`.
+  const re = /(?<![\w.-])(?:file:\/\/)?(\/[^\s:()?]+)(?:\?[^\s:()]*)?:(\d+):(\d+)/g;
   /** @type {{ file: string, line: number, column: number }[]} */
   const frames = [];
   let m;
@@ -114,6 +118,15 @@ export function buildDevErrorFrame(error, opts = {}) {
   let file = opts.file || null;
   let line = opts.line != null ? opts.line : null;
   let column = opts.column != null ? opts.column : null;
+  // A module that fails to PARSE (a decorator is the common case) throws a
+  // SyntaxError whose stack OPENS with a bare `file:///abs/x.ts:2` header (a
+  // line, no column) and continues with node:internal frames only, which the
+  // frame pattern would misread as a path. The header names the source, so it
+  // wins.
+  if (!file && stack) {
+    const head = /^(?:file:\/\/)?(\/[^\s:()?]+)(?:\?[^\s:()]*)?:(\d+)[ \t]*\n/.exec(stack);
+    if (head) { file = head[1]; line = Number(head[2]); }
+  }
   if (!file && stack) {
     const loc = parseStackLocation(stack, opts.appDir);
     if (loc) { file = loc.file; line = loc.line; column = loc.column; }
@@ -125,6 +138,20 @@ export function buildDevErrorFrame(error, opts = {}) {
     const loc = parseStackLocation(`${err.message}\n${stack || ''}`, opts.appDir);
     if (loc && loc.file === file) { line = loc.line; column = loc.column; }
   }
+  // A module that fails to PARSE, caught rather than crashing the process,
+  // carries no location at all on Node (the `file:line` arrow header is only
+  // printed for an uncaught error), so a decorator three imports down leaves
+  // the overlay with nothing to point at. The usual cause of an unexpected
+  // token in a WebJs app is a decorator, so look for one in the app source.
+  let hint = opts.hint || null;
+  if (!hint && !file && err instanceof SyntaxError && opts.appDir) {
+    const found = findAppDecorator(opts.appDir);
+    if (found) {
+      file = found.file; line = found.hit.line; column = found.hit.column;
+      const { message, fix } = decoratorReport(found.hit);
+      hint = `${message} ${fix}`;
+    }
+  }
   const codeFrame = file && line ? readCodeFrame(file, line, column || 0) : null;
   return {
     kind,
@@ -134,7 +161,68 @@ export function buildDevErrorFrame(error, opts = {}) {
     line,
     column,
     codeFrame,
-    hint: opts.hint || null,
+    hint: hint || inferHint(err, file) || null,
     url: typeof opts.url === 'string' && opts.url ? opts.url : null,
   };
+}
+
+/**
+ * Name the WebJs fix for an error whose own message does not, so the overlay
+ * says what to write instead of only what broke.
+ *
+ * A decorator (`@customElement`, `@property`, ...) is the case it exists for.
+ * Node fails the module with a bare `SyntaxError: Invalid or unexpected
+ * token`, and Bun, which runs legacy decorators, with a `ReferenceError` for
+ * the undefined decorator function. Neither names the fix, so when the failing
+ * file carries a decorator the hint is the one `webjs check` prints.
+ *
+ * @param {Error} err
+ * @param {string | null} file  the located source file, when there is one
+ * @returns {string | null}
+ */
+export function inferHint(err, file) {
+  if ((err instanceof SyntaxError || err instanceof ReferenceError) && file) {
+    let src = null;
+    try { src = readFileSync(file, 'utf8'); } catch { src = null; }
+    const hit = src ? findDecorator(src) : null;
+    if (hit) {
+      const { message, fix } = decoratorReport(hit);
+      return `${message} ${fix}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * The first decorator in the app's own source, walking every JS / TS file
+ * outside node_modules, `public/`, and dot or underscore folders. Dev-only and
+ * reached only for an unlocated SyntaxError, so the synchronous walk costs
+ * nothing on the happy path.
+ *
+ * @param {string} appDir
+ * @returns {{ file: string, hit: { name: string, index: number, line: number, column: number } } | null}
+ */
+function findAppDecorator(appDir) {
+  /** @type {string[]} */
+  const stack = [appDir];
+  let budget = 5000;
+  while (stack.length && budget-- > 0) {
+    const dir = /** @type {string} */ (stack.pop());
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (e.name === 'node_modules' || e.name.startsWith('.') || e.name.startsWith('_')) continue;
+      const abs = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (dir === appDir && e.name === 'public') continue;
+        stack.push(abs);
+      } else if (/\.m?[jt]s$/.test(e.name)) {
+        let src;
+        try { src = readFileSync(abs, 'utf8'); } catch { continue; }
+        const hit = findDecorator(src);
+        if (hit) return { file: abs, hit };
+      }
+    }
+  }
+  return null;
 }

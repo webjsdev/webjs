@@ -12,6 +12,7 @@ import { walk } from '../fs-walk.js';
 import {
   redactStringsAndTemplates,
 } from '../js-scan.js';
+import { findDecorator, decoratorReport } from '../lit-hints.js';
 
 /**
  * @typedef {import('./rules.js').Violation} Violation
@@ -134,8 +135,11 @@ export async function checkNoNonErasableTypescript(appDir, violations) {
     // Walk every .ts / .mts file under appDir, skipping node_modules,
     // build outputs, version control, and the framework's own private
     // folders. Match the conventional excludes that fs-walk.js's caller
-    // contract expects.
-    for await (const abs of walk(appDir, (p) => /\.m?ts$/.test(p))) {
+    // contract expects. Plain .js / .mjs files are walked too, for the
+    // decorator scan alone: no JavaScript runtime WebJs serves to runs
+    // decorators either, so `@customElement` in a .js component is the same
+    // load-time SyntaxError.
+    for await (const abs of walk(appDir, (p) => /\.m?[jt]s$/.test(p))) {
       // Skip anything inside node_modules or common build / cache dirs.
       const relPath = relative(appDir, abs);
       if (
@@ -148,6 +152,10 @@ export async function checkNoNonErasableTypescript(appDir, violations) {
       ) {
         continue;
       }
+      const isTs = /\.m?ts$/.test(abs);
+      // A .js file under public/ is a static asset (a service worker, a
+      // vendored script), never an app module the server loads.
+      if (!isTs && relPath.startsWith('public' + sep)) continue;
       let content;
       try {
         content = await readFile(abs, 'utf8');
@@ -159,6 +167,20 @@ export async function checkNoNonErasableTypescript(appDir, violations) {
       // inside `html\`...\`` template literals don't trip the rule.
       // The redactor preserves line + column so the reported line
       // number still maps to the right place in the original.
+      // Decorators: Lit's `@customElement` / `@property` / `@state` /
+      // `@query` habit. Node's stripper passes them through untouched, so the
+      // module dies at load with a bare SyntaxError that names neither the
+      // decorator nor the fix. Scanned on the fully blanked mask (string
+      // bodies too), so `@click=${...}` in an html template, `@media` in a
+      // css template, and `@param` in a JSDoc block never match.
+      if (content.includes('@')) {
+        const hit = findDecorator(content);
+        if (hit) {
+          const { message, fix } = decoratorReport(hit);
+          violations.push({ rule: 'no-non-erasable-typescript', file: relPath, message, fix });
+        }
+      }
+      if (!isTs) continue;
       const scan = redactStringsAndTemplates(content);
       for (const { name, regex, fix } of NON_ERASABLE_PATTERNS) {
         const m = scan.match(regex);
