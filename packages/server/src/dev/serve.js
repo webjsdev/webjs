@@ -8,7 +8,7 @@
  * half calls into it at exactly three points.
  */
 import { stat, readFile } from 'node:fs/promises';
-import { join, extname, resolve, relative, sep } from 'node:path';
+import { join, extname, resolve, relative, sep, dirname } from 'node:path';
 
 import { matchPage, matchApi } from '../router.js';
 import { ssrPage, ssrNotFound } from '../ssr.js';
@@ -390,11 +390,16 @@ export async function handleCore(req, ctx) {
     // A handler that throws is recorded in the dev status as a `route` error
     // HERE, before a root middleware wrapping `next()` reports the same error
     // as its own (#1664). The rethrow keeps the response path unchanged.
-    const handler = recordDevStatus
-      ? async () => {
-        try { return await handleApi(api.route, api.params, req, dev); } catch (e) { recordDevStatus(e, req, 'route'); throw e; }
+    // The same throw is reported to onError / onRequestError as a `route`
+    // error (reportError dedupes, so the top-level catch does not report it
+    // again under a vaguer phase).
+    const handler = async () => {
+      try { return await handleApi(api.route, api.params, req, dev); } catch (e) {
+        if (recordDevStatus) recordDevStatus(e, req, 'route');
+        if (reportError) reportError(e, req, 'route', routePathOf(appDir, api.route.file));
+        throw e;
       }
-      : () => handleApi(api.route, api.params, req, dev);
+    };
     return runWithSegmentMiddleware(req, api.route.middlewares, handler, dev);
   }
 
@@ -446,7 +451,7 @@ export async function handleCore(req, ctx) {
         cspEnabled,
         // onError sink (issue #239): a page render error that becomes a 500 is
         // reported to the APM hook with the active request's correlation id.
-        onError: reportError ? (e) => reportError(e, req, 'ssr') : undefined,
+        onError: reportError ? (e) => reportError(e, req, 'ssr', routePathOf(appDir, page.route.file)) : undefined,
         // Dev error overlay (#264): a render crash pushes a frame to the open
         // tab. Dev-only (reportDevError early-returns in prod), so no source
         // leaks. Distinct from onError (the APM sink), which always fires.
@@ -567,6 +572,17 @@ export async function handleCore(req, ctx) {
     && before.kind === 'render' && before.url === devErrorUrl
   ) state.lastDevError = null;
   return resp;
+}
+
+/**
+ * The route file's directory as Next's `onRequestError` context names it,
+ * `/app/blog/[slug]` for `app/blog/[slug]/page.ts`.
+ * @param {string} appDir
+ * @param {string} file
+ */
+export function routePathOf(appDir, file) {
+  const rel = relative(join(appDir, 'app'), dirname(file)).split(sep).join('/');
+  return rel ? `/app/${rel}` : '/app';
 }
 
 /** @param {Request} req @param {string} path */

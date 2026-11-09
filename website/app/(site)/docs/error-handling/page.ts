@@ -150,6 +150,26 @@ export default function GlobalError({ error }: { error: Error }) {
     <h2>Server action errors</h2>
     <p>Errors thrown from server actions are sanitized in production: the client gets a generic <code>"Internal server error"</code> message plus a short <code>digest</code>, never the raw thrown message or the stack trace. The full error is logged server-side keyed by that digest, so a client-reported digest maps back to the server log line. A <code>redirect()</code> / <code>notFound()</code> control-flow throw passes through. To surface a specific user-facing message, return an <code>ActionResult</code> <code>{ success: false, error }</code> envelope instead of throwing.</p>
 
+    <h2 id="on-request-error">Reporting errors with onRequestError</h2>
+    <p>An app-root <code>instrumentation.ts</code> may export Next.js's <code>onRequestError</code>. The server calls it for every error a request hits on the server: a page or layout render, a metadata route, a <code>route.ts</code> handler, a server action, or middleware. It receives the same three arguments Next passes, so an existing Sentry or OpenTelemetry reporter works unchanged.</p>
+    <code-block>// instrumentation.ts
+export function register() {
+  // start your APM here
+}
+
+export async function onRequestError(
+  err: Error & { digest: string },
+  request: { path: string; method: string; headers: Record&lt;string, string&gt; },
+  context: { routerKind: 'App Router'; routePath: string; routeType: 'render' | 'route' | 'action' | 'proxy' },
+) {
+  await fetch('https://errors.example.com/report', {
+    method: 'POST',
+    body: JSON.stringify({ message: err.message, digest: err.digest, path: request.path, ...context }),
+  });
+}</code-block>
+    <p><code>err.digest</code> is the same short hash a sanitized production response carries, so a digest a user reports maps to the report. <code>routePath</code> is the route file's folder (<code>/app/blog/[slug]</code>), and <code>routeType</code> is <code>render</code> for pages, layouts and metadata, <code>route</code> for a <code>route.ts</code> handler, <code>action</code> for a server action, and <code>proxy</code> for middleware. Each error is reported once, under the most specific of those. The call is fire-and-forget: the response never waits for it, and a reporter that throws or rejects is logged and ignored. A thrown <code>redirect()</code>, <code>notFound()</code>, <code>forbidden()</code> or <code>unauthorized()</code> is routing, not an error, and is never reported.</p>
+    <p>Inside <code>register()</code> you can also call <code>setOnError(fn)</code> from <code>@webjsdev/server</code>, which receives the original error plus <code>{ request, requestId, phase }</code> and composes with the <code>onError</code> option of <code>createRequestHandler</code>.</p>
+
     <h2>Dev error overlay</h2>
     <p>In development, an SSR render crash, a non-erasable-TypeScript strip failure, and a failed rebuild each push a rich error overlay to the open tab over the live-reload channel, without a manual refresh. The overlay shows the message, the offending <code>file:line:column</code>, and a source code frame of the failing line with context. A TypeScript strip failure also shows the erasable-syntax hint inline (a non-erasable <code>enum</code> / <code>namespace</code> breaks only the client module fetch, so the page still server-renders but hydration is dead; the overlay surfaces that instead of burying the hint in a console comment). The overlay dismisses on the next successful rebuild, and the frame is replayed to a tab opened after the breaking edit.</p>
     <p>A render error's overlay is scoped to the page that produced it. It comes down when you navigate away, it never appears in a tab that is viewing a different page, and merely prefetching a link to a broken page (which happens on hover, since link prefetch is on by default) does not raise one on the page you are actually on. A rebuild or TypeScript error is not page-scoped, because it describes a broken build rather than one route, so it stays put until the next successful rebuild.</p>

@@ -19,6 +19,7 @@ import {
 } from './responses.js';
 import { devImport } from '../dev-import.js';
 import { applySeoDefaults } from './seo.js';
+import { isControlFlowThrow } from '../action-error.js';
 
 
 /**
@@ -123,11 +124,25 @@ function nearest(arr) {
 }
 
 /**
+ * Collect and merge metadata across the route's layouts (outermost first) and
+ * its page, Next.js style. `generateMetadata(props, parent)` and
+ * `generateViewport(props, parent)` receive `parent`, a promise of the
+ * metadata (or viewport) resolved from the segments above, with `title`
+ * normalized to Next's `{ absolute, template }`.
+ *
+ * A thrown `notFound()` / `redirect()` / `forbidden()` / `unauthorized()`
+ * propagates, so it answers the request exactly as it would from the page. Any
+ * other error is logged and reported through `onError`, and that segment's
+ * metadata is skipped, so a broken `generateMetadata` never fails the page.
+ *
  * @param {import('../router.js').PageRoute} route
  * @param {Record<string,unknown>} ctx
- * @param {boolean} dev
+ * @param {{ dev?: boolean, onError?: (e: unknown) => void }} opts
  */
-async function collectMetadata(route, ctx, dev) {
+async function collectMetadata(route, ctx, opts) {
+  const dev = !!opts.dev;
+  /** @type {Record<string, any>} */
+  let viewportSoFar = {};
   /** @type {Record<string, any>} */
   let meta = {};
   // Carry the title template forward across layers. Once an outer layout
@@ -141,7 +156,7 @@ async function collectMetadata(route, ctx, dev) {
       const mod = await loadModule(file, dev);
       let m = null;
       if (typeof mod.generateMetadata === 'function') {
-        m = await mod.generateMetadata(ctx);
+        m = await mod.generateMetadata(ctx, Promise.resolve(resolvedParent(meta, titleTemplate)));
       } else if (mod.metadata) {
         m = mod.metadata;
       }
@@ -152,14 +167,17 @@ async function collectMetadata(route, ctx, dev) {
       // working. Likewise for `themeColor` and `colorScheme`.
       let vp = null;
       if (typeof mod.generateViewport === 'function') {
-        vp = await mod.generateViewport(ctx);
+        vp = await mod.generateViewport(ctx, Promise.resolve({ ...viewportSoFar }));
       } else if (mod.viewport) {
         vp = mod.viewport;
       }
       if (vp && typeof vp === 'object') {
+        viewportSoFar = { ...viewportSoFar, ...vp };
         m = { ...(m || {}), _viewport: { ...(m && m._viewport), ...vp } };
         // Allow `themeColor` / `colorScheme` to live on the viewport export.
-        if (typeof vp.themeColor === 'string' && !(m && m.themeColor)) {
+        // `themeColor` may be a string, a `{ color, media }` descriptor, or an
+        // array of them (Next's shape); head.js emits one <meta> per entry.
+        if (vp.themeColor && !(m && m.themeColor)) {
           m.themeColor = vp.themeColor;
         }
         if (typeof vp.colorScheme === 'string') m.colorScheme = vp.colorScheme;
@@ -189,8 +207,15 @@ async function collectMetadata(route, ctx, dev) {
         }
       }
       meta = { ...meta, ...resolved };
-    } catch {
-      // ignore: metadata collection never fails the request
+    } catch (e) {
+      // Control flow answers the request, as it would from the page.
+      if (isControlFlowThrow(e)) throw e;
+      // Anything else is a bug in that segment's metadata: say so, report it,
+      // and render the page with the metadata the other segments produced.
+      console.error(`[webjs] metadata failed in ${file}:`, e);
+      if (typeof opts.onError === 'function') {
+        try { opts.onError(e); } catch { /* a throwing sink must not affect the response */ }
+      }
     }
   }
   try {
@@ -198,6 +223,19 @@ async function collectMetadata(route, ctx, dev) {
   } catch {
     return meta;
   }
+}
+
+/**
+ * The `parent` metadata a `generateMetadata` receives: a shallow snapshot of
+ * what the outer segments resolved, `title` in Next's `{ absolute, template }`
+ * shape so `(await parent).title.absolute` works as it does in Next.
+ * @param {Record<string, any>} meta
+ * @param {string | null} template
+ */
+function resolvedParent(meta, template) {
+  const snap = { ...meta };
+  snap.title = { absolute: typeof meta.title === 'string' ? meta.title : '', template };
+  return snap;
 }
 
 /**
@@ -971,9 +1009,20 @@ export async function ssrPage(route, params, url, opts) {
   };
 
   // Collect metadata across layouts (outermost first) then page.
-  const metadata = await collectMetadata(route, ctx, opts.dev);
+  // A control-flow throw from generateMetadata (notFound(), redirect(), ...)
+  // is rethrown inside the try below, so it answers exactly as a page throw.
+  /** @type {Record<string, any>} */
+  let metadata = {};
+  /** @type {unknown} */
+  let metadataThrow = null;
+  try {
+    metadata = await collectMetadata(route, ctx, { dev: opts.dev, onError: opts.onError });
+  } catch (e) {
+    metadataThrow = e;
+  }
 
   try {
+    if (metadataThrow) throw metadataThrow;
     const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set(), dev: opts.dev };
     // Parse the partial-nav "have" header from the client. The server walks
     // the target route's layout chain innermost → outermost and

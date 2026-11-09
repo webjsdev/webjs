@@ -20,6 +20,7 @@ import { stat } from 'node:fs/promises';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { devImport } from './dev-import.js';
 import { shared } from './process-shared.js';
+import { errorDigest } from './action-error.js';
 
 /**
  * Per-boot handoff channel for a `register()`-registered error sink. An
@@ -73,7 +74,11 @@ export async function findInstrumentationClient(appDir) {
  *
  * @param {string} appDir
  * @param {{ dev?: boolean, logger?: { error?: (...a: any[]) => void } }} [opts]
- * @returns {Promise<{ onError: ((error: unknown, ctx?: any) => void) | null }>}
+ * The module may also export Next.js's `onRequestError(error, request, context)`,
+ * which is returned as `onRequestError` for the request handler to call on
+ * every reported server error (see `buildRequestErrorReport`).
+ *
+ * @returns {Promise<{ onError: ((error: unknown, ctx?: any) => void) | null, onRequestError: OnRequestError | null }>}
  */
 export async function runInstrumentation(appDir, opts = {}) {
   const { dev = false, logger } = opts;
@@ -82,15 +87,18 @@ export async function runInstrumentation(appDir, opts = {}) {
     const p = join(appDir, name);
     if (await exists(p)) { file = p; break; }
   }
-  if (!file) return { onError: null };
+  if (!file) return { onError: null, onRequestError: null };
   // Per-boot store: setOnError writes here, scoped to THIS run's async context.
   const store = { onError: null };
+  /** @type {OnRequestError | null} */
+  let onRequestError = null;
   await _als.run(store, async () => {
     try {
       const mod = await devImport(file, dev);
       const register = typeof mod.default === 'function'
         ? mod.default
         : (typeof mod.register === 'function' ? mod.register : null);
+      if (typeof mod.onRequestError === 'function') onRequestError = mod.onRequestError;
       if (register) await register();
     } catch (e) {
       // A failing instrumentation hook must not crash boot: log and continue, the
@@ -98,5 +106,53 @@ export async function runInstrumentation(appDir, opts = {}) {
       logger?.error?.(`[webjs] instrumentation.{js,ts} register() failed`, { err: String(e) });
     }
   });
-  return { onError: store.onError };
+  return { onError: store.onError, onRequestError };
+}
+
+/**
+ * @typedef {(
+ *   error: Error & { digest: string },
+ *   request: { path: string, method: string, headers: Record<string, string> },
+ *   context: { routerKind: 'App Router', routePath: string, routeType: 'render' | 'route' | 'action' | 'proxy', revalidateReason: undefined, renderSource?: string },
+ * ) => void | Promise<void>} OnRequestError
+ */
+
+/**
+ * The internal pipeline phase to Next's `routeType`. A page render, a metadata
+ * route, and a last-resort crash in the handler are all `render`; root and
+ * segment middleware are `proxy` (Next 16's name for middleware).
+ * @type {Record<string, 'render' | 'route' | 'action' | 'proxy'>}
+ */
+const ROUTE_TYPE = { ssr: 'render', metadata: 'render', handle: 'render', route: 'route', action: 'action', middleware: 'proxy' };
+
+/**
+ * Build the three arguments Next.js passes to `onRequestError`, from the error
+ * the pipeline caught, the request, and its phase. The error gains a `digest`
+ * (the same hash the sanitized production responses carry, so a report maps
+ * back to what the client saw) when it does not already have one.
+ *
+ * @param {unknown} error
+ * @param {Request} request
+ * @param {string} phase
+ * @param {string} [routePath] the app-relative route file path, `/app/blog/[slug]`
+ * @returns {Promise<Parameters<OnRequestError>>}
+ */
+export async function buildRequestErrorReport(error, request, phase, routePath) {
+  /** @type {any} */
+  let err = error instanceof Error ? error : new Error(String(error));
+  if (typeof err.digest !== 'string') {
+    const digest = await errorDigest(err);
+    if (Object.isExtensible(err)) err.digest = digest;
+    else err = Object.assign(new Error(err.message, { cause: err }), { digest });
+  }
+  /** @type {Record<string, string>} */
+  const headers = {};
+  for (const [k, v] of request.headers) headers[k] = v;
+  let path = '/';
+  try { const u = new URL(request.url); path = u.pathname + u.search; } catch { /* keep / */ }
+  return [
+    err,
+    { path, method: request.method, headers },
+    { routerKind: 'App Router', routePath: routePath || path.split('?')[0], routeType: ROUTE_TYPE[phase] || 'render', revalidateReason: undefined },
+  ];
 }

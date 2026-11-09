@@ -26,7 +26,7 @@ import { ensureStripper } from '../ts-strip.js';
 import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
-import { runInstrumentation } from '../instrumentation.js';
+import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.js';
 import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
@@ -180,7 +180,7 @@ export async function createRequestHandler(opts) {
   // before traffic. Any error sink it registers via setOnError composes with
   // the programmatic opts.onError (both fire). Fail-open (a throwing hook is
   // logged, not fatal).
-  const { onError: instrumentationOnError } = await runInstrumentation(appDir, { dev, logger });
+  const { onError: instrumentationOnError, onRequestError } = await runInstrumentation(appDir, { dev, logger });
   // APM / Sentry integration point (issue #239). Called whenever the request
   // pipeline catches an unhandled error: the top-level handle() catch (the
   // last-resort 500), an unexpected throw inside the produce() funnel, or a
@@ -234,7 +234,11 @@ export async function createRequestHandler(opts) {
       devStatus.record(frame || buildDevErrorFrame(error, { kind, appDir, url }));
     } catch { /* best effort */ }
   }
-  const hasOnError = onErrorSinks.length > 0;
+  const hasOnError = onErrorSinks.length > 0 || typeof onRequestError === 'function';
+  /** Each error object is reported once, under the first (most specific) phase
+   * that reaches it: a route handler's throw is reported as `route` before the
+   * top-level catch sees the same error again. @type {WeakSet<object>} */
+  const reportedErrors = new WeakSet();
 
   /**
    * Invoke every registered onError sink defensively. The phase is a coarse
@@ -242,13 +246,26 @@ export async function createRequestHandler(opts) {
    * @param {unknown} error
    * @param {Request} request
    * @param {string} phase
+   * @param {string} [routePath] the route file path for `onRequestError`
    */
-  function reportError(error, request, phase) {
+  function reportError(error, request, phase, routePath) {
     // Dev status (#1664). Recorded BEFORE the no-sink return, because an app
     // with no onError sink is exactly the one whose action errors were
     // invisible to an agent. An `ssr` error is a render failure.
     recordDevStatus(error, request, phase === 'ssr' ? 'render' : phase);
     if (!hasOnError) return;
+    if (error && typeof error === 'object') {
+      if (reportedErrors.has(error)) return;
+      reportedErrors.add(error);
+    }
+    // Next.js's instrumentation `onRequestError(error, request, context)`.
+    // Fire-and-forget like Next: an awaited reporter never delays the response,
+    // and a throwing or rejecting one is logged, never surfaced.
+    if (typeof onRequestError === 'function' && !isControlFlowThrow(error)) {
+      buildRequestErrorReport(error, request, phase, routePath)
+        .then((args) => onRequestError(...args))
+        .catch((e) => logger.error?.('[webjs] onRequestError threw (ignored)', { err: String(e) }));
+    }
     const ctx = { request, requestId: getRequestId(), phase };
     for (const sink of onErrorSinks) {
       try {

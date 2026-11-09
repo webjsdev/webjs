@@ -36,6 +36,10 @@ try {
   w('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport const metadata = { title: 'Shop', description: 'Fresh bread', openGraph: { siteName: 'Shop', images: [{ url: '/og.png', width: 1200, alt: 'Bread' }] } };\nexport default () => html\`<h1>Shop</h1>\`;`);
   w('app/items/[id]/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport async function generateSitemapParams() { return [{ id: '7' }]; }\nexport default () => html\`<h1>Item</h1>\`;`);
   w('app/account/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport const metadata = { robots: { index: false } };\nexport default () => html\`<h1>Account</h1>\`;`);
+  // Next parity: generateMetadata(props, parent), a themeColor descriptor array
+  // on the viewport, and robots.googleBot as an object.
+  w('app/news/layout.ts', `import { html } from ${JSON.stringify(CORE)};\nexport const metadata = { title: { template: '%s | News', default: 'News' } };\nexport const viewport = { themeColor: [{ media: '(prefers-color-scheme: dark)', color: '#000' }, { media: '(prefers-color-scheme: light)', color: '#fff' }] };\nexport default ({ children }: { children: unknown }) => html\`\${children}\`;`);
+  w('app/news/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport async function generateMetadata(_p: unknown, parent: Promise<{ title: { absolute: string } }>) { const p = await parent; return { title: 'Today after ' + p.title.absolute, robots: { index: true, googleBot: { index: true, 'max-snippet': -1 } } }; }\nexport default () => html\`<h1>News</h1>\`;`);
   w('app/sitemap.ts', `export default async ({ pages }: { pages: () => Promise<unknown[]> }) => pages();`);
   w('app/robots.ts', `export default ({ siteUrl }: { siteUrl: string }) => ({ rules: { userAgent: '*', allow: '/', disallow: '/account' }, sitemap: siteUrl + '/sitemap.xml' });`);
 
@@ -64,7 +68,12 @@ try {
   assert.match(html, /<meta property="og:image" content="https:\/\/shop\.test\/og\.png">/, `absolute og:image on ${runtime}`);
   const xml = await (await fetch(`${base}/sitemap.xml`)).text();
   const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).sort();
-  assert.deepEqual(locs, ['https://shop.test/', 'https://shop.test/items/7'], `sitemap pages() on ${runtime}`);
+  assert.deepEqual(locs, ['https://shop.test/', 'https://shop.test/items/7', 'https://shop.test/news'], `sitemap pages() on ${runtime}`);
+
+  const news = await (await fetch(`${base}/news`)).text();
+  assert.match(news, /<title>Today after News \| News<\/title>/, `generateMetadata parent on ${runtime}`);
+  assert.match(news, /<meta name="theme-color" content="#000" media="\(prefers-color-scheme: dark\)">/, `themeColor array on ${runtime}`);
+  assert.match(news, /<meta name="googlebot" content="index, max-snippet:-1">/, `googleBot object on ${runtime}`);
 
   const missing = await fetch(`${base}/nope`);
   assert.equal(missing.status, 404, `unknown URL is 404 on ${runtime}`);

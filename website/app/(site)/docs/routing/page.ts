@@ -515,6 +515,25 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function PostPage({ params }: { params: { slug: string } }) {
   // ...
 }</code-block>
+    <p>
+      As in Next.js, <code>generateMetadata(props, parent)</code> receives a
+      second argument, a promise of the metadata the outer layouts resolved, with
+      <code>title</code> normalized to <code>{ absolute, template }</code>. Use
+      it to extend rather than replace a parent value:
+    </p>
+    <code-block>export async function generateMetadata({ params }, parent) {
+  const previous = (await parent).openGraph?.images || [];
+  return { openGraph: { images: ['/post.png', ...previous] } };
+}</code-block>
+    <p>
+      <code>generateViewport(props, parent)</code> works the same way for the
+      <code>viewport</code> export. A <code>notFound()</code> or
+      <code>redirect()</code> thrown from <code>generateMetadata</code> answers
+      the request exactly as it would from the page. Any other error is logged
+      with the file name, reported to <code>onError</code> and
+      <code>onRequestError</code>, and that segment's metadata is skipped, so a
+      broken metadata function never takes the page down.
+    </p>
 
     <h3>Metadata Merging</h3>
     <p>
@@ -526,7 +545,8 @@ export default async function PostPage({ params }: { params: { slug: string } })
       <li><code>title</code>: sets <code>&lt;title&gt;</code></li>
       <li><code>description</code>: sets <code>&lt;meta name="description"&gt;</code></li>
       <li><code>viewport</code>: sets <code>&lt;meta name="viewport"&gt;</code> (defaults to <code>width=device-width,initial-scale=1</code>)</li>
-      <li><code>themeColor</code>: sets <code>&lt;meta name="theme-color"&gt;</code></li>
+      <li><code>themeColor</code> sets <code>&lt;meta name="theme-color"&gt;</code>; as in Next it may be a string, a <code>{ color, media }</code> descriptor, or an array of them (one tag each, for light and dark)</li>
+      <li><code>robots</code> sets <code>&lt;meta name="robots"&gt;</code> from a string or Next's object (<code>index</code>, <code>follow</code>, <code>noarchive</code>, <code>max-snippet</code> and the rest); a nested <code>googleBot</code> object or string becomes <code>&lt;meta name="googlebot"&gt;</code></li>
       <li><code>openGraph</code>: an object of Open Graph properties (keys become <code>og:key</code>)</li>
       <li><code>preload</code>: an array of <code>&lt;link rel="preload"&gt;</code> entries (e.g. fonts, images)</li>
     </ul>

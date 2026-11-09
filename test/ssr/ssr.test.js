@@ -2805,7 +2805,7 @@ test('ssrPage: metadata.twitter emits twitter:* meta tags', async () => {
   assert.ok(body.includes('<meta name="twitter:image" content="/og.png">'));
 });
 
-test('ssrPage: a metadata file that throws is silently skipped', async () => {
+test('ssrPage: a metadata file that throws is skipped, logged, and reported', async () => {
   const sub = mkdtempSync(join(tmpDir, 'metaerr-'));
   const appDir = join(sub, 'app');
   mkdirSync(appDir, { recursive: true });
@@ -2820,10 +2820,20 @@ test('ssrPage: a metadata file that throws is silently skipped', async () => {
     `export function generateMetadata() { throw new Error('meta boom'); }\n`);
 
   const route = { file: pageFile, layouts: [], errors: [], metadataFiles: [brokenMeta, pageFile] };
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const reported = [];
+  const origError = console.error;
+  const logged = [];
+  console.error = (...a) => logged.push(a.map(String).join(' '));
+  let resp;
+  try {
+    resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, onError: (e) => reported.push(e) });
+  } finally { console.error = origError; }
   assert.equal(resp.status, 200);
   const body = await resp.text();
   assert.ok(body.includes('<p>ok</p>'));
+  assert.equal(reported.length, 1, 'the metadata error reaches onError');
+  assert.equal(reported[0].message, 'meta boom');
+  assert.ok(logged.some((l) => l.includes('metadata failed') && l.includes('broken.js')), 'the error is logged naming the file');
 });
 
 /* ------------ loading.ts → automatic Suspense wrap ------------ */
