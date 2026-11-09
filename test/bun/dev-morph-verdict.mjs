@@ -1,7 +1,9 @@
 /**
- * Cross-runtime dev live-reload VERDICT test (#1398): start `webjs dev` under
- * WHICHEVER runtime runs this file, edit a page and then a component, and
- * assert the SSE `reload` frame carries the right classification on both. Run
+ * Cross-runtime dev live-reload VERDICT test (#1398, #1689): start `webjs dev`
+ * under WHICHEVER runtime runs this file, edit a page and then a component, and
+ * assert the SSE `reload` frame carries the right classification on both
+ * (`page` for the page, `component` for a hot-swappable component edit,
+ * `reload` for a constructor edit the hot swap refuses). Run
  * under both:
  *
  *   node test/bun/dev-morph-verdict.mjs
@@ -15,13 +17,14 @@
  * of thing a transport can chunk or re-frame differently, so the payload is
  * asserted byte-for-byte identical on both.
  *
- * `--no-hot` is load-bearing, and a future reader should not assume this covers
- * `webjs dev` as users run it on Node. It makes `planDevSupervisor` return
- * `{ mode: 'inline' }`, so the server stays in THIS process instead of being
- * re-exec'd under `node --watch`. That in-process path is the only one that can
- * carry a verdict at all: a `node --watch` restart replaces the process, so
- * nothing survives to classify and the browser learns of the edit only through
- * a changed boot id, which is unconditionally a full reload.
+ * `--no-hot` makes `planDevSupervisor` return `{ mode: 'inline' }`, so the
+ * server runs in THIS process and the test reads its frames directly. Since
+ * #1689 the supervised child on Node also survives an edit (the module resolve
+ * hook re-evaluates the edited chain in place), so it carries the same
+ * verdicts; that path is covered by `test/bun/dev-hot-server-fresh.mjs` and the
+ * dev-morph e2e. Only a restart file (`.env`, `package.json`, a lockfile,
+ * `instrumentation.*`, `env.*`) still replaces the process, and the browser
+ * then learns of the edit through a changed boot id, a full reload.
  *
  * A plain assert script (not node:test) so the SAME file runs on both runtimes;
  * it exits non-zero on failure and spawns the real CLI via the current

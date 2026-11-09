@@ -5,6 +5,7 @@
 - Running a WebJs app on **Node 24+** or **Bun**, and why the app source you write is identical on either.
 - The three things that actually differ under the hood (the listener shell, the TypeScript stripper, a handful of built-ins), and the one feature gap (103 Early Hints on Bun).
 - Scaffolding a Bun-flavored app and the `bun --bun run dev` / `start` commands.
+- What `webjs dev` does on each kind of edit (in-place refresh, component hot swap, stylesheet swap, restart) and the console line each one logs.
 - Where Deno fits (planned, not yet supported).
 
 Read this when you are choosing a runtime, deploying, debugging a runtime-specific difference, or a scaffold emitted `bun.lock` and you want to know what changed. For the TypeScript stripping mechanics see `typescript.md`. For SQLite, caching, and other built-ins see `built-ins.md`. For the cross-runtime test matrix see `testing.md`.
@@ -60,6 +61,23 @@ Behind a TLS-terminating proxy (Railway, Fly, Render, Cloudflare, nginx), both s
 One limit worth knowing: the rewrite belongs to `startServer`. An app embedded through `createRequestHandler` gets the `Request` its host adapter built, so that adapter owns the correction, the same boundary that already applies to the trusted client IP.
 
 **Anything SHARED that you derive from `ctx.url` must be keyed by the origin.** Neither Cloudflare nor Railway strips a client-supplied `X-Forwarded-Host`, they forward it, so a hostile value reaches the container through the proxy rather than around it. That is fine for a per-request response (the attacker only poisons their own), and a real problem the moment a response is shared. WebJs handles the cache it owns: the server HTML response cache (`export const revalidate`) folds `url.origin` into every cache key (#1097), so a poisoned body is unreachable from any origin the attacker does not already control. Apply the same rule to anything you cache yourself off `ctx.url`, and note the rule reaches caches WebJs does not own either. A page served `Cache-Control: public` is stored by a CDN under the CDN's OWN key, which does not include `X-Forwarded-Host`, so keying the server cache cannot protect that copy. Derive nothing origin-dependent into a page you make publicly cacheable, or pin the origin from config rather than from `ctx.url`.
+
+## Dev reload: what each edit does
+
+`webjs dev` classifies every saved file and applies the lightest update that is still correct, identically on Node and Bun (#1398, #1689). A batch of edits takes the strongest of its verdicts. Each update logs one line in the browser console, so you can always tell which one ran.
+
+| Edit | What the tab does | Console |
+|---|---|---|
+| a page file (`page.ts`) | re-renders the page on the server and morphs it in place, keeping scroll and the hydrated state outside the page | `[webjs] page updated in place (<file>)` |
+| a layout, or a server-only module (`lib/`, `modules/`, `db/`, a `*.server.*` file, `route.ts`, middleware), or a file in a `webjs.dev.watch` root | re-renders the whole body in place | `[webjs] layout updated in place (<file>)` |
+| a component, or a browser module only components import | hot-swaps the component class (see `components.md` under "Hot swap in dev") | `[webjs] hot-swapped <tag> (<file>)` |
+| a `.css` file outside the module graph (a `public/` sheet, a Tailwind input) | swaps every same-origin stylesheet in place, no re-render | `[webjs] stylesheets refreshed (<file>)` |
+| `.env`, `package.json`, a lockfile, `instrumentation.*`, `env.*` | the server restarts, the tab reloads once | `[webjs] full reload: server-restarted` |
+| anything else: a new or deleted file, a non-CSS `public/` asset, a browser module a shipping page imports directly, an edit a hot swap refuses | full reload | `[webjs] full reload: <reason> (<file>)` |
+
+The full-reload line is printed by the page that loads AFTER the reload, so it survives the reload it explains. The `<reason>` names the rule that forced it (`ships-to-browser`, `constructor-changed`, `unknown-path`, and so on). A CSS module script (`import sheet from './x.css' with { type: 'css' }`) is part of the module graph and reloads. A `webjs.dev.regenerate` output such as `public/tailwind.css` is rebuilt on the request the update makes, so a template edit that adds a utility class lands with its rule. When a page render fails, the error overlay goes up over the last good page, and the edit that fixes it applies in place.
+
+Module-scope server state outside the edited chain survives an in-place update on Node (sessions in the memory store, `cache()` entries, open WebSockets, a counter in a module you did not touch). On Bun, an edit that needs a `bun --hot` registry reset (see above) re-evaluates the app's modules, so module-scope state in your own app code starts over, while the server process, its open connections, and the framework state kept process-wide (sessions in the memory store, the default `cache()` store, broadcast clients) stay.
 
 ## Scaffolding a Bun app
 

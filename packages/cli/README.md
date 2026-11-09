@@ -43,7 +43,7 @@ webjs create <name>            # scaffold a full-stack app (default; auth ships 
                                # and - . _ , starting with a letter or a digit
 webjs create <name> --template api   # backend-only API app (routes + modules + Drizzle)
 
-webjs dev                      # dev server with live reload (runs webjs.dev.before, e.g. webjs db migrate, then serves; npm run dev is a thin alias)
+webjs dev                      # dev server with hot reload: in-place page refresh + component hot swap (runs webjs.dev.before, e.g. webjs db migrate, then serves; npm run dev is a thin alias)
 webjs start                    # production server (no build step, serves source directly)
 webjs check                    # validate source-code conventions (CI gate)
 webjs doctor                   # verify the project/toolchain setup (per-check severity via webjs.doctor.gate, so CI can gate a subset)
