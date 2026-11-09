@@ -1076,7 +1076,13 @@ export async function createRequestHandler(opts) {
     // updates `.webjs/routes.d.ts` without a manual `webjs types`. Dev only,
     // best-effort (see emitRouteTypes).
     if (dev) void emitRouteTypes();
-    clearVendorCache();
+    // The resolved vendor map and its SRI are keyed by the sorted install set
+    // and by url, so a new bare import already misses them. Only the app's
+    // package.json (a version bump) can make a hit stale (#1689); clearing on
+    // every edit made an unpinned app re-resolve and re-fetch every bundle's
+    // SRI after each save. A caller that names no files (an embedder's bare
+    // `rebuild()`) keeps the old clear-everything behaviour.
+    if (!changed.length || changed.some((f) => resolve(f) === join(appDir, 'package.json'))) clearVendorCache();
     // A rebuild changes the bare-import set, so a failed resolve's backoff
     // window no longer describes anything; the next request may try at once.
     vendorBackoff.reset();

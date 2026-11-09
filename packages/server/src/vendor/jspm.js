@@ -346,3 +346,13 @@ export function clearJspmCache() {
   jspmCache.clear();
 }
 
+/**
+ * The number of cached jspm resolves. A test seam (#1689): the dev rebuild test
+ * reads it to prove an ordinary edit keeps the cache and a `package.json` edit
+ * clears it. Not re-exported from the package.
+ * @returns {number}
+ */
+export function _jspmCacheSize() {
+  return jspmCache.size;
+}
+
