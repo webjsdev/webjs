@@ -178,8 +178,10 @@ export function checkNoServerEnvInComponents(files, violations, shipped = new Se
  * @param {Violation[]} violations
  */
 export function checkNoNextRuntimeGuard(files, violations) {
-  for (const { rel, content } of files) {
-    const masked = maskComments(content);
+  for (const { rel, scan } of files) {
+    // `scan` blanks comments and template bodies (a docs page quoting the
+    // guard is not code).
+    const masked = scan;
     if (!/\bprocess\.env\.NEXT_RUNTIME\b/.test(masked)) continue;
     violations.push({
       rule: 'no-next-runtime-guard',

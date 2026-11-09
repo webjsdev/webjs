@@ -82,13 +82,13 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   await db.post.delete({ where: { slug: params.slug } });
   return Response.json({ deleted: true });
 }</code-block>
-    <p>Catch-all segments (<code>[...rest]</code>) work too, with <code>params.rest</code> as the full remaining path as a string:</p>
+    <p>Catch-all segments (<code>[...rest]</code>) work too, with <code>params.rest</code> as the remaining path segments, a <code>string[]</code> as in Next.js:</p>
     <code-block>// app/api/files/[...path]/route.ts
-type Ctx = { params: { path: string } };
+type Ctx = { params: { path: string[] } };
 
 export async function GET(_req: Request, { params }: Ctx) {
-  // params.path is "images/photo.jpg" for /api/files/images/photo.jpg
-  const file = await readFile(join(STORAGE_DIR, params.path));
+  // params.path is ["images", "photo.jpg"] for /api/files/images/photo.jpg
+  const file = await readFile(join(STORAGE_DIR, ...params.path));
   return new Response(file, {
     headers: { 'content-type': 'application/octet-stream' },
   });
