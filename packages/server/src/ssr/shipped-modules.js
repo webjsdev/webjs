@@ -54,7 +54,12 @@ const MEMO = new WeakMap();
 export function shippedBootModules(route, deps) {
   const hit = MEMO.get(route);
   if (hit && hit.epoch === buildEpoch()) return hit.value;
-  const value = assembleBootModules([route.file, ...route.layouts], deps);
+  // Nesting order, outermost layout first and the page last, so an ancestor's
+  // elements are defined before a descendant's. A context provider in a layout
+  // then exists when a page component's context request fires on upgrade; with
+  // the page first, that one-shot request went unanswered and the consumer
+  // silently got no value.
+  const value = assembleBootModules([...route.layouts, route.file], deps);
   MEMO.set(route, { epoch: buildEpoch(), value, hinted: null, hintedBasePath: '' });
   return value;
 }

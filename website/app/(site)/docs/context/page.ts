@@ -221,6 +221,8 @@ new ContextRoot().attach(document.body);</code-block>
 
     <p>Only subscribing consumers are replayed, as in Lit; a one-shot request that found no provider stays unanswered.</p>
 
+    <p>A provider rendered by a layout needs no <code>ContextRoot</code>. A page boots its modules in nesting order, the outermost layout first and the page last, so an element a layout renders is defined before one its page renders, and a page's consumer finds the layout's provider when it first connects. A header control that sets a value the page reads therefore works with each element imported only by the route module that renders it, provided the provider wraps both: put it in the root layout around the header and <code>\${children}</code>.</p>
+
     <h2>Server Rendering</h2>
     <p>Context is a client-side protocol. During server rendering no element is connected, so a consumer's value is <code>undefined</code> in the first paint and arrives when the page hydrates. Render a sensible fallback (<code>this.#theme.value ?? 'light'</code>), or pass first-paint data down as attributes from the page.</p>
 

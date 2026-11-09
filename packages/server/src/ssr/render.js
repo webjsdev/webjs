@@ -723,7 +723,8 @@ function boundaryModuleUrls(boundaryFile, wrapLayouts, opts) {
   // `lazyFiles` is deliberately not passed: a boundary render has no lazy map
   // of its own to register a diverted frontier component with, so a `static
   // lazy` component imported by a boundary is imported eagerly, as before.
-  return assembleBootModules(boundaryFile ? [boundaryFile, ...wrapLayouts] : wrapLayouts, {
+  // Nesting order, as on the happy path: the wrapping layouts, then the boundary.
+  return assembleBootModules(boundaryFile ? [...wrapLayouts, boundaryFile] : wrapLayouts, {
     appDir: opts.appDir,
     inert: opts.inertRouteModules,
     importOnly: opts.importOnlyRouteModules,

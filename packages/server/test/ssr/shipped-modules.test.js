@@ -51,7 +51,18 @@ test('instrumentation-client is imported first, once', () => {
   const r = route();
   const ic = `${appDir}/instrumentation-client.ts`;
   const out = shippedBootModules(r, { appDir, inert: undefined, importOnly: undefined, lazyFiles: undefined, instrumentationClient: ic });
-  assert.deepEqual(out.moduleUrls, ['/instrumentation-client.ts', '/app/page.ts', '/app/layout.ts']);
+  assert.deepEqual(out.moduleUrls, ['/instrumentation-client.ts', '/app/layout.ts', '/app/page.ts']);
+});
+
+test('the boot imports in nesting order: outermost layout first, the page last', () => {
+  // A context provider rendered by a layout must be defined before a consumer
+  // the page renders, or the consumer's one-shot context-request on upgrade
+  // goes unanswered (found by an agent building an app). Nesting order gives
+  // every ancestor's elements first.
+  const nested = `${appDir}/app/recipes/layout.ts`;
+  const r = { file: `${appDir}/app/recipes/[id]/page.ts`, layouts: [layout, nested] };
+  const out = shippedBootModules(r, { appDir, inert: undefined, importOnly: undefined, lazyFiles: undefined, instrumentationClient: undefined });
+  assert.deepEqual(out.moduleUrls, ['/app/layout.ts', '/app/recipes/layout.ts', '/app/recipes/[id]/page.ts']);
 });
 
 test('memoized per route object within a build; a bump or a different route recomputes', () => {
