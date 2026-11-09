@@ -62,9 +62,9 @@ Lit stops at the component, and that is the right scope for a library. You bring
 Lit does have `@lit-labs/ssr`, but server rendering, hydration, routing, and data flow are pieces you assemble yourself. WebJs makes those decisions for you and controls the SSR pipeline end to end so hydration is not something you configure.
 
 
-# Progressive enhancement and elision
+# Progressive enhancement and server-only markup
 
-Because WebJs owns the SSR path, it can do things a component library on its own cannot. Pages are server-rendered HTML that work with JavaScript off. A display-only component, one with no interactive signal, renders identical HTML with or without its script, so WebJs strips its module from what the browser downloads. You write a normal component and it ships zero JavaScript when it does not need any. With plain Lit you would ship the element's definition regardless.
+Because WebJs owns the SSR path, it can do things a component library on its own cannot. Pages are server-rendered HTML that work with JavaScript off. Pages and layouts render only on the server and never ship, and a component you put in a `.server.ts` file renders on the server and is never defined in the browser, so it ships zero JavaScript. A component in an ordinary file ships and hydrates, exactly as a Lit component does. With plain Lit you would ship every element's definition regardless.
 
 
 # Where Lit is the better pick

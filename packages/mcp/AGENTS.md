@@ -39,15 +39,10 @@ src/
                          routes-report.js), list_actions (buildActionIndex +
                          hashFile, now reports verb/cache/tags/invalidates per
                          #488 and excludes reserved config exports from the
-                         callable-action list), list_components (scanComponents),
-                         list_elision (analyzeAppElision, #1308: the whole
-                         elision verdict, returned VERBATIM because that
-                         function already owns the app-level contract, so there
-                         is no projector leaf and a drift test asserts it equals
-                         `webjs elision --json`; note list_components stays a
-                         cheap lexical inventory and must NOT grow an elided
-                         flag, which would make it build a module graph),
-                         check (checkConventions via projectCheck). Export names
+                         callable-action list), list_components (scanComponents,
+                         a cheap lexical inventory that must not grow anything
+                         needing a module graph), check (checkConventions via
+                         projectCheck). Export names
                          are extracted LEXICALLY (extractExportNames /
                          extractRouteMethods / extractActionConfig) so no app
                          module is loaded.

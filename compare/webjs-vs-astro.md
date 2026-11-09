@@ -33,7 +33,7 @@ So Astro is at its best when the content is known at build time and can be gener
 
 Astro's islands are components from a UI framework of your choice (React, Vue, Svelte, or web components) that you hydrate with explicit `client:load`, `client:visible`, and similar directives. You choose the framework and mark the hydration strategy.
 
-WebJs's islands are always native web components, and the hydration is automatic. A component with an interactive signal hydrates; a display-only component with no signal renders identical HTML with or without its script, so WebJs strips its module from the download automatically. You do not annotate hydration; the framework derives it. The trade is less explicit control in exchange for not having to think about it, and a single component model rather than any-framework-you-like.
+WebJs's islands are always native web components, and the split is decided by where the code lives rather than by a directive. A component in an ordinary file is an island: it ships and hydrates. Pages and layouts render on the server and never ship, and markup you want kept off the browser goes in a component in a `.server.ts` file or a function returning `html`. You do not annotate hydration per use; the file you put the code in decides it. The trade is a single component model rather than any-framework-you-like.
 
 
 # Difference three: how much backend you get
@@ -55,7 +55,7 @@ WebJs is a full-stack framework first. Server actions are the core mechanism, wi
 
 - You are building a dynamic application with real reads and writes, not a mostly-static content site, and you want the backend to be first-class.
 - You want no build step for either dev or deploy, and request-time rendering rather than a static-generation step.
-- You want automatic islands with native web components and automatic zero-JS elision, without annotating hydration.
+- You want islands as native web components, with pages and server-only components that ship zero JavaScript, without annotating hydration.
 - You want auth, sessions, caching, a data layer, and a typed server-action boundary built in rather than assembled.
 
 Astro and WebJs both refuse to ship JavaScript you do not need. Astro reaches that as a build-time content framework you add islands to; WebJs reaches it as a no-build full-stack framework where the interactive web component is the unit and the server is built in.
@@ -64,7 +64,7 @@ Astro and WebJs both refuse to ship JavaScript you do not need. Astro reaches th
 
 ### Do WebJs and Astro both use islands?
 
-Yes, both send mostly static HTML and hydrate only the interactive parts. The difference is how. Astro uses `client:*` directives you annotate at build time; WebJs treats every interactive web component as an island automatically and elides display-only components to zero JavaScript with no annotation.
+Yes, both send mostly static HTML and hydrate only the interactive parts. The difference is how. Astro uses `client:*` directives you annotate at build time; WebJs treats every component as an island and keeps pages and server-only components at zero JavaScript, decided by where the code lives.
 
 ### Does WebJs need a build step like Astro?
 

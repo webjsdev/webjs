@@ -123,40 +123,12 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 - `app/api/comments/[postId]/route.ts` exports `WS` for live comment threads.
 - Client components use `connectWS()` for auto-reconnecting WebSocket connections.
 
-### Elision fixtures (e2e-pinned)
-The app carries display-only and zero-JS route fixtures so the network
-probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
-
-- `components/build-stamp.ts` (rendered on `/` AND on `/observed`): a
-  display-only component whose module is stripped from the served page
-  source, so the browser never downloads it. It is the NEGATIVE CONTROL on
-  both routes: a probe asserting some other module IS downloaded needs a
-  module that is still elided on the same run, or the probe would also pass
-  if elision had stopped working altogether.
-- `components/vendor-badge.ts` (rendered on `/`): a display-only
-  component whose only non-core dependency is `dayjs` (a binding import,
-  not an interactivity signal). Because the component is elided, the
-  bare-import scan skips it, so `dayjs` never enters the importmap and is
-  never fetched. The dayjs-formatted date is still SSR'd.
-- `app/static-info/page.ts`: a fully-static route. No page or layout
-  module ever ships (route modules run only on the server); the only module
-  the boot emits is the root layout's theme-toggle, which loads core and
-  auto-enables the router.
-- `components/observed-badge.ts` + `components/observe-badge.ts` (rendered
-  on `/observed`): a display-only component that WOULD elide, paired with a
-  module that observes it via `customElements.whenDefined('observed-badge')`.
-  `forced-badge.ts` imports the observer, because a page never loads in the
-  browser, so a side-effect import in the page itself would never run.
-  The observation forces the badge to ship, so the probe asserts its module
-  IS downloaded (the cross-module-registration fix, #169). The unobserved
-  `build-stamp` is the negative control.
-- `components/forced-badge.ts` (rendered on `/observed`): display-only in
-  every respect (static markup, no events, no reactive props, no lifecycle
-  hook, light DOM) EXCEPT `static interactive = true`, the explicit author
-  override. It pins that override end to end (#1308): before it, the only
-  coverage stopped at the analyser returning a boolean, and nothing proved
-  the boot script actually keeps the module. The probe asserts its module is
-  downloaded on a run where `build-stamp` on the same page still is not.
+### Zero-JS route fixture (e2e-pinned)
+`app/static-info/page.ts` is a fully-static route. No page or layout module
+ever ships (route modules run only on the server); the only module the boot
+emits is the root layout's theme-toggle, which loads core and auto-enables the
+router. The network probes in `test/e2e/e2e.test.mjs` assert that no page or
+layout module is ever requested.
 
 ### Client-router script reactivation (#1102)
 `app/script-swap/` exists ONLY as an e2e fixture. Its layout emits two inline
@@ -177,8 +149,8 @@ async component whose `async render()` awaits `getSeedUser`
 (`modules/seed/queries/get-user.server.ts`, a `'use server'` action). The SSR
 result is seeded into the page, so the e2e network probe asserts NO
 `/__webjs/action/` RPC fires on hydration (initial load and soft nav), while a
-prop bump to an unseeded id DOES fetch. The `@click` bump is what makes the
-component ship (otherwise a bare async leaf would be elided like `/async-leaf`).
+prop bump to an unseeded id DOES fetch. Like every component in an ordinary
+file it ships and hydrates; the `@click` bump is what exercises a client fetch.
 
 ### Webjs UI kit
 `components/ui/` holds the kit, split into two tiers:

@@ -7,6 +7,8 @@ tags: performance, elision, no-build, ssr, web-components
 author: Vivek
 ---
 
+*Update: this got simpler twice. Pages, layouts and boundaries now never ship, whatever they import, so the boot always loads just the components a page renders. And component elision is gone: every component in an ordinary file ships, as in Lit, while server-only markup lives in a `.server.ts` component or a function returning `html`. The `webjs elision` report this post mentions no longer exists; `webjs status` and `webjs doctor` point out code in a page that will only ever run on the server.*
+
 Open a WebJs blog post and pop the network tab. Now look for `page.ts`. It is not there. Look for `layout.ts`. Also not there. The post rendered, the theme toggle in the corner works, and the two files that describe the entire page never crossed the wire. Do the same on a typical React or Next app and you watch the page component and its layout come down as client JavaScript that then hydrates.
 
 That gap is the whole post. Those two files stayed home, and you did not configure anything to make them. It falls out of one fact about how WebJs runs, and once you have seen it, the empty network tab is the thing you learn to check.

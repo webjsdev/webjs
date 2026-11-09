@@ -32,7 +32,7 @@ Dropping the bundler is not the same as dropping compilation, and this is where 
 
 Remix 3 authors components in JSX, which no browser executes, so every browser module has to be compiled before it can run. Its asset server does that at request time: it transforms TypeScript and JSX through oxc, rewrites imports to public URLs, and follows CSS `@import` and `url()` references through lightningcss. In production the same pipeline lowers syntax to the browser targets you declare, minifies, and serves fingerprinted URLs. That is a genuine compiler, and setting it up is part of setting up an app (a file map, an allow list of servable files and packages, targets, minification, source maps, fingerprints, file watching). It runs per request instead of ahead of time, which is a real simplification over a bundler, but it is not the absence of a build.
 
-WebJs serves the file. Its `html` templates are ordinary tagged template literals, so a `.js` component is valid JavaScript the browser runs as written, and a `.ts` file only has its type annotations erased by Node's built-in stripper. The framework does its own rewriting on top of that (the import graph decides what is servable at all, a `.server.ts` import becomes a typed RPC stub, and display-only modules are elided out of the page), but there is no syntax to compile, no CSS compiler in the path, and nothing about the pipeline to configure.
+WebJs serves the file. Its `html` templates are ordinary tagged template literals, so a `.js` component is valid JavaScript the browser runs as written, and a `.ts` file only has its type annotations erased by Node's built-in stripper. The framework does its own rewriting on top of that (the import graph decides what is servable at all, a `.server.ts` import becomes a typed RPC stub, and pages never ship at all), but there is no syntax to compile, no CSS compiler in the path, and nothing about the pipeline to configure.
 
 So the honest version of the shared headline is that neither framework has a build step you run, and the difference is how much translation happens between your source and the browser. Remix compiles a language the browser cannot run. WebJs erases types from one it can.
 
@@ -41,7 +41,7 @@ So the honest version of the shared headline is that neither framework has a bui
 
 This is the core divergence in the view layer. Remix 3 renders through its own lightweight virtual DOM (with a reconciler, a `mix` composition system, JSX, and frame hydration) that it ships and controls. WebJs renders through native web components: `customElements.define`, shadow DOM when you want it, `<slot>` projection, no virtual DOM and no reconciler shipped to the browser.
 
-The consequence is what outlives the framework. A WebJs `<my-counter>` is a real custom element that the browser upgrades and runs on its own; it keeps working independent of the framework version. Remix 3's components live inside its VDOM runtime. One bets on the browser's own component model, the other on a small controlled virtual DOM. WebJs also elides display-only components entirely, so a component with no interactivity ships zero JavaScript, which a shipped VDOM runtime does not do by default.
+The consequence is what outlives the framework. A WebJs `<my-counter>` is a real custom element that the browser upgrades and runs on its own; it keeps working independent of the framework version. Remix 3's components live inside its VDOM runtime. One bets on the browser's own component model, the other on a small controlled virtual DOM. WebJs also keeps pages, layouts and server-only components off the browser entirely, so markup with no interactivity ships zero JavaScript, which a shipped VDOM runtime does not do by default.
 
 
 # Difference three: declarative reactivity vs an imperative model
@@ -76,7 +76,7 @@ Remix 3 is in [beta preview](https://remix.run/blog/remix-3-beta-preview). Its i
 - You want native web components as the view layer: standards-based custom elements that render on their own and outlive the framework, with no virtual DOM shipped to the browser.
 - You want the code the browser runs to be the code you wrote, with no compiler between the two and no asset pipeline to configure.
 - You prefer a declarative, lit-shaped reactive model over an imperative one, with signals and reactive properties that re-render automatically.
-- You want automatic zero-JavaScript elision for display-only components, so static parts of the page ship no script.
+- You want pages and server-only components that ship no script, so static parts of the page cost the browser nothing.
 - You want a single typed server-action boundary for reads and writes, with types spanning the client and server, and file-routing conventions you already know from the Next.js app router.
 
 WebJs and Remix 3 arrived at the same crossroads, no bundler, beyond React, web standards, built for agents, and then took different roads. The choice is largely native web components you serve as source with declarative reactivity, versus a JSX virtual DOM compiled on demand with an imperative model.
@@ -85,7 +85,7 @@ WebJs and Remix 3 arrived at the same crossroads, no bundler, beyond React, web 
 
 ### How is WebJs different from Remix 3?
 
-Both drop the bundler, move beyond React, and lean on web standards. WebJs builds on native web components with declarative reactivity, while Remix 3 uses a runtime-first virtual DOM with a more imperative model authored in JSX. WebJs also serves component source to the browser without a compile step, and elides display-only components to zero JavaScript automatically.
+Both drop the bundler, move beyond React, and lean on web standards. WebJs builds on native web components with declarative reactivity, while Remix 3 uses a runtime-first virtual DOM with a more imperative model authored in JSX. WebJs also serves component source to the browser without a compile step, and ships zero JavaScript for pages and server-only components.
 
 ### Is Remix 3 a no-build framework?
 
@@ -97,4 +97,4 @@ Neither asks you to run a build before starting the app, and neither ships a bun
 
 ### Which should I choose, WebJs or Remix 3?
 
-Choose WebJs when you want native web components, source served as written, declarative reactivity, automatic zero-JavaScript elision, and a single typed server-action boundary for reads and writes. Choose Remix 3 if its JSX virtual-DOM view layer, its configurable asset pipeline, and its ecosystem fit how you prefer to build. Both are strong web-standards bets.
+Choose WebJs when you want native web components, source served as written, declarative reactivity, zero-JavaScript pages and server-only components, and a single typed server-action boundary for reads and writes. Choose Remix 3 if its JSX virtual-DOM view layer, its configurable asset pipeline, and its ecosystem fit how you prefer to build. Both are strong web-standards bets.

@@ -34,7 +34,7 @@ WebJs is TypeScript (or JavaScript) everywhere. The same language writes your pa
 
 Rails does interactivity with Hotwire: Turbo swaps HTML fragments over the wire, and Stimulus attaches modest JavaScript behavior to server-rendered markup. It is a mature, HTML-over-the-wire approach that keeps most logic on the server.
 
-WebJs does interactivity with native web components. An interactive island hydrates per element with a lit-shaped authoring API, reactive properties, and signals; a display-only component ships zero JavaScript because the framework strips its module from the download. WebJs also has a Turbo-style client router (it preserves layout DOM across navigations, with prefetch and no white flash), so the HTML-over-the-wire navigation feel is there too, but the unit of interactivity is a standards-based custom element rather than a Stimulus controller.
+WebJs does interactivity with native web components. An interactive island hydrates per element with a lit-shaped authoring API, reactive properties, and signals; pages, layouts and server-only components ship zero JavaScript because they render only on the server. WebJs also has a Turbo-style client router (it preserves layout DOM across navigations, with prefetch and no white flash), so the HTML-over-the-wire navigation feel is there too, but the unit of interactivity is a standards-based custom element rather than a Stimulus controller.
 
 
 # Difference three: data layer
@@ -54,7 +54,7 @@ WebJs defaults to Drizzle with SQLite (or Postgres by swapping one file), a type
 # Where WebJs is the better pick
 
 - You want one language across the entire stack, with types that span the client and server boundary instead of a Ruby and JavaScript split.
-- You want native web components as the interactivity unit, with automatic zero-JavaScript elision for display-only elements.
+- You want native web components as the interactivity unit, with pages and server-only components that ship zero JavaScript.
 - You want the no-build, sensible-defaults Rails feeling but in the JavaScript and TypeScript ecosystem your frontend already lives in, without committing to conventions across the whole architecture.
 - You are building with AI agents and want a framework small enough to read end to end, with conventions the tooling enforces.
 

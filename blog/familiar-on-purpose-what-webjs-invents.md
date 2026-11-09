@@ -95,6 +95,6 @@ That is the actual test. Not "has someone done this before" but "is the familiar
 
 A framework's identity is not a count of the concepts it invented. Plenty of frameworks with a great deal of original vocabulary are miserable to use, and their originality is the reason.
 
-What is mine is the judgment about where to spend. A no-build runtime that serves the file you wrote. A component model that leans on the real object model instead of covering it. A server boundary the file router enforces at the path level. Display-only components whose JavaScript is not sent at all. Those choices are connected, they hold together, and they cost me the ability to borrow in a few specific places, so I did not borrow there and I wrote down exactly where.
+What is mine is the judgment about where to spend. A no-build runtime that serves the file you wrote. A component model that leans on the real object model instead of covering it. A server boundary the file router enforces at the path level. Pages and server-only components whose JavaScript is never sent at all. Those choices are connected, they hold together, and they cost me the ability to borrow in a few specific places, so I did not borrow there and I wrote down exactly where.
 
 Everywhere else, you already know how to use this. That is not a shortcut I took. It is the feature I worked hardest on.

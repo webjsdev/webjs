@@ -64,9 +64,9 @@ The capture is the part I am happiest with, because it is exactly where a build-
 
 # The other half, where most of these never ship
 
-Seeding is one side of the story. The other side is that a lot of these components do not reach the browser at all. A display-only component, one that fetches and renders with no click handlers, no signals, no interactivity, is elided. Its server-rendered HTML is already the complete and final output, so WebJs drops its JavaScript module from the page. Nothing to hydrate means nothing to refetch, and the data is already sitting in the HTML.
+Seeding is one side of the story. The other side is that a component which only fetches and renders does not need to reach the browser at all. Put it in a `.server.ts` file and it renders on the server and never ships, so its server-rendered HTML is the complete and final output.
 
-So the split is clean. A display-only async component ships no JavaScript, so it cannot double-fetch by construction. Seeding is the safety net for the components that do ship, the ones that are also interactive and therefore have to hydrate. Those hydrate without re-requesting what SSR already fetched. Between the two, the double fetch has nowhere left to live.
+So the split is clean. A server-only async component ships no JavaScript, so it cannot double-fetch by construction. Seeding is the safety net for the components that do ship, which is every component in an ordinary file.
 
 # If you ever want it off
 

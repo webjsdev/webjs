@@ -60,7 +60,7 @@ const TS_CACHE_MAX = 500;
 // Entry: { mtimeMs, code, map: string | null }
 ```
 
-Capped at 500 entries to prevent unbounded memory growth in long-running production servers. Keyed by absolute path, invalidated when the file's mtime changes. First request through is on the order of a hundred microseconds per file. Subsequent requests are Map lookups. The Map hangs off the request handler rather than the module, because the cached bytes bake in that handler's elision verdict, so two handlers for the same app with different elision settings must not share one.
+Capped at 500 entries to prevent unbounded memory growth in long-running production servers. Keyed by absolute path, invalidated when the file's mtime changes. First request through is on the order of a hundred microseconds per file. Subsequent requests are Map lookups. The Map hangs off the request handler rather than the module, because the cached bytes bake in that handler's view of the app (which imports it defers to the lazy loader, for one), so two handlers for the same app must not share one.
 
 There is no fallback for a file that uses non-erasable syntax. Stripping throws and the server returns a clean 500, and that is the entire error path. In dev the response names the offending construct and points at the rule; in production it stays terse on purpose, so no path leaks to a visitor, and the detail goes to the server log instead. Nothing regenerates the code through a bundler, which is what keeps the guarantee worth having: the file on disk is the file that runs, with no second code path where that stops being true. Two `webjs check` rules catch the problem at edit time instead, `erasable-typescript-only` on the tsconfig flag and `no-non-erasable-typescript` on the source itself.
 

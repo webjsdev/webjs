@@ -896,27 +896,17 @@ names mechanically:
 - Use `cn()` from `'../lib/utils.ts'` to merge a helper's output with
   user-supplied classes when needed: `<button class=${cn(buttonClass(), 'rounded-full')}>`.
 - **A registry module does NO work at module scope.** Not a call, not a `new`,
-  not a `document` reference. The elision analyser reads any of those as client
-  work, so the module pins every page that reaches it on a component-free path,
-  and a Tier-1 helper registers no element, so the path-aware carve-out (#963)
-  cannot save it. Because `cn` sits under essentially every helper, one such
-  line costs page elision in every app that runs `webjsui init`. Two shapes
-  caused it (#1320). A `...borderGroups()` spread inside a module-scope table is
-  a real top-level call, fixed by memoising the table behind a function
+  not a `document` reference. A helper module is imported by pages and
+  server-only code on the server and by components in the browser, so
+  module-scope work runs on every import in both places, and a browser global
+  there throws during server rendering. Two shapes once crept in (#1320). A
+  `...borderGroups()` spread inside a module-scope table is a real top-level
+  call, fixed by memoising the table behind a function
   (`let _groups; function GROUPS() { return (_groups ??= [...]) }`). An
   `if (typeof document !== 'undefined') installFooStyles()` stylesheet
   injection is both a call and a browser-global reference, fixed by putting the
   CSS in the theme block instead, which also puts it in the first paint and
-  makes it work with JavaScript off. `packages/ui/test/utils-purity.test.js`
-  pins the flagged set as an EQUALITY, so a new offender fails immediately and
-  the remaining entries can only be removed deliberately. Four are still on
-  that list and DO pin an importing page today: `pagination`, `progress`,
-  `sonner` and `tabs`, an analyser precision gap, since an arrow with an
-  expression body puts its call at brace depth 0 and reads as a top-level
-  statement. The page ships either way, so do not treat them as harmless.
-  `checkbox` and `radio-group` left the list when their checked paint moved
-  into their own classes (#1666), which is the third fix for an injection and
-  the one that needs neither JavaScript nor the app's theme block.
+  makes it work with JavaScript off.
 - **The kit is copy-on-add, so fixing the registry does not fix an app.** An
   existing app holds its own copy of every component and of `lib/utils/cn.ts`,
   and `npx @webjsdev/ui diff` is the discovery channel for the drift. The theme

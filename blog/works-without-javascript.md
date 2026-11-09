@@ -21,7 +21,7 @@ So "works without JavaScript" is not something the framework has to reconstruct.
 
 The whole thing holds on one discipline: never write a first paint that depends on hydration. The moment a component renders a blank placeholder on the server and fills it in from a `connectedCallback` fetch, the no-JS experience is broken, because with JS off the placeholder is all you get.
 
-WebJs is built to make the correct path the easy one. Server-known data arrives through the page function and is in the SSR HTML. A component that needs request-time data can `await` it directly in `render()`, and SSR blocks on that await so the resolved data is in the first paint with no fallback markup. Browser-only data (something from `localStorage`, the viewport, `navigator`) goes in `connectedCallback` and writes a signal, so it enhances a page that already rendered without it. The framework even elides display-only components from the browser entirely, which is only sound because their SSR HTML is already the complete output.
+WebJs is built to make the correct path the easy one. Server-known data arrives through the page function and is in the SSR HTML. A component that needs request-time data can `await` it directly in `render()`, and SSR blocks on that await so the resolved data is in the first paint with no fallback markup. Browser-only data (something from `localStorage`, the viewport, `navigator`) goes in `connectedCallback` and writes a signal, so it enhances a page that already rendered without it. Pages and layouts never reach the browser at all, and markup you write as a server-only component never does either, which is only sound because their SSR HTML is already the complete output.
 
 # Forms are the write path
 
@@ -62,7 +62,7 @@ Three things fall out of building this way, and they are the reason it is the de
 
 The first paint is correct for everyone. A slow device, a flaky network, a script that fails to load, a crawler, a reader-mode extension: all of them get the real content, because the real content was never gated behind the script. Accessibility improves for the same reason, since assistive tech reads a fully-formed document instead of racing a hydration pass.
 
-It composes with the framework's other bets. Elision is only safe because display-only components produce their complete output at SSR. The client router is only safe because a failed navigation can fall back to a real link. Each of these depends on the page being genuinely finished before JavaScript runs.
+It composes with the framework's other bets. Keeping pages and server-only components off the browser is only safe because they produce their complete output at SSR. The client router is only safe because a failed navigation can fall back to a real link. Each of these depends on the page being genuinely finished before JavaScript runs.
 
 And it is honest about what JavaScript is for. JavaScript is the enhancement that makes an already-working page snappier and more interactive. It is not the thing that makes the page exist. When you treat it that way, the app degrades gracefully by construction, because there is a real page underneath to degrade to.
 
