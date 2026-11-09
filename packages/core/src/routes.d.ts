@@ -137,7 +137,21 @@ export type Awaitable<T> = T & PromiseLike<T>;
  * `then` (see packages/server/src/thenable-params.js), so a spread / JSON /
  * `Object.keys` sees only the data keys.
  */
-export interface PageProps<R extends string = string> {
+/**
+ * What a failed form action hands the page it re-renders, by default: the
+ * action's own failure result (`{ success: false, error, fieldErrors }` is the
+ * usual shape) with the submitted text fields on `values`. Name the exact
+ * shape with `PageProps`'s second type parameter.
+ */
+export interface FormActionData {
+  success?: boolean;
+  error?: string;
+  fieldErrors?: Record<string, string | string[]>;
+  values?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+export interface PageProps<R extends string = string, A = FormActionData> {
   /**
    * Path params, narrowed to the route's shape (`{ slug: string }`,
    * `{ rest: string[] }`) from the generated map or, without one, from the
@@ -154,9 +168,11 @@ export interface PageProps<R extends string = string> {
    * (#244). `undefined` on a normal GET render. Read `actionData.fieldErrors`
    * / `actionData.values` to surface validation errors and repopulate inputs.
    * On a failure `values` carries every submitted text field, with the action's
-   * own `values` on top (#1581).
+   * own `values` on top (#1581). Typed {@link FormActionData} by default; pass
+   * the action's result type as the second parameter,
+   * `PageProps<'/route', MyResult>`, to type it exactly.
    */
-  actionData?: unknown;
+  actionData?: A;
 }
 
 /**
@@ -164,7 +180,7 @@ export interface PageProps<R extends string = string> {
  * the rendered `children`. Mirrors the `{ children, params, searchParams, url
  * }` object packages/server/src/ssr.js passes a layout.
  */
-export interface LayoutProps<R extends string = string> extends PageProps<R> {
+export interface LayoutProps<R extends string = string, A = FormActionData> extends PageProps<R, A> {
   /** The nested page / inner-layout content this layout must embed. */
   children: TemplateResult;
 }

@@ -8,6 +8,24 @@
  */
 import type { PageProps, RouteHandlerContext, RouteParams } from '@webjsdev/core';
 
+// A failed form action's result reaches the page as actionData. By default it
+// reads as a form result with no cast, as an agent writes it.
+function form({ actionData }: PageProps<'/projects/[id]'>) {
+  const title: string | string[] | undefined = actionData?.fieldErrors?.title;
+  const typed: string | undefined = actionData?.values?.title;
+  return [title, typed, actionData?.error];
+}
+void form;
+
+// The second parameter names the action's exact result.
+function exact({ actionData }: PageProps<'/x', { ok: false; reason: 'full' | 'closed' }>) {
+  const reason: 'full' | 'closed' | undefined = actionData?.reason;
+  // @ts-expect-error the exact type has no fieldErrors.
+  actionData?.fieldErrors;
+  return reason;
+}
+void exact;
+
 function docs({ params }: PageProps<'/ui/docs/[...slug]'>) {
   const parts: string[] = params.slug;
   return parts.join('/');

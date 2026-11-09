@@ -36,6 +36,7 @@ export type {
   RouteParams,
   PageProps,
   LayoutProps,
+  FormActionData,
   RouteHandlerContext,
   WebjsRoutes,
   RouteParamMap,

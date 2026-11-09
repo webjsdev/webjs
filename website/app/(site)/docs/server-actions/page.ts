@@ -478,11 +478,10 @@ export async function createPost(input: { title?: string; body?: string }) {
 
 // app/posts/page.ts
 import { html } from '@webjsdev/core';
+import type { PageProps } from '@webjsdev/core';
 import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
-export default function NewPost({ actionData }: {
-  actionData?: { fieldErrors?: Record&lt;string, string&gt;; values?: Record&lt;string, string&gt; };
-}) {
+export default function NewPost({ actionData }: PageProps&lt;'/posts'&gt;) {
   const errors = actionData?.fieldErrors || {};
   const values = actionData?.values || {};
   return html\`
