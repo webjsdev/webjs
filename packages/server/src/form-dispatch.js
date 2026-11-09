@@ -7,6 +7,8 @@ import { readFlash, encodeFlash, flashSetCookie } from './action-flash.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { makeThenable, searchParamsRecord } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
+import { originalAction } from './action-seed.js';
+import { declaredParamCount } from './action-params.js';
 import { verifyOrigin } from './csrf.js';
 import { actionMethod, actionConfigFn, actionMiddleware, resolveTags, RESERVED_CONFIG } from './action-config.js';
 import { runValidate } from './actions.js';
@@ -588,7 +590,10 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // invalidates see the call's arguments, the bound ones first, as over RPC.
   // Bound arguments come before both, so `(slug, prevState, formData)` reads
   // its prevState once the bound parameters are counted off, as in Next.
-  const arity = fn.length - bound.length;
+  // The count is the DECLARED one (#1686): `fn.length` stops at the first
+  // default, so `(prevState = initial, formData)` would read as 0, and that
+  // default is how an action supplies the first submission's state.
+  const arity = declaredParamCount(originalAction(fn)) - bound.length;
   const flash = arity >= 2 ? await readFlash(req) : null;
   const prevState = flash && flash.id === id ? flash.result : undefined;
   /** @type {ActionResult | undefined} */

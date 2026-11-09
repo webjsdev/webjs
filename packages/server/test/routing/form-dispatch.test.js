@@ -668,6 +668,31 @@ export default ({ actionData }) => html\`<form action=\${count}></form><p id="n"
   assert.equal(second.status, 303, 'prevState.n (1) + 1 = 2, a success');
 });
 
+test('a prevState with a default still receives the previous result (#1686)', async () => {
+  // fn.length is 0 here, so arity used to read 0 and prevState was never passed.
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/c/actions/c.server.ts': `'use server';\nexport async function count(prev = { n: 10 }, input) { const n = prev.n + Number(input.get('by')); return n < 12 ? { success: false, error: 'more', n } : { success: true, n }; }\n`,
+      'app/count/page.ts': `
+import { html } from ${CORE};
+import { count } from '../../modules/c/actions/c.server.ts';
+export default ({ actionData }) => html\`<form action=\${count}></form><p id="n">\${actionData?.n ?? 0}</p>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const page = await app.handle(new Request('http://x/count'));
+  const id = identityOf(await page.text());
+  const first = await app.handle(new Request('http://x/count', form({ by: '1', __webjs_action: id })));
+  assert.equal(first.status, 422);
+  assert.match(await first.text(), /<p id="n">11<\/p>/, 'the default supplied the first state');
+  const req2 = new Request('http://x/count', form({ by: '1', __webjs_action: id }));
+  req2.headers.set('cookie', flashCookie(first));
+  const second = await app.handle(req2);
+  assert.equal(second.status, 303, 'prevState.n (11) + 1 = 12, a success');
+});
+
 test('a render that shows a flash is never shared-cacheable, even on a public page', async () => {
   const app = await createRequestHandler({
     appDir: makeApp({

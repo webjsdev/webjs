@@ -209,5 +209,32 @@ function urlencoded(fields) {
   assert.ok(!JSON.stringify(bodyless.fields).includes('a@b.com'), `[${runtime}] no user data`);
 }
 
+// A prevState with a default (#1686). Its `fn.length` is 0, so the dispatcher
+// counts the parameters the action declares, read from its source through the
+// load-hook facade, which differs per runtime: the default supplies the first
+// state and the second submission receives the first one's result.
+{
+  const pdir = mkdtempSync(join(tmpdir(), 'webjs-1686-prev-'));
+  const put = (rel, body) => { mkdirSync(dirname(join(pdir, rel)), { recursive: true }); writeFileSync(join(pdir, rel), body); };
+  put('count.server.js', `'use server';\nexport async function count(prev = { n: 10 }, input) { const n = prev.n + Number(input.get('by')); return n < 12 ? { success: false, error: 'more', n } : { success: true, n }; }\n`);
+  put('app/count/page.js', `import { html } from ${CORE};\nimport { count } from '../../count.server.js';\nexport default ({ actionData }) => html\`<form action=\${count}></form><p id="n">\${actionData?.n ?? 0}</p>\`;\n`);
+  const papp = await createRequestHandler({ appDir: pdir, dev: false });
+  await papp.warmup();
+  const page = await (await papp.handle(new Request('http://x/count'))).text();
+  const pid = new RegExp(`name="${FIELD}" value="([^"]*)"`).exec(page)[1];
+  const post = (cookie) => new Request('http://x/count', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin', ...(cookie ? { cookie } : {}) },
+    body: new URLSearchParams({ [FIELD]: pid, by: '1' }).toString(),
+  });
+  const first = await papp.handle(post());
+  assert.equal(first.status, 422, `[${runtime}] the first submission fails (10 + 1 < 12)`);
+  assert.match(await first.text(), /<p id="n">11<\/p>/, `[${runtime}] the default supplied the first state`);
+  const flash = first.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash=')).split(';')[0];
+  const second = await papp.handle(post(flash));
+  assert.equal(second.status, 303, `[${runtime}] prevState carried 11, so 11 + 1 succeeds`);
+  rmSync(pdir, { recursive: true, force: true });
+}
+
 rmSync(dir, { recursive: true, force: true });
 console.log(`[form-action-dispatch] #1155 dispatch + #1307 reporting OK on ${runtime} (identity ${id})`);
