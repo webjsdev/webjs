@@ -107,7 +107,9 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
     const plugin = bunPluginServed(sourceLocations);
     return {
       mode: 'supervise',
-      args: ['--hot', ...argv],
+      // --no-env-file: WebJs loads the env files itself in Next's order
+      // (env-files.js); Bun's own auto-load would pick a different set.
+      args: ['--no-env-file', '--hot', ...argv],
       env: BUN_CHILD_ENV,
       restartOnChange: true,
       restartFor: (p) => plugin(p) || isBootFile(p),

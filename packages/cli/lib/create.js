@@ -469,8 +469,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         const script = isApi ? 'clear-api-gallery.mjs' : 'clear-gallery.mjs';
         return isBun ? `bun scripts/${script}` : `node scripts/${script}`;
       })(),
-      dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
-      start: isBun ? 'bun --bun webjs start' : 'webjs start',
+      // --no-env-file: WebJs loads .env files itself in Next's order; Bun's
+      // auto-load would read .env.development under `start` too.
+      dev: isBun ? 'bun --bun --no-env-file webjs dev' : 'webjs dev',
+      start: isBun ? 'bun --bun --no-env-file webjs start' : 'webjs start',
       test: 'webjs test',
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',

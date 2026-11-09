@@ -30,6 +30,7 @@ import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.
 import { validateAppLayout, AppLayoutError, cssImportProblems } from '../app-layout.js';
 import { applyPendingCookies } from '../cookie-store.js';
 import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
+import { loadEnvFiles, envMode } from '../env-files.js';
 import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
@@ -77,7 +78,7 @@ import {
   readDevToolingFromApp,
 } from './config.js';
 import {
-  exists, kebab, resolveRequestId, shouldAccessLog, loadAppEnv, collectRouteModules,
+  exists, kebab, resolveRequestId, shouldAccessLog, collectRouteModules,
   appTopLevelDirs, locateCoreDir,
   setReloadIdleMs,
   resolveReloadIdleMs,
@@ -156,7 +157,8 @@ export async function createRequestHandler(opts) {
   // scaffolded apps with a committed .env.example + .env would fail
   // to boot until the user discovered the missing env-load. See
   // tracker #37.
-  loadAppEnv(appDir);
+  // Next.js's env file order (.env.$mode.local, .env.local, .env.$mode, .env).
+  loadEnvFiles(appDir, envMode(!!opts.dev));
   // Optional boot-time env validation (#236). If <appDir>/env.{js,ts} exists it
   // default-exports a typed schema or a custom validator function; we run it
   // against process.env (now populated by loadAppEnv) BEFORE buildActionIndex

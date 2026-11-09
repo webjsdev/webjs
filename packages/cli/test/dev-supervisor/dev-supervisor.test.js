@@ -42,7 +42,7 @@ const WATCH = {
 test('Bun runs the child under `bun --hot` and restarts it for plugin-served paths (#1550)', () => {
   const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
   assert.ok(plan.mode === 'supervise');
-  assert.deepEqual(plan.args, ['--hot', ...ARGV]);
+  assert.deepEqual(plan.args, ['--no-env-file', '--hot', ...ARGV], 'WebJs loads the env files itself');
   assert.equal(plan.restartOnChange, true);
   assert.deepEqual({ watchDirs: plan.watchDirs, watchFiles: plan.watchFiles }, WATCH);
   // A 'use server' module is served by the seed plugin, which bun --hot never

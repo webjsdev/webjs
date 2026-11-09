@@ -282,7 +282,7 @@ Deno.serve({ port: 8080 }, (req) =&gt; app.handle(req));</code-block>
 DATABASE_URL="postgresql://user:pass@localhost:5432/mydb"
 SESSION_SECRET="change-me"
 API_KEY="sk-..."</code-block>
-    <p>WebJs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> on boot via Node 24+'s built-in <code>process.loadEnvFile</code>. No <code>dotenv</code> dependency. Shell-exported values take precedence over the file, so production platforms (Railway, Fly, Render, Docker, systemd) keep injecting secrets the same way they already do. See <a href="/docs/configuration">Configuration</a> for the full precedence rules.</p>
+    <p>WebJs loads the app's env files into <code>process.env</code> on boot in Next.js's order (<code>.env.production.local</code>, <code>.env.local</code>, <code>.env.production</code>, <code>.env</code> under <code>npm run start</code>), on Node and Bun alike. No <code>dotenv</code> dependency. Values the platform exports take precedence over every file, so production platforms (Railway, Fly, Render, Docker, systemd) keep injecting secrets the same way they already do. See <a href="/docs/configuration#env-file-order">Configuration</a> for the full precedence rules.</p>
 
     <h2>Secrets: platform injection, not a committed file</h2>
     <p>WebJs deliberately stays out of secret management. There is no encrypted credentials file and no bespoke crypto subsystem. Secrets are plain environment variables, the 12-factor way, and the safe production posture is the standard one your platform already supports.</p>
