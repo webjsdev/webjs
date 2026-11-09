@@ -93,7 +93,7 @@ test('dev serves the reload SharedWorker, and the client uses it with a direct E
   // comparison passes when the guard is gone entirely, which is the one case
   // this assertion exists for.
   const tryAt = fallbackBody.indexOf('try {');
-  const reloadAt = fallbackBody.indexOf('__webjsApplyReload(m.verdict)');
+  const reloadAt = fallbackBody.indexOf('__webjsApplyReload(__webjsVerdictOf(m.verdict))');
   assert.notEqual(tryAt, -1, 'the guard is present at all');
   assert.notEqual(reloadAt, -1, 'the reload call is present at all');
   assert.ok(tryAt < reloadAt, 'the guard opens BEFORE the reload call, not around something else');
@@ -175,7 +175,8 @@ test('the reload client probes the server is up before reloading (no restart fla
   // ships no component at all, and both fall back to a full reload.
   assert.match(clientSrc, /globalThis\.__webjsRefreshPage/, 'the refresh entry is feature-detected on the global');
   assert.match(clientSrc, /typeof refresh === 'function'/, 'and only used when it is actually a function');
-  assert.match(clientSrc, /verdict === 'page' \|\| verdict === 'shell'/, 'only the two morphable verdicts take the refresh path');
+  assert.match(clientSrc, /mode === 'page' \|\| mode === 'shell'/, 'only the two morphable verdicts take the refresh path');
+  assert.match(clientSrc, /var mode = verdict\.v;/, 'and the mode is the verdict object\'s v (#1689)');
   assert.match(clientSrc, /if \(!ok\) \{ location\.reload\(\); return; \}/, 'a refresh that declines falls back to a full reload');
   // A swap never re-requests a stylesheet on its own (mergeHead preserves them
   // per #936, and the dev href carries no content hash), so `webjs.dev.regenerate`
@@ -192,7 +193,7 @@ test('the reload client probes the server is up before reloading (no restart fla
   // fails again pushes a fresh frame DURING it, and dismissing afterwards would
   // wipe that legitimately-new overlay.
   const dismissAt = clientSrc.indexOf('dismissDevOverlay();');
-  const refreshAt = clientSrc.indexOf('refresh(verdict).then');
+  const refreshAt = clientSrc.indexOf('refresh(mode).then');
   assert.notEqual(dismissAt, -1, 'the refresh path dismisses a live error overlay');
   assert.notEqual(refreshAt, -1, 'and the refresh call is present at all');
   assert.ok(dismissAt < refreshAt, 'the dismiss happens BEFORE the re-render, not after it');
@@ -210,11 +211,13 @@ test('the reload client probes the server is up before reloading (no restart fla
   // never a bare location.reload() on a reload signal. Since #1397 the fallback
   // reaches it through the shim port the shared relay posts to, which is the
   // same message contract the SharedWorker path consumes.
-  assert.match(clientSrc, /if \(m\.type === 'reload'\) __webjsApplyReload\(m\.verdict\)/, 'both paths gate the reload');
+  assert.match(clientSrc, /if \(m\.type === 'reload'\) __webjsApplyReload\(__webjsVerdictOf\(m\.verdict\)\)/, 'both paths gate the reload');
+  assert.equal(clientSrc.match(/__webjsApplyReload\(__webjsVerdictOf\(m\.verdict\)\)/g).length, 2,
+    'BOTH message paths normalize a legacy string verdict before applying it (#1689)');
   assert.match(clientSrc, /else if \(m\.type === 'webjs-error'\) __webjsApplyError\(m\.data\)/, 'and both route an error frame to the overlay');
   // The boot-id rule (#893) lives in the relay now, in ONE place, rather than
   // being re-implemented in the fallback where the two copies could drift.
-  assert.match(clientSrc, /if \(lastBoot !== null && \(h\.boot !== lastBoot \|\| \(h\.seq !== null && lastSeq !== null && h\.seq !== lastSeq\)\)\) \{\s*requestReload\('reload'\);/, 'only a changed boot id, or a reload missed while paused (#1507), reloads, and it is unconditionally a FULL reload (#1398)');
+  assert.match(clientSrc, /if \(lastBoot !== null && \(h\.boot !== lastBoot \|\| \(h\.seq !== null && lastSeq !== null && h\.seq !== lastSeq\)\)\) \{\s*requestReload\(\{ v: 'reload', by: '', why: h\.boot !== lastBoot \? 'server-restarted' : 'missed-update' \}\);/, 'only a changed boot id, or a reload missed while paused (#1507), reloads, and it is unconditionally a FULL reload (#1398)');
   assert.equal(clientSrc.match(/lastBoot !== null/g).length, 1, 'the boot-id rule exists exactly once');
 });
 

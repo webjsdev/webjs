@@ -10,7 +10,7 @@
  * runs in a real browser. The relay is driven with a fake EventSource + fake
  * MessagePorts so it needs no live SSE server.
  */
-import { startReloadWorker, RELOAD_QUIET_IN_PLACE_MS, frameInPlace, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, RECONNECT_BASE_MS, RECONNECT_MAX_MS, parseVerdict, parseHello, pageIsStale } from '../../../src/dev-reload-worker.js';
+import { startReloadWorker, RELOAD_QUIET_IN_PLACE_MS, frameInPlace, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, RECONNECT_BASE_MS, RECONNECT_MAX_MS, parseVerdict, parseReloadFrame, parseHello, pageIsStale } from '../../../src/dev-reload-worker.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -28,6 +28,16 @@ class FakeEventSource {
 function fakePort() {
   const received = [];
   return { received, port: { start() {}, postMessage(m) { received.push(m); } } };
+}
+
+/**
+ * A tab's messages with each reload verdict reduced to its name. The relay
+ * posts the whole `{ v, by, why, modules, css }` object since #1689; most cases
+ * here assert only which verdict won, and the object-shape cases read
+ * `received` directly.
+ */
+function names(received) {
+  return received.map((m) => (m && m.type === 'reload' ? { type: 'reload', verdict: m.verdict.v } : m));
 }
 
 /**
@@ -79,8 +89,8 @@ suite('dev reload SharedWorker relay (#887)', () => {
     scope.onconnect({ ports: [b.port] });
     FakeEventSource.last.fire('reload');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'tab A reloaded');
-    assert.deepEqual(b.received, [{ type: 'reload', verdict: 'reload' }], 'tab B reloaded from the same worker');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'tab A reloaded');
+    assert.deepEqual(names(b.received), [{ type: 'reload', verdict: 'reload' }], 'tab B reloaded from the same worker');
   });
 
   test('relays an error frame to every connected tab', () => {
@@ -89,7 +99,7 @@ suite('dev reload SharedWorker relay (#887)', () => {
     const a = fakePort();
     scope.onconnect({ ports: [a.port] });
     FakeEventSource.last.fire('webjs-error', 'FRAME_JSON');
-    assert.deepEqual(a.received, [{ type: 'webjs-error', data: 'FRAME_JSON' }]);
+    assert.deepEqual(names(a.received), [{ type: 'webjs-error', data: 'FRAME_JSON' }]);
   });
 
   test('caches the error and replays it to a tab that connects later', () => {
@@ -101,7 +111,7 @@ suite('dev reload SharedWorker relay (#887)', () => {
     FakeEventSource.last.fire('webjs-error', 'FRAME_JSON');
     const late = fakePort();
     scope.onconnect({ ports: [late.port] });
-    assert.deepEqual(late.received, [{ type: 'webjs-error', data: 'FRAME_JSON' }], 'a late tab still shows the overlay');
+    assert.deepEqual(names(late.received), [{ type: 'webjs-error', data: 'FRAME_JSON' }], 'a late tab still shows the overlay');
   });
 
   test('clears the cached error on reload so a later tab does not see a stale overlay', () => {
@@ -133,10 +143,10 @@ suite('dev reload SharedWorker relay (#887)', () => {
     scope.onconnect({ ports: [a.port] });
     FakeEventSource.last.fire('hello', 'BOOT_A'); // initial connect: baseline only
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [], 'the first hello does not reload');
+    assert.deepEqual(names(a.received), [], 'the first hello does not reload');
     FakeEventSource.last.fire('hello', 'BOOT_B'); // reconnected to a fresh process
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'a new boot id reloads the tab');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'a new boot id reloads the tab');
   });
 
   test('a transient reconnect to the SAME process (same boot id) never reloads', () => {
@@ -147,7 +157,7 @@ suite('dev reload SharedWorker relay (#887)', () => {
     FakeEventSource.last.fire('hello', 'BOOT_A'); // first connect
     FakeEventSource.last.fire('hello', 'BOOT_A'); // sleep/wake or blip: same process
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [], 'a same-process reconnect is not an edit (no state loss)');
+    assert.deepEqual(names(a.received), [], 'a same-process reconnect is not an edit (no state loss)');
   });
 });
 
@@ -177,9 +187,9 @@ suite('dev reload coalescing (#1397)', () => {
     es.fire('reload');
     tick(gap);
     es.fire('hello', 'BOOT_C');
-    assert.deepEqual(a.received, [], 'nothing fires while the edits are still landing');
+    assert.deepEqual(names(a.received), [], 'nothing fires while the edits are still landing');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'four signals coalesce into one reload');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'four signals coalesce into one reload');
   });
 
   test('a single signal in a quiet session reloads after exactly the quiet window', () => {
@@ -189,9 +199,9 @@ suite('dev reload coalescing (#1397)', () => {
     scope.onconnect({ ports: [a.port] });
     FakeEventSource.last.fire('reload');
     tick(RELOAD_QUIET_MS - 1);
-    assert.deepEqual(a.received, [], 'not yet, the window has not elapsed');
+    assert.deepEqual(names(a.received), [], 'not yet, the window has not elapsed');
     tick(1);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'and never later than the window');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'and never later than the window');
   });
 
   test('a sustained burst still reloads at the cap, measured from the first signal', () => {
@@ -207,10 +217,10 @@ suite('dev reload coalescing (#1397)', () => {
       tick(step);
       elapsed += step;
       es.fire('reload');
-      assert.deepEqual(a.received, [], 'the quiet window keeps being pushed out by the burst');
+      assert.deepEqual(names(a.received), [], 'the quiet window keeps being pushed out by the burst');
     }
     tick(RELOAD_MAX_HOLD_MS - elapsed);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'the cap fires at RELOAD_MAX_HOLD_MS from the FIRST signal');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'the cap fires at RELOAD_MAX_HOLD_MS from the FIRST signal');
   });
 
   // COUNTERFACTUAL: re-arm the cap timer on every signal and the cap slides out
@@ -228,9 +238,9 @@ suite('dev reload coalescing (#1397)', () => {
     tick(step);
     es.fire('reload'); // mid-batch again
     tick(RELOAD_MAX_HOLD_MS - 2 * step - 1);
-    assert.deepEqual(a.received, [], 'the cap has not fired one tick early');
+    assert.deepEqual(names(a.received), [], 'the cap has not fired one tick early');
     tick(1);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'the cap still measures from the first signal');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'the cap still measures from the first signal');
   });
 
   test('a signal after a cap fire starts a NEW batch', () => {
@@ -263,7 +273,7 @@ suite('dev reload coalescing (#1397)', () => {
     scope.onconnect({ ports: [a.port] });
     FakeEventSource.last.fire('webjs-error', 'FRAME_JSON');
     // No tick: an overlay has to appear at once, and it is not a reload.
-    assert.deepEqual(a.received, [{ type: 'webjs-error', data: 'FRAME_JSON' }]);
+    assert.deepEqual(names(a.received), [{ type: 'webjs-error', data: 'FRAME_JSON' }]);
   });
 
   test('a reload signal clears the cached error immediately, before the debounced emit', () => {
@@ -290,7 +300,7 @@ suite('dev reload verdicts (#1398)', () => {
     scope.onconnect({ ports: [a.port] });
     FakeEventSource.last.fire('reload', '{"v":"page","by":"app/page.ts","why":"page-module"}');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'page' }], 'the tab is told it can morph');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'page' }], 'the tab is told it can morph');
   });
 
   test('a batch mixing a page edit and a component edit collapses to reload', () => {
@@ -303,7 +313,7 @@ suite('dev reload verdicts (#1398)', () => {
     tick(500);
     es.fire('reload', '{"v":"reload"}');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'exactly one fanout, at the strongest verdict');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'exactly one fanout, at the strongest verdict');
   });
 
   // COUNTERFACTUAL for a last-write-wins relay, which passes the test above and
@@ -318,7 +328,7 @@ suite('dev reload verdicts (#1398)', () => {
     tick(500);
     es.fire('reload', '{"v":"page"}');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'a later page verdict cannot weaken the batch');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'a later page verdict cannot weaken the batch');
   });
 
   test('shell outranks page and is outranked by reload', () => {
@@ -330,7 +340,7 @@ suite('dev reload verdicts (#1398)', () => {
     es.fire('reload', '{"v":"page"}');
     es.fire('reload', '{"v":"shell"}');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'shell' }], 'a layout edit in the batch wins over a page edit');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'shell' }], 'a layout edit in the batch wins over a page edit');
   });
 
   // A restart carries no filename, so nothing survives it to classify. A burst
@@ -349,7 +359,7 @@ suite('dev reload verdicts (#1398)', () => {
     tick(500);
     es.fire('hello', 'BOOT_B');            // the process was replaced
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }]);
   });
 
   test('a new batch after an emit starts fresh at the weakest verdict', () => {
@@ -362,7 +372,7 @@ suite('dev reload verdicts (#1398)', () => {
     tick(RELOAD_QUIET_MS);
     es.fire('reload', '{"v":"page"}');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [
+    assert.deepEqual(names(a.received), [
       { type: 'reload', verdict: 'reload' },
       { type: 'reload', verdict: 'page' },
     ], 'the previous batch\'s verdict does not leak into the next one');
@@ -382,6 +392,101 @@ suite('dev reload verdicts (#1398)', () => {
     assert.equal(parseVerdict('"page"'), 'reload', 'a bare string is not an object');
     assert.equal(parseVerdict('{"v":"page"}'), 'page', 'and a good one still parses');
     assert.equal(parseVerdict('{"v":"shell"}'), 'shell');
+    assert.equal(parseVerdict('{"v":"component"}'), 'component', '#1689 names parse too');
+    assert.equal(parseVerdict('{"v":"css"}'), 'css');
+  });
+});
+
+// #1689: the relay posts the whole verdict object, so a tab learns which
+// component modules to re-import and whether a stylesheet changed, not only
+// which response won. A batch keeps the strongest v and the work of every
+// weaker signal in it.
+suite('dev reload verdict payload (#1689)', () => {
+  function relay() {
+    const { scope, tick } = fakeClock();
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    return { a, es: FakeEventSource.last, tick };
+  }
+
+  test('every posted verdict carries all five fields', () => {
+    const { a, es, tick } = relay();
+    es.fire('reload', '{"v":"page","by":"app/page.ts","why":"page-module","seq":1,"inPlace":true}');
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: { v: 'page', by: 'app/page.ts', why: 'page-module', modules: [], css: false } }]);
+  });
+
+  test('a page plus component batch emits ONE page verdict with the union of modules', () => {
+    const { a, es, tick } = relay();
+    es.fire('reload', JSON.stringify({ v: 'component', by: 'components/a.ts', why: 'hot-swap', modules: ['/components/a.ts?t=1'] }));
+    es.fire('reload', JSON.stringify({ v: 'page', by: 'app/page.ts', why: 'page-module' }));
+    es.fire('reload', JSON.stringify({ v: 'component', by: 'components/b.ts', why: 'hot-swap', modules: ['/components/b.ts?t=2', '/components/a.ts?t=1'] }));
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received.length, 1, 'one fanout');
+    const v = a.received[0].verdict;
+    assert.equal(v.v, 'page');
+    assert.equal(v.by, 'app/page.ts', 'by and why come from the strongest signal');
+    assert.equal(v.why, 'page-module');
+    assert.deepEqual(v.modules, ['/components/a.ts?t=1', '/components/b.ts?t=2'], 'sorted, each url once');
+    assert.equal(v.css, false);
+  });
+
+  test('css plus page gives page with css set', () => {
+    const { a, es, tick } = relay();
+    es.fire('reload', JSON.stringify({ v: 'css', by: 'public/app.css', why: 'stylesheet', css: true }));
+    es.fire('reload', JSON.stringify({ v: 'page', by: 'app/page.ts', why: 'page-module' }));
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received[0].verdict.v, 'page');
+    assert.equal(a.received[0].verdict.css, true, 'the stylesheet change is not lost under the page verdict');
+  });
+
+  test('reload absorbs everything and still reports the batch\'s modules and css', () => {
+    const { a, es, tick } = relay();
+    es.fire('reload', JSON.stringify({ v: 'component', by: 'components/a.ts', why: 'hot-swap', modules: ['/components/a.ts?t=1'] }));
+    es.fire('reload', JSON.stringify({ v: 'css', by: 'public/app.css', why: 'stylesheet', css: true }));
+    es.fire('reload', JSON.stringify({ v: 'reload', by: 'components/c.ts', why: 'constructor-changed' }));
+    tick(RELOAD_QUIET_MS);
+    const v = a.received[0].verdict;
+    assert.equal(v.v, 'reload');
+    assert.equal(v.why, 'constructor-changed', 'the reload names its own reason');
+    assert.deepEqual(v.modules, ['/components/a.ts?t=1']);
+    assert.equal(v.css, true);
+  });
+
+  test('a hello-driven reload says why: a restarted server', () => {
+    const { a, es, tick } = relay();
+    es.fire('hello', JSON.stringify({ boot: 'A', seq: 0 }));
+    es.fire('hello', JSON.stringify({ boot: 'B', seq: 0 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: { v: 'reload', by: '', why: 'server-restarted', modules: [], css: false } }]);
+  });
+
+  test('a hello-driven reload says why: an update missed while paused', () => {
+    const { a, es, tick } = relay();
+    es.fire('hello', JSON.stringify({ boot: 'A', seq: 1 }));
+    es.fire('hello', JSON.stringify({ boot: 'A', seq: 2 }));
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received[0].verdict.why, 'missed-update');
+  });
+
+  test('a tab whose page is behind is reloaded with why page-behind', () => {
+    const { a, es, tick } = relay();
+    es.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
+    a.port.onmessage({ data: { type: 'page', boot: 'B', seq: 3 } });
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received[0].verdict.why, 'page-behind');
+  });
+
+  test('parseReloadFrame fails safe, and fills absent fields with empty values', () => {
+    const bad = { v: 'reload', by: '', why: 'unreadable-frame', modules: [], css: false };
+    assert.deepEqual(parseReloadFrame('now'), bad, 'the legacy bare payload');
+    assert.deepEqual(parseReloadFrame('{"v":"bogus"}'), bad);
+    assert.deepEqual(parseReloadFrame('{"v":'), bad);
+    assert.deepEqual(parseReloadFrame('{"v":"css"}'), { v: 'css', by: '', why: '', modules: [], css: false });
+    assert.deepEqual(parseReloadFrame('{"v":"component","modules":["/a.ts?t=1",7],"css":"yes"}'),
+      { v: 'component', by: '', why: '', modules: ['/a.ts?t=1'], css: false },
+      'a non-string module and a non-true css are dropped, not trusted');
   });
 });
 
@@ -437,7 +542,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     say(a, { type: 'visibility', visible: true });
     FakeEventSource.last.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }]);
   });
 
   test('no edit while paused: returning does not reload, even after reloads it did see', () => {
@@ -531,7 +636,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     say(a, { type: 'activity' });
     relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }]);
   });
 
   test('without idleMs the stream never closes on its own', () => {
@@ -568,7 +673,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     assert.ok(relay.es, 'reconnected');
     relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }]);
   });
 
   test('a fresh relay reloads a page rendered before an edit (no previous hello to compare)', () => {
@@ -579,7 +684,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     say(a, { type: 'page', boot: 'B', seq: 3 });
     relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }]);
   });
 
   test('a fresh relay reloads a page rendered by a previous server process', () => {
@@ -590,7 +695,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     say(a, { type: 'page', boot: 'OLD', seq: 9 });
     relay.es.fire('hello', JSON.stringify({ boot: 'NEW', seq: 0 }));
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }]);
   });
 
   test('a tab that connects after a reload was fanned out still reloads, and only that tab', () => {
@@ -608,7 +713,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     scope.onconnect({ ports: [b.port] });
     say(b, { type: 'page', boot: 'B', seq: 3 });
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(b.received, [{ type: 'reload', verdict: 'reload' }], 'tab B caught up');
+    assert.deepEqual(names(b.received), [{ type: 'reload', verdict: 'reload' }], 'tab B caught up');
     assert.equal(a.received.length, 1, 'tab A, already current, is not reloaded again');
   });
 
@@ -641,7 +746,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     tick(RECONNECT_BASE_MS);
     relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 2 }));
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'page' }], 'one reload, not a second one on the reconnect');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'page' }], 'one reload, not a second one on the reconnect');
   });
 
   test('with idleMs, a page behind the server reloads once when the idle-closed stream reopens', () => {
@@ -656,7 +761,7 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     say(a, { type: 'activity' });
     relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'exactly one reload');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'reload' }], 'exactly one reload');
   });
 
   test('pageIsStale compares boot, then seq, and never guesses without a seq', () => {
@@ -686,9 +791,9 @@ suite('dev reload settle for an in-place server (#1575)', () => {
     FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 1, inPlace: true }));
     FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 2, inPlace: true }));
     tick(RELOAD_QUIET_IN_PLACE_MS - 1);
-    assert.deepEqual(a.received, [], 'still folding the burst');
+    assert.deepEqual(names(a.received), [], 'still folding the burst');
     tick(1);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'page' }], 'one reload, right after the burst');
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'page' }], 'one reload, right after the burst');
   });
 
   test('a restart signal in the batch keeps the full window', () => {
@@ -699,9 +804,9 @@ suite('dev reload settle for an in-place server (#1575)', () => {
     FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 1 }));
     FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 2, inPlace: true }));
     tick(RELOAD_QUIET_IN_PLACE_MS);
-    assert.deepEqual(a.received, [], 'a frame from a restarting server waits');
+    assert.deepEqual(names(a.received), [], 'a frame from a restarting server waits');
     tick(RELOAD_QUIET_MS);
-    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'page' }]);
+    assert.deepEqual(names(a.received), [{ type: 'reload', verdict: 'page' }]);
     // The next batch starts short again.
     FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 3, inPlace: true }));
     tick(RELOAD_QUIET_IN_PLACE_MS);

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { strongerVerdict } from '../dev-classify.js';
+import { mergeVerdicts } from '../dev-classify.js';
 import { createWatchIgnore } from './watch-ignore.js';
 import { watchTree } from './watch-tree.js';
 import { relative, resolve } from 'node:path';
@@ -309,9 +309,9 @@ export async function startServer(opts) {
 
   /** @type {AbortController | null} */
   let watcherAbort = null;
-  /** The strongest verdict of the edits a poked re-run has yet to apply. */
-  /** @type {import('../dev-classify.js').ReloadVerdict | null} */
-  let pokedVerdict = null;
+  /** The merged verdict and changed files of the edits a poked re-run has yet to apply. */
+  /** @type {{ verdict: import('../dev-classify.js').ReloadVerdict | null, changed: Set<string> }} */
+  const poked = { verdict: null, changed: new Set() };
   /** @type {any} */ let pokeFallback = null;
   if (dev) {
     // Watch the app tree with Node's built-in `fs.watch` (no external dep):
@@ -323,34 +323,41 @@ export async function startServer(opts) {
     // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
     // the SQLite dev DB (db/dev.db) + db/migrations so a file the dev server itself writes never loops.
     // Live-reload classification (#1398). Several files can change inside one
-    // 50ms debounce window (80ms before #1575), so hold the STRONGEST verdict of the window and
-    // hand it to the rebuild. Same rule as the browser relay's cross-batch
-    // accumulation, for the same reason: a window mixing a page edit and a
-    // component edit is a component edit, and taking the last one would morph
-    // fresh markup onto the old component class.
-    /** @type {import('../dev-classify.js').ReloadVerdict | null} */
-    let pendingVerdict = null;
+    // 50ms debounce window (80ms before #1575), so merge the verdicts of the
+    // window and hand the result to the rebuild. Same rule as the browser
+    // relay's cross-batch accumulation, for the same reason: a window mixing a
+    // page edit and a component edit is a component edit, and taking the last
+    // one would morph fresh markup onto the old component class. The window's
+    // changed files ride along (#1689), so the rebuild can version exactly the
+    // modules the edit touched.
+    /** @type {{ verdict: import('../dev-classify.js').ReloadVerdict | null, changed: Set<string> }} */
+    const pending = { verdict: null, changed: new Set() };
     // Under `bun --hot`, a window that changed a module a `Bun.plugin` serves
     // pokes the re-run sentinel instead of rebuilding (#1575): the rebuild has
     // to wait for the registry reset, or the next request would still import
     // the stale module. The re-run (`hotRerun` below) rebuilds with the verdict.
     let pendingPoke = false;
     const rebuild = debounce(() => {
-      const v = pendingVerdict;
-      pendingVerdict = null;
+      const v = pending.verdict;
+      const files = [...pending.changed];
+      pending.verdict = null;
+      pending.changed.clear();
       if (pendingPoke) {
         pendingPoke = false;
-        pokedVerdict = strongerVerdict(pokedVerdict, v);
+        poked.verdict = mergeVerdicts(poked.verdict, v);
+        for (const f of files) poked.changed.add(f);
         pokeHotSentinel(app.appDir);
         clearTimeout(pokeFallback);
         pokeFallback = setTimeout(() => {
-          const pv = pokedVerdict;
-          pokedVerdict = null;
-          if (pv) app.rebuild(pv);
+          const pv = poked.verdict;
+          const pf = [...poked.changed];
+          poked.verdict = null;
+          poked.changed.clear();
+          if (pv) app.rebuild(pv, { changed: pf });
         }, POKE_FALLBACK_MS);
         return;
       }
-      app.rebuild(v || undefined);
+      app.rebuild(v || undefined, { changed: files });
     }, 50);
     watcherAbort = new AbortController();
     // One warning per unwatchable path (#1521): an EACCES / ENOENT on a single
@@ -377,7 +384,8 @@ export async function startServer(opts) {
           // db/dev.db carve-out above. `app` exposes the check because `state`
           // lives in createRequestHandler's scope, not here.
           if (app.isRegenerateOutput(filename)) return;
-          pendingVerdict = strongerVerdict(pendingVerdict, app.classifyWatchPath(filename, root));
+          pending.verdict = mergeVerdicts(pending.verdict, app.classifyWatchPath(filename, root));
+          pending.changed.add(resolve(root, filename));
           if (hotKey && needsHotReset(filename, (f) => !app.needsRegistryReset(f, root))) pendingPoke = true;
           // A status wait (#1664) holds until the rebuild this event schedules.
           app.noteChange?.();
@@ -441,10 +449,12 @@ export async function startServer(opts) {
          */
         rerun: async () => {
           await armHotSentinel(app.appDir);
-          const pv = pokedVerdict;
-          pokedVerdict = null;
+          const pv = poked.verdict;
+          const pf = [...poked.changed];
+          poked.verdict = null;
+          poked.changed.clear();
           clearTimeout(pokeFallback);
-          await app.rebuild(pv || undefined, { notify: !!pv });
+          await app.rebuild(pv || undefined, { notify: !!pv, changed: pf });
           return owned;
         },
         poke: () => pokeHotSentinel(app.appDir),

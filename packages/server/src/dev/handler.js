@@ -981,12 +981,14 @@ export async function createRequestHandler(opts) {
    *   classification of the change that triggered this rebuild (#1398). Absent
    *   (an embedded host calling `rebuild()`, or any caller with no filename to
    *   classify) means a full reload, which is the fail-safe default.
-   * @param {{ notify?: boolean }} [rebuildOpts] `notify: false` re-derives
-   *   without a reload frame (a `bun --hot` registry reset, #1575).
+   * @param {{ notify?: boolean, changed?: string[] }} [rebuildOpts] `notify: false`
+   *   re-derives without a reload frame (a `bun --hot` registry reset, #1575).
+   *   `changed` lists the absolute paths the watcher saw change (#1689); empty
+   *   (an embedder's bare `rebuild()`) means nothing is known to have changed.
    */
-  async function rebuild(verdict, { notify = true } = {}) {
+  async function rebuild(verdict, { notify = true, changed = [] } = {}) {
     devStatus?.rebuildStarted();
-    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify)).then(() => {
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify, changed)).then(() => {
       // The recorded errors described the build this one replaced.
       devStatus?.rebuildFinished();
       devRecorded = new WeakSet();
@@ -1006,8 +1008,9 @@ export async function createRequestHandler(opts) {
    * @param {boolean} [notify] tell the open tabs (`onReload`). False for the
    *   re-derive a `bun --hot` re-run asks for (#1575), whose edit the watcher
    *   already announced.
+   * @param {string[]} [changed] absolute paths of the files that changed
    */
-  async function doRebuild(verdict, notify = true) {
+  async function doRebuild(verdict, notify = true, changed = []) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);

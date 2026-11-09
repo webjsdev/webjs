@@ -29,9 +29,9 @@
  */
 
 /**
- * The three verdicts, STRONGEST FIRST. The index in this array IS the strength
- * order, which is what `strongerVerdict` compares and what lets a batch of
- * changes collapse to the strongest verdict it contains rather than the last.
+ * The verdicts, STRONGEST FIRST. The index in this array IS the strength order,
+ * which is what `mergeVerdicts` compares and what lets a batch of changes
+ * collapse to the strongest verdict it contains rather than the last.
  *
  * - `reload`: a component module, anything transitively reaching one, or any
  *   path the server cannot place. The browser does `location.reload()`.
@@ -40,21 +40,40 @@
  * - `page`: a page module and nothing else. The browser re-renders the current
  *   URL and morphs the deepest shared boundary, preserving scroll AND the
  *   hydrated state of components outside the changed region.
+ * - `component`: browser modules the tab re-imports and patches onto the live
+ *   component classes (#1689), listed in the verdict's `modules`. A tab with no
+ *   hot-swap support applies it as a full reload.
+ * - `css`: a stylesheet and nothing else (#1689). The tab re-requests its
+ *   stylesheets and swaps them in. A tab with no support reloads.
  *
- * @type {readonly ['reload', 'shell', 'page']}
+ * @type {readonly ['reload', 'shell', 'page', 'component', 'css']}
  */
-export const RELOAD_VERDICTS = /** @type {const} */ (['reload', 'shell', 'page']);
+export const RELOAD_VERDICTS = /** @type {const} */ (['reload', 'shell', 'page', 'component', 'css']);
 
 /**
- * @typedef {{ v: 'page' | 'shell' | 'reload', by: string, why: string }} ReloadVerdict
+ * A live-reload verdict. `modules` lists the versioned browser URLs a
+ * `component` verdict asks the tab to re-import, and `css` says a stylesheet
+ * changed too, so the tab refreshes its sheets on top of whatever else it does.
+ *
+ * @typedef {{
+ *   v: 'reload' | 'shell' | 'page' | 'component' | 'css',
+ *   by: string,
+ *   why: string,
+ *   modules?: string[],
+ *   css?: true,
+ * }} ReloadVerdict
  */
 
 /**
- * The stronger of two verdicts, treating `null` / `undefined` as weakest and an
- * unrecognised one as `reload` (fail safe, never fail open).
+ * Merge two verdicts into the one a batch applies, treating `null` /
+ * `undefined` as nothing and an unrecognised name as `reload` (fail safe, never
+ * fail open). `v`, `by` and `why` come from the stronger verdict (the first on
+ * a tie). `modules` is the sorted union of both and `css` is set when either
+ * sets it, because a weaker change in the batch still needs its own work done
+ * alongside the stronger one.
  *
  * Used twice for the same reason. The watcher can see several files change
- * inside one 80ms debounce window, and the browser relay coalesces a burst of
+ * inside one debounce window, and the browser relay coalesces a burst of
  * signals into ONE emitted reload (#1397). In both places a batch mixing a page
  * edit and a component edit is a COMPONENT edit, so taking the last verdict
  * would leave the old component class running against fresh markup.
@@ -63,10 +82,16 @@ export const RELOAD_VERDICTS = /** @type {const} */ (['reload', 'shell', 'page']
  * @param {ReloadVerdict | null | undefined} b
  * @returns {ReloadVerdict | null}
  */
-export function strongerVerdict(a, b) {
+export function mergeVerdicts(a, b) {
   if (!a) return b || null;
   if (!b) return a;
-  return verdictRank(a.v) <= verdictRank(b.v) ? a : b;
+  const top = verdictRank(a.v) <= verdictRank(b.v) ? a : b;
+  /** @type {ReloadVerdict} */
+  const out = { v: top.v, by: top.by, why: top.why };
+  const modules = [...new Set([...(a.modules || []), ...(b.modules || [])])].sort();
+  if (modules.length) out.modules = modules;
+  if (a.css || b.css) out.css = true;
+  return out;
 }
 
 /**

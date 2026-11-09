@@ -33,6 +33,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseReloadFrame } from '../../packages/server/src/dev-reload-worker.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../..');
@@ -144,6 +145,11 @@ Counter.register('my-counter');
   const page = await verdictForEdit('app/page.ts', "import { html } from '@webjsdev/core';\nimport '../components/counter.ts';\nexport default () => html`<main>B_EDITED<my-counter></my-counter></main>`;\n");
   assert.equal(page.v, 'page', `a page edit is morphable on ${runtime}, got ${JSON.stringify(page)}\n--- server log ---\n${log}`);
   assert.equal(page.by, 'app/page.ts', `the frame names the changed file on ${runtime}`);
+  // The relay reads the frame into the object it posts to a tab (#1689). A page
+  // edit carries no modules and no stylesheet flag, so the tab gets empty ones,
+  // identically on both transports.
+  assert.deepEqual(parseReloadFrame(JSON.stringify(page)), { v: 'page', by: 'app/page.ts', why: 'page-module', modules: [], css: false },
+    `the relay reads the page frame into the full verdict object on ${runtime}`);
 
   // The counterfactual direction: a component edit must stay a full reload,
   // because `customElements.define` is once-per-tag and a morph would apply new

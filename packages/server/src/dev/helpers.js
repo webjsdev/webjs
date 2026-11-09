@@ -517,12 +517,20 @@ function __webjsWhenReady(then) {
   function again() { if (++tries > 100) location.reload(); else setTimeout(attempt, 100); }
   attempt();
 }
+// A relay message's verdict as an object (#1689). A SharedWorker another tab
+// started before an upgrade can still be alive and posts the bare verdict name,
+// so a string becomes { v }, and anything unreadable is a full reload.
+function __webjsVerdictOf(v) {
+  if (typeof v === 'string') return { v: v, by: '', why: '', modules: [], css: false };
+  return v && typeof v === 'object' ? v : { v: 'reload', by: '', why: 'unreadable-frame', modules: [], css: false };
+}
 // Apply a reload signal at the lightest correct weight (#1398). A page or
 // layout edit never changes browser-bound JS, so the server's re-render is the
 // complete truth and the client router can swap it in place: scroll and (for a
 // page edit) the hydrated state of components outside the changed region
 // survive. Anything else, including every signal the server could not classify,
-// is the full reload this always was.
+// is the full reload this always was. A \`component\` or \`css\` verdict (#1689)
+// also reloads until this client learns to apply it in place.
 function __webjsApplyReload(verdict) {
   if (__webjsHold.offer(verdict)) return;
   __webjsWhenReady(function () {
@@ -532,7 +540,8 @@ function __webjsApplyReload(verdict) {
     // \`webjs.clientRouter: false\`, and a page that ships no component at all so
     // @webjsdev/core never loads in the browser and the module never runs.
     var refresh = globalThis.__webjsRefreshPage;
-    if ((verdict === 'page' || verdict === 'shell') && typeof refresh === 'function') {
+    var mode = verdict.v;
+    if ((mode === 'page' || mode === 'shell') && typeof refresh === 'function') {
       // Take any error overlay down BEFORE re-rendering. DEFENSIVE, and the
       // reasoning is worth recording because the obvious scenario for it does
       // NOT hold. The overlay's own teardown is keyed on the URL CHANGING,
@@ -558,7 +567,7 @@ function __webjsApplyReload(verdict) {
       // seconds, and markup swapped in before it lands paints a new class with
       // no rule. The old sheets stay applied until the swap, then go.
       preloadStyles().then(function (styles) {
-        return refresh(verdict).then(function (ok) {
+        return refresh(mode).then(function (ok) {
           if (!ok) { location.reload(); return; }
           styles.commit();
         });
@@ -594,7 +603,7 @@ function __webjsDirectEvents() {
     // dev-overlay bug leaves no trace, which would be a new behaviour rather
     // than a restored one.
     try {
-      if (m.type === 'reload') __webjsApplyReload(m.verdict);
+      if (m.type === 'reload') __webjsApplyReload(__webjsVerdictOf(m.verdict));
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     } catch (_) {
       console.error('[webjs] dev reload handler threw', _);
@@ -657,7 +666,7 @@ try {
     const w = new SharedWorker(${workerUrl});
     w.port.onmessage = (e) => {
       const m = e.data || {};
-      if (m.type === 'reload') __webjsApplyReload(m.verdict);
+      if (m.type === 'reload') __webjsApplyReload(__webjsVerdictOf(m.verdict));
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     };
     // The worker's SCRIPT can fail to load where the page itself loaded: a

@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { classifyChangedPath, strongerVerdict, RELOAD_VERDICTS } from '../../src/dev-classify.js';
+import { classifyChangedPath, mergeVerdicts, RELOAD_VERDICTS } from '../../src/dev-classify.js';
 
 const APP = '/app';
 const p = (rel) => `${APP}/${rel}`;
@@ -141,27 +141,56 @@ test('an empty path reloads', () => {
 });
 
 test('RELOAD_VERDICTS is ordered strongest first', () => {
-  assert.deepEqual([...RELOAD_VERDICTS], ['reload', 'shell', 'page']);
+  assert.deepEqual([...RELOAD_VERDICTS], ['reload', 'shell', 'page', 'component', 'css']);
 });
 
 // Every ordered pair, both directions, so a comparison that got the sign
 // backwards cannot pass. A window mixing a page edit and a component edit is a
 // component edit.
-test('strongerVerdict picks the strongest over all ordered pairs', () => {
+test('mergeVerdicts picks the strongest over all ordered pairs', () => {
   const mk = (v) => ({ v, by: v, why: v });
   for (const a of RELOAD_VERDICTS) {
     for (const b of RELOAD_VERDICTS) {
       const expected = RELOAD_VERDICTS.indexOf(a) <= RELOAD_VERDICTS.indexOf(b) ? a : b;
-      assert.equal(strongerVerdict(mk(a), mk(b)).v, expected, `${a} vs ${b}`);
+      const merged = mergeVerdicts(mk(a), mk(b));
+      assert.equal(merged.v, expected, `${a} vs ${b}`);
+      assert.equal(merged.by, expected, `${a} vs ${b} keeps the stronger one's by`);
+      assert.equal(merged.why, expected, `${a} vs ${b} keeps the stronger one's why`);
     }
   }
 });
 
-test('strongerVerdict treats null as weakest and an unknown name as strongest', () => {
+test('mergeVerdicts treats null as nothing and an unknown name as strongest', () => {
   const page = { v: 'page', by: '', why: '' };
-  assert.equal(strongerVerdict(null, page), page);
-  assert.equal(strongerVerdict(page, null), page);
-  assert.equal(strongerVerdict(null, null), null);
-  assert.equal(strongerVerdict(page, { v: 'nonsense', by: '', why: '' }).v, 'nonsense',
+  assert.equal(mergeVerdicts(null, page), page);
+  assert.equal(mergeVerdicts(page, null), page);
+  assert.equal(mergeVerdicts(null, null), null);
+  assert.equal(mergeVerdicts(page, { v: 'nonsense', by: '', why: '' }).v, 'nonsense',
     'an unrecognised verdict ranks strongest, so it can only ever over-reload');
+});
+
+// A batch keeps the strongest response but must not drop the weaker changes'
+// own work (#1689): a page edit plus a component edit still re-imports the
+// component's modules, and a stylesheet edit anywhere in the batch still
+// refreshes the sheets.
+test('mergeVerdicts unions modules and ORs css across a batch', () => {
+  const page = { v: 'page', by: 'app/page.ts', why: 'page-module' };
+  const comp = { v: 'component', by: 'components/a.ts', why: 'hot-swap', modules: ['/components/b.ts?t=2', '/components/a.ts?t=2'] };
+  const comp2 = { v: 'component', by: 'components/c.ts', why: 'hot-swap', modules: ['/components/a.ts?t=2', '/components/c.ts?t=3'] };
+  const css = { v: 'css', by: 'public/app.css', why: 'stylesheet', css: true };
+
+  const a = mergeVerdicts(mergeVerdicts(mergeVerdicts(page, comp), comp2), css);
+  assert.equal(a.v, 'page', 'page outranks component and css');
+  assert.equal(a.by, 'app/page.ts');
+  assert.deepEqual(a.modules, ['/components/a.ts?t=2', '/components/b.ts?t=2', '/components/c.ts?t=3'],
+    'the sorted union, each url once');
+  assert.equal(a.css, true, 'a stylesheet change anywhere in the batch is kept');
+
+  const b = mergeVerdicts(css, comp);
+  assert.equal(b.v, 'component');
+  assert.equal(b.css, true, 'css survives a stronger verdict arriving after it');
+
+  const c = mergeVerdicts(page, { v: 'shell', by: 'app/layout.ts', why: 'server-only-module' });
+  assert.equal('modules' in c, false, 'no modules key when neither side has any');
+  assert.equal('css' in c, false, 'no css key when neither side sets it');
 });
