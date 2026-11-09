@@ -58,3 +58,26 @@ add` copies in) come from the finished app, a migration is regenerated with
 this branch's `webjs check`, `webjs typecheck` and server tests and prints
 which drafts pass. `edit misses` counts edits whose `old_string` was not found
 in the replayed file, a sign the draft diverged from what the agent saw.
+
+## Clean multi-feature builds
+
+`build.mjs` runs the spec-sized builds the first-draft numbers come from. A
+headless `claude -p` builds one spec from `specs/` (Roomly, Pollster, Trackr,
+Inbox) in a fresh scaffold OUTSIDE this repo, with `--setting-sources
+project,local` and `--strict-mcp-config` over the app's own `.claude.json`, so
+only what a real scaffold ships applies: none of the machine's user settings,
+hooks, skills or MCP servers. The transcript is stream-json, so `replay.mjs`
+reads it as it is.
+
+```sh
+node scripts/agent-eval/build.mjs --spec roomly                          # 1 build, Haiku
+node scripts/agent-eval/build.mjs --spec inbox --runs 3 --jobs 3
+node scripts/agent-eval/build.mjs --spec roomly --framework ../webjs-main --label before
+node scripts/agent-eval/build.mjs --summary <out-dir>                    # the table again
+```
+
+Each build gets `result.json`: whether the agent's FIRST check, typecheck and
+test run passed, the first draft replayed and graded on this branch, the
+finished app graded, edits after the first failed check (`rework`), tool calls,
+tokens and minutes. `--framework` points at another checkout for a baseline arm;
+it scaffolds and links that checkout's framework.
