@@ -8,7 +8,8 @@
  */
 
 import { getStore } from './cache.js';
-import { getRequest, getBodyLimits, markDynamicAccess } from './context.js';
+import { getRequest, getBodyLimits, markDynamicAccess, requestCookieStore } from './context.js';
+import { redirect } from '@webjsdev/core';
 import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 
 const enc = new TextEncoder();
@@ -532,7 +533,107 @@ export function createAuth(config) {
     return new Response('Not found', { status: 404 });
   }
 
-  return { auth, signIn: signInFn, signOut: signOutFn, handlers: { GET, POST } };
+  // -- The public signIn() / signOut(): Auth.js v5 semantics ----------------
+  //
+  // Inside a request (a server action, a route handler, middleware) they act
+  // the way Auth.js's do in a Next server action: the session cookie goes onto
+  // this request's response through the cookie store, and success THROWS a
+  // redirect, so the habit `await signIn('credentials', formData)` works and
+  // so does `return signIn(...)`. A credentials failure throws
+  // `CredentialsSignin` (an `AuthError`), which an action can catch to return
+  // a message; uncaught, it is also a redirect to the error page, as the
+  // `/api/auth/*` route does. `{ redirect: false }` returns the target url
+  // instead of throwing. With no request in scope (a script, a unit test that
+  // calls it bare) they return the Response the route handlers send.
+
+  async function signIn(providerId, data, opts = {}) {
+    const fields = data instanceof FormData ? formFields(data) : (data || {});
+    const noRedirect = opts.redirect === false || fields.redirect === false || fields.redirect === 'false';
+    if (!getRequest()) return signInFn(providerId, fields, opts);
+    const res = await signInFn(providerId, fields, opts);
+    const location = res.headers.get('location');
+    const cookie = res.headers.get('set-cookie');
+    if (!cookie && /[?&]error=CredentialsSignin\b/.test(location || '')) throw credentialsSignin(location);
+    if (cookie) queueSetCookie(cookie);
+    if (res.status !== 302 || !location) return res;
+    if (noRedirect) return location;
+    return redirect(location);
+  }
+
+  async function signOut(opts = {}) {
+    if (!getRequest()) return signOutFn(opts);
+    const res = await signOutFn(opts);
+    for (const c of res.headers.getSetCookie()) queueSetCookie(c);
+    const location = /** @type {string} */ (res.headers.get('location'));
+    if (opts.redirect === false) return location;
+    return redirect(location);
+  }
+
+  return { auth, signIn, signOut, handlers: { GET, POST } };
+}
+
+/**
+ * Put a `Set-Cookie` the auth flow built onto the in-flight response.
+ * @param {string} setCookie
+ */
+function queueSetCookie(setCookie) {
+  const store = requestCookieStore();
+  if (store.sealed) throw new Error('signIn()/signOut(): the response headers were already sent, so the session cookie cannot be set. Call it from a server action, a route handler or middleware.');
+  store.pending.set(setCookie.slice(0, setCookie.indexOf('=')), setCookie);
+}
+
+/**
+ * A FormData as the plain credentials object Auth.js hands `authorize`.
+ * @param {FormData} fd
+ * @returns {Record<string, unknown>}
+ */
+function formFields(fd) {
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const [k, v] of fd.entries()) out[k] = v;
+  return out;
+}
+
+/**
+ * Auth.js's base error class: `error instanceof AuthError` and `error.type`
+ * tell an action why a sign-in failed.
+ */
+export class AuthError extends Error {
+  /** @param {string} [message] */
+  constructor(message) {
+    super(message);
+    this.name = 'AuthError';
+    /** @type {string} */
+    this.type = 'AuthError';
+  }
+}
+
+/** Thrown by `signIn('credentials', ...)` when `authorize` returns null. */
+export class CredentialsSignin extends AuthError {
+  /** @param {string} [message] */
+  constructor(message = 'Invalid credentials.') {
+    super(message);
+    this.name = 'CredentialsSignin';
+    this.type = 'CredentialsSignin';
+    /** Auth.js's `code`, the value of the `error` query parameter. */
+    this.code = 'credentials';
+  }
+}
+
+/**
+ * A `CredentialsSignin` that is ALSO a redirect to the error page, so an
+ * action that does not catch it sends the user where the route handler would.
+ * @param {string} location
+ */
+function credentialsSignin(location) {
+  const err = new CredentialsSignin();
+  try {
+    redirect(location);
+  } catch (r) {
+    const rr = /** @type {any} */ (r);
+    Object.assign(err, { __webjs: rr.__webjs, url: rr.url, status: rr.status, redirectType: rr.redirectType });
+  }
+  return err;
 }
 
 // -- Default database adapter (cache store) ---------------------------------

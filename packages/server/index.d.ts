@@ -1182,12 +1182,21 @@ export interface AuthConfig {
  */
 export interface AuthInstance<TUser = ResolvedAuthUser> {
   auth: (req?: Request) => Promise<{ user: TUser } | null>;
+  /**
+   * Auth.js v5's `signIn`. Inside a request (a server action, a route handler,
+   * middleware) it sets the session cookie on the response and throws a
+   * redirect, so `await signIn('credentials', formData)` in a form action signs
+   * in and navigates; a credentials failure throws {@link CredentialsSignin}.
+   * `{ redirect: false }` returns the target url instead of throwing. With no
+   * request in scope it returns the Response the `/api/auth/*` routes send.
+   */
   signIn: (
     provider: string,
-    data?: Record<string, unknown>,
-    opts?: { redirectTo?: string; req?: Request },
-  ) => Promise<Response>;
-  signOut: (opts?: { redirectTo?: string; req?: Request }) => Promise<Response>;
+    data?: FormData | Record<string, unknown>,
+    opts?: { redirectTo?: string; redirect?: boolean; req?: Request },
+  ) => Promise<Response | string>;
+  /** Auth.js v5's `signOut`: clears the session and throws a redirect inside a request. */
+  signOut: (opts?: { redirectTo?: string; redirect?: boolean; req?: Request }) => Promise<Response | string>;
   handlers: { GET: (req: Request) => Promise<Response>; POST: (req: Request) => Promise<Response> };
 }
 
@@ -1220,12 +1229,34 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  *
  * // A page, layout or action reads the signed-in user:
  * //   const session = await auth();   // null when signed out
- * // Sign in and out with plain forms, which work with JavaScript off:
- * //   <form method="post" action="/api/auth/signin/credentials"> (email, password, redirectTo)
- * //   <form method="post" action="/api/auth/signout">
+ *
+ * // modules/auth/actions/log-in.server.ts, bound as <form action=${logIn}>
+ * // (works with JavaScript off), exactly as in a Next app with Auth.js:
+ * 'use server';
+ * import { AuthError } from '@webjsdev/server';
+ * import { signIn } from '../auth.server.ts';
+ * export async function logIn(formData: FormData) {
+ *   try {
+ *     await signIn('credentials', formData, { redirectTo: '/dashboard' });
+ *   } catch (error) {
+ *     if (error instanceof AuthError) return { success: false, error: 'Wrong email or password.' };
+ *     throw error; // the success redirect
+ *   }
+ * }
+ * // Signing out is the same: an action that awaits signOut({ redirectTo: '/' }).
+ * // Plain forms posting to /api/auth/signin/credentials and /api/auth/signout work too.
  * ```
  */
 export declare function createAuth<TUser = ResolvedAuthUser>(config: AuthConfig): AuthInstance<TUser>;
+/** Auth.js's base error: `error instanceof AuthError` and `error.type` say why a sign-in failed. */
+export declare class AuthError extends Error {
+  type: string;
+}
+/** Thrown by `signIn('credentials', ...)` when `authorize` returns null. */
+export declare class CredentialsSignin extends AuthError {
+  type: 'CredentialsSignin';
+  code: string;
+}
 /**
  * Options for the credentials provider, Auth.js's `Credentials`. `C` is the
  * shape of the submitted fields, inferred from `authorize`'s annotation

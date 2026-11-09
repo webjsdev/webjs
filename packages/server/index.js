@@ -66,7 +66,7 @@ export { attachWebSocket } from './src/websocket.js';
 export { getSerializer, setSerializer, defaultSerializer } from './src/serializer.js';
 
 // Auth (NextAuth-style)
-export { createAuth, Credentials, Google, GitHub } from './src/auth.js';
+export { createAuth, Credentials, Google, GitHub, AuthError, CredentialsSignin } from './src/auth.js';
 
 // Test harness helpers (issue #267): thin builders over handle()
 export {

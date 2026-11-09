@@ -71,10 +71,10 @@ test('signup -> login -> dashboard renders for the authenticated user', async (t
     t.skip('no migrated DB; run db:migrate to enable the full flow');
     return;
   }
-  // Success auto-logs-in and 302s to the dashboard (carrying the session
+  // Success auto-logs-in and 303s to the dashboard (carrying the session
   // cookie); a 422 means validation failed. Either way the action ran.
-  assert.ok([302, 422].includes(signupRes.status), 'signup action ran');
-  if (signupRes.status === 302) {
+  assert.ok([303, 422].includes(signupRes.status), 'signup action ran');
+  if (signupRes.status === 303) {
     assert.equal(signupRes.headers.get('location'), '/features/auth/dashboard', 'signup lands on the dashboard');
   } else {
     t.skip('signup was rejected by validation; run db:migrate to enable the full flow');

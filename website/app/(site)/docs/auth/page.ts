@@ -54,20 +54,28 @@ export default async function Dashboard() {
     <p>A <code>redirect()</code> thrown during a GET page render (an auth gate like this) defaults to <code>302 Found</code>, the conventional bounce code. The same <code>redirect()</code> thrown from a form-bound server action answers <code>303 See Other</code>, as in Next.js, so the browser follows with a GET and the action runs once; called over RPC from a component, it navigates the client router to the target. An explicit <code>redirect(url, status)</code> overrides the GET-gate default. To type <code>session.user</code> so <code>session.user.name</code> needs no cast, see <a href="/docs/typescript">Typing the auth() Session User</a>.</p>
 
     <h2>Sign in and sign out</h2>
-    <code-block>// Server actions
+    <code-block>// modules/auth/actions/session.server.ts, bound as &lt;form action=\${logIn}&gt;
+'use server';
+import { AuthError } from '@webjsdev/server';
 import { signIn, signOut } from '#lib/auth.server.ts';
 
-export async function login(credentials) {
-  return signIn('credentials', credentials);
+export async function logIn(formData: FormData) {
+  try {
+    await signIn('credentials', formData, { redirectTo: '/dashboard' });
+  } catch (error) {
+    if (error instanceof AuthError) return { success: false, error: 'Wrong email or password.' };
+    throw error; // the success redirect
+  }
 }
 
-export async function loginWithGoogle() {
-  return signIn('google', {}, { redirectTo: '/dashboard' });
+export async function logInWithGoogle() {
+  await signIn('google', undefined, { redirectTo: '/dashboard' });
 }
 
-export async function logout() {
-  return signOut({ redirectTo: '/' });
+export async function logOut() {
+  await signOut({ redirectTo: '/' });
 }</code-block>
+    <p><code>signIn</code> and <code>signOut</code> work the way Auth.js v5's do in a Next.js server action. Inside a request they set or clear the session cookie on the response and throw a redirect, which a form-bound action answers with a 303, so the form works with JavaScript off. A credentials sign-in whose <code>authorize</code> returns <code>null</code> throws <code>CredentialsSignin</code>, a subclass of <code>AuthError</code> with <code>type</code> set to <code>'CredentialsSignin'</code>. Catch it to return a message, which re-renders the page with it on <code>actionData</code>. Left uncaught, it redirects to <code>pages.error</code> (or <code>pages.signIn</code>) with <code>?error=CredentialsSignin</code>, as the <code>/api/auth/signin/credentials</code> route does. Pass <code>{ redirect: false }</code> to get the target url back instead of the redirect. Called with no request in scope, from a script, they return the <code>Response</code> the auth routes send.</p>
     <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the auth demo in the WebJs gallery renders its logout button.</p>
 
     <h2>Return to the page the user started from</h2>
