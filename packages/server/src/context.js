@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { parseCookies } from './csrf.js';
+import { CookieStore, cookiesView } from './cookie-store.js';
 import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
 import { shared } from './process-shared.js';
 
@@ -39,7 +39,7 @@ import { shared } from './process-shared.js';
  * `revalidatedPaths` collects every `revalidatePath()` call made while serving
  * the request, so an RPC action response can tell the browser to refresh them.
  *
- * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[] }} Store
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[], cookieStore?: CookieStore }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -202,26 +202,48 @@ export function headers() {
 }
 
 /**
- * Read-only cookie jar for the in-flight request. Returns an object with
- * `.get(name)`, `.has(name)`, `.entries()`. To SET a cookie, return a
- * `Response` whose headers include `Set-Cookie` (route handlers and
- * exposed actions can do this directly).
+ * The in-flight request's cookie store (Next.js's `cookies()` from
+ * `next/headers`). `get(name)` returns `{ name, value }` or undefined, so
+ * `cookies().get('theme')?.value` reads a value; `getAll`, `has`, `size` and
+ * iteration read; `set(name, value, options)` / `set({ name, value, ... })`
+ * and `delete(name)` write a `Set-Cookie` onto this request's response
+ * (applied by the request handler), and a later read in the same request sees
+ * the write. The result is also awaitable, so Next 15's
+ * `(await cookies()).get('theme')` works too. Throws outside a request.
  *
- * @returns {{ get: (name: string) => string | undefined, has: (name: string) => boolean, entries: () => [string, string][] }}
+ * `options.maxAge` is in SECONDS (Next's unit) and `path` defaults to `/`.
+ *
+ * @returns {ReturnType<typeof cookiesView>}
  */
 export function cookies() {
-  const req = getRequest();
-  if (!req) throw new Error('cookies(): called outside a request scope');
+  const store = als.getStore();
+  if (!store) throw new Error('cookies(): called outside a request scope');
   // Reading cookies makes the render per-user (a logged-in vs logged-out body
   // keys off an auth cookie), so mark the request dynamic so the HTML cache
   // excludes it even under `revalidate`, the core leak defense (#241).
   markDynamicAccess();
-  const map = parseCookies(req);
-  return {
-    get: (name) => map[name],
-    has: (name) => Object.prototype.hasOwnProperty.call(map, name),
-    entries: () => Object.entries(map),
-  };
+  return cookiesView(requestCookieStore(store));
+}
+
+/**
+ * The request's cookie store, created on first use. Shared by `cookies()` and
+ * middleware's `request.cookies`, so a write through either is one write.
+ * @param {Store} [store]
+ * @returns {CookieStore}
+ */
+export function requestCookieStore(store = als.getStore()) {
+  if (!store) throw new Error('cookies(): called outside a request scope');
+  if (!store.cookieStore) store.cookieStore = new CookieStore(store.req.headers.get('cookie'));
+  return store.cookieStore;
+}
+
+/**
+ * The current request's cookie store if one was created, for the handler to
+ * apply its pending `Set-Cookie` writes. Null when no code touched cookies.
+ * @returns {CookieStore | null}
+ */
+export function currentCookieStore() {
+  return als.getStore()?.cookieStore || null;
 }
 
 /**

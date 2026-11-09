@@ -110,7 +110,7 @@ export default async function requireAuth(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
 ): Promise&lt;Response&gt; {
-  const user = await getUserByToken(cookies().get(SESSION_COOKIE));
+  const user = await getUserByToken(cookies().get(SESSION_COOKIE)?.value);
   if (!user) {
     const to = encodeURIComponent(new URL(req.url).pathname);
     return new Response(null, {
@@ -190,15 +190,20 @@ export default rateLimit({ window: '10s', max: 5 });</code-block>
     <p>WebJs provides request-scoped helpers via <code>@webjsdev/server</code> that let you read cookies and headers from anywhere in your server-side code (middleware, pages, server actions, API routes) without explicitly threading the request object:</p>
     <code-block>import { cookies, headers } from '@webjsdev/server';
 
-// In any server-side function:
-const token = cookies().get('session_token');
+// In any server-side function (Next.js's next/headers shape):
+const token = cookies().get('session_token')?.value;   // { name, value } | undefined
 const hasToken = cookies().has('session_token');
-const allCookies = cookies().entries(); // [string, string][]
+const all = cookies().getAll();                         // { name, value }[]
+const theme = (await cookies()).get('theme')?.value;   // also awaitable, as in Next 15
+
+// Writing, from a server action, a route handler, or middleware:
+cookies().set('theme', 'dark', { httpOnly: true, sameSite: 'lax', maxAge: 60 * 60 * 24 });
+cookies().delete('session_token');
 
 const auth = headers().get('authorization');
 const userAgent = headers().get('user-agent');</code-block>
     <p>These are backed by AsyncLocalStorage. The request context is established before your middleware runs, so they work everywhere in the request lifecycle. Calling them outside a request scope (e.g., at module top level) throws an error.</p>
-    <p><strong>Note:</strong> <code>cookies()</code> is read-only. To set a cookie, include a <code>Set-Cookie</code> header on the Response you return from your middleware, API route, or server action.</p>
+    <p><code>cookies()</code> has the same API as Next.js's: <code>get(name)</code> returns <code>{ name, value }</code> (or <code>undefined</code>), so read a value with <code>?.value</code>. <code>set(name, value, options)</code> (or <code>set({ name, value, ...options })</code>) and <code>delete(name)</code> queue a <code>Set-Cookie</code> on this request's response, which WebJs adds for you, redirects included, and a later read in the same request sees the new value. The options are Next's: <code>maxAge</code> is in seconds, <code>path</code> defaults to <code>/</code>, and <code>httpOnly</code>, <code>secure</code>, <code>sameSite</code>, <code>domain</code>, <code>expires</code>, <code>partitioned</code> and <code>priority</code> map to their cookie attributes. Inside middleware, <code>request.cookies</code> is the same store.</p>
 
     <h2>Middleware and Server Actions</h2>
     <p>Root middleware runs on server action RPC calls (<code>POST /__webjs/action/:hash/:fn</code>) just like any other request. Per-segment middleware does not apply to server actions (they bypass the file-based route tree). For action-level guards, check auth inside the action itself, declare per-action <code>middleware</code> on the action, or call the action from a <code>route.ts</code> under a middleware-protected segment.</p>

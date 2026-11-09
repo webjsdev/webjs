@@ -27,7 +27,7 @@ test('a request bound by one copy is the request another copy reads (#1590)', as
   await server.withRequest(req, async () => {
     await Promise.resolve();
     assert.equal(app.getRequest(), req, 'getRequest() from the fresh copy sees the request');
-    assert.equal(app.cookies().get('webjs.session'), 'abc', 'cookies() too');
+    assert.equal(app.cookies().get('webjs.session')?.value, 'abc', 'cookies() too');
     assert.equal(app.headers().get('cookie'), 'webjs.session=abc', 'headers() too');
   });
 });

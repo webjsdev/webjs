@@ -119,7 +119,7 @@ function cookieReadingPage(counterKey, { revalidate } = {}) {
     `  const k = ${JSON.stringify(counterKey)};\n` +
     `  globalThis.__renders = globalThis.__renders || {};\n` +
     `  globalThis.__renders[k] = (globalThis.__renders[k] || 0) + 1;\n` +
-    `  const who = cookies().get('uid') || 'anon';\n` +
+    `  const who = cookies().get('uid')?.value || 'anon';\n` +
     `  return html\`<h1>render #\${globalThis.__renders[k]} for \${who}</h1>\`;\n` +
     `}\n`
   );

@@ -642,12 +642,40 @@ export declare function staticPageRoutes(table: {
 
 /** Read-only headers for the in-flight request. Throws outside a request scope. */
 export declare function headers(): Headers;
-/** Read-only cookie jar for the in-flight request. Throws outside a request scope. */
-export declare function cookies(): {
-  get(name: string): string | undefined;
+/** A cookie as read from the request. */
+export interface RequestCookie { name: string; value: string }
+/** A cookie to write (Next's `ResponseCookie`; `maxAge` in seconds, `path` defaults to `/`). */
+export interface ResponseCookie {
+  name: string;
+  value: string;
+  expires?: Date | number;
+  maxAge?: number;
+  domain?: string;
+  path?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  sameSite?: 'lax' | 'strict' | 'none' | 'Lax' | 'Strict' | 'None' | boolean;
+  partitioned?: boolean;
+  priority?: 'low' | 'medium' | 'high';
+}
+/** The request's cookie store (Next.js's `cookies()` shape). */
+export interface RequestCookies {
+  get(name: string | { name: string }): RequestCookie | undefined;
+  getAll(name?: string | { name: string }): RequestCookie[];
   has(name: string): boolean;
-  entries(): [string, string][];
-};
+  readonly size: number;
+  set(name: string, value: string, options?: Omit<ResponseCookie, 'name' | 'value'>): RequestCookies;
+  set(cookie: ResponseCookie): RequestCookies;
+  delete(name: string | { name: string; path?: string; domain?: string }): RequestCookies;
+  toString(): string;
+  [Symbol.iterator](): IterableIterator<[string, RequestCookie]>;
+}
+/**
+ * The in-flight request's cookies, Next.js's `cookies()`: `cookies().get('x')?.value`
+ * reads, `set` / `delete` write a `Set-Cookie` onto this request's response. Also
+ * awaitable (`(await cookies()).get('x')`). Throws outside a request scope.
+ */
+export declare function cookies(): RequestCookies & Promise<RequestCookies>;
 /** The raw `Request` for the in-flight scope, or null at module top-level. */
 export declare function getRequest(): Request | null;
 /** Run `fn` within a request scope. */

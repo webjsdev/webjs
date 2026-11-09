@@ -83,10 +83,10 @@ import { cookies } from '@webjsdev/server';
 import { getUserByToken, SESSION_COOKIE } from '#lib/session.server.ts';
 
 export async function currentUser() {
-  const token = cookies().get(SESSION_COOKIE);
+  const token = cookies().get(SESSION_COOKIE)?.value;
   return getUserByToken(token);
 }</code-block>
-    <p>The <code>cookies()</code> helper from <code>@webjsdev/server</code> reads the in-flight Request via AsyncLocalStorage, so no parameter passing needed.</p>
+    <p>The <code>cookies()</code> helper from <code>@webjsdev/server</code> reads the in-flight Request via AsyncLocalStorage, so no parameter passing needed. It has Next.js's shape: <code>get(name)</code> returns <code>{ name, value }</code>, and <code>cookies().set(name, value, options)</code> / <code>cookies().delete(name)</code> write a <code>Set-Cookie</code> onto the response from a server action or route handler.</p>
 
     <h2>Route Protection via Middleware</h2>
     <code-block>// app/dashboard/middleware.ts
@@ -97,7 +97,7 @@ export default async function requireAuth(
   req: Request,
   next: () =&gt; Promise&lt;Response&gt;,
 ) {
-  const user = await getUserByToken(cookies().get(SESSION_COOKIE));
+  const user = await getUserByToken(cookies().get(SESSION_COOKIE)?.value);
   if (!user) {
     const to = encodeURIComponent(new URL(req.url).pathname);
     return new Response(null, {

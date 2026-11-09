@@ -28,7 +28,8 @@ import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
 import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.js';
 import { validateAppLayout, AppLayoutError, cssImportProblems } from '../app-layout.js';
-import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from '../context.js';
+import { applyPendingCookies } from '../cookie-store.js';
+import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId, currentCookieStore } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
@@ -1227,6 +1228,9 @@ export async function createRequestHandler(opts) {
       let res;
       try {
         res = await produce(req);
+        // `cookies().set()` / `.delete()` anywhere in the request (an action,
+        // a route handler, middleware, a render) lands here as Set-Cookie.
+        res = applyPendingCookies(res, currentCookieStore());
       } catch (e) {
         // A throw escaping produce() is the last-resort 500 (every interior
         // path catches its own errors, but a surprise still must not crash the
