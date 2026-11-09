@@ -90,7 +90,7 @@ test('mcp: initialize handshake returns serverInfo + capabilities', async () => 
   const r = frames[0];
   assert.equal(r.id, 1);
   assert.equal(r.result.protocolVersion, '2024-11-05');
-  assert.deepEqual(r.result.capabilities, { tools: {}, resources: {}, prompts: {} });
+  assert.deepEqual(r.result.capabilities, { tools: {} }, 'tools only: no doc resources, no recipe prompts');
   assert.deepEqual(r.result.serverInfo, { name: 'webjs', version: '9.9.9' });
 });
 
@@ -112,17 +112,16 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   ]);
   const tools = frames[0].result.tools;
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['check', 'docs', 'init', 'list_actions', 'list_components', 'list_elision', 'list_routes', 'source', 'ui']);
+  assert.deepEqual(names, ['check', 'init', 'list_actions', 'list_components', 'list_elision', 'list_routes', 'source', 'ui']);
   for (const t of tools) {
     assert.equal(typeof t.description, 'string');
     assert.equal(t.inputSchema.type, 'object');
   }
-  // The introspection tools take appDir, and so do init + docs, whose corpus is
-  // resolved from the app being asked about; docs also takes topic/query.
+  // The introspection tools take appDir, and so does init, which compares the
+  // app's installed @webjsdev/mcp with the running server's.
   const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
   assert.ok(byName.list_routes.inputSchema.properties.appDir, 'introspection tool declares appDir');
   assert.deepEqual(Object.keys(byName.init.inputSchema.properties), ['appDir'], 'init takes only appDir');
-  assert.ok(byName.docs.inputSchema.properties.topic && byName.docs.inputSchema.properties.query, 'docs takes topic/query');
   assert.ok(byName.source.inputSchema.properties.path && byName.source.inputSchema.properties.query, 'source takes path/query/package');
   assert.ok(byName.ui.inputSchema.properties.name, 'ui takes an optional component name');
 });
@@ -457,6 +456,71 @@ test('mcp: throwing ui deps degrade only the ui tool, the server stays up', asyn
   const routesFrame = frames.find((f) => f.id === 71);
   assert.ok(!routesFrame.result.isError, 'list_routes still works');
   assert.ok(Array.isArray(JSON.parse(routesFrame.result.content[0].text).pages), 'list_routes returns the route projection');
+});
+
+/* ---------------- init: the WebJs brief ---------------- */
+
+const { BRIEF } = await import(resolve(REPO, 'packages', 'mcp', 'src', 'brief.js'));
+
+test('mcp: tools/call init returns the brief and the tool map', async () => {
+  const { frames } = await driveMcp(tmpDir(), [
+    { jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'init', arguments: {} } },
+  ]);
+  const text = frames[0].result.content[0].text;
+  assert.match(text, /read first/i);
+  assert.ok(text.includes(BRIEF), 'carries the brief verbatim');
+  assert.match(text, /`source`/, 'points at the source tool for exact contracts');
+  assert.match(text, /`check`/, 'points at the check tool');
+  assert.ok(!/Warning:/.test(text), 'no installed copy, nothing to warn about');
+});
+
+test('mcp: the docs tool, doc resources and recipe prompts are gone', async () => {
+  const { frames } = await driveMcp(tmpDir(), [
+    { jsonrpc: '2.0', id: 21, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'components' } } },
+    { jsonrpc: '2.0', id: 22, method: 'resources/list' },
+    { jsonrpc: '2.0', id: 23, method: 'prompts/list' },
+    { jsonrpc: '2.0', id: 24, method: 'tools/list' },
+  ]);
+  assert.equal(frames[0].error.code, -32602, 'docs is an unknown tool');
+  assert.equal(frames[1].error.code, -32601, 'resources/list is not served');
+  assert.equal(frames[2].error.code, -32601, 'prompts/list is not served');
+  assert.ok(frames[3].result.tools, 'the loop kept serving after the errors');
+});
+
+/** An app dir with its own installed @webjsdev/mcp at `version`. */
+function appWithMcp(version) {
+  const dir = tmpDir();
+  write(dir, join('node_modules', '@webjsdev', 'mcp', 'package.json'), JSON.stringify({ name: '@webjsdev/mcp', version }));
+  return dir;
+}
+
+test('mcp: every app-scoped tool ADVERTISES appDir, so a conforming client can actually send one', async () => {
+  const { frames } = await driveMcp(tmpDir(), [{ jsonrpc: '2.0', id: 87, method: 'tools/list' }]);
+  const byName = Object.fromEntries(frames[0].result.tools.map((t) => [t.name, t]));
+  for (const name of ['init', 'list_routes', 'list_actions', 'list_components', 'list_elision', 'check']) {
+    assert.ok(byName[name], `${name} is advertised`);
+    assert.equal(typeof byName[name].inputSchema.properties.appDir, 'object', `${name} advertises appDir`);
+    assert.equal(byName[name].inputSchema.properties.appDir.type, 'string', `${name}'s appDir is a string`);
+  }
+  // `ui` is kit-scoped and `source` resolves from the server cwd, so neither takes one.
+  for (const name of ['ui', 'source']) {
+    assert.ok(!byName[name].inputSchema.properties.appDir, `${name} is not app-scoped`);
+  }
+});
+
+test('mcp: init warns when the app has a newer @webjsdev/mcp than the running server', async () => {
+  // driveMcp pins the server at 9.9.9, so an app on 10.0.0 is the stale-server case.
+  const newer = appWithMcp('10.0.0');
+  const same = appWithMcp('9.9.9');
+  const { frames } = await driveMcp(same, [
+    { jsonrpc: '2.0', id: 84, method: 'tools/call', params: { name: 'init', arguments: { appDir: newer } } },
+    { jsonrpc: '2.0', id: 85, method: 'tools/call', params: { name: 'init', arguments: {} } },
+  ]);
+  const stale = frames[0].result.content[0].text;
+  assert.match(stale, /Warning: this MCP server is @webjsdev\/mcp@9\.9\.9, but this app has @webjsdev\/mcp@10\.0\.0, so the brief and the tools below may be stale\./);
+  assert.match(stale, /npm i -g @webjsdev\/mcp@latest/, 'says how to fix the stale install');
+  assert.ok(stale.includes(BRIEF), 'advisory, never a refusal: the brief still follows');
+  assert.ok(!/Warning:/.test(frames[1].result.content[0].text), 'no appDir defaults to cwd, where versions are equal');
 });
 
 /* ---------- extractActionConfig unit tests (#488) ---------- */

@@ -23,15 +23,7 @@
 import { createInterface } from 'node:readline';
 import { relative } from 'node:path';
 
-import {
-  resolveDocsLocation,
-  listResources,
-  readResource,
-  initText,
-  searchDocs,
-  PROMPTS,
-  getPrompt,
-} from './mcp-docs.js';
+import { initText } from './mcp-init.js';
 import { resolveFrameworkRoots, runSourceTool } from './mcp-source.js';
 // The export lookup behind the `source` tool's `export` arg, re-exported for
 // `webjs source <Export>` in the CLI (#1623), which shells the same text.
@@ -56,10 +48,9 @@ const RESERVED_CONFIG = new Set(['method', 'cache', 'tags', 'invalidates', 'vali
 /**
  * The `appDir` property, shared by every tool that is scoped to one app.
  *
- * `init` and `docs` carry it too, not just the introspection tools: the docs
- * corpus is resolved from the app being asked about (#1319), so a tool that did
- * not ADVERTISE `appDir` could never receive one from a conforming client, and
- * the app-corpus rung would be reachable only from hand-written JSON-RPC.
+ * `init` carries it too: it compares the app's installed `@webjsdev/mcp` with
+ * the running server's to warn about a stale server (#1319), and a tool that did
+ * not ADVERTISE `appDir` could never receive one from a conforming client.
  */
 const APPDIR_PROP = {
   type: 'string',
@@ -73,33 +64,13 @@ const APPDIR_SCHEMA = {
   required: [],
 };
 
-/** `init` takes only the optional appDir, which selects whose docs corpus it reports. */
+/** `init` takes only the optional appDir, whose installed server version it compares. */
 const INIT_SCHEMA = {
   type: 'object',
   properties: {
     appDir: {
       ...APPDIR_PROP,
-      description: "App directory whose docs corpus to read. Defaults to the server cwd.",
-    },
-  },
-  required: [],
-};
-
-/** `docs` takes an optional topic OR a free-text query, plus the optional appDir. */
-const DOCS_SCHEMA = {
-  type: 'object',
-  properties: {
-    appDir: {
-      ...APPDIR_PROP,
-      description: "App directory whose docs corpus to read. Defaults to the server cwd.",
-    },
-    topic: {
-      type: 'string',
-      description: 'A doc name (e.g. components, recipes, lit-muscle-memory-gotchas, AGENTS). Returns the full doc.',
-    },
-    query: {
-      type: 'string',
-      description: 'Free-text search across all webjs docs. Returns matching lines with their source.',
+      description: 'App directory the agent is editing, checked for a newer @webjsdev/mcp than this server. Defaults to the server cwd.',
     },
   },
   required: [],
@@ -155,29 +126,22 @@ const SOURCE_SCHEMA = {
 };
 
 /**
- * The tools. The four introspection tools project an EXISTING @webjsdev/server
- * function (read-only, appDir-scoped). `init` + `docs` (#376) surface the
- * framework knowledge: `init` is the "read first" mental-model primer, `docs`
- * retrieves a doc by topic or searches the corpus. Descriptions are crisp so a
- * model picks the right tool without reading source.
+ * The tools. The introspection tools project an EXISTING @webjsdev/server
+ * function (read-only, appDir-scoped). `init` returns the WebJs brief, `source`
+ * reads the framework's own source, and `ui` reads the @webjsdev/ui kit.
+ * Descriptions are crisp so a model picks the right tool without reading source.
  */
 const TOOL_DEFS = [
   {
     name: 'init',
     description:
-      'READ THIS FIRST before writing or editing a webjs app. Returns the webjs mental model (NOT React/Next: no RSC, components hydrate but pages do not, signals-default state, the .server boundary) plus the invariants and the doc index. Read-only.',
+      'READ THIS FIRST before writing or editing a WebJs app. Returns the WebJs brief (Next.js App Router routing plus Lit component APIs, imported from @webjsdev/*, with the few differences that matter) and what each other tool is for. Read-only.',
     inputSchema: INIT_SCHEMA,
-  },
-  {
-    name: 'docs',
-    description:
-      'Retrieve webjs framework docs: pass `topic` for a full doc (components, recipes, styling, built-ins, configuration, advanced, metadata, typescript, testing, lit-muscle-memory-gotchas, AGENTS, ...) or `query` to search the corpus. No args returns the topic index. Read-only.',
-    inputSchema: DOCS_SCHEMA,
   },
   {
     name: 'source',
     description:
-      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `export` for the signature plus doc comment of ONE export (the cheap way to check a contract: `export: "createAuth"`), `path` to read a file (e.g. server/src/ssr/head.js; the bare server/src/ssr.js is a barrel that re-exports from the sibling directory), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use when the docs do not answer something. Read-only.',
+      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `export` for the signature plus doc comment of ONE export (the cheap way to check a contract: `export: "createAuth"`), `path` to read a file (e.g. server/src/ssr/head.js; the bare server/src/ssr.js is a barrel that re-exports from the sibling directory), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use it for any exact contract the brief does not state. Read-only.',
     inputSchema: SOURCE_SCHEMA,
   },
   {
@@ -571,47 +535,16 @@ export async function runMcpServer(opts) {
   }
   const runners = makeToolRunners(deps);
 
-  // The docs corpus deps for the knowledge layer (#376): resources / prompts /
-  // init / docs. Injectable for tests; otherwise resolved from the app's own
-  // installed corpus, the bundled (published) snapshot, or the repo-root (dev)
-  // docs, plus node fs.
-  //
-  // Resolved PER CALL and memoized by appDir (#1319), not once at boot. `appDir`
-  // is a per-call tool argument, so a boot-time resolution would pin the corpus
-  // to the launch directory forever and defeat the app-corpus rung for any host
-  // that overrides it. `resources/list` and `resources/read` carry no appDir in
-  // the MCP protocol, so they resolve from `cwd`, which is the same value a
-  // `tools/call` with no `appDir` argument defaults to; the surfaces can only
-  // diverge when a caller deliberately asks about a different app.
-  let docsFs = null;
-  if (!opts.docsDeps) {
+  // The `init` deps: fs readers for the stale-server check, which compares the
+  // app's installed @webjsdev/mcp with this server's version (#1319). Resolved
+  // per call from the tool's `appDir`. Injectable for tests via `initFs`.
+  let initFs = opts.initFs;
+  if (!initFs) {
     const { readFile } = await import('node:fs/promises');
-    const { readdirSync, existsSync } = await import('node:fs');
-    docsFs = { listDir: readdirSync, exists: existsSync, readFile };
+    const { existsSync } = await import('node:fs');
+    initFs = { readFile, exists: existsSync };
   }
-  /** @type {Map<string, object>} */
-  const docsDepsCache = new Map();
-  /** The docs deps for one appDir. An injected `opts.docsDeps` wins for every appDir. */
-  const docsDepsFor = (dir) => {
-    if (opts.docsDeps) return opts.docsDeps;
-    const key = typeof dir === 'string' ? dir : '';
-    let built = docsDepsCache.get(key);
-    if (!built) {
-      const loc = resolveDocsLocation(import.meta.url, key);
-      built = {
-        docsDir: loc.docsDir,
-        agentsPath: loc.agentsPath,
-        skillPath: loc.skillPath,
-        corpusPath: loc.corpusPath,
-        corpusSource: loc.corpusSource,
-        appDir: key,
-        serverVersion: version,
-        ...docsFs,
-      };
-      docsDepsCache.set(key, built);
-    }
-    return built;
-  };
+  const initDepsFor = (dir) => ({ ...initFs, appDir: dir, serverVersion: version });
 
   // The `source` tool (#378): read the framework's own source from
   // node_modules/@webjsdev/*/src (no-build, so it is the real JSDoc). Roots are
@@ -657,7 +590,7 @@ export async function runMcpServer(opts) {
     if (method === 'initialize') {
       return rpcResult(id, {
         protocolVersion: PROTOCOL_VERSION,
-        capabilities: { tools: {}, resources: {}, prompts: {} },
+        capabilities: { tools: {} },
         serverInfo: { name: 'webjs', version },
       });
     }
@@ -675,39 +608,12 @@ export async function runMcpServer(opts) {
       });
     }
 
-    // Knowledge layer (#376): the framework docs as MCP resources.
-    if (method === 'resources/list') {
-      return rpcResult(id, { resources: listResources(docsDepsFor(cwd)) });
-    }
-    if (method === 'resources/read') {
-      const uri = ((msg && msg.params) || {}).uri;
-      try {
-        const r = await readResource(docsDepsFor(cwd), uri);
-        return rpcResult(id, { contents: [r] });
-      } catch (e) {
-        return rpcError(id, -32602, e && e.message ? e.message : String(e));
-      }
-    }
-
-    // Knowledge layer (#376): the recipes as guided-workflow prompts.
-    if (method === 'prompts/list') {
-      return rpcResult(id, { prompts: PROMPTS });
-    }
-    if (method === 'prompts/get') {
-      const params = (msg && msg.params) || {};
-      try {
-        return rpcResult(id, getPrompt(params.name, params.arguments));
-      } catch (e) {
-        return rpcError(id, -32602, e && e.message ? e.message : String(e));
-      }
-    }
-
     if (method === 'tools/call') {
       const params = (msg && msg.params) || {};
       const name = params.name;
       const args = params.arguments || {};
-      // The knowledge tools route to the docs / source layer; they return text.
-      const isKnowledgeTool = name === 'init' || name === 'docs' || name === 'source';
+      // The knowledge tools (the brief, the framework source) return text.
+      const isKnowledgeTool = name === 'init' || name === 'source';
       // `ui` is kit-scoped (not app-scoped), so it is dispatched separately.
       const isUiTool = name === 'ui';
       if (!isKnowledgeTool && !isUiTool && !runners[name]) {
@@ -717,10 +623,8 @@ export async function runMcpServer(opts) {
       try {
         const result = isKnowledgeTool
           ? name === 'init'
-            ? await initText(docsDepsFor(appDir))
-            : name === 'docs'
-              ? await searchDocs(docsDepsFor(appDir), args)
-              : await runSourceTool(sourceDeps, args)
+            ? await initText(initDepsFor(appDir))
+            : await runSourceTool(sourceDeps, args)
           : isUiTool
             ? runUiTool(uiDeps, args)
             : await runners[name](appDir);

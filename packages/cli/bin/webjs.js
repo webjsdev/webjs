@@ -346,7 +346,7 @@ const HELP = {
   },
   mcp: {
     usage: 'webjs mcp',
-    summary: 'Start the read-only MCP server (routes / actions / components / elision / check + a docs/source knowledge layer).',
+    summary: 'Start the read-only MCP server (routes / actions / components / elision / check, plus the WebJs brief and the framework source).',
     examples: ['webjs mcp'],
   },
   source: {

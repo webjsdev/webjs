@@ -1,6 +1,6 @@
 # AGENTS.md for @webjsdev/mcp
 
-The webjs **Model Context Protocol server** (extracted from `@webjsdev/cli` in
+The WebJs **Model Context Protocol server** (extracted from `@webjsdev/cli` in
 #415). A hand-rolled, READ-ONLY MCP stdio server, ZERO runtime dependency
 beyond `@webjsdev/server` for its introspection data functions.
 
@@ -28,11 +28,11 @@ bin/
                          with the process streams.
 src/
   mcp.js                 runMcpServer({ stdin, stdout, stderr, cwd, version,
-                         deps?, docsDeps?, sourceDeps? }). The JSON-RPC loop +
-                         the tool/resource/prompt dispatch. Handshake:
-                         initialize -> serverInfo + capabilities (tools +
-                         resources + prompts); notifications/initialized -> no
-                         reply; tools/list, tools/call, resources/*, prompts/*.
+                         deps?, initFs?, sourceDeps?, uiDeps? }). The JSON-RPC
+                         loop + the tool dispatch. Handshake: initialize ->
+                         serverInfo + capabilities (tools only);
+                         notifications/initialized -> no reply; tools/list,
+                         tools/call. There are no resources and no prompts.
                          INTROSPECTION tools (read-only, appDir-scoped), each
                          projecting a @webjsdev/server function: list_routes
                          (buildRouteTable, via the shared projectRoutes from
@@ -63,21 +63,17 @@ src/
                          drift test in mcp.test.mjs asserts the tool output
                          equals that leaf's output, and another caps the
                          no-args payload's byte size.
-                         `deps` / `docsDeps` / `sourceDeps` / `uiDeps` are
+                         `deps` / `initFs` / `sourceDeps` / `uiDeps` are
                          injectable for in-process tests.
-  mcp-docs.js            KNOWLEDGE layer (#376): resolveDocsLocation (the app's
-                         own installed corpus first, then the server's bundled
-                         resources/, then a repo-root-relative fallback, the
-                         skill in dev; also returns corpusPath, null on that
-                         fallback, which a bundle-less published install reaches
-                         too, so it is not the dev rung alone), the init
-                         primer (sources the AGENTS.md execution-model +
-                         invariants so it cannot drift, and reports which corpus
-                         it served plus a warning when the app's @webjsdev/mcp
-                         is newer than the server's, #1319), the docs tool,
-                         resources (the skill references + SKILL.md + AGENTS.md
-                         as webjs-docs://*), and the recipe PROMPTS.
-                         compareVersions / readAppMcpVersion back that warning.
+  brief.js               BRIEF + BRIEF_HEADING: the WebJs brief, the whole of the
+                         agent-facing docs. The root AGENTS.md and the scaffold's
+                         templates/AGENTS.md carry it verbatim, and
+                         test/repo-health/brief-parity.test.mjs holds the three
+                         copies identical. Edit it here, then paste.
+  mcp-init.js            The `init` tool: the brief plus a map of the other
+                         tools, prefixed with a warning when the app's installed
+                         @webjsdev/mcp is newer than the server's (#1319;
+                         compareVersions / readAppMcpVersion / staleWarning).
   mcp-source.js          SOURCE tool (#378): reads the framework's own no-build
                          source from node_modules/@webjsdev/*/src (read-only,
                          traversal-guarded via realpath, loads no module).
@@ -101,22 +97,6 @@ src/
                          A leaf module: the two effectful deps are injected so it
                          needs no `mcp.js` import (no cycle). A drift test asserts
                          `list_routes` output equals `projectRoutes`.
-scripts/
-  copy-mcp-resources.js  prepack: bundle the repo-root skill (references + SKILL.md) + AGENTS.md
-                         into resources/ (in `files`) so npx is self-contained.
-                         Also emits resources/corpus.json, the build stamp naming
-                         the package, version, commit SHA, and copy time the
-                         bundle froze (#1319). Exports bundleDocs(...) (whose
-                         `stamp` is optional) + readGitSha(...), which answers
-                         only for a checkout ROOT (rev-parse walks up, so a tree
-                         nested in an unrelated repo would otherwise stamp that
-                         repo's HEAD) and returns null rather than throwing.
-                         Every stamp field is null when unknown, never a
-                         plausible default, so no answer stays distinguishable
-                         from a real one.
-  clean-mcp-resources.js postpack: remove the transient resources/ bundle so dev
-                         always reads the live repo-root docs. Exports
-                         cleanBundle(...).
 ```
 
 ## Invariants
@@ -125,35 +105,17 @@ scripts/
    diagnostics go to stderr (`logErr`). A stray stdout write corrupts the
    stream.
 2. **Read-only.** Every tool projects an existing `@webjsdev/server` data
-   function (or reads source/docs) and mutates nothing. No app module is loaded
+   function (or reads the framework source) and mutates nothing. No app module is loaded
    (export names are extracted lexically) so there are no DB-init side effects.
-3. **The docs bundle is transient.** `resources/` exists only inside the
-   published tarball (prepack writes it, postpack removes it). That covers the
-   whole tree, `corpus.json` build stamp included; postpack removes the
-   directory recursively, so nothing added to the bundle needs its own cleanup.
-   In the monorepo the tree is absent and `resolveDocsLocation` falls back to
-   the live repo-root docs, so source stays single. The stamp is build metadata,
-   not a doc, which is why it sits beside `AGENTS.md` rather than inside
-   `references/`: `catalogue()` lists only `*.md` under the references dir, so a
-   stamp there would surface to agents as readable guidance.
-4. **The corpus is a pure function of `appDir`.** `resolveDocsLocation` prefers
-   the corpus installed in the app being asked about, because that copy is
-   version-matched to the framework the agent is editing and the server's own
-   snapshot may be years older (#1319). So the docs deps are built per call and
-   memoized by `appDir`, never once at boot, which would pin the corpus to the
-   launch directory. `resources/list` and `resources/read` carry no `appDir` in
-   the MCP protocol, so they resolve from `cwd`, which is what a `tools/call`
-   with no `appDir` argument defaults to; the surfaces diverge only when a
-   caller deliberately asks about a different app. An injected `opts.docsDeps`
-   wins for every `appDir`, which is the seam the tests drive. Because the corpus
-   follows `appDir`, `init` and `docs` must ADVERTISE `appDir` in their
-   `inputSchema` alongside the introspection tools: a tool that does not declare
-   it can never be sent one by a conforming client, which would leave the
-   app-corpus rung reachable only from hand-written JSON-RPC.
+3. **No docs corpus.** The `docs` tool, the `webjs-docs://*` resources and the
+   recipe prompts were removed along with the agent skill they served: Lit and
+   Next.js habits plus the brief are meant to be enough, and `webjs check` and
+   the runtime refuse what is not, with the fix in the message. Do not bring a
+   bundled corpus back; an exact contract is the `source` tool's job.
 
 ## Tests
 
-`test/mcp.test.mjs`, `test/mcp-docs.test.mjs`, `test/mcp-source.test.mjs`,
+`test/mcp.test.mjs`, `test/mcp-source.test.mjs`,
 `test/check-report.test.mjs`. `runMcpServer` is driven in-process with injected
 deps, so no real server boots. Run `npm test` from the repo root.
 
