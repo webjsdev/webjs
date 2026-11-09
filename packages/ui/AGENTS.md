@@ -379,7 +379,7 @@ render the real value on the server. Icons come from the kit's
 `lib/icons.ts` (`import { ChevronRightIcon } from '../../../lib/icons.ts'`,
 with `lib-icons` in the block's `registryDependencies`), never inline, so an
 app's icon library choice reaches every block it installs. The sample avatar
-is `https://webjs.dev/public/avatars/vivek.jpg` (alt `@vivek`, fallback `VK`),
+is `https://webjs.dev/avatars/vivek.jpg` (alt `@vivek`, fallback `VK`),
 hotlinked by an installed block; the site's mirror makes it site-relative.
 
 **The projector** (`registry/extract.js`), shared by `view` and the MCP `ui`
