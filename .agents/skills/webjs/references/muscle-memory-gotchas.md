@@ -3,7 +3,7 @@
 ## What This Covers
 
 - The Next.js patterns that LOOK right in WebJs but break, because WebJs borrows Next's file-based routing shape but not its execution model (no RSC, no `'use client'` split): `redirect()` in a route handler, `fetch()` in a page, `<Link>`, `NEXT_PUBLIC_`, `await params`.
-- The Lit patterns that break WebJs SSR, reactivity, or event handling, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: `static properties` / the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, interpolation into `<style>`, reading `assignedNodes()` in `firstUpdated` of a light-DOM component.
+- The Lit patterns that break WebJs SSR, reactivity, or event handling, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, interpolation into `<style>`, reading `assignedNodes()` in `firstUpdated` of a light-DOM component.
 - The WebJs-shaped fix for each, with short code.
 
 Read this when a pattern feels familiar from Next.js or Lit but you are not sure it transfers. For the component runtime see `components.md`; for the routing surface see `routing-and-pages.md`. The one difference underneath everything: pages and layouts render server-only and never hydrate, and the one client boundary is a `WebComponent` custom element.
@@ -308,9 +308,9 @@ class StudentCard extends WebComponent({ student: prop<Student>(Object) }) {
 }
 ```
 
-### The `@property()` decorator and a `static properties` block
+### The `@property()` decorator
 
-The `@property()` decorator is banned by the erasable-TS invariant (decorators are non-erasable, they would force a build step). A `static properties = { ... }` block THROWS at runtime (`no-static-properties`). The single replacement for both is the declare-free base-class factory `WebComponent({ ... })`, with the `prop()` helper carrying options.
+The `@property()` decorator is banned by the erasable-TS invariant (decorators are non-erasable, they would force a build step). Lit's decorator-free spelling works as it does in Lit: `static properties = { count: { type: Number } }` plus `declare count: number`. The `WebComponent({ count: Number })` factory is the other spelling, and it infers the types so no `declare` is needed.
 
 ### The `@state()` decorator and `state: true`
 
@@ -359,4 +359,4 @@ Context providers publish on connect via `hostConnected`, which does not run at 
 
 ### Vanilla DOM instead of Lit idioms
 
-WebJs components are Lit-shaped on purpose: the value is the declarative DX. Prefer a factory-declared reactive prop over `this.getAttribute`, a `state: true` prop or a `signal` for internal state, a `class=${...}` binding over `this.classList`, a `@click=${...}` binding over `this.addEventListener`, and `C.register('x')` over `customElements.define`. Vanilla DOM stays right only where the platform offers nothing declarative: `this.closest('ui-tabs')` for compound-component ancestor lookup (resolves at SSR too), slotted-content queries, global `document` / `window` listeners, and imperative `el.focus()`. This is a convention, not a lint rule. A global `document` / `window` LISTENER is one of those legitimate cases, because the event happens outside the element. A document QUERY is not: reaching for markup that another component rendered is the jQuery habit to drop, and for your OWN rendered node a `ref` replaces the selector entirely. The ownership rules at the top of `components.md` state the full test.
+WebJs components are Lit-shaped on purpose: the value is the declarative DX. Prefer a declared reactive prop over `this.getAttribute`, a `state: true` prop or a `signal` for internal state, a `class=${...}` binding over `this.classList`, a `@click=${...}` binding over `this.addEventListener`, and `C.register('x')` over `customElements.define`. Vanilla DOM stays right only where the platform offers nothing declarative: `this.closest('ui-tabs')` for compound-component ancestor lookup (resolves at SSR too), slotted-content queries, global `document` / `window` listeners, and imperative `el.focus()`. This is a convention, not a lint rule. A global `document` / `window` LISTENER is one of those legitimate cases, because the event happens outside the element. A document QUERY is not: reaching for markup that another component rendered is the jQuery habit to drop, and for your OWN rendered node a `ref` replaces the selector entirely. The ownership rules at the top of `components.md` state the full test.

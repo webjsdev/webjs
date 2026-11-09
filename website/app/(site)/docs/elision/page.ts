@@ -30,7 +30,7 @@ export default function Elision() {
 
     <ul>
       <li>An <code>@event</code> binding, or a native handler property like <code>.onclick</code>.</li>
-      <li>A factory-declared reactive property.</li>
+      <li>A declared reactive property.</li>
       <li>An overridden lifecycle hook, <code>renderFallback()</code> and <code>renderError()</code> included.</li>
       <li>An imported <code>signal</code> / <code>computed</code> / <code>watch</code> / <code>Task</code> / <code>ref</code> or a streaming directive, or a call to <code>addController</code> / <code>requestUpdate</code>.</li>
       <li>Code that runs at module load: a top-level call, a non-data <code>new</code>, a dynamic <code>import(...)</code>, a top-level <code>await</code>. Only declarations and the <code>register(...)</code> call are inert. A call inside a declaration does not run at load, so an arrow's expression body (<code>export const usd = (m) =&gt; Math.round(m) / MICROS</code>) and a function parameter default (<code>function relativeTime(when, now = Date.now())</code>) are inert too. TypeScript types are erased before the analyser reads a module, so an annotation is never a signal however call-shaped it looks: <code>readonly (readonly [number, number, number])[]</code> is inert data.</li>

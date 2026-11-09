@@ -81,7 +81,7 @@ UserCard.register('user-card');</code-block>
     <p>If you forget the hyphen, the browser throws at registration time with a clear error message.</p>
 
     <h2>Properties</h2>
-    <p>Reactive properties that ride HTML attributes are declared in <strong>one</strong> place: the base-class factory. You pass the property shape directly into <code>WebComponent({ ... })</code>, the types flow to TypeScript automatically (no <code>declare</code> lines), and the runtime installs a reactive accessor for each key. A hand-written <code>static properties = { ... }</code> field in the class body is no longer supported and throws at construction.</p>
+    <p>Reactive properties that ride HTML attributes are declared either by passing the property shape into the base-class factory <code>WebComponent({ ... })</code>, where the types flow to TypeScript automatically (no <code>declare</code> lines), or with Lit's own <code>static properties = { count: { type: Number } }</code> plus <code>declare count: number</code>. The runtime installs a reactive accessor for each key either way, and a subclass's props merge with its parent's, as in Lit.</p>
 
     <h3>The factory shape</h3>
     <p>Map each property name to its type constructor. Default values are set in the constructor after <code>super()</code> (never a class-field initializer, which runs after <code>super()</code> and clobbers the reactive accessor):</p>

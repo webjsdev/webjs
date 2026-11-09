@@ -138,9 +138,9 @@ The first version ships three modules instead of one: itself, plus `<spec-table>
 
 **The exception, and it is a real one.** Markup that is static *today* but is the thing a near-term behaviour will read is fine to keep, because the alternative is a component that reaches outward for it later, which is what rule 1 forbids. Judge the behaviour you are building, not one you are speculating about. When those genuinely collide, ownership wins over bytes: a coherent component that ships a little extra markup beats a split feature that a selector holds together.
 
-## Reactive properties: the base-class factory
+## Reactive properties: the factory or Lit's `static properties`
 
-Reactive properties are declared by passing their shape into `WebComponent({ ... })`. The types flow automatically to `this.<prop>`, so there is NO `static properties` block and NO `declare` line (a `static properties` block throws at runtime, caught by `no-static-properties`).
+Reactive properties are declared by passing their shape into `WebComponent({ ... })`, where the types flow automatically to `this.<prop>`, or with Lit's own `static properties = { count: { type: Number } }` plus an erasable `declare count: number` for the type. The two are the same declaration: a subclass's props merge with its parent's, as in Lit, and a factory class may add a `static properties` block. The factory is shown below because it needs no `declare`.
 
 ```ts
 import { WebComponent, prop, html } from '@webjsdev/core';
@@ -423,7 +423,7 @@ hydration close the element a moment later (#1443).
 A component that does no client-side work renders the same SSR'd HTML with or without its JS, so WebJs strips its import from the served source (and any vendor reachable only through it). This is automatic and conservative. A component stays elidable while it has NONE of:
 
 - an `@event` binding or native handler property (`.onclick`)
-- a factory-declared reactive property, including `state: true` and `attribute: false`
+- a declared reactive property, including `state: true` and `attribute: false`
 - an overridden lifecycle hook (including `renderFallback` / `renderError`)
 - an imported `signal` / `computed` / `watch` / `Task` / `ref` / streaming directive, or `addController` / `requestUpdate`
 - code that runs at module load (a top-level call, non-data `new`, dynamic `import(...)`, top-level `await`); only declarations and `X.register(...)` are allowed. A call inside a declaration does not run at load, so it is not a blocker: an arrow's expression body (`export const usd = (m) => Math.round(m) / MICROS`) and a function parameter default (`function relativeTime(when, now = Date.now())`) are both fine. TypeScript types are erased before the analyser reads a module, so an annotation can never be a blocker however call-shaped it looks (`readonly (readonly [number, number, number])[]` is fine)

@@ -93,8 +93,8 @@ action without also triggering the row navigation.
 ### 6. Build components for interactivity
 
 Pages and layouts never hydrate, so put every interactive behavior inside a
-`WebComponent` custom element, and declare its reactive properties only in the
-base-class factory (the skill's "Core WebJs Rules" 11). Use the shorthand for primitives
+`WebComponent` custom element, and declare its reactive properties in the
+base-class factory or Lit's `static properties` (the skill's "Core WebJs Rules" 11). With the factory, use the shorthand for primitives
 (`extends WebComponent({ name: String, count: Number, open: Boolean })`) and the
 `prop<T>()` helper for typed objects and arrays
 (`extends WebComponent({ items: prop<Item[]>(Array), user: prop<User>(Object) })`).

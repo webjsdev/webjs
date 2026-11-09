@@ -26,12 +26,12 @@ WebJs matches the Lit surface you already know:
 - `ReactiveController` and `ReactiveControllerHost`.
 - The lit-html directive set (`repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `ref`, `cache`, `until`, `asyncAppend`, and more).
 
-Code you have written against Lit reads almost unchanged in WebJs. There is one deliberate divergence, covered below.
+Code you have written against Lit reads almost unchanged in WebJs. The one thing that does not port is the `@property()` decorator, covered below.
 
 
-# The one deliberate difference: reactive properties
+# Reactive properties: no decorators
 
-Lit declares reactive properties with the `@property()` decorator or a `static properties` block. WebJs declares them through a declare-free base-class factory instead:
+Lit declares reactive properties with the `@property()` decorator or a `static properties` block. WebJs accepts the `static properties` block as it is, with a `declare count: number` for the type, and adds a base-class factory that infers the types for you:
 
 ```ts
 class Counter extends WebComponent({ count: Number }) {
@@ -46,7 +46,7 @@ class Counter extends WebComponent({ count: Number }) {
 Counter.register('my-counter');
 ```
 
-The reason is the no-build constraint. WebJs strips TypeScript with Node's built-in eraser, which requires erasable syntax only, so legacy decorators with metadata are out. The factory gives you the same typed reactive properties without a decorator and without a `declare` line. It is the single place the API departs from Lit, and it exists so the framework can run your `.ts` with no compile step.
+The decorator is the part that cannot come along. WebJs strips TypeScript with Node's built-in eraser, which requires erasable syntax only, and a decorator is real code rather than a type, so it would need a compile step. `static properties` and `declare` are both fine, since one is plain JavaScript and the other is erased, so a Lit component that already uses them ports as written. The factory is the shorter form, typing each property with no `declare` line.
 
 
 # What WebJs adds around the component
@@ -95,4 +95,4 @@ Lit is a component library; WebJs is a full-stack framework. On top of the Lit-s
 
 ### Can I migrate my Lit components to WebJs?
 
-Mostly yes. The template syntax and lifecycle are the same, so the render logic ports with little change. The main edit is swapping Lit's `@property()` decorator or `static properties` block for the WebJs reactive-property declaration, and letting WebJs handle SSR and routing.
+Mostly yes. The template syntax and lifecycle are the same, so the render logic ports with little change. A component written with `static properties` ports as it is; one written with the `@property()` decorator moves its properties into `static properties` (or the factory). Then let WebJs handle SSR and routing.

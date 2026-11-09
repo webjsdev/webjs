@@ -432,8 +432,8 @@ property types flow to `this.<prop>` with no `declare` lines needed. For
 per-property options use the `prop()` helper inside the shape
 (`count: prop(Number, { reflect: true })`, `mode: prop<'a' | 'b'>({ state: true })`);
 narrow a type with `prop<Student>(Object)`. Set defaults in the constructor
-after `super()`. A hand-written `static properties = { ... }` throws at
-construction. The factory gives you full intelligence in any tsserver-backed
+after `super()`. Lit's `static properties = { ... }` with a `declare` per
+prop declares the same thing. The factory gives you full intelligence in any tsserver-backed
 editor. See the Editor Setup docs for the standalone `@webjsdev/intellisense`
 (no Lit dependency) that extends this to tag / attribute
 intelligence inside `html\`…\`` templates (go-to-definition, binding-aware
@@ -450,7 +450,7 @@ elements).
 - **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
 - Tag name must contain a hyphen (HTML spec)
 - Always call `Class.register('tag')`. That's the standard DOM API.
-- **Reactive props are declared via the base-class factory `WebComponent({ ... })`, with defaults set in `constructor()` after `super()`.** A hand-written `static properties = { ... }` throws at construction (`webjs check` flags it via `no-static-properties`). Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders (`webjs check` flags this via `reactive-props-no-class-field`).
+- **Reactive props are declared via the base-class factory `WebComponent({ ... })` or Lit's `static properties` plus `declare`, with defaults set in `constructor()` after `super()`.** Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders (`webjs check` flags this via `reactive-props-no-class-field`).
 - Component state lives in signals. Import `signal` from
   `@webjsdev/core`, read via `signal.get()` inside `render()`, write
   via `signal.set(value)`. Module-scope signals share state across
