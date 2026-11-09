@@ -1,8 +1,8 @@
 /**
  * The muscle-memory corpus, "works" half: code written the way an agent trained
  * on Lit and the Next.js App Router writes it (with WebJs imports), which must
- * be clean under `webjs check` and render correctly with no WebJs-specific
- * adjustment. Each fixture file names the idiom it carries in its header.
+ * be clean under `webjs check` and behave as it would in Lit or Next.js with no
+ * WebJs-specific adjustment. Each fixture file names the idiom it carries in its header.
  *
  * This file covers the check verdict and the server render. The same components
  * are exercised after hydration in `browser/works.test.js`, where the idioms
@@ -12,6 +12,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,4 +51,68 @@ test('the corpus renders every Lit idiom on the server', async () => {
   assert.match(html, /<p class="\s*active\s*">Mode flag<\/p>/, '`classMap`');
   has('<p>HELLO!</p>', 'a custom directive');
   has('<button >Clicks: 0</button>', 'a bare signal in a child hole');
+});
+
+test('the corpus behaves the Next.js way on the server', async () => {
+  // `.env.local` is gitignored, so the env pair is written for this test only.
+  writeFileSync(join(APP, '.env'), 'MM_GREETING=from-env\n');
+  writeFileSync(join(APP, '.env.local'), 'MM_GREETING=from-env-local\n');
+  try {
+    const h = await createRequestHandler({ appDir: APP, dev: false, logger: quiet });
+    await h.warmup?.();
+    const go = (path, init = {}) => h.handle(new Request('http://localhost' + path, { redirect: 'manual', ...init }));
+    const same = { origin: 'http://localhost', 'sec-fetch-site': 'same-origin' };
+
+    // Named `middleware` export with config.matcher and request.cookies.
+    const blocked = await go('/admin');
+    assert.equal(blocked.status, 307, 'middleware redirects a request without a session');
+    assert.match(blocked.headers.get('location') || '', /\/login$/);
+    const allowed = await go('/admin', { headers: { cookie: 'session=abc' } });
+    assert.equal(allowed.status, 200, 'returning nothing from middleware continues');
+    assert.match(await allowed.text(), /Admin area/);
+    assert.equal((await go('/greeting')).status, 200, 'the matcher leaves other paths alone');
+
+    // cookies(): Next's shape for reading and writing.
+    assert.match(await (await go('/login', { headers: { cookie: 'session=abc' } })).text(), /Session: abc/, '(await cookies()).get(name)?.value');
+    const setRes = await go('/api/session', { method: 'POST', headers: same });
+    assert.equal(setRes.status, 200);
+    assert.match(setRes.headers.get('set-cookie') || '', /^session=abc;.*HttpOnly/, 'cookies().set() writes Set-Cookie');
+
+    // Route handlers: notFound(), redirect(), and HEAD for free.
+    assert.deepEqual(await (await go('/api/items/1')).json(), { id: '1', name: 'Widget' });
+    assert.equal((await go('/api/items/2')).status, 404, 'notFound() in a route handler is a 404');
+    const moved = await go('/api/items/first');
+    assert.equal(moved.status, 307, 'redirect() in a route handler is a 307');
+    assert.equal(moved.headers.get('location'), '/api/items/1');
+    assert.equal((await go('/api/items/1', { method: 'HEAD' })).status, 200, 'HEAD is answered from GET');
+
+    // Pages: catch-all arrays, permanentRedirect, env files, public/ at the root.
+    assert.match(await (await go('/docs/a/b')).text(), /Path: a \/ b/, 'a catch-all param is an array');
+    const perm = await go('/old-about');
+    assert.equal(perm.status, 308, 'permanentRedirect() is a 308');
+    const greeting = await (await go('/greeting')).text();
+    assert.match(greeting, /Greeting: from-env-local/, '.env.local overrides .env');
+    const logo = await go('/logo.svg');
+    assert.equal(logo.status, 200, 'public/logo.svg is served at /logo.svg');
+    assert.match(await logo.text(), /<svg/);
+
+    // A (prevState, formData) action: { errors } re-renders, redirect() is a 303.
+    const form = await (await go('/guestbook')).text();
+    const ident = /name="__webjs_action" value="([^"]+)"/.exec(form);
+    assert.ok(ident, 'the bound form carries the action identity');
+    const submit = (name) => go('/guestbook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...same },
+      body: new URLSearchParams({ __webjs_action: ident[1], name }),
+    });
+    const failed = await submit('');
+    assert.equal(failed.status, 422, '{ errors } is a failed result');
+    assert.match(await failed.text(), /Name is required/, 'the failed result reaches the page as actionData');
+    const ok = await submit('Ada');
+    assert.equal(ok.status, 303, 'redirect() after the write answers 303, so the browser GETs the target');
+    assert.equal(ok.headers.get('location'), '/guestbook?thanks=1');
+  } finally {
+    rmSync(join(APP, '.env'), { force: true });
+    rmSync(join(APP, '.env.local'), { force: true });
+  }
 });

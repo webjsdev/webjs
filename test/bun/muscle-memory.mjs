@@ -48,6 +48,32 @@ const quiet = { info() {}, warn() {}, error() {}, debug() {} };
   }
 }
 
+// The Next.js half behaves the same: middleware, cookies(), route handlers,
+// env files (Bun's own .env loading must not win over Next's order), public/.
+{
+  const app = join(ROOT, 'test/muscle-memory/works');
+  writeFileSync(join(app, '.env'), 'MM_GREETING=from-env\n');
+  writeFileSync(join(app, '.env.local'), 'MM_GREETING=from-env-local\n');
+  try {
+    const h = await createRequestHandler({ appDir: app, dev: false, logger: quiet });
+    await h.warmup?.();
+    const go = (path, init = {}) => h.handle(new Request('http://localhost' + path, { redirect: 'manual', ...init }));
+    assert.equal((await go('/admin')).status, 307, `${runtime}: middleware redirects without a session`);
+    assert.equal((await go('/admin', { headers: { cookie: 'session=abc' } })).status, 200, `${runtime}: middleware continues`);
+    assert.match(await (await go('/login', { headers: { cookie: 'session=abc' } })).text(), /Session: abc/, `${runtime}: cookies().get()?.value`);
+    const set = await go('/api/session', { method: 'POST', headers: { origin: 'http://localhost', 'sec-fetch-site': 'same-origin' } });
+    assert.match(set.headers.get('set-cookie') || '', /^session=abc;/, `${runtime}: cookies().set()`);
+    assert.equal((await go('/api/items/2')).status, 404, `${runtime}: notFound() in a route handler`);
+    assert.equal((await go('/api/items/first')).status, 307, `${runtime}: redirect() in a route handler`);
+    assert.match(await (await go('/docs/a/b')).text(), /Path: a \/ b/, `${runtime}: catch-all arrays`);
+    assert.match(await (await go('/greeting')).text(), /Greeting: from-env-local/, `${runtime}: .env.local overrides .env`);
+    assert.equal((await go('/logo.svg')).status, 200, `${runtime}: public/ at the root`);
+  } finally {
+    rmSync(join(app, '.env'), { force: true });
+    rmSync(join(app, '.env.local'), { force: true });
+  }
+}
+
 // Every dev-time refusal names its fix.
 for (const c of REFUSED.filter((x) => x.load && !(process.versions.bun && x.serverLoadsOnBun))) {
   const appDir = mkdtempSync(join(tmpdir(), `webjs-bun-refused-${c.id}-`));
