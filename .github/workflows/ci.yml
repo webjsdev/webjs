@@ -280,8 +280,12 @@ jobs:
       # dev-restart-files rides here too (#1689): a .env or package.json edit
       # restarts the server once, and Bun's own .env loading must not hand the
       # restarted child the old values.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll + rebuild-order + late-rerun + vendor-cache-rebuild + restart-files + error-header on Bun
+      # dev-watch-burst rides here too (#1689): Bun's fs.watch drops the second
+      # of two saves in one folder within about 1ms, so the rebuild has to find
+      # that edit from disk stamps and still carry it to the tab.
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll + rebuild-order + late-rerun + vendor-cache-rebuild + restart-files + error-header + watch-burst on Bun
         run: |
+          bun test/bun/dev-watch-burst.mjs
           bun test/bun/dev-hot-server-fresh.mjs
           bun test/bun/dev-hot-served-versions.mjs
           bun test/bun/dev-html-cache-rebuild.mjs
