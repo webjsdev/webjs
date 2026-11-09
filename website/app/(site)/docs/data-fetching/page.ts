@@ -49,7 +49,7 @@ class UserActivity extends WebComponent({ uid: String }) {
     return html\`&lt;ul&gt;${'${items.map((i) => html`<li>${i.label}</li>`)}'}&lt;/ul&gt;\`;
   }
 }</code-block>
-    <p>Define <code>renderFallback()</code> only when stale content during a re-fetch would mislead. It is a prop-aware method (not a static field), so it can branch on the component's current state. <code>Task</code> cannot cover this case: a <code>Task</code> renders its pending state at SSR, losing the first-paint data, and you cannot wrap a signal around your own <code>await</code> inside <code>render()</code>.</p>
+    <p>Define <code>renderFallback()</code> only when stale content during a re-fetch would mislead. It is a prop-aware method (not a static field), so it can branch on the component's current state. <code>Task</code> cannot cover this case: a <code>Task</code> never runs at SSR (the server renders its initial state), losing the first-paint data, and you cannot wrap a signal around your own <code>await</code> inside <code>render()</code>.</p>
 
     <h2>Errors are isolated by default</h2>
     <code-block>// (d) the no-op error case: isolation works WITHOUT renderError()

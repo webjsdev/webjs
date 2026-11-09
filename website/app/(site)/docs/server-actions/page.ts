@@ -114,6 +114,7 @@ import { createPost } from '#actions/posts.server.ts';
 //                        ^-- TS sees: (input: { title: string; body: string }) => Promise&lt;Post&gt;
 
 export class PostForm extends WebComponent {
+  static shadow = true;   // static styles apply inside a shadow root
   static styles = css\`:host { display: block; }\`;
 
   async handleSubmit(e: Event) {
@@ -391,6 +392,7 @@ import { WebComponent, html, css } from '@webjsdev/core';
 import { addTodo, listTodos } from '#actions/todos.server.ts';
 
 export class TodoApp extends WebComponent {
+  static shadow = true;   // static styles apply inside a shadow root
   static styles = css\`
     :host { display: block; max-width: 400px; }
     ul { list-style: none; padding: 0; }

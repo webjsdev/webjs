@@ -79,17 +79,17 @@ await el.updateComplete;
 }</code-block>
 
     <h2>State mutation</h2>
-    <p>Mutating a signal that the update cycle read (in <code>willUpdate()</code>, <code>render()</code> or <code>updated()</code>) schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared via the <code>WebComponent({ ... })</code> factory) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
+    <p>Mutating a signal that the update cycle read (in <code>willUpdate()</code>, <code>render()</code> or <code>updated()</code>) schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared through the <code>WebComponent({ ... })</code> factory or <code>static properties</code>) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>
     <code-block>this.count.set(this.count.get() + 1);
 this.name = 'updated';                       // reactive property assignment
 // One render. changedProperties.has('name') is true; signal change drove the watcher.</code-block>
 
     <p>For a fine-grained binding that updates a single template hole without re-running the host's <code>render()</code> (and without going through the lifecycle hooks above), see the <code>watch(signal)</code> directive in the <a href="/docs/components">Components</a> doc. Lifecycle hooks fire only on a full re-render; <code>watch()</code>-driven updates bypass them.</p>
 
-    <h2>requestUpdate(name, oldValue)</h2>
+    <h2>requestUpdate(name, oldValue, options)</h2>
     <p>Manually schedule a re-render. Optionally record a property change so hooks see it in <code>changedProperties</code>. Used by controllers and code that mutates outside the reactive property system.</p>
     <code-block>this.requestUpdate('items', oldItems);</code-block>
-    <p>As in Lit, a named call runs the property's <code>hasChanged</code> against <code>oldValue</code> and schedules nothing when the value is unchanged, so after mutating an array or object in place (same reference) call <code>this.requestUpdate()</code> with no arguments instead.</p>
+    <p>As in Lit, a named call runs the property's <code>hasChanged</code> against <code>oldValue</code> (or the <code>hasChanged</code> in the optional third <code>options</code> argument) and schedules nothing when the value is unchanged, so after mutating an array or object in place (same reference) call <code>this.requestUpdate()</code> with no arguments instead.</p>
 
     <h2>renderError(error)</h2>
     <p>Runs when <code>update()</code>/<code>render()</code> throws. Return a fallback template to show instead of crashing the page.</p>
@@ -114,9 +114,9 @@ this.name = 'updated';                       // reactive property assignment
     <p>These are provided by <code>HTMLElement</code> itself and work as normal in WebJs components:</p>
     <ul>
       <li><code>connectedCallback()</code> fires when the element is added to DOM (call <code>super.connectedCallback()</code>)</li>
-      <li><code>disconnectedCallback()</code> fires when the element is removed from DOM</li>
+      <li><code>disconnectedCallback()</code> fires when the element is removed from DOM (call <code>super.disconnectedCallback()</code>, which releases signal subscriptions and notifies controllers)</li>
       <li><code>attributeChangedCallback(name, old, new)</code> fires when an observed attribute changes</li>
-      <li><code>static observedAttributes</code>: declares which attributes to watch</li>
+      <li><code>static observedAttributes</code> is derived from your declared reactive properties, so do not override it; declare a property instead</li>
     </ul>
 
     <h2>SSR vs Browser: which hooks run where</h2>

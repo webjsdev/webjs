@@ -12,12 +12,12 @@ import {
   classMap, styleMap, ifDefined, unsafeHTML, unsafeSVG, unsafeMathML, live,
   keyed, guard, templateContent, ref, createRef,
   cache, until, asyncAppend, asyncReplace,
-  when, choose, map, join, range,
+  when, choose, map, join, range, watch,
 } from '@webjsdev/core/directives';
 import { literal, unsafeStatic, html as staticHtml } from '@webjsdev/core/static-html';</code-block>
 
     <h2>repeat(items, keyFn, templateFn)</h2>
-    <p>Keyed list reconciliation. Without it, re-rendering an array destroys and recreates all DOM nodes, losing focus, scroll position, and component state.</p>
+    <p>Keyed list reconciliation. Without it, an array updates position by position: the DOM for item N is reused for whatever is now at index N, so on a reorder or an insert, focus, scroll position and component state stay with the position rather than the item. <code>repeat()</code> moves each item's DOM with its key.</p>
     <code-block>html\`&lt;ul&gt;
   \${repeat(
     items,
@@ -27,6 +27,10 @@ import { literal, unsafeStatic, html as staticHtml } from '@webjsdev/core/static
 &lt;/ul&gt;\`;</code-block>
     <p>Use for any list where items can be added, removed, or reordered and you need to preserve DOM identity (animated lists, forms with inputs, draggable items). For static lists, plain <code>\${items.map(...)}</code> works.</p>
     <p>Lit's two-argument form, <code>repeat(items, (item, i) =&gt; html\`...\`)</code>, works too. With no key function each item is keyed by its index, so it updates positionally like a plain array; pass a key function whenever DOM identity has to follow the data.</p>
+
+    <h2>watch(signal)</h2>
+    <p>Binds one hole to a signal: when the signal changes, only that text node or attribute updates, without re-running the host's <code>render()</code> or its lifecycle hooks. A bare <code>\${signal}</code> in a hole does the same thing, as in Lit's signals package; <code>watch()</code> is the explicit spelling, also exported from <code>@webjsdev/core/signals</code>.</p>
+    <code-block>html\`&lt;p&gt;Unread: \${watch(unread)}&lt;/p&gt;\`;</code-block>
 
     <h2>unsafeHTML(htmlString)</h2>
     <p>Renders a raw HTML string without escaping. The only way to inject pre-built HTML (CMS content, markdown output) into a template.</p>

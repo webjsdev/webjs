@@ -148,7 +148,7 @@ class MyCard extends WebComponent {
     <p><strong>Verify by USING it.</strong> A layout bug only shows mid-interaction. Render the app, play through every state (fill the board, win, draw, reload), and confirm nothing resizes and the cells stay equal.</p>
 
     <h2>Opting in to shadow DOM</h2>
-    <p>Set <code>static shadow = true</code> when you want <code>adoptedStyleSheets</code>-scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed-proof CSS isolation:</p>
+    <p>Set <code>static shadow = true</code> when you want <code>adoptedStyleSheets</code>-scoped styles, <code>::slotted()</code> selectors, or third-party-embed-proof CSS isolation (<code>&lt;slot&gt;</code> itself works the same in light DOM):</p>
 
     <code-block>import { WebComponent, html, css } from '@webjsdev/core';
 

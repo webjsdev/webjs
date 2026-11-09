@@ -261,6 +261,7 @@ export function WS(ws: WebSocket) {
 import { WebComponent, html, css, connectWS } from '@webjsdev/core';
 
 export class LiveChat extends WebComponent {
+  static shadow = true;   // static styles apply inside a shadow root
   static styles = css\`
     :host { display: flex; flex-direction: column; height: 400px; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
     .messages { flex: 1; overflow-y: auto; padding: 12px; }
@@ -395,6 +396,7 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: { postId: 
 import { WebComponent, html, css, connectWS } from '@webjsdev/core';
 
 export class LiveComments extends WebComponent({ postId: Number }) {
+  static shadow = true;   // static styles apply inside a shadow root
   static styles = css\`
     :host { display: block; }
     .comment { padding: 8px 0; border-bottom: 1px solid #eee; }

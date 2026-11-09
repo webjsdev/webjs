@@ -35,11 +35,12 @@ export default function Components() {
     <p>To check a component you are about to write, walk its template and ask of each element whether a handler touches it, a state change alters it, or it sits in a template hole. If all three are no, that element is a passenger. A template that is mostly passengers wants splitting. The exception is markup that is static today but is what a near-term behaviour will read, since the alternative is a component that reaches outward for it later. When ownership and bytes genuinely collide, ownership wins.</p>
 
     <h2>The WebComponent Base Class</h2>
-    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> by passing a shape into the base-class factory (<code>extends WebComponent({ ... })</code>, and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
+    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>reactive properties</strong> (through the base-class factory <code>extends WebComponent({ ... })</code> or Lit's <code>static properties</code> plus <code>declare</code>, both covered below), optionally sets <code>static shadow = true</code> with <code>static styles</code> for scoped CSS, implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
 
     <code-block>import { WebComponent, html, css, signal } from '@webjsdev/core';
 
 class MyCounter extends WebComponent {
+  static shadow = true;   // static styles apply inside a shadow root
 
   // Instance signal carries component-local state. SignalWatcher
   // (built into WebComponent) auto-tracks .get() reads and re-renders.
@@ -275,11 +276,12 @@ Counter.register('my-counter');</code-block>
     <p>Lit's <code>SignalWatcher</code> mixin and <code>watch</code> are both importable from <code>@webjsdev/core/signals</code> (Lit's <code>@lit-labs/signals</code>). <code>SignalWatcher</code> returns the class it is given unchanged, because every <code>WebComponent</code> already watches the signals its update reads, so <code>class X extends SignalWatcher(WebComponent)</code> works and means the same thing as <code>class X extends WebComponent</code>.</p>
 
     <h2>Styles</h2>
-    <p>Use the <code>css</code> tagged template to declare scoped styles. They are automatically adopted into the component's shadow root.</p>
+    <p>Use the <code>css</code> tagged template to declare scoped styles on a component with <code>static shadow = true</code>; they are adopted into its shadow root. A light-DOM component (the default) has no shadow root to adopt them into, so <code>static styles</code> there is refused, as described below.</p>
 
     <code-block>import { WebComponent, html, css } from '@webjsdev/core';
 
 class StyledCard extends WebComponent {
+  static shadow = true;
   static styles = css\`
     :host {
       display: block;
@@ -533,7 +535,7 @@ UserProfile.register('user-profile');</code-block>
     <ul>
       <li><strong>Server data knowable at request time</strong>: <code>async render()</code> in the component. The default, simplest case.</li>
       <li><strong>Re-fetch where stale content would mislead</strong>: add <code>renderFallback()</code>.</li>
-      <li><strong>Genuinely client-only data</strong> (depends on a click, viewport, localStorage, or live updates, not needed in the first paint): use <code>Task</code> / signals plus an RPC action. A <code>Task</code> shows its pending state at SSR, so it loses first-paint data.</li>
+      <li><strong>Genuinely client-only data</strong> (depends on a click, viewport, localStorage, or live updates, not needed in the first paint): use <code>Task</code> / signals plus an RPC action. A <code>Task</code> never runs at SSR (the server renders its initial state), so it loses first-paint data.</li>
       <li><strong>Slow server data</strong> where blocking the first byte hurts: stream it by wrapping the component in <code>&lt;webjs-suspense .fallback=\${html\`…\`}&gt;</code> (fallback on the first byte, content streams in). See <a href="/docs/data-fetching">Data fetching</a>.</li>
     </ul>
     <h3>Anti-patterns</h3>
@@ -610,6 +612,7 @@ html\`
     <p>Use <code>&lt;slot name="..."&gt;</code> to route different pieces of content to different parts of a component:</p>
 
     <code-block>class PageLayout extends WebComponent {
+  static shadow = true;
   static styles = css\`
     .sidebar { float: left; width: 200px; }
     .content { margin-left: 220px; }
@@ -653,10 +656,10 @@ html\`
     <p>WebJs components use the standard custom element lifecycle callbacks. If you override them, <strong>always call super</strong>.</p>
 
     <h3>connectedCallback()</h3>
-    <p>Called when the element is inserted into the document. This is where WebJs attaches the shadow root, adopts styles, and performs the first render. Use it for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
+    <p>Called when the element is inserted into the document. WebJs sets up the render root here (attaching the shadow root and adopting styles when <code>static shadow = true</code>) and queues the first render, which runs a microtask later, as in Lit. DOM work that needs the rendered output belongs in <code>firstUpdated()</code>. Use <code>connectedCallback</code> for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
 
     <code-block>connectedCallback() {
-  super.connectedCallback();  // REQUIRED: sets up shadow root + first render
+  super.connectedCallback();  // REQUIRED: sets up the render root, queues the first render
   this._ws = connectWS('/api/chat', {
     onMessage: (msg) =&gt; this.messages.set([...this.messages.get(), msg]),
   });
@@ -668,12 +671,13 @@ html\`
     <p>Called when the element is removed from the document. Clean up event listeners, timers, WebSocket connections, and other resources:</p>
 
     <code-block>disconnectedCallback() {
+  super.disconnectedCallback();
   this._ws?.close();
   this._ws = null;
   clearInterval(this._timer);
 }</code-block>
 
-    <p>You do not need to call <code>super.disconnectedCallback()</code> (the base class is a no-op), but it does not hurt to include it for safety.</p>
+    <p>Always call <code>super.disconnectedCallback()</code>. The base class disposes the component's signal subscriptions, tears down its slot observers, and calls each controller's <code>hostDisconnected()</code>; skipping it leaks all three.</p>
 
     <h3>attributeChangedCallback(name, oldValue, newValue)</h3>
     <p>Called when one of the <code>observedAttributes</code> changes. WebJs handles this for you. It coerces the attribute value based on the type declared in the factory shape, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
@@ -688,7 +692,7 @@ html\`
     <h3>Render Is Automatic</h3>
     <p>You never call <code>render()</code> directly. It is called automatically:</p>
     <ul>
-      <li>Once during <code>connectedCallback()</code> (first paint).</li>
+      <li>Once after <code>connectedCallback()</code>, a microtask later (first render).</li>
       <li>After every signal write the render reads (tracked by the built-in SignalWatcher).</li>
       <li>After every reactive-property assignment.</li>
       <li>After every <code>requestUpdate()</code> call.</li>
@@ -783,7 +787,7 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
     <p>WebJs wraps the native API (and installs a compatible shim on the server) so the same line works in both environments:</p>
     <ul>
       <li><strong>Browser</strong>: tells the browser to upgrade all <code>&lt;my-counter&gt;</code> elements with the <code>MyCounter</code> class, and mirrors the mapping into webjs's internal registry.</li>
-      <li><strong>Server</strong>: stores the class in the internal registry so <code>renderToString</code> can look it up for Declarative Shadow DOM injection.</li>
+      <li><strong>Server</strong>: stores the class in the internal registry so the server render can instantiate it wherever its tag appears.</li>
     </ul>
 
     <p>Module URLs for <code>&lt;link rel="modulepreload"&gt;</code> hints are discovered separately, by a server-side scanner that walks the app tree on the first request (memoized, and re-run after each rebuild) and derives the file path for each discovered tag. No per-component <code>import.meta.url</code> argument needed.</p>
@@ -793,16 +797,16 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
     <p>The tag argument accepts any short-string quote style. <code>register('my-counter')</code>, <code>register("my-counter")</code>, and <code>register(&#96;my-counter&#96;)</code> are all equivalent. The framework's <code>tag-name-has-hyphen</code> lint rule reads the tag through any of them.</p>
 
     <h2>Server Rendering</h2>
-    <p>WebJs components are server-rendered using <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter count="5"&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
+    <p>Every component is server-rendered. A light-DOM component (the default) renders its template inline after a <code>&lt;!--webjs-hydrate--&gt;</code> marker; a component with <code>static shadow = true</code>, like <code>MyCounter</code> above, renders as <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
 
-    <code-block>&lt;my-counter count="5"&gt;
+    <code-block>&lt;my-counter&gt;
   &lt;template shadowrootmode="open"&gt;
     &lt;style&gt;
       :host { display: inline-flex; gap: 8px; }
       button { font: inherit; padding: 4px 12px; }
     &lt;/style&gt;
     &lt;button&gt;-&lt;/button&gt;
-    &lt;output&gt;5&lt;/output&gt;
+    &lt;output&gt;0&lt;/output&gt;
     &lt;button&gt;+&lt;/button&gt;
   &lt;/template&gt;
 &lt;/my-counter&gt;</code-block>
@@ -810,8 +814,8 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
     <h3>How SSR Works</h3>
     <ul>
       <li>The server imports the component module, which calls <code>Class.register('tag')</code> and stores the class in the registry.</li>
-      <li>During <code>renderToString()</code>, the server scans the output HTML for registered custom element tags.</li>
-      <li>For each match, it creates a temporary instance, applies attributes from the HTML, calls <code>render()</code>, and wraps the result in a <code>&lt;template shadowrootmode="open"&gt;</code> block with the component's styles.</li>
+      <li>The renderer walks the page's templates once; when it reaches the tag of a registered component, it renders that component in place.</li>
+      <li>For each one it creates a temporary instance, applies the tag's attributes, runs the pre-render hooks and <code>render()</code>, then writes the result inline (light DOM) or inside a <code>&lt;template shadowrootmode="open"&gt;</code> block with the component's styles (shadow DOM).</li>
       <li>The browser parses this as a native declarative shadow root, so the content is visible <strong>before any JavaScript loads</strong>.</li>
       <li>When the component's JS module eventually loads and the custom element upgrades, the existing shadow root is reused. The client renderer performs a fine-grained diff against the already-painted DOM.</li>
     </ul>
@@ -836,7 +840,7 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
 }
 UserProfile.register('user-profile');</code-block>
 
-    <p>On the client, <code>render()</code> is called synchronously. If you need async data on the client, fetch it in <code>connectedCallback()</code> and write a signal when the data arrives.</p>
+    <p>On the client an <code>async render()</code> is awaited too. When a property change re-runs it, the current content stays on screen until the new render resolves (stale-while-revalidate), and an optional <code>renderFallback()</code> shows while it does. See <a href="/docs/data-fetching">Data fetching</a>.</p>
 
     <h2>Fine-Grained Client Renderer</h2>
     <p>The client renderer does <strong>not</strong> rebuild the entire DOM on every state change. Instead, it tracks each dynamic "hole" in the template and only touches the parts that actually changed.</p>
@@ -860,7 +864,7 @@ UserProfile.register('user-profile');</code-block>
     </ul>
 
     <h3>Keyed Lists with repeat()</h3>
-    <p>By default, rendering an array of templates rebuilds all children when any item changes. For lists where items have stable identities, use <code>repeat()</code> to enable keyed reconciliation:</p>
+    <p>A plain array of templates updates position by position: the DOM for item N is reused for whatever is now at index N, so on a reorder or an insert, focus and component state stay with the position rather than the item. For lists whose items have stable identities, use <code>repeat()</code> so the DOM follows the data:</p>
 
     <code-block>import { WebComponent, html, css, repeat } from '@webjsdev/core';
 
@@ -911,10 +915,10 @@ TaskList.register('task-list');</code-block>
     <h2>Putting It All Together</h2>
     <p>Here is a complete example showing properties, state, events, lifecycle, slots, and scoped styles in a single component:</p>
 
-    <code-block>import { WebComponent, html, css, repeat, connectWS } from '@webjsdev/core';
+    <code-block>import { WebComponent, html, css, repeat, connectWS, signal } from '@webjsdev/core';
 
 class ChatBox extends WebComponent {
-
+  static shadow = true;
   static styles = css\`
     :host { display: block; border: 1px solid var(--border); border-radius: var(--rad-lg); }
     .log  { height: 200px; overflow-y: auto; padding: var(--sp-4); }
@@ -941,6 +945,7 @@ class ChatBox extends WebComponent {
   }
 
   disconnectedCallback() {
+    super.disconnectedCallback();
     this._conn?.close();
     this._conn = null;
   }
@@ -982,9 +987,9 @@ ChatBox.register('chat-box');</code-block>
       <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
       <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots, fallback content, <code>assignedNodes()</code>, <code>slotchange</code>. Works identically in light DOM and shadow DOM.</li>
       <li><strong>Light DOM</strong> by default. Set <code>static shadow = true</code> to opt in to shadow DOM for scoped styles (<code>static styles = css\`...\`</code>) or third-party embed isolation.</li>
-      <li><strong>Lifecycle</strong>: <code>connectedCallback()</code> (call super!), <code>disconnectedCallback()</code>, <code>attributeChangedCallback()</code>.</li>
-      <li><strong>Lists</strong>: <code>repeat(items, keyFn, templateFn)</code> for efficient keyed updates.</li>
-      <li><strong>SSR</strong>: components render to Declarative Shadow DOM. Async <code>render()</code> supported on the server.</li>
+      <li><strong>Lifecycle</strong>: <code>connectedCallback()</code> and <code>disconnectedCallback()</code> (call super in both), <code>attributeChangedCallback()</code>, then Lit's update cycle (<code>willUpdate</code>, <code>firstUpdated</code>, <code>updated</code>).</li>
+      <li><strong>Lists</strong>: <code>repeat(items, keyFn, templateFn)</code> for keyed updates (Lit's two-argument <code>repeat(items, templateFn)</code> works too, keyed by index).</li>
+      <li><strong>SSR</strong>: light-DOM components render inline, shadow-DOM components as Declarative Shadow DOM. Async <code>render()</code> is awaited on the server and the client.</li>
     </ul>
 
     <h2>Next Steps</h2>

@@ -160,7 +160,7 @@ handleSubmit(e) {
     <p>Use <code>autoRun: false</code> for tasks that should only fire on explicit user action: form submissions, delete confirmations, or manual refresh buttons. <code>run(args)</code> also accepts an explicit args array for that one run.</p>
 
     <h2>taskComplete</h2>
-    <p><code>task.taskComplete</code> is a promise for the current run: it resolves with the value or rejects with the error. With no run pending it settles straight away with the current value. Useful in tests and in code that needs the result after triggering a run:</p>
+    <p><code>task.taskComplete</code> is a promise for the current run: it resolves with the value or rejects with the error. With no run pending it settles straight away: it resolves with the current value, or rejects with the current error. Useful in tests and in code that needs the result after triggering a run:</p>
 
     <code-block>this.userId = '42';
 await this.updateComplete;          // the update ran the task
@@ -259,6 +259,7 @@ class LiveSearch extends WebComponent {
   }
 
   disconnectedCallback() {
+    super.disconnectedCallback();
     clearTimeout(this._timer);
   }
 
