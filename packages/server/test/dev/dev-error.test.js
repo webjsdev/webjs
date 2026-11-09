@@ -120,3 +120,12 @@ test("Node's uncaught parse header locates the file", () => {
   assert.equal(frame.line, 2);
   assert.match(frame.hint || '', /static properties/);
 });
+
+test('a missing core export (Node or Bun wording) gets the core-imports-exist fix', () => {
+  const node = new SyntaxError("The requested module '/x/node_modules/@webjsdev/core/index.js' does not provide an export named 'LitElement'");
+  assert.match(buildDevErrorFrame(node).hint || '', /WebComponent/);
+  const bun = new SyntaxError("Export named 'PropertyDeclaration' not found in module '/x/packages/core/index.js'.");
+  assert.match(buildDevErrorFrame(bun).hint || '', /import type \{ PropertyDeclaration \}/);
+  const other = new SyntaxError("The requested module 'left-pad' does not provide an export named 'x'");
+  assert.equal(buildDevErrorFrame(other).hint, null);
+});

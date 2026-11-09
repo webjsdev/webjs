@@ -1,6 +1,7 @@
 /**
- * Cross-runtime proof that a Lit decorator is refused LOUDLY, with the WebJs
- * fix, under whichever runtime executes this file. Run it under both:
+ * Cross-runtime proof that a Lit decorator, and a Lit name core does not
+ * export, are refused LOUDLY, with the WebJs fix, under whichever runtime
+ * executes this file. Run it under both:
  *
  *   node test/bun/decorator-detection.mjs
  *   bun  test/bun/decorator-detection.mjs
@@ -19,7 +20,8 @@
  * A plain assert script (not `*.test.mjs`); it throws on failure.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createRequestHandler } from '../../packages/server/src/dev.js';
@@ -81,6 +83,24 @@ try {
     ssrFrames.some((f) => /state: true/.test(f.hint || '')),
     `[${runtime}] the render frame carries the @state fix: ${JSON.stringify(ssrFrames.map((f) => [f.message, f.file, f.hint]))}`,
   );
+
+  // 4. A Lit name core does not export fails at link time with a different
+  //    message per runtime (Node: "does not provide an export named", Bun:
+  //    "Export named ... not found"); both map to the same fix.
+  const litApp = makeApp('lit', {
+    'app/page.ts': "import { LitElement } from '@webjsdev/core';\nexport default function P() { return String(LitElement); }\n",
+  });
+  mkdirSync(join(litApp, 'node_modules', '@webjsdev'), { recursive: true });
+  symlinkSync(fileURLToPath(new URL('../../packages/core', import.meta.url)), join(litApp, 'node_modules', '@webjsdev', 'core'));
+  const litFrames = [];
+  const lit = await createRequestHandler({ appDir: litApp, dev: true, onDevError: (f) => litFrames.push(f) });
+  assert.equal((await lit.handle(new Request('http://x/'))).status, 500, `[${runtime}] the LitElement page fails`);
+  assert.ok(
+    litFrames.some((f) => /WebComponent/.test(f.hint || '')),
+    `[${runtime}] the frame names WebComponent: ${JSON.stringify(litFrames.map((f) => [f.message, f.hint]))}`,
+  );
+  const litCheck = (await checkConventions(litApp)).find((v) => v.rule === 'core-imports-exist');
+  assert.ok(litCheck && /WebComponent/.test(litCheck.fix), `[${runtime}] core-imports-exist flags LitElement`);
 
   console.log(`[${runtime}] decorator detection OK`);
 } finally {

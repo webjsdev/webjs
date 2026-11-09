@@ -16,7 +16,8 @@
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { findDecorator, decoratorReport } from './lit-hints.js';
+import { findDecorator, decoratorReport, parseMissingExport, isCoreModule, missingCoreNameFix } from './lit-hints.js';
+import { coreSurface, isTypeOnlyAnywhere } from './core-exports.js';
 
 /**
  * Pull the first useful `file:line:column` out of an error stack. Prefers a
@@ -161,7 +162,7 @@ export function buildDevErrorFrame(error, opts = {}) {
     line,
     column,
     codeFrame,
-    hint: hint || inferHint(err, file) || null,
+    hint: hint || inferHint(err, file, opts.appDir) || null,
     url: typeof opts.url === 'string' && opts.url ? opts.url : null,
   };
 }
@@ -176,11 +177,23 @@ export function buildDevErrorFrame(error, opts = {}) {
  * the undefined decorator function. Neither names the fix, so when the failing
  * file carries a decorator the hint is the one `webjs check` prints.
  *
+ * The other is a name `@webjsdev/core` does not export (`LitElement`, a
+ * decorator function, a type imported as a value). Node says `does not provide
+ * an export named X` and Bun `Export named 'X' not found`; the hint is the one
+ * the `core-imports-exist` check rule prints for the same import.
+ *
  * @param {Error} err
  * @param {string | null} file  the located source file, when there is one
+ * @param {string} [appDir]  resolves the core package the app imports
  * @returns {string | null}
  */
-export function inferHint(err, file) {
+export function inferHint(err, file, appDir) {
+  const missing = parseMissingExport(err.message);
+  if (missing && isCoreModule(missing.module)) {
+    const surface = coreSurface(appDir);
+    const typeOnly = !!surface && isTypeOnlyAnywhere(surface, missing.name);
+    return `\`${missing.name}\` is not a runtime export of @webjsdev/core. ${missingCoreNameFix(missing.name, { typeOnly })}`;
+  }
   if ((err instanceof SyntaxError || err instanceof ReferenceError) && file) {
     let src = null;
     try { src = readFileSync(file, 'utf8'); } catch { src = null; }

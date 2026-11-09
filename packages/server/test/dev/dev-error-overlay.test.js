@@ -10,7 +10,8 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -221,4 +222,21 @@ test('a page whose module graph fails on a decorator at SSR gets the decorator h
   const f = frames.find((x) => /decorator/i.test(x.hint || ''));
   assert.ok(f, `a frame carries the decorator hint: ${JSON.stringify(frames.map((x) => [x.kind, x.message, x.file, x.hint]))}`);
   assert.match(f.hint, /state: true/);
+});
+
+test('a page importing LitElement from core gets the WebComponent fix in its frame', async () => {
+  const appDir = makeApp({
+    'app/page.ts': "import { LitElement } from '@webjsdev/core';\nexport default function P() { return String(LitElement); }\n",
+  });
+  // Resolve the bare specifier to the workspace core, as an installed app would.
+  mkdirSync(join(appDir, 'node_modules', '@webjsdev'), { recursive: true });
+  symlinkSync(fileURLToPath(new URL('../../../core', import.meta.url)), join(appDir, 'node_modules', '@webjsdev', 'core'));
+  const frames = [];
+  const app = await createRequestHandler({ appDir, dev: true, onDevError: (f) => frames.push(f) });
+  const res = await app.handle(new Request('http://x/'));
+  assert.equal(res.status, 500);
+  assert.ok(
+    frames.some((f) => /WebComponent/.test(f.hint || '')),
+    JSON.stringify(frames.map((f) => [f.message, f.hint])),
+  );
 });
