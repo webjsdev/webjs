@@ -74,15 +74,43 @@ export type Route = _HasRoutes extends true
   : string;
 
 /**
+ * The params a route key's own text declares, read without a generated
+ * `RouteParamMap`: `[x]` is a `string`, `[...x]` a `string[]` (as in Next.js)
+ * and `[[...x]]` an optional `string[]`. Segments are read left to right from
+ * the first `[`, so every one is kept; the text up to the first `]` of
+ * `[[...x]]` is `[...x`, which is how the optional form is told apart.
+ */
+type InferredParams<K extends string> =
+  K extends `${string}[${infer Seg}]${infer Rest}`
+    ? Seg extends `[...${infer N}`
+      ? { [P in N]?: string[] } & InferredParams<Rest extends `]${infer After}` ? After : Rest>
+      : Seg extends `...${infer N}`
+        ? { [P in N]: string[] } & InferredParams<Rest>
+        : { [P in Seg]: string } & InferredParams<Rest>
+    : {};
+
+/**
+ * The params for a route key with no generated entry: what its text declares,
+ * or, for a static route and for the wide `string` key, the runtime default
+ * `Record<string, string>`.
+ */
+type FallbackParams<R extends string> = string extends R
+  ? Record<string, string>
+  : keyof InferredParams<R> extends never
+    ? Record<string, string>
+    : InferredParams<R>;
+
+/**
  * The params object for a route key. A generated dynamic route resolves to
  * its `RouteParamMap` entry (`{ slug: string }`, `{ rest: string[] }`,
- * `{ slug?: string[] }`); anything else (a static route, or any route in an
- * un-generated app) resolves to `Record<string, string>`, the runtime
- * default the SSR pipeline produces.
+ * `{ slug?: string[] }`). Without one (an app that never ran `webjs types`),
+ * a dynamic route key still yields the same shape, read from the key itself,
+ * and a static route resolves to `Record<string, string>`, the runtime default
+ * the SSR pipeline produces.
  */
 export type RouteParams<R extends string> = R extends keyof RouteParamMap
   ? RouteParamMap[R]
-  : Record<string, string>;
+  : FallbackParams<R>;
 
 /**
  * A value that is BOTH synchronously usable as `T` and `await`-able to `T`
@@ -111,11 +139,12 @@ export type Awaitable<T> = T & PromiseLike<T>;
  */
 export interface PageProps<R extends string = string> {
   /**
-   * Path params. A generated dynamic route narrows this to its exact shape
-   * (`{ slug: string }`); a static or un-generated route is
-   * `Record<string, string>`. Sync-readable and `await`-able (#848).
+   * Path params, narrowed to the route's shape (`{ slug: string }`,
+   * `{ rest: string[] }`) from the generated map or, without one, from the
+   * route key itself; a static route is `Record<string, string>`.
+   * Sync-readable and `await`-able (#848).
    */
-  params: Awaitable<R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>>;
+  params: Awaitable<RouteParams<R>>;
   /** Query string, as an object. Repeated keys are last-wins at runtime. Sync-readable and `await`-able (#848). */
   searchParams: Awaitable<Record<string, string | string[]>>;
   /** The full request URL string. */
@@ -149,5 +178,5 @@ export interface LayoutProps<R extends string = string> extends PageProps<R> {
  */
 export interface RouteHandlerContext<R extends string = string> {
   /** Sync-readable and `await`-able (#848), same as `PageProps['params']`. */
-  params: Awaitable<R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>>;
+  params: Awaitable<RouteParams<R>>;
 }
