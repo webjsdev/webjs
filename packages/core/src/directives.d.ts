@@ -3,6 +3,8 @@ export { repeat, isRepeat } from './repeat.js';
 export interface UnsafeHTMLDirective {
   _$webjs: 'unsafe-html';
   value: string;
+  /** Set by `unsafeSVG` / `unsafeMathML`: the namespace the client parses the markup in. */
+  ns?: 'svg' | 'mathml';
 }
 
 export interface LiveDirective<T = unknown> {
@@ -65,6 +67,10 @@ export interface WatchDirective<T = unknown> {
 
 export function unsafeHTML(htmlString: string | null | undefined): UnsafeHTMLDirective;
 export function isUnsafeHTML(x: unknown): x is UnsafeHTMLDirective;
+/** lit's `unsafeSVG`: trusted SVG markup, parsed in the SVG namespace on the client. */
+export function unsafeSVG(svgString: string | null | undefined): UnsafeHTMLDirective;
+/** lit's `unsafeMathML`: trusted MathML markup, parsed in the MathML namespace on the client. */
+export function unsafeMathML(mathString: string | null | undefined): UnsafeHTMLDirective;
 export function live<T>(value: T): LiveDirective<T>;
 export function isLive(x: unknown): x is LiveDirective;
 export function keyed<T>(key: unknown, template: T): KeyedDirective<T>;
@@ -96,5 +102,33 @@ export function asyncReplace<T>(
 export function isAsyncReplace(x: unknown): x is AsyncReplaceDirective;
 export function watch<T>(sig: { get(): T; __isSignal: true }): WatchDirective<T>;
 export function isWatch(x: unknown): x is WatchDirective;
+
+type Falsy = null | undefined | false | 0 | -0 | 0n | '';
+
+/** lit's `when`: the case functions receive the condition value. */
+export function when<C, T, F = undefined>(
+  condition: C,
+  trueCase: (c: Exclude<C, Falsy>) => T,
+  falseCase?: (c: Extract<C, Falsy>) => F,
+): C extends Falsy ? F : T;
+/** lit's `choose`: the case whose key is `===` to `value`, else the default. */
+export function choose<T, V, K extends T = T>(
+  value: T,
+  cases: Array<[K, () => V]>,
+  defaultCase?: () => V,
+): V | undefined;
+/** lit's `map`: a lazy generator over `items`, renderable anywhere an array is. */
+export function map<T, U>(
+  items: Iterable<T> | undefined,
+  f: (value: T, index: number) => U,
+): Generator<U, void, unknown>;
+/** lit's `join`: `items` with `joiner` (or `joiner(index)`) between each pair. */
+export function join<I, J>(
+  items: Iterable<I> | undefined,
+  joiner: J | ((index: number) => J),
+): Generator<I | J, void, unknown>;
+/** lit's `range`: `range(end)`, `range(start, end)` or `range(start, end, step)`. */
+export function range(end: number): Generator<number, void, unknown>;
+export function range(start: number, end: number, step?: number): Generator<number, void, unknown>;
 
 export { classMap, styleMap, ifDefined } from './attribute-directives.js';

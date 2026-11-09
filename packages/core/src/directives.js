@@ -63,6 +63,35 @@ export function isUnsafeHTML(x) {
   return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'unsafe-html';
 }
 
+/**
+ * Render a trusted SVG string inside an `<svg>` element (lit's `unsafeSVG`).
+ * The client parses the markup in the SVG namespace, so `<circle>` and
+ * `<path>` paint; the server emits it verbatim, exactly as `unsafeHTML` does.
+ * Same rule as `unsafeHTML`: NEVER pass user input.
+ *
+ * ```js
+ * html`<svg viewBox="0 0 10 10">${unsafeSVG(iconMarkup)}</svg>`;
+ * ```
+ *
+ * @param {string | null | undefined} svgString
+ * @returns {{ _$webjs: 'unsafe-html', value: string, ns: 'svg' }}
+ */
+export function unsafeSVG(svgString) {
+  return { _$webjs: 'unsafe-html', value: String(svgString ?? ''), ns: 'svg' };
+}
+
+/**
+ * Render a trusted MathML string inside a `<math>` element (lit's
+ * `unsafeMathML`). The client parses it in the MathML namespace; the server
+ * emits it verbatim. NEVER pass user input.
+ *
+ * @param {string | null | undefined} mathString
+ * @returns {{ _$webjs: 'unsafe-html', value: string, ns: 'mathml' }}
+ */
+export function unsafeMathML(mathString) {
+  return { _$webjs: 'unsafe-html', value: String(mathString ?? ''), ns: 'mathml' };
+}
+
 /* ================================================================
  * live
  * ================================================================ */
@@ -457,6 +486,114 @@ export function watch(sig) {
 /** @param {unknown} x */
 export function isWatch(x) {
   return !!x && typeof x === 'object' && /** @type {any} */ (x)._$webjs === 'watch';
+}
+
+/* ================================================================
+ * when / choose / map / join / range (lit-html parity)
+ *
+ * Plain functions, not markers: each returns an ordinary value (or a
+ * generator) the renderers already accept, so they behave identically on
+ * the server and the client and need no renderer support beyond iterables.
+ * ================================================================ */
+
+/**
+ * Render one of two templates on a condition. The case functions receive the
+ * condition value, as lit's `when` passes it.
+ *
+ * ```js
+ * html`${when(this.user, (u) => html`<p>Hi ${u.name}</p>`, () => html`<a href="/login">Sign in</a>`)}`;
+ * ```
+ *
+ * @template C, T, F
+ * @param {C} condition
+ * @param {(c: C) => T} trueCase
+ * @param {(c: C) => F} [falseCase]
+ * @returns {T | F | undefined}
+ */
+export function when(condition, trueCase, falseCase) {
+  return condition ? trueCase(condition) : falseCase?.(condition);
+}
+
+/**
+ * Render the case whose key is strictly equal (`===`) to `value`, else the
+ * default case, lit's `choose`.
+ *
+ * ```js
+ * html`${choose(this.tab, [
+ *   ['home', () => html`<home-tab></home-tab>`],
+ *   ['about', () => html`<about-tab></about-tab>`],
+ * ], () => html`<p>Not found</p>`)}`;
+ * ```
+ *
+ * @template T, V
+ * @param {T} value
+ * @param {Array<[T, () => V]>} cases
+ * @param {() => V} [defaultCase]
+ * @returns {V | undefined}
+ */
+export function choose(value, cases, defaultCase) {
+  for (const [key, fn] of cases) {
+    if (key === value) return fn();
+  }
+  return defaultCase?.();
+}
+
+/**
+ * Lazily map an iterable, lit's `map`. Returns a generator, which both
+ * renderers accept anywhere an array is.
+ *
+ * @template T, U
+ * @param {Iterable<T> | undefined} items
+ * @param {(value: T, index: number) => U} f
+ * @returns {Generator<U>}
+ */
+export function* map(items, f) {
+  if (items === undefined) return;
+  let i = 0;
+  for (const value of items) yield f(value, i++);
+}
+
+/**
+ * Interleave a separator between the items of an iterable, lit's `join`. The
+ * joiner is a value or a function of the separator's index.
+ *
+ * ```js
+ * html`${join(tags, html`<span>, </span>`)}`;
+ * ```
+ *
+ * @template I, J
+ * @param {Iterable<I> | undefined} items
+ * @param {J | ((index: number) => J)} joiner
+ * @returns {Generator<I | J>}
+ */
+export function* join(items, joiner) {
+  if (items === undefined) return;
+  const isFunction = typeof joiner === 'function';
+  let i = -1;
+  for (const value of items) {
+    if (i > -1) yield isFunction ? /** @type {any} */ (joiner)(i) : joiner;
+    i++;
+    yield value;
+  }
+}
+
+/**
+ * A generator of numbers, lit's `range`: `range(end)`, `range(start, end)` or
+ * `range(start, end, step)`. Pair it with `map` to render a counted list.
+ *
+ * ```js
+ * html`<ul>${map(range(3), (i) => html`<li>${i}</li>`)}</ul>`;
+ * ```
+ *
+ * @param {number} startOrEnd
+ * @param {number} [end]
+ * @param {number} [step]
+ * @returns {Generator<number>}
+ */
+export function* range(startOrEnd, end, step = 1) {
+  const start = end === undefined ? 0 : startOrEnd;
+  end ??= startOrEnd;
+  for (let i = start; step > 0 ? i < end : end < i; i += step) yield i;
 }
 
 export { classMap, styleMap, ifDefined } from './attribute-directives.js';

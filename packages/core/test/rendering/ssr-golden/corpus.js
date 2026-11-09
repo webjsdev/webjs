@@ -114,6 +114,13 @@ class ShadowThrower extends WebComponent {
 }
 ShadowThrower.register('gold-shadow-thrower');
 
+class ShadowOptions extends WebComponent {
+  static shadow = true;
+  static shadowRootOptions = { mode: 'open', delegatesFocus: true, serializable: true };
+  render() { return html`<button><slot></slot></button>`; }
+}
+ShadowOptions.register('gold-shadow-options');
+
 class AsyncItem extends WebComponent({ label: String }) {
   constructor() { super(); this.label = ''; }
   async render() {
@@ -289,6 +296,7 @@ export const cases = [
 
   // --- shadow DOM ---
   { name: 'shadow-dsd-and-styles', run: () => renderToString(html`<gold-shadowy tone="loud"><b slot="x">x</b><p>light</p></gold-shadowy><gold-shadow-list><li>a</li></gold-shadow-list>`) },
+  { name: 'shadow-root-options', run: () => renderToString(html`<gold-shadow-options>Go</gold-shadow-options>`) },
   { name: 'shadow-nested-light', run: () => renderToString(html`<gold-shadowy><gold-badge label="in-shadow-light"></gold-badge></gold-shadowy>`) },
 
   // --- bound forms (#1155, #1207, #1307) ---

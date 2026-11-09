@@ -104,3 +104,28 @@ test('attribute option: reflect writes to the custom attribute name', async () =
   assert.ok(el.hasAttribute('data-active'), 'reflects to the custom attribute name');
   assert.ok(!el.hasAttribute('active'), 'does not reflect to the property name');
 });
+
+test("default attribute name: Lit's lowercase name is primary, the kebab name a read alias", async () => {
+  class C extends WebComponent({ isOpen: prop(Boolean, { reflect: true }), maxItems: Number }) {}
+  customElements.define('attr-lower', C);
+  const observed = C.observedAttributes;
+  assert.ok(observed.includes('isopen') && observed.includes('is-open'));
+  document.body.innerHTML = '<attr-lower></attr-lower>';
+  const el = /** @type any */ (document.querySelector('attr-lower'));
+  el.connectedCallback();
+  el.isOpen = true;
+  await el.updateComplete;
+  assert.ok(el.hasAttribute('isopen'), 'reflects to the lowercase name, as Lit does');
+  assert.ok(!el.hasAttribute('is-open'), 'never to the kebab alias');
+  el.attributeChangedCallback('max-items', null, '3');
+  assert.equal(el.maxItems, 3, 'the kebab spelling still reads');
+  el.attributeChangedCallback('maxitems', null, '4');
+  assert.equal(el.maxItems, 4);
+});
+
+test('attribute: true is the default name, not an attribute called "true"', () => {
+  class C extends WebComponent({ userName: prop(String, { attribute: true }) }) {}
+  customElements.define('attr-true', C);
+  assert.ok(C.observedAttributes.includes('username'));
+  assert.ok(!C.observedAttributes.includes('true'));
+});

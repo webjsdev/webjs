@@ -4,7 +4,7 @@
  * A TemplateResult is an isomorphic description of HTML: the static string
  * pieces plus the dynamic values. Server and client renderers both consume it.
  *
- * @typedef {{ _$webjs: 'template', strings: TemplateStringsArray | string[], values: unknown[], svg?: boolean }} TemplateResult
+ * @typedef {{ _$webjs: 'template', strings: TemplateStringsArray | string[], values: unknown[], svg?: boolean, mathml?: boolean }} TemplateResult
  *
  * @param {TemplateStringsArray | string[]} strings
  * @param {...unknown} values
@@ -33,6 +33,20 @@ export function html(strings, ...values) {
  */
 export function svg(strings, ...values) {
   return { _$webjs: 'template', strings, values, svg: true };
+}
+
+/**
+ * Tagged template literal for a MathML FRAGMENT, lit's `mathml` tag: markup
+ * that sits inside a `<math>` element but is built in its own template. The
+ * client parses it inside a `<math>` wrapper so its elements land in the
+ * MathML namespace; the server renders it exactly like `html`.
+ *
+ * @param {TemplateStringsArray | string[]} strings
+ * @param {...unknown} values
+ * @returns {TemplateResult}
+ */
+export function mathml(strings, ...values) {
+  return { _$webjs: 'template', strings, values, mathml: true };
 }
 
 /**

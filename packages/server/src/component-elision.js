@@ -85,6 +85,23 @@ export const REACTIVE_IMPORTS = new Set([
   'ref',
   'createRef',
   'live',
+  // Custom directive authoring (Lit's `directive()`, `Directive`,
+  // `AsyncDirective`, from `@webjsdev/core/directive` and
+  // `@webjsdev/core/async-directive`). A directive class may hold per-part
+  // state and an AsyncDirective pushes values after upgrade through
+  // `setValue`, so the analyser cannot prove the SSR output is the whole
+  // story and a component importing one ships.
+  'directive',
+  'Directive',
+  'AsyncDirective',
+  // `ContextRoot` buffers context requests until a late provider upgrades,
+  // and `ContextProviderEvent` hands subscribers to a nearer provider; both
+  // only happen in the browser.
+  'ContextRoot',
+  'ContextProviderEvent',
+  // Lit's `SignalWatcher` mixin (an identity mixin here, watching is built
+  // in): a component that names it reacts to signals after upgrade.
+  'SignalWatcher',
 ]);
 
 /**
@@ -116,17 +133,27 @@ export const CLIENT_LIFECYCLE_HOOKS = [
   // The async-render re-fetch loading UI (#469): defining it means the
   // component suspends and re-renders on the client, so it must ship.
   'renderFallback',
+  // Lit's update-scheduling overrides. They run only on the client (the SSR
+  // walk drives `performServerUpdate` instead), so overriding one means the
+  // author wants client-side timing control: debounced or batched renders
+  // (`scheduleUpdate`), a manual flush (`performUpdate`), or deferred
+  // activation (`enableUpdating`).
+  'scheduleUpdate',
+  'performUpdate',
+  'enableUpdating',
 ];
 
 /**
  * Method calls that only make sense on the client. `addController` registers a
- * ReactiveController (client lifecycle); `requestUpdate` schedules a re-render.
+ * ReactiveController (client lifecycle); `requestUpdate` schedules a re-render;
+ * `performUpdate` flushes a pending update synchronously (Lit's idiom for a
+ * test or a measure-before-paint caller).
  * Any of these implies the component is not inert. (The dynamic slot read
  * surface lives in `SLOT_DYNAMIC_RE`, not here.)
  *
  * @type {readonly string[]}
  */
-export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate'];
+export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate', 'performUpdate'];
 
 /**
  * Static class fields whose declaration (to a non-`false` value) marks a

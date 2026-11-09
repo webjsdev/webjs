@@ -74,12 +74,14 @@ export type {
   NonSerializable,
 } from './src/serializable.d.ts';
 
-export { html, svg, isTemplate, MARKER } from './src/html.js';
+export { html, svg, mathml, isTemplate, MARKER } from './src/html.js';
+export { isServer } from './src/is-server.js';
 // The `html\`\`` return type. A JSDoc typedef in html.js used across the
 // component / route / testing type surfaces; re-exported so an app or the
 // docs/website can annotate a value as `TemplateResult` (#772).
 export type { TemplateResult } from './src/html.js';
-export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export type { CSSResultGroup, CSSResultOrNative, CSSResultArray } from './src/css.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';
@@ -103,16 +105,16 @@ export {
   unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
   templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
   until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
-  watch, isWatch,
+  watch, isWatch, unsafeSVG, unsafeMathML, when, choose, map, join, range,
 } from './src/directives.js';
-export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
-export { Task, TaskStatus } from './src/task.js';
+export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent, ContextProviderEvent, ContextRoot } from './src/context.js';
+export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';
 
 // Signals (the default state primitive, invariant 5), the CSP nonce reader,
 // the wire serializer, and the streaming/frame custom elements. These mirror
 // the index.js runtime re-exports; their declarations live in the matching
 // src/*.d.ts (#388 fixed the index.d.ts drift from index.js).
-export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+export { signal, computed, effect, batch, isSignal, Signal, SignalWatcher } from './src/signal.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
 export { asset, setAssetUrlProvider } from './src/asset-url.js';
 export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';

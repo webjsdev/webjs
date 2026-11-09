@@ -6,8 +6,9 @@
  * renderer is only reached on the server.
  */
 
-export { html, svg, isTemplate, MARKER } from './src/html.js';
-export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export { html, svg, mathml, isTemplate, MARKER } from './src/html.js';
+export { isServer } from './src/is-server.js';
+export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
 export { WebComponent, prop } from './src/component.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
@@ -33,7 +34,7 @@ export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';
 
 // Signals (TC39 Stage-1 shape), also available via '@webjsdev/core/signals'
-export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+export { signal, computed, effect, batch, isSignal, Signal, SignalWatcher } from './src/signal.js';
 
 // Optimistic-mutation helper (thin signal wrapper, rolls back on failure)
 export { optimistic } from './src/optimistic.js';
@@ -60,14 +61,14 @@ export {
   unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
   templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
   until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
-  watch, isWatch,
+  watch, isWatch, unsafeSVG, unsafeMathML, when, choose, map, join, range,
 } from './src/directives.js';
 
 // Context Protocol, also available via '@webjsdev/core/context'
-export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
+export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent, ContextProviderEvent, ContextRoot } from './src/context.js';
 
 // Task controller, also available via '@webjsdev/core/task'
-export { Task, TaskStatus } from './src/task.js';
+export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';
 
 export { nothing, noChange } from './src/sentinels.js';
 

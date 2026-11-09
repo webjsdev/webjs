@@ -26,7 +26,7 @@ export default function Controllers() {
     <ul>
       <li><strong>hostConnected()</strong>: called when the host component's <code>connectedCallback</code> fires. Set up subscriptions, timers, and event listeners here.</li>
       <li><strong>hostDisconnected()</strong>: called when the host component's <code>disconnectedCallback</code> fires. Clean up resources.</li>
-      <li><strong>hostUpdate()</strong>: called before the host's <code>render()</code> method. Pre-render controller logic.</li>
+      <li><strong>hostUpdate()</strong>: called before the host's <code>render()</code> method. Pre-render controller logic. It also runs during SSR, so derived state reaches the first paint; guard browser-only work with <code>if (isServer) return;</code>. A <code>hostUpdate()</code> that throws on the server is skipped and reported once per controller class, and the component still renders.</li>
       <li><strong>hostUpdated()</strong>: called after the host's <code>render()</code> method, before <code>firstUpdated()</code>. Post-render controller logic.</li>
     </ul>
 
@@ -165,7 +165,7 @@ DashboardWidget.register('dashboard-widget');</code-block>
     <p>WebJs ships three controllers out of the box:</p>
 
     <h3>Task</h3>
-    <p>Manages async operations with automatic loading/error states, abort support, and reactive args. Imported from <code>webjs/task</code>. See the <a href="/docs/task">Task Controller</a> page for full documentation.</p>
+    <p>Manages async operations with automatic loading/error states, abort support, and reactive args, a port of Lit's <code>@lit/task</code>. Imported from <code>@webjsdev/core/task</code>. See the <a href="/docs/task">Task Controller</a> page for full documentation.</p>
 
     <code-block>import { Task } from '@webjsdev/core/task';
 
@@ -188,7 +188,7 @@ class UserProfile extends WebComponent({ userId: String }) {
 }</code-block>
 
     <h3>ContextProvider</h3>
-    <p>Provides a value to all descendant components via the context protocol. Imported from <code>webjs/context</code>. See the <a href="/docs/context">Context Protocol</a> page for full documentation.</p>
+    <p>Provides a value to all descendant components via the context protocol, a port of Lit's <code>@lit/context</code>. Imported from <code>@webjsdev/core/context</code>. See the <a href="/docs/context">Context Protocol</a> page for full documentation.</p>
 
     <code-block>import { createContext, ContextProvider } from '@webjsdev/core/context';
 
@@ -208,7 +208,7 @@ class AppShell extends WebComponent {
 }</code-block>
 
     <h3>ContextConsumer</h3>
-    <p>Consumes a value from an ancestor provider. Imported from <code>webjs/context</code>.</p>
+    <p>Consumes a value from an ancestor provider. Imported from <code>@webjsdev/core/context</code>.</p>
 
     <code-block>import { createContext, ContextConsumer } from '@webjsdev/core/context';
 

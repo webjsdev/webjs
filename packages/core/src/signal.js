@@ -426,7 +426,7 @@ class SignalComputed {
  * Watcher
  * ============================================================ */
 
-class SignalWatcher {
+class WatcherImpl {
   /** @param {() => void} notifyCb */
   constructor(notifyCb) {
     this.__notify = notifyCb;
@@ -553,7 +553,7 @@ function untrack(fn) {
   try { return fn(); } finally { activeConsumer = prev; }
 }
 
-/** @param {SignalComputed | SignalWatcher} sink */
+/** @param {SignalComputed | WatcherImpl} sink */
 function introspectSources(sink) {
   return sink.producers.slice();
 }
@@ -568,7 +568,7 @@ function hasSinks(producer) {
   return !!producer.liveConsumers && producer.liveConsumers.size > 0;
 }
 
-/** @param {SignalComputed | SignalWatcher} sink */
+/** @param {SignalComputed | WatcherImpl} sink */
 function hasSources(sink) {
   return sink.producers.length > 0;
 }
@@ -618,7 +618,7 @@ export const Signal = {
   State: SignalState,
   Computed: SignalComputed,
   subtle: {
-    Watcher: SignalWatcher,
+    Watcher: WatcherImpl,
     untrack,
     introspectSources,
     introspectSinks,
@@ -662,7 +662,7 @@ export function isSignal(v) {
  *
  * Effects are useful for browser-only side effects such as DOM
  * mutations, timers, or fetch calls. Avoid in render paths; the
- * component's built-in SignalWatcher already covers re-render.
+ * component's built-in signal watching already covers re-render.
  *
  * The spec forbids reads/writes inside a Watcher notify, so effects
  * defer the re-run to a microtask.
@@ -674,7 +674,7 @@ export function effect(fn) {
   let scheduled = false;
   let disposed = false;
   const computed_ = new SignalComputed(fn);
-  const w = new SignalWatcher(() => {
+  const w = new WatcherImpl(() => {
     if (scheduled || disposed) return;
     scheduled = true;
     queueMicrotask(() => {
@@ -692,3 +692,23 @@ export function effect(fn) {
     w.dispose();
   };
 }
+
+/**
+ * Lit's `SignalWatcher` mixin (`@lit-labs/signals`), here an IDENTITY: a
+ * `WebComponent` already re-renders when a signal it read changes, so
+ * `class X extends SignalWatcher(WebComponent)` is the same class as
+ * `class X extends WebComponent`. Kept so code written from Lit's signals
+ * package works unchanged.
+ *
+ * @template {abstract new (...args: any[]) => any} T
+ * @param {T} Base
+ * @returns {T}
+ */
+export function SignalWatcher(Base) {
+  return Base;
+}
+
+// `watch(signal)` from `@lit-labs/signals` is the fine-grained binding
+// directive WebJs already ships, re-exported so `@webjsdev/core/signals`
+// carries the whole Lit signals surface.
+export { watch } from './directives.js';

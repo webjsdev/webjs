@@ -73,9 +73,13 @@ export function isAttributeBacked(decl) {
  * applied to the JSON and converter branches alone, which left a `String`-typed
  * prop holding the raw source text at SSR while `getAttribute()` on the client
  * returned the decoded one.
+ * @param {string} [propName] the property being read, named in the Boolean warning
  * @returns {unknown}
  */
-export function readAttributeValue(def, value) {
+export function readAttributeValue(def, value, propName) {
+  // Lit's function form: a bare `converter: (value, type) => ...` IS the
+  // `fromAttribute` half, and reflection uses the default serialization.
+  if (typeof def.converter === 'function') return def.converter(value, def.type);
   if (def.converter && def.converter.fromAttribute) {
     // Deliberately UNGUARDED, and deliberately first (#1340). An author who
     // supplies a converter owns the whole read, which is the same rule
@@ -109,7 +113,13 @@ export function readAttributeValue(def, value) {
     return def.converter.fromAttribute(value, def.type);
   }
   if (def.type === Number) return value == null ? null : Number(value);
-  if (def.type === Boolean) return value != null && value !== 'false';
+  if (def.type === Boolean) {
+    // A boolean attribute is on whenever it is PRESENT, as in HTML and Lit,
+    // so `open="false"` is true. Say so once per property, since the literal
+    // reads as off to anyone coming from a JSX prop.
+    if (value === 'false') warnFalseBoolean(def, propName);
+    return value != null;
+  }
   if (def.type === Object || def.type === Array) {
     // An attribute that is not parseable JSON yields `null` rather than the raw
     // string (#1253), because a STRING is never a valid value for a property
@@ -135,9 +145,45 @@ export function readAttributeValue(def, value) {
   return value;
 }
 
+/** Declarations already warned about a literal "false". @type {WeakSet<object>} */
+const WARNED_FALSE = new WeakSet();
+
+/**
+ * @param {object} def
+ * @param {string | undefined} propName
+ */
+function warnFalseBoolean(def, propName) {
+  if (WARNED_FALSE.has(def)) return;
+  WARNED_FALSE.add(def);
+  const name = propName ? `\`${propName}\`` : 'A Boolean property';
+  console.warn(
+    `[webjs] ${name} received the attribute value "false", which is TRUE: a Boolean property is on whenever its ` +
+      `attribute is present, as in HTML and Lit. To turn it off, leave the attribute out, or bind it with ` +
+      `?attr=\${false} in a template.`,
+  );
+}
+
 /** Kebab-case a property name for its default HTML attribute. @param {string} s */
 function hyphenate(s) {
   return s.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+/**
+ * The attribute a declared property reads and reflects to, Lit's
+ * `attribute` option: a string is used as written, `false` (or
+ * `state: true`) means none, and anything else (absent, or `true`) is Lit's
+ * default name, the LOWERCASED property name (`isOpen` -> `isopen`). The
+ * kebab spelling (`is-open`) stays readable as an alias (see
+ * `attributeBackedProps`) but is never what a property reflects to.
+ *
+ * @param {string} propName
+ * @param {{ attribute?: string | boolean, state?: boolean }} decl  normalised declaration
+ * @returns {string | undefined}
+ */
+export function attributeNameFor(propName, decl) {
+  if (!isAttributeBacked(decl)) return undefined;
+  if (typeof decl.attribute === 'string') return decl.attribute;
+  return propName.toLowerCase();
 }
 
 /**
@@ -182,14 +228,20 @@ function hyphenate(s) {
  *   which case the caller must IGNORE the attribute entirely (#1341).
  */
 export function resolveAttributeProperty(Cls, attrName) {
-  // Primary names first, so a prop literally named `foobar` keeps `foobar`
-  // even when a sibling `fooBar` would answer to it as an alias.
+  // Primary names first, then aliases. Two props can share a primary name
+  // (`fooBar` and `foobar` both default to `foobar`); the prop literally
+  // named after the attribute keeps it, so a sibling never steals a real prop.
+  let primaryHit;
   let aliasHit;
   for (const { propName, def, primary, alias } of attributeBackedProps(Cls)) {
-    if (primary === attrName) return { propName, def };
-    if (aliasHit === undefined && alias === attrName) aliasHit = { propName, def };
+    if (primary === attrName) {
+      if (propName === attrName) return { propName, def };
+      if (primaryHit === undefined) primaryHit = { propName, def };
+    } else if (aliasHit === undefined && alias === attrName) {
+      aliasHit = { propName, def };
+    }
   }
-  return aliasHit;
+  return primaryHit ?? aliasHit;
 }
 
 /**
@@ -231,7 +283,9 @@ export function declaredProperties(Cls) {
   const parent = Object.getPrototypeOf(Cls);
   const inherited = parent && parent !== Function.prototype ? declaredProperties(parent) : {};
   const own = Object.hasOwn(Cls, 'properties') ? Cls.properties : undefined;
-  const merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
+  const created = CREATED.get(Cls);
+  let merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
+  if (created) merged = { ...merged, ...created };
   DECLARED.set(Cls, merged);
   return merged;
 }
@@ -240,12 +294,57 @@ export function declaredProperties(Cls) {
 const DECLARED = new WeakMap();
 
 /**
+ * Properties added to a class through Lit's `static createProperty(name,
+ * options)`, per class. Merged LAST in `declaredProperties`, so a created
+ * property wins over a same-named `static properties` entry, as it does in Lit
+ * (`createProperty` writes straight into `elementProperties`).
+ * @type {WeakMap<Function, Record<string, any>>}
+ */
+const CREATED = new WeakMap();
+
+/**
+ * Normalise one declaration: the bare-constructor shorthand (`count: Number`)
+ * becomes `{ type: Number }`, an options object is returned as is.
+ * @param {unknown} decl
+ * @returns {Record<string, any>}
+ */
+export function normalizeDecl(decl) {
+  return typeof decl === 'object' && decl !== null ? /** @type {any} */ (decl) : { type: decl };
+}
+
+/**
+ * Record a property created through `static createProperty()` and drop the
+ * class's memoized declarations so the next read includes it.
+ * @param {Function} Cls
+ * @param {string} name
+ * @param {Record<string, any>} decl
+ */
+export function addCreatedProperty(Cls, name, decl) {
+  let own = CREATED.get(Cls);
+  if (!own) CREATED.set(Cls, (own = {}));
+  own[name] = decl;
+  invalidateClass(Cls);
+}
+
+/**
+ * Drop every memo this module keeps for `Cls`, so its declarations are read
+ * again on next use.
+ * @param {Function} Cls
+ */
+export function invalidateClass(Cls) {
+  DECLARED.delete(Cls);
+  BACKED_PROPS.delete(Cls);
+}
+
+/**
  * The attribute-backed props of `Cls` with the names each answers to.
  *
  * `primary` is the custom `attribute` option, matched VERBATIM, or else the
- * kebab-cased property name. `alias` is the LOWERCASED property name, lit's
- * default attribute name, present only when the prop has no custom `attribute`
- * and the lowercased name differs from the kebab one. Without it,
+ * LOWERCASED property name, Lit's default attribute name and the one a
+ * reflected property writes. `alias` is the KEBAB-cased property name, kept
+ * as a read-only alias (WebJs's earlier default, and the spelling HTML
+ * authors reach for), present only when the prop has no custom `attribute`
+ * and the kebab name differs from the lowercase one. Without it,
  * `<quiz-player quizId=${id}>` against `{ quizId: Number }` reached neither
  * side: the parser lowercases the name to `quizid`, which matched nothing, so
  * the prop silently stayed undefined on the server AND the client (#1540).
@@ -278,11 +377,11 @@ function buildAttributeBackedProps(Cls) {
   const props = declaredProperties(Cls);
   const out = [];
   for (const [k, decl] of Object.entries(props)) {
-    const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
-    if (!isAttributeBacked(d)) continue;
-    const primary = d.attribute || hyphenate(k);
-    const lower = k.toLowerCase();
-    const alias = !d.attribute && lower !== primary ? lower : undefined;
+    const d = normalizeDecl(decl);
+    const primary = attributeNameFor(k, d);
+    if (primary === undefined) continue;
+    const kebab = hyphenate(k);
+    const alias = typeof d.attribute !== 'string' && kebab !== primary ? kebab : undefined;
     out.push({ propName: k, def: d, primary, alias });
   }
   return out;

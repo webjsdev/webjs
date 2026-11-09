@@ -1,7 +1,7 @@
-import { stylesToString, isCSS } from '../css.js';
+import { stylesToString, finalizeStyles } from '../css.js';
 import { unsafeHTML } from '../directives.js';
 import { escapeAttr } from '../escape.js';
-import { defaultSSRErrorTemplate, browserMemberHint } from './errors.js';
+import { defaultSSRErrorTemplate, browserMemberHint, isProd } from './errors.js';
 import {
   applyAttrsToInstance, consumePropAttrs, parseAttrs, seedServerAttrs,
   withHostMarker,
@@ -45,6 +45,7 @@ const NON_BLANK = /\S/;
 export function beginComponent(w, tag, Cls, opening, attrs) {
   if (w.ctx && w.ctx.usedComponents) w.ctx.usedComponents.add(tag);
   const isShadow = Cls.shadow === true;
+  if (!isShadow) reportLightDomStyles(w, tag, Cls);
   const frame = {
     kind: 'component', tag, Cls, isShadow, instance: null, opening, tpl: undefined,
     pending: /** @type {Promise<unknown> | null} */ (null), presentAttrNames: /** @type {Set<string> | null} */ (null),
@@ -142,7 +143,7 @@ export async function finishComponent(w, frame, children) {
         // Native <slot> stays as-is in the DSD template: the browser projects
         // the host's light children natively. The authored children stay in
         // place after the template, and the source end tag is kept.
-        return `${frame.opening}<template shadowrootmode="open">${styleString(Cls)}${inner}</template>${children}${frame.closeText}`;
+        return `${frame.opening}${dsdOpenTag(Cls)}${styleString(Cls)}${inner}</template>${children}${frame.closeText}`;
       }
       if (!NON_BLANK.test(inner)) {
         // An empty rendered template (a decorator component with no render(),
@@ -204,10 +205,53 @@ function partitionChildren(children, segments) {
   return groups;
 }
 
+/**
+ * The Declarative Shadow DOM opening tag for a shadow component, carrying
+ * Lit's `static shadowRootOptions` as the template attributes the HTML parser
+ * maps onto `attachShadow()`: the mode, `delegatesFocus`, `clonable` and
+ * `serializable`. The common case (no options) is the constant open tag.
+ * @param {any} Cls
+ * @returns {string}
+ */
+export function dsdOpenTag(Cls) {
+  const o = Cls.shadowRootOptions;
+  if (!o) return OPEN_DSD;
+  const mode = o.mode === 'closed' ? 'closed' : 'open';
+  if (mode === 'open' && !o.delegatesFocus && !o.clonable && !o.serializable) return OPEN_DSD;
+  return `<template shadowrootmode="${mode}"` +
+    (o.delegatesFocus ? ' shadowrootdelegatesfocus' : '') +
+    (o.clonable ? ' shadowrootclonable' : '') +
+    (o.serializable ? ' shadowrootserializable' : '') + '>';
+}
+const OPEN_DSD = '<template shadowrootmode="open">';
+
 function styleString(Cls) {
-  const rawStyles = Cls.styles;
-  const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
-  return stylesToString(styleList);
+  // `elementStyles` is the class's finalized list (Lit's `finalizeStyles`);
+  // a class not built on WebComponent has none, so flatten its styles here.
+  return stylesToString(Cls.elementStyles ?? finalizeStyles(Cls.styles));
+}
+
+/** Light-DOM classes already reported for `static styles`. @type {WeakSet<Function>} */
+const REPORTED_LIGHT_STYLES = new WeakSet();
+
+/**
+ * A light-DOM component's `static styles` never apply (there is no shadow
+ * root to adopt them into). Report it once per class in dev, on the server,
+ * so the cause shows up in the terminal as well as the browser console.
+ * @param {import('./walk.js').Walker} w
+ * @param {string} tag
+ * @param {any} Cls
+ */
+function reportLightDomStyles(w, tag, Cls) {
+  if (!Cls.styles || REPORTED_LIGHT_STYLES.has(Cls)) return;
+  const dev = w.dev === undefined ? !isProd() : !!w.dev;
+  if (!dev) return;
+  REPORTED_LIGHT_STYLES.add(Cls);
+  console.error(
+    `[webjs] <${tag}> declares static styles but renders into light DOM, so the styles are never applied. ` +
+      'Add `static shadow = true` to scope them in a shadow root, or style the light-DOM markup with Tailwind ' +
+      'utilities or a global stylesheet (prefix custom class selectors with the tag name).',
+  );
 }
 
 /**
@@ -243,7 +287,7 @@ async function errorState(w, frame) {
   }
   let opening = frame.opening;
   if (!isShadow) opening = withHostMarker(opening);
-  if (isShadow) return `${opening}<template shadowrootmode="open">${styleString(Cls)}${errorInner}</template>`;
+  if (isShadow) return `${opening}${dsdOpenTag(Cls)}${styleString(Cls)}${errorInner}</template>`;
   return `${opening}<!--webjs-hydrate-->${errorInner}</${tag}>`;
 }
 

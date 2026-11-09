@@ -79,7 +79,7 @@ export const RULES = [
   {
     name: 'no-non-erasable-typescript',
     description:
-      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
+      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time, and .ts / .mts / .js / .mjs source for DECORATORS (`@customElement`, `@property`, `@state`, `@query`, any `@name` in decorator position). The stripper passes a decorator through untouched, so the module then fails to load with a bare `SyntaxError: Invalid or unexpected token` on Node and in the browser; the rule names the decorator and its WebJs spelling (`static properties` plus `declare`, or the `WebComponent({ ... })` factory, for `@property`; `state: true` for `@state`; `MyEl.register(tag)` for `@customElement`; a getter over `this.renderRoot` for `@query`). Comments, strings and template bodies are masked first, so `@click` in an html template, `@media` in a css template, and a JSDoc `@param` never match. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, _private folders, and .js files under public/.',
   },
   {
     name: 'no-browser-globals-in-render',
@@ -120,6 +120,21 @@ export const RULES = [
     name: 'no-missing-local-import',
     description:
       'Flags a NAMED value import of a symbol that a resolvable app-internal module does not export (`import { todos } from \'#db/schema.server.ts\'` when the schema no longer exports `todos`). The binding is `undefined` at runtime and crashes on first use, yet the rest of `webjs check` (elision-based, it does not compile types) misses it, so a schema swap that orphans a gallery module can pass `check` while `typecheck` is red. This is the runtime-crash class `check` exists to catch, filling that gap so an agent running only `check` cannot ship a broken import. Deliberately conservative to never false-positive on a valid app: it only inspects app-internal specifiers (a relative `./` path or a `#` alias) that resolve to a file in the app, only NAMED value imports (a `type` import, a default import, a namespace import, and any bare / `node:` / npm-package specifier are skipped), and it treats a module as UNKNOWABLE (never flags imports from it) when its exports are not fully enumerable: a `export * from ...` star re-export, a destructuring `export const { a } = ...`, or a multi-declarator `export const a = .., b = ..`. It reads names from `export function/class/const/let/var/type/interface/enum` and from `export { a, b as c }` / `export { x } from ...` clauses (the alias after `as` is the exported name). A re-export barrel therefore resolves correctly, and a `\'use server\'` action file exports its function names normally. Found dogfooding a tic-tac-toe app: dropping the example `todos` table left a gallery module importing it, green under `check` but red under `typecheck`.',
+  },
+  {
+    name: 'static-styles-need-shadow',
+    description:
+      'Flags a class extending `WebComponent` that declares `static styles` without `static shadow = true`. WebJs adopts `static styles` into a SHADOW root, and a component renders into light DOM unless it opts into shadow DOM (the reverse of Lit\'s default), so the styles are never applied. Fix: add `static shadow = true` to scope them, or drop `static styles` and style the light DOM with Tailwind utilities or a global stylesheet whose class selectors are prefixed with the tag name. A `static shadow` the rule cannot evaluate (a getter or an expression) is not flagged.',
+  },
+  {
+    name: 'shadow-options-need-shadow',
+    description:
+      'Flags a class extending `WebComponent` that declares `static shadowRootOptions` (Lit\'s `{ mode, delegatesFocus, ... }` for `attachShadow`) without `static shadow = true`. The options configure a shadow root, and the component has none: it renders into light DOM by default, so they are ignored. Fix: add `static shadow = true`, or remove the options.',
+  },
+  {
+    name: 'core-imports-exist',
+    description:
+      'Flags a named value import from `@webjsdev/core` (or one of its subpaths) of a name that module does not export, a default import from a module with no default export, and an import from a subpath core does not export. Each is a load-time crash: ESM refuses to link the module with `does not provide an export named X`, which names neither the cause nor the fix. Lit habits produce it: `LitElement` (use `WebComponent`), a decorator function such as `customElement` or `property` (use `MyEl.register(tag)` and `static properties`), or a type such as `PropertyValues` or `TemplateResult` imported as a value (use `import type`, since the type stripper keeps a plain import). The rule reads the INSTALLED core package\'s real export surface (each `exports` subpath\'s source module for values, its declaration file for types), so a name core gains is accepted as soon as it ships, and a name exported by a different subpath is pointed there. `import type` imports and `type`-qualified names are skipped, since they are erased before load.',
   },
 ];
 

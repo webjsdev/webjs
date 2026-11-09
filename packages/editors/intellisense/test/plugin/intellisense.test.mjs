@@ -416,7 +416,7 @@ test('legacy static properties: completes static-properties keys after typing `<
   assert.ok(names.includes('then'), `expected "then" in ${JSON.stringify(names)}`);
 });
 
-test('a camelCase prop completes as a hyphenated attribute; state props are excluded', () => {
+test("a camelCase prop completes as Lit's lowercase attribute; state props are excluded", () => {
   const svc = makeService({
     '/box.ts':
       `import { WebComponent, prop } from '@webjsdev/core';\n` +
@@ -432,7 +432,7 @@ test('a camelCase prop completes as a hyphenated attribute; state props are excl
   });
   const pos = offsetOf('/page.ts', '<my-box ') + '<my-box '.length;
   const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
-  assert.ok(names.includes('max-length'), `plain attr is hyphenated: ${JSON.stringify(names)}`);
+  assert.ok(names.includes('maxlength'), `plain attr is the lowercased name: ${JSON.stringify(names)}`);
   assert.ok(!names.includes('maxLength'), 'camelCase prop is not offered as a plain attribute');
   assert.ok(!names.includes('internal'), 'state prop has no attribute');
 });
@@ -453,7 +453,7 @@ test('an attribute: false prop is a property target, not an attribute', () => {
   });
   const pos = offsetOf('/page.ts', '<my-box ') + '<my-box '.length;
   const names = svc.getCompletionsAtPosition('/page.ts', pos, undefined).entries.map((e) => e.name);
-  assert.ok(names.includes('max-length'));
+  assert.ok(names.includes('maxlength'));
   assert.ok(!names.includes('items'), 'attribute: false has no attribute');
 });
 

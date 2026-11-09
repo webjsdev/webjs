@@ -137,6 +137,12 @@
     "isCSS": {
       "exempt": "internal: value type guard used by the renderer"
     },
+    "CSSResult": {
+      "exempt": "internal: the class css returns, exported for Lit parity and instanceof; authors use the css tag (demoed)"
+    },
+    "unsafeCSS": {
+      "exempt": "deferred: agent-facing (Lit's escape hatch for a trusted string in a css hole, documented on the docs-site styling page); no single-concept gallery demo yet"
+    },
     "isCache": {
       "exempt": "internal: directive type guard used by the renderer"
     },
@@ -326,6 +332,36 @@
     "svg": {
       "exempt": "deferred: agent-facing (the html tag's SVG-fragment sibling, documented at https://webjs.dev/docs/components); no single-concept gallery demo yet"
     },
+    "mathml": {
+      "exempt": "deferred: agent-facing (lit's mathml tag, the html tag's MathML-fragment sibling, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "isServer": {
+      "exempt": "deferred: agent-facing (lit's isServer flag, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "SignalWatcher": {
+      "exempt": "deferred: agent-facing (lit's SignalWatcher mixin, an identity because every WebComponent already watches signals; documented on the docs site's components page); nothing to demo beyond a plain component"
+    },
+    "unsafeSVG": {
+      "exempt": "deferred: agent-facing (lit's unsafeSVG, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "unsafeMathML": {
+      "exempt": "deferred: agent-facing (lit's unsafeMathML, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "when": {
+      "exempt": "deferred: agent-facing (lit's when helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "choose": {
+      "exempt": "deferred: agent-facing (lit's choose helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "map": {
+      "exempt": "deferred: agent-facing (lit's map generator helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "join": {
+      "exempt": "deferred: agent-facing (lit's join generator helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
+    "range": {
+      "exempt": "deferred: agent-facing (lit's range generator helper, documented on the docs site's directives page); no single-concept gallery demo yet"
+    },
     "classMap": {
       "demo": "modules/directives/components/directive-demo.ts"
     },
@@ -340,6 +376,21 @@
     },
     "noChange": {
       "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "ContextProviderEvent": {
+      "exempt": "deferred: agent-facing (Lit's @lit/context provider announcement event, dispatched by ContextProvider itself; documented on the docs-site context page); no single-concept gallery demo yet"
+    },
+    "ContextRoot": {
+      "exempt": "deferred: agent-facing (Lit's late-provider request buffer, documented on the docs-site context page); no single-concept gallery demo yet"
+    },
+    "initialState": {
+      "exempt": "deferred: agent-facing (Lit's Task sentinel that returns a task to INITIAL, documented on the docs-site task page); no single-concept gallery demo yet"
+    },
+    "shallowArrayEquals": {
+      "exempt": "deferred: agent-facing (Lit's default Task argsEqual, documented on the docs-site task page); no single-concept gallery demo yet"
+    },
+    "deepArrayEquals": {
+      "exempt": "deferred: agent-facing (Lit's structural Task argsEqual, documented on the docs-site task page); no single-concept gallery demo yet"
     }
   },
   "serverSpecifier": "@webjsdev/server",

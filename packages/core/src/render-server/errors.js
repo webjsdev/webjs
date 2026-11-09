@@ -36,6 +36,43 @@ export function browserMemberHint(e) {
   return null;
 }
 
+/**
+ * Lit decorator names. Bun runs legacy decorators, so a decorated class fails
+ * there with a `ReferenceError` naming the undefined decorator; Node and the
+ * browser fail the whole module with a bare `SyntaxError` instead.
+ */
+const DECORATOR_NAMES = new Set([
+  'customElement', 'property', 'state', 'query', 'queryAll', 'queryAsync',
+  'queryAssignedElements', 'queryAssignedNodes', 'eventOptions', 'provide', 'consume',
+]);
+
+/**
+ * If `e` is the recognisable failure of a Lit DECORATOR reaching the runtime
+ * (WebJs has no build step and decorators are not erasable TypeScript, so the
+ * type stripper passes them through), return the WebJs fix; otherwise null.
+ * Node and the browser report a bare `SyntaxError: Invalid or unexpected
+ * token` for the `@`, which names neither cause nor fix; Bun reports a
+ * `ReferenceError: property is not defined`. The `no-non-erasable-typescript`
+ * check rule catches the same thing at edit time with a per-decorator fix.
+ * @param {unknown} e
+ * @returns {string | null}
+ */
+export function decoratorHint(e) {
+  const msg = e && typeof (/** @type any */ (e).message) === 'string' ? /** @type any */ (e).message : '';
+  const fix =
+    'WebJs runs no build step, so decorators cannot run. Declare reactive properties in `static properties` ' +
+    '(or the `WebComponent({ ... })` factory), use `state: true` for `@state`, call `MyEl.register(tag)` for ' +
+    '`@customElement`, and write `@query` as a getter over `this.renderRoot`.';
+  if (e instanceof SyntaxError && /Invalid or unexpected token|Unexpected token '@'|Unexpected character '@'|[Dd]ecorators? /.test(msg)) {
+    return `A module failed to parse. If it uses a decorator (\`@property\`, \`@customElement\`, ...), that is the cause. ${fix}`;
+  }
+  const m = /^(\w+) is not defined\b/.exec(msg);
+  if (e instanceof ReferenceError && m && DECORATOR_NAMES.has(m[1])) {
+    return `\`${m[1]}\` is a Lit decorator, which WebJs does not provide. ${fix}`;
+  }
+  return null;
+}
+
 // Browser-only names whose absence during SSR produces a recognisable error.
 // Mirrors the `no-browser-globals-in-render` webjs check rule, which catches
 // these at edit time; this turns the runtime SSR crash into the same guidance.

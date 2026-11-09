@@ -14,6 +14,7 @@ import { compile, submitterActionBindings, INSTANCE } from './template-compiler.
 import { commitAdoption, planSlotAdoption, retargetParts } from './adopt-slots.js';
 import {
   applyPart, bindPart, currentRenderHost, setCurrentRenderHost, currentRenderRoot, findSlotHost, setCurrentRenderRoot, updateInstance,
+  releaseInstanceDirectives,
 } from './parts.js';
 
 /**
@@ -378,6 +379,9 @@ function clearInstance(inst, container) {
   // element parts, and rescue any projected children sitting inside
   // slot parts so they survive teardown of a collapsing conditional
   // fragment.
+  // Custom directives in the outgoing template are released first (an async
+  // one runs its `disconnected()`), as lit does when a part goes away.
+  releaseInstanceDirectives(inst);
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher, p.handler);
     if (p.kind === 'element') {

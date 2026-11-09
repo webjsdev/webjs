@@ -10,7 +10,8 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -160,4 +161,82 @@ test('PROD counterfactual: no frame is built and the overlay client 404s', async
 
   const reload = await app.handle(new Request('http://x/__webjs/reload.js'));
   assert.equal(reload.status, 404, 'the dev overlay client is not served in prod');
+});
+
+test('a decorator in a served .ts module is refused with the decorator and its WebJs fix', async () => {
+  const appDir = makeApp({
+    'app/page.js': "import '../components/dec.ts';\nexport default function P() { return 'ok'; }\n",
+    'components/dec.ts':
+      "import { WebComponent, html } from '@webjsdev/core';\nexport class DecEl extends WebComponent {\n  @property({ type: Number }) count = 0;\n  render() { return html`<p @click=${() => 1}>x</p>`; }\n}\n",
+  });
+  const frames = [];
+  const app = await createRequestHandler({ appDir, dev: true, onDevError: (f) => frames.push(f) });
+  await app.warmup();
+
+  const res = await app.handle(new Request('http://x/components/dec.ts'));
+  assert.equal(res.status, 500, 'the decorator module is a 500 stub, not served to the browser');
+  const body = await res.text();
+  assert.match(body, /@property/);
+  assert.match(body, /static properties/);
+  assert.match(body, /troubleshooting#decorators/);
+  const f = frames.find((x) => x.kind === 'ts-strip');
+  assert.ok(f, 'a ts-strip frame was pushed');
+  assert.equal(f.line, 3, 'the frame points at the decorator line');
+  assert.match(f.hint || '', /static properties/);
+});
+
+test('a decorator in a served .js module is refused too', async () => {
+  const appDir = makeApp({
+    'app/page.js': "import '../components/dec.js';\nexport default function P() { return 'ok'; }\n",
+    'components/dec.js': "@customElement('dec-el')\nexport class DecEl {}\n",
+  });
+  const frames = [];
+  const app = await createRequestHandler({ appDir, dev: true, onDevError: (f) => frames.push(f) });
+  await app.warmup();
+  const res = await app.handle(new Request('http://x/components/dec.js'));
+  assert.equal(res.status, 500);
+  assert.match(await res.text(), /\.register\('my-el'\)/);
+});
+
+test('a module with @click and @media but no decorator is served normally', async () => {
+  const appDir = makeApp({
+    'app/page.js': "import '../components/ok.ts';\nexport default function P() { return 'ok'; }\n",
+    'components/ok.ts':
+      "import { WebComponent, html, css } from '@webjsdev/core';\n/** @param {string} x */\nexport class OkEl extends WebComponent {\n  static styles = css`\n@media (min-width: 1px) { :host { display: block; } }\n`;\n  render() { return html`<p @click=${() => 1}>x</p>`; }\n}\nOkEl.register('ok-el');\n",
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
+  const res = await app.handle(new Request('http://x/components/ok.ts'));
+  assert.equal(res.status, 200);
+});
+
+test('a page whose module graph fails on a decorator at SSR gets the decorator hint in its frame', async () => {
+  const appDir = makeApp({
+    'app/page.ts': "import { DecEl } from '../components/dec.ts';\nexport default function P() { return String(DecEl); }\n",
+    'components/dec.ts': "export class DecEl {\n  @state() open = false;\n}\n",
+  });
+  const frames = [];
+  const app = await createRequestHandler({ appDir, dev: true, onDevError: (f) => frames.push(f) });
+  const res = await app.handle(new Request('http://x/'));
+  assert.equal(res.status, 500);
+  const f = frames.find((x) => /decorator/i.test(x.hint || ''));
+  assert.ok(f, `a frame carries the decorator hint: ${JSON.stringify(frames.map((x) => [x.kind, x.message, x.file, x.hint]))}`);
+  assert.match(f.hint, /state: true/);
+});
+
+test('a page importing LitElement from core gets the WebComponent fix in its frame', async () => {
+  const appDir = makeApp({
+    'app/page.ts': "import { LitElement } from '@webjsdev/core';\nexport default function P() { return String(LitElement); }\n",
+  });
+  // Resolve the bare specifier to the workspace core, as an installed app would.
+  mkdirSync(join(appDir, 'node_modules', '@webjsdev'), { recursive: true });
+  symlinkSync(fileURLToPath(new URL('../../../core', import.meta.url)), join(appDir, 'node_modules', '@webjsdev', 'core'));
+  const frames = [];
+  const app = await createRequestHandler({ appDir, dev: true, onDevError: (f) => frames.push(f) });
+  const res = await app.handle(new Request('http://x/'));
+  assert.equal(res.status, 500);
+  assert.ok(
+    frames.some((f) => /WebComponent/.test(f.hint || '')),
+    JSON.stringify(frames.map((f) => [f.message, f.hint])),
+  );
 });

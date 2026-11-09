@@ -129,7 +129,7 @@ export function applyAttrsToInstance(instance, attrs, Cls) {
     // per-component error isolation below, which is deliberate: an author who
     // supplies a converter owns the read, the same rule `_reflectAttribute`
     // states for `toAttribute`. See the comment on `readAttributeValue`.
-    instance[propName] = readAttributeValue(def, decodeAttrEntities(sourceValue));
+    instance[propName] = readAttributeValue(def, decodeAttrEntities(sourceValue), propName);
   }
 }
 

@@ -11,6 +11,7 @@ import {
   checkArrayPropUsesArrayType,
   checkNoBrowserGlobalsInRender,
   checkNoShadowedNativeMember,
+  checkShadowOnlyStatics,
 } from './rules-components.js';
 import {
   checkNoRedirectInApiRoute,
@@ -35,6 +36,7 @@ import { checkServerImportInBrowserModule } from './runner-support.js';
 import {
   checkNoMissingLocalImport,
   checkFormActionNotAGetAction,
+  checkCoreImportsExist,
 } from './rules-imports.js';
 
 /**
@@ -94,6 +96,7 @@ export async function checkConventions(appDir) {
   checkArrayPropUsesArrayType(files, violations);
   checkNoBrowserGlobalsInRender(files, violations);
   checkNoShadowedNativeMember(files, violations);
+  checkShadowOnlyStatics(files, violations);
   checkNoRedirectInApiRoute(files, violations);
   checkNoInterpolationInRawTextElement(files, violations);
   checkNoServerEnvInComponents(files, violations);
@@ -108,6 +111,7 @@ export async function checkConventions(appDir) {
   await checkServerImportInBrowserModule(appDir, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
+  checkCoreImportsExist(appDir, files, violations);
 
   return violations;
 }

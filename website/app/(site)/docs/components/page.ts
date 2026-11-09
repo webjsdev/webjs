@@ -144,20 +144,45 @@ UserCard.register('user-card');</code-block>
 
     <p>Declare an <strong>array-typed</strong> property with the <code>Array</code> constructor, not <code>Object</code> (<code>tags: prop&lt;string[]&gt;(Array)</code>). The default converter treats both the same (each JSON-encodes the value), so <code>Object</code> does not break anything, but <code>Array</code> states the property's shape correctly. The <code>array-prop-uses-array-type</code> rule in <code>webjs check</code> flags an array-typed generic declared with <code>Object</code>.</p>
 
+    <h3>Every Lit property option</h3>
+    <p>The declaration options behave as in Lit. <code>attribute</code> takes a string (the attribute name, used as written), <code>true</code> (the default name), or <code>false</code> (no attribute). <code>converter</code> takes a <code>{ fromAttribute, toAttribute }</code> object, or a bare function, which is the <code>fromAttribute</code> half while reflection keeps the default serialisation. <code>hasChanged(value, oldValue)</code> decides whether a write schedules an update, and <code>requestUpdate(name, oldValue, options)</code> runs it too, so a manual call with an unchanged value schedules nothing (call <code>requestUpdate()</code> with no arguments to force one).</p>
+    <p>A class that defines its own <code>get</code> / <code>set</code> for a declared property keeps it: the accessor is wrapped, so reads and writes go through your code (a private field included) and each write still records the change, reflects, and re-renders. With <code>noAccessor: true</code> nothing is wrapped and your setter calls <code>this.requestUpdate(name, oldValue)</code> itself.</p>
+    <code-block>class Rating extends WebComponent {
+  static properties = { level: { type: Number, reflect: true } };
+  #level = 0;
+  get level() { return this.#level; }
+  set level(v) { this.#level = Math.max(0, Math.min(5, v)); }   // clamped, still reactive
+}</code-block>
+
+    <h3>Lit's static class API</h3>
+    <p>The class-level members a Lit author reaches for work with Lit's meaning, over the same merged declarations the accessors and attribute readers use (the factory, <code>static properties</code>, and the parent chain):</p>
+    <ul>
+      <li><code>static elementProperties</code> is a <code>Map</code> of every declared property, own and inherited, to its normalised declaration.</li>
+      <li><code>static getPropertyOptions(name)</code> returns one declaration, or the default <code>{ type: String }</code>.</li>
+      <li><code>static createProperty(name, options)</code> declares a property from code. Call it at class definition time; once an instance exists the accessors are installed, so a later call throws naming the fix.</li>
+      <li><code>static getPropertyDescriptor(name, key, options)</code> returns the accessor installed for each property. Override it and wrap <code>super.getPropertyDescriptor(...)</code>, or return <code>undefined</code> to install none.</li>
+      <li><code>static addInitializer(fn)</code> runs <code>fn(element)</code> in the constructor of every instance of the class and its subclasses (Lit's hook for controllers that attach themselves).</li>
+      <li><code>static finalize()</code> is idempotent, and <code>register()</code> and <code>observedAttributes</code> call it for you.</li>
+    </ul>
+    <code-block>class Tracked extends WebComponent({ count: Number }) {}
+Tracked.addInitializer((el) =&gt; el.addController(new LoggerController(el)));
+Tracked.createProperty('label', { type: String });
+Tracked.getPropertyOptions('count').type;   // Number</code-block>
+
     <h3>Attribute-to-Property Coercion</h3>
     <p>When an attribute changes on the DOM element, WebJs coerces the string value to the declared type:</p>
 
     <ul>
       <li><strong>String</strong>: passed through as-is.</li>
       <li><strong>Number</strong>: converted via <code>Number(value)</code>. Null attributes become <code>null</code>.</li>
-      <li><strong>Boolean</strong>: the attribute is <code>true</code> if present and not <code>"false"</code>. Removing the attribute sets <code>false</code>.</li>
+      <li><strong>Boolean</strong>: the property is <code>true</code> whenever the attribute is present, whatever its value, as in HTML and Lit, so <code>open="false"</code> is <code>true</code> (and warns once naming the property). Removing the attribute sets <code>false</code>. To turn one off from a template, bind <code>?open=\${false}</code>, which leaves the attribute out.</li>
       <li><strong>Object / Array</strong>: parsed via <code>JSON.parse()</code>. If parsing fails the property reads back as <code>null</code>, since a string is never a valid value for a property declared <code>Object</code> or <code>Array</code>. An attribute that was never there is a different case: it is not read at all, so the property keeps whatever the constructor gave it.</li>
       <li><strong>Every type</strong>: the value arrives with its HTML character references already decoded, on the server and in the browser alike, before the coercion above runs. So <code>cfg="&amp;#123;&amp;quot;a&amp;quot;:1&amp;#125;"</code> parses as the object it spells, and <code>label="Tom &amp;amp; Jerry"</code> is <code>Tom &amp; Jerry</code>. Named, decimal, and hexadecimal references are all covered, and so are the legacy semicolon-less forms, which decode only where a browser decodes them: <code>&amp;nbsp</code> at the end of a value is a non-breaking space, while <code>&amp;nbspx</code> and <code>&amp;nbsp=x</code> stay literal because the next character is alphanumeric or an <code>=</code>. Writing the semicolon avoids the question.</li>
     </ul>
 
     <p>A property supplying its own <code>converter.fromAttribute</code> bypasses that list entirely. The converter runs first, ahead of any type-based coercion, and whatever it returns IS the property value, so a <code>prop(Object)</code> with a converter never reaches the <code>JSON.parse()</code> step above. It runs on <strong>both</strong> attribute readers, the browser one and the server one, so it executes during SSR as well as on the client upgrade. Two consequences worth planning for. Keep a converter free of browser globals (<code>document</code>, <code>window</code>, <code>navigator</code>): SSR has no DOM, so touching one throws server-side and the component renders its error state instead of its content. And a converter that throws is not caught on either side, because an author who writes one owns the conversion; at SSR the throw is isolated to that component (an error box in dev, an empty element at a 200 in production, with the cause in the server log) while its siblings still render. Both readers hand the converter <strong>decoded</strong> attribute text, so a converter that parses its input (<code>JSON.parse</code> for a Map or a Set, <code>new Date(...)</code>) receives the same string server-side and client-side even when the attribute carries <code>&amp;quot;</code> or <code>&amp;amp;</code>.</p>
 
-    <p>Property names are automatically converted between camelCase (JavaScript) and kebab-case (HTML). A property named <code>userName</code> observes the attribute <code>user-name</code>. HTML attribute names are case-insensitive and the browser lowercases them while parsing, so a camelCase attribute in markup (<code>userName="…"</code>) arrives as <code>username</code>. The property answers to that lowercased name too (lit's default attribute name), so <code>user-name</code>, <code>userName</code> and <code>username</code> all reach <code>userName</code>, in the browser and on the server. Kebab-case is the preferred spelling and the one a reflected property writes. A property with a custom <code>attribute</code> gets no lowercased alias.</p>
+    <p>A property's default attribute is Lit's: the property name lowercased, so <code>userName</code> observes and reflects <code>username</code>. HTML attribute names are case-insensitive and the browser lowercases them while parsing, so <code>userName="…"</code> in markup arrives as <code>username</code> and reaches the property. The kebab spelling <code>user-name</code> is also read, as an alias, in the browser and on the server, but a reflected property always writes the lowercase name, so style a reflected state with <code>[username]</code> (or give the property an explicit <code>attribute: 'user-name'</code> when you want the kebab name everywhere). A property with a custom <code>attribute</code> answers to that name only.</p>
 
     <p>A property that renames its attribute answers to the new name and to nothing else. Given <code>open: prop(Boolean, { attribute: 'is-open' })</code>, write <code>&lt;my-el is-open&gt;</code>; <code>&lt;my-el open&gt;</code> reaches no property on either side.</p>
 
@@ -243,6 +268,11 @@ class Counter extends WebComponent {
 Counter.register('my-counter');</code-block>
 
     <p>SSR inlines the current value once; subscription is a client-only concern. Pick <code>watch()</code> when the binding is a scalar (text node, attribute value) tied to one signal and the surrounding template is expensive or static. Pick <code>signal.get()</code> when the render branches on the value, derives several things from it, or reads multiple signals together.</p>
+
+    <h3>A bare signal in a hole</h3>
+    <p>As in Lit's signals package, a signal placed in a hole WITHOUT <code>.get()</code> binds that hole the way <code>watch()</code> does: <code>\${count}</code> in text, <code>title=\${label}</code>, <code>?hidden=\${closed}</code>, and a signal inside an interpolated attribute (<code>class="card \${tone}"</code>) all render the current value on the server and update in place on the client, with no re-render of the host. A <code>.prop=\${sig}</code> hole is the exception: it hands the signal object itself to the property, so a child component can read it.</p>
+    <code-block>html\`&lt;p title=\${label} class="badge \${tone}"&gt;\${count}&lt;/p&gt;\`;</code-block>
+    <p>Lit's <code>SignalWatcher</code> mixin and <code>watch</code> are both importable from <code>@webjsdev/core/signals</code> (Lit's <code>@lit-labs/signals</code>). <code>SignalWatcher</code> returns the class it is given unchanged, because every <code>WebComponent</code> already watches the signals its update reads, so <code>class X extends SignalWatcher(WebComponent)</code> works and means the same thing as <code>class X extends WebComponent</code>.</p>
 
     <h2>Styles</h2>
     <p>Use the <code>css</code> tagged template to declare scoped styles. They are automatically adopted into the component's shadow root.</p>
@@ -382,7 +412,17 @@ class MyCard extends WebComponent {
 }
 Card.register('my-card');</code-block>
 
-    <p><code>static styles</code> on a light-DOM component is silently ignored. There's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
+    <p><code>static styles</code> on a light-DOM component never applies, since there is no shadow root to adopt it into, so WebJs reports it rather than ignoring it. <code>webjs check</code> flags it, and the dev server and the browser each log an error once per class naming <code>static shadow = true</code> as the fix. Lit attaches a shadow root by default and WebJs does not, so this is the habit to watch; <code>static shadowRootOptions</code> without <code>static shadow = true</code> is flagged the same way (<code>shadow-options-need-shadow</code>). A hole in a <code>css</code> template takes another <code>css</code> result or a number; a plain string throws and must be wrapped in <code>unsafeCSS()</code> (see <a href="/docs/styling">Styling</a>).</p>
+
+    <h3>shadowRootOptions, createRenderRoot() and renderRoot</h3>
+    <p>These are Lit's members with Lit's meaning. <code>static shadowRootOptions</code> holds the <code>attachShadow()</code> options (<code>delegatesFocus</code>, <code>clonable</code>, <code>serializable</code>, a <code>closed</code> mode); the server writes them onto the Declarative Shadow DOM template too (<code>shadowrootdelegatesfocus</code> and friends), so the first paint and the hydrated element agree. <code>this.renderRoot</code> is the node <code>render()</code> commits into: the shadow root here, the element itself in light DOM. It is <code>undefined</code> until the element connects and at SSR.</p>
+    <code-block>class FancyInput extends WebComponent {
+  static shadow = true;
+  static shadowRootOptions = { mode: 'open', delegatesFocus: true };
+  render() { return html\`&lt;input&gt;\`; }
+  firstUpdated() { this.renderRoot.querySelector('input')?.select(); }
+}</code-block>
+    <p><code>createRenderRoot()</code> creates that root once per element. Its default returns the element for light DOM, and for <code>static shadow = true</code> attaches the shadow root (or reuses the server-rendered one) and adopts <code>static styles</code>. Lit's <code>createRenderRoot() { return this; }</code> works and is already the default. An override may post-process <code>super.createRenderRoot()</code>, but it cannot switch modes on its own: the server renders from <code>static shadow</code> and never calls it, so a shadow root returned without <code>static shadow = true</code> (or a light root with it) throws on connect, naming the fix. Calling <code>attachShadow()</code> yourself during SSR throws the same way, since the server has no DOM.</p>
 
     <h3>Mode summary</h3>
     <p>Both modes are <strong>fully SSR'd</strong>. Shadow DOM renders via Declarative Shadow DOM (<code>&lt;template shadowrootmode="open"&gt;</code>). Light DOM renders content directly as HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker. Both hydrate on the client without flash.</p>
@@ -907,7 +947,7 @@ class ChatBox extends WebComponent {
 
   send(e) {
     e.preventDefault();
-    const input = this.shadowRoot.querySelector('input');
+    const input = this.renderRoot.querySelector('input');
     if (!input.value.trim() || !this._conn) return;
     this._conn.send({ text: input.value });
     input.value = '';

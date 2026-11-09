@@ -326,6 +326,26 @@ jobs:
       # on the Bun SSR path (buffered and streamed) as on Node.
       - name: webjs binding-prefix dispatch on Bun
         run: bun test/bun/binding-prefixes.mjs
+      # Decorators refused loudly on Bun: Bun runs legacy decorators and throws
+      # a ReferenceError for the undefined decorator where Node throws a bare
+      # SyntaxError, so this asserts check, the dev module refusal, and the SSR
+      # dev frame all name the WebJs fix on the Bun path too.
+      - name: WebJs decorator detection on Bun
+        run: bun test/bun/decorator-detection.mjs
+      # The lit directive surface (iterables in a child hole, the two-argument
+      # repeat, when / choose / map / join / range, unsafeSVG, the mathml tag,
+      # static-html) renders the same on the Bun SSR path.
+      - name: WebJs lit directive parity on Bun
+        run: bun test/bun/lit-directives.mjs
+      # A custom directive (directive / async-directive subpaths) resolves to
+      # its render() result in every SSR part, across the source subpath and
+      # the built root bundle.
+      - name: WebJs custom directives on Bun
+        run: bun test/bun/custom-directive.mjs
+      # A bare signal in a template hole renders its value at SSR, and the
+      # /signals subpath carries SignalWatcher and watch on the built bundle.
+      - name: WebJs bare signals in template holes on Bun
+        run: bun test/bun/bare-signal.mjs
       # Reverse-proxy forwarded headers on Bun (#1090): the node shell corrects
       # the request url via urlFromRequest before building its Request, but the
       # Bun shell handed Bun.serve's request straight through, so behind a

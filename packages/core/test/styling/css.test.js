@@ -4,7 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { css, isCSS, adoptStyles, stylesToString } from '../../index.js';
+import { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from '../../index.js';
+import { finalizeStyles } from '../../src/css.js';
 
 test('css`...` returns a CSSResult object with text + sentinel', () => {
   const r = css`a { color: red; }`;
@@ -12,15 +13,45 @@ test('css`...` returns a CSSResult object with text + sentinel', () => {
   assert.equal(r.text, 'a { color: red; }');
 });
 
-test('css interpolation: interpolates string values', () => {
+test('css interpolation: a string in a hole throws naming unsafeCSS', () => {
   const fg = 'red';
-  const r = css`a { color: ${fg}; }`;
-  assert.equal(r.text, 'a { color: red; }');
+  assert.throws(() => css`a { color: ${fg}; }`, /unsafeCSS/);
 });
 
-test('css interpolation: nullish values coerce to empty string', () => {
-  const r = css`a { color: ${null}; }${undefined}`;
-  assert.equal(r.text, 'a { color: ; }');
+test('css interpolation: null and undefined throw too', () => {
+  assert.throws(() => css`a { color: ${null}; }`, /unsafeCSS/);
+  assert.throws(() => css`a{}${undefined}`, /unsafeCSS/);
+});
+
+test('css interpolation: a nested css result and a number compose as text', () => {
+  const brand = css`#e33`;
+  const r = css`a { color: ${brand}; padding: ${4}px; }`;
+  assert.equal(r.cssText, 'a { color: #e33; padding: 4px; }');
+});
+
+test('unsafeCSS wraps a trusted string and composes into css', () => {
+  const r = css`a { color: ${unsafeCSS('red')}; }`;
+  assert.equal(r.text, 'a { color: red; }');
+  assert.ok(unsafeCSS('x') instanceof CSSResult);
+  assert.equal(unsafeCSS(3).cssText, '3');
+});
+
+test('a CSSResult stringifies to its text and exposes cssText and text', () => {
+  const r = css`b{}`;
+  assert.equal(String(r), 'b{}');
+  assert.equal(`${r}`, 'b{}');
+  assert.equal(r.cssText, r.text);
+  assert.equal(r.styleSheet, undefined, 'no constructed sheet on the server');
+});
+
+test('finalizeStyles flattens nested arrays and keeps the last duplicate', () => {
+  const a = css`a{}`;
+  const b = css`b{}`;
+  const c = css`c{}`;
+  assert.deepEqual(finalizeStyles([a, [b, [a, c]]]), [b, a, c]);
+  assert.deepEqual(finalizeStyles(a), [a]);
+  assert.deepEqual(finalizeStyles(null), []);
+  assert.deepEqual(finalizeStyles(undefined), []);
 });
 
 test('isCSS: true for css`` results, false for other objects/primitives', () => {

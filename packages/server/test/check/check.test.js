@@ -117,6 +117,94 @@ export class Counter {
   }
 });
 
+test('no-non-erasable-typescript: flags a Lit decorator with its WebJs fix', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'components', 'counter.ts'),
+      `import { WebComponent, html } from '@webjsdev/core';
+export class MyCounter extends WebComponent {
+  @property({ type: Number }) count = 0;
+  render() { return html\`<p>\${this.count}</p>\`; }
+}
+MyCounter.register('my-counter');\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('counter.ts'));
+    assert.ok(v, 'expected the decorator to be flagged');
+    assert.match(v.message, /`@property` at line 3/);
+    assert.match(v.message, /SyntaxError/);
+    assert.match(v.fix, /static properties/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags @customElement in a plain .js file', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'components', 'el.js'),
+      `import { WebComponent } from '@webjsdev/core';
+@customElement('my-el')
+export class MyEl extends WebComponent {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('el.js'));
+    assert.ok(v, 'expected the .js decorator to be flagged');
+    assert.match(v.fix, /MyEl\.register\('my-el'\)/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: @state and @query each get their own fix', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'components', 's.ts'), `class S {\n  @state()\n  private open = false;\n}\n`);
+    await writeFileEnsureDir(join(appDir, 'components', 'q.ts'), `class Q {\n  @query('#x') el!: HTMLElement;\n}\n`);
+    const violations = await checkConventions(appDir);
+    const s = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.endsWith('s.ts'));
+    const q = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.endsWith('q.ts'));
+    assert.match(s.fix, /state: true/);
+    assert.match(q.fix, /this\.renderRoot\.querySelector/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: an @ in a template, css, JSDoc or string is not a decorator', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'components', 'clean.ts'),
+      `import { WebComponent, html, css } from '@webjsdev/core';
+/**
+ * A button.
+ * @param {string} label the label
+ * @returns {void}
+ */
+export class CleanBtn extends WebComponent {
+  static styles = css\`
+@media (min-width: 40rem) { :host { display: block; } }
+\`;
+  render() {
+    return html\`<button
+      @click=\${() => this.go()}>go</button>\`;
+  }
+  go() { return 'a@b.com' + /@x/.source; }
+}
+CleanBtn.register('clean-btn');\n`,
+    );
+    await writeFileEnsureDir(join(appDir, 'public', 'vendor.js'), `@decorated\nclass V {}\n`);
+    const violations = await checkConventions(appDir);
+    const hits = violations.filter((v) => v.rule === 'no-non-erasable-typescript');
+    assert.deepEqual(hits, [], JSON.stringify(hits));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no-non-erasable-typescript: skips node_modules and _private folders', async () => {
   const appDir = await makeTempApp();
   try {

@@ -221,4 +221,19 @@ for (const [source, expected] of ENTITY_MATRIX) {
   );
 }
 
+// --- 5. A Boolean attribute is on whenever it is present (Lit) -------------
+
+{
+  const warnings = [];
+  const orig = console.warn;
+  console.warn = (...a) => { warnings.push(String(a[0])); };
+  try {
+    const out = await ssr('<bun-attr-custom is-open="false"></bun-attr-custom>');
+    assert.ok(out.includes('open=true'), `[${runtime}] is-open="false" must read as true: ${out}`);
+  } finally {
+    console.warn = orig;
+  }
+  assert.ok(warnings.some((w) => w.includes('received the attribute value "false"')), `[${runtime}] the literal "false" is warned about`);
+}
+
 console.log(`[${runtime}] attribute-reader parity (#1341): ok`);
