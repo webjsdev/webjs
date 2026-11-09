@@ -140,9 +140,14 @@ export function retargetParts(plan, bound) {
     if (!p.el) continue;
     const live = plan.map.get(p.el);
     if (!live) continue;
-    if (p.kind === 'event') {
-      p.el.removeEventListener(p.name, p.dispatcher);
-      live.addEventListener(p.name, p.dispatcher);
+    // An event part registers its dispatcher in applyPart, with the handler as
+    // the options bag (capture / once / passive). This runs before the first
+    // apply, so usually nothing is registered yet; move a registration only
+    // when one exists, with the SAME options, or a capture listener would be
+    // registered twice and a `once` listener would lose its `once`.
+    if (p.kind === 'event' && p.handler) {
+      p.el.removeEventListener(p.name, p.dispatcher, p.handler);
+      live.addEventListener(p.name, p.dispatcher, p.handler);
     }
     p.el = live;
     if (p.kind === 'attr' || p.kind === 'attr-mixed' || p.kind === 'bool') {

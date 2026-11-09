@@ -78,6 +78,26 @@ suite('Lit expression and helper compatibility', () => {
     assert.equal(container.querySelector('input').hasAttribute('title'), false);
     assert.equal(container.querySelector('p').textContent, '');
   });
+  test('noChange in a mixed attribute on first render matches SSR (#1682)', () => {
+    const container = document.createElement('div');
+    const view = (a, b) => html`<p class="a ${a} b ${b}">x</p>`;
+    // Lit commits an empty string for a noChange piece on the first render,
+    // which is also what the server serves, so hydration agrees.
+    render(view(noChange, 'two'), container);
+    assert.equal(container.querySelector('p').getAttribute('class'), 'a  b two');
+    render(view('one', noChange), container);
+    assert.equal(container.querySelector('p').getAttribute('class'), 'a one b two');
+    render(view(noChange, 'three'), container);
+    assert.equal(container.querySelector('p').getAttribute('class'), 'a one b three');
+  });
+  test('noChange after a nullish value keeps the empty attribute (#1682)', () => {
+    const container = document.createElement('div');
+    const view = (v) => html`<p title=${v}>x</p>`;
+    render(view(undefined), container);
+    assert.equal(container.querySelector('p').getAttribute('title'), '');
+    render(view(noChange), container);
+    assert.equal(container.querySelector('p').getAttribute('title'), '', 'noChange leaves the committed attribute');
+  });
   test('ordinary booleans stringify and nullish attributes become empty', () => {
     const container = document.createElement('div');
     render(html`<p title=${null} data-flag=${false}>${false}/${true}</p>`, container);

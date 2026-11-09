@@ -149,6 +149,33 @@ suite('light-DOM hydration keeps projected children in place (#1666)', () => {
     box.remove();
   });
 
+  test('listener options survive the move onto a kept ancestor (#1682)', async () => {
+    const tag = tagName('options');
+    let captured = 0;
+    let once = 0;
+    // Lit listener objects: the object is also the options bag. A retarget that
+    // registered the dispatcher without options left a bubble registration
+    // beside the capture one (two calls per click) and dropped `once`.
+    const capture = { handleEvent() { captured++; }, capture: true };
+    const single = { handleEvent() { once++; }, once: true };
+    class C extends WebComponent {
+      render() {
+        return html`<section @click=${capture}><div @click=${single}><slot></slot></div></section>`;
+      }
+    }
+    const ssr =
+      '<!--webjs-hydrate--><section><div>' +
+      `<slot data-webjs-light data-projection="actual"><${countTag} id="o"></${countTag}></slot></div></section>`;
+    const { box, host, left } = await hydrate(tag, C, ssr);
+    assert.deepEqual([...left], [], 'the projected node never left, so the ancestors were adopted');
+    const target = /** @type {any} */ (host.querySelector('#o'));
+    target.click();
+    target.click();
+    assert.equal(captured, 2, 'the capture listener runs once per click');
+    assert.equal(once, 1, 'the once listener runs once in total');
+    box.remove();
+  });
+
   test('firstUpdated already reads the projection on a hydrated host', async () => {
     const tag = tagName('first');
     let seen = -1;
