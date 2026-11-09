@@ -5,7 +5,6 @@
     "tag-name-has-hyphen": "HTML-spec basic; framework invariant 3, no muscle-memory divergence to counter",
     "no-duplicate-tag": "two components claim one tag name, a build-time collision surfaced by the check, not a runtime error signature",
     "array-prop-uses-array-type": "shape hint (declare an array prop with Array not Object); the rule's own message carries the fix",
-    "no-redirect-in-api-route": "explained only in the deleted agent skill; the rule message carries the fix (return Response.redirect). Slated for removal in this PR when route handlers gain Next redirect semantics, which makes this exemption stale on purpose.",
-    "no-interpolation-in-raw-text-element": "explained only in the deleted agent skill; the rule message carries the fix (static styles or Tailwind). Remove this exemption once the troubleshooting page names the rule."
+    "no-redirect-in-api-route": "explained only in the deleted agent skill; the rule message carries the fix (return Response.redirect). Slated for removal in this PR when route handlers gain Next redirect semantics, which makes this exemption stale on purpose."
   }
 }
