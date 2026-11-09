@@ -25,7 +25,7 @@ The importmap alone does not solve discovery latency, though. It tells the brows
 
 The fix is `<link rel="modulepreload">`. During SSR, WebJs walks the module graph from the page's actually-shipped modules, collects every vendor specifier they reach, resolves each to its importmap target, and emits a preload hint for it in the head. So the moment the browser reads the head, it starts fetching the whole reached vendor set in parallel, before it has parsed a single component. The level-by-level discovery collapses into one parallel burst. The bytes the browser needs are already in flight by the time the code that imports them runs.
 
-The walk is careful about which roots it starts from. It uses the boot's shipped-module set, which already drops the display-only modules that elision strips and substitutes an import-only page with its real components. So a vendor reached only through a module that never ships is never preloaded. You do not pay to preload a dependency the page will not actually load. The preload set is exactly the served set, no more.
+The walk is careful about which roots it starts from. It uses the boot's shipped-module set, which never contains a page or layout (those run only on the server, so the boot loads the components they render instead) and already drops the display-only components that elision strips. So a vendor reached only through a module that never ships is never preloaded. You do not pay to preload a dependency the page will not actually load. The preload set is exactly the served set, no more.
 
 # The listener path
 

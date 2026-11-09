@@ -39,8 +39,10 @@ subcommand) delegates to this same server, so both routes run identical code.
   config exports are excluded from the callable-action list), `list_components`,
   `list_elision` (the display-only elision verdict: which component modules the
   browser never downloads, the evidence behind each one that ships, every
-  page/layout as inert / import-only / shipped, and any orphan class that gets
-  no verdict at all; identical to `webjs elision --json`),
+  route module (page, layout, boundary, none of which ever ships) with the
+  components the boot loads in its place and any hint about code in it meant
+  for the browser, and any orphan class that gets no verdict at all; identical
+  to `webjs elision --json`),
   `check` (the structured `webjs check` violations, each with its fix). Each
   projects an existing `@webjsdev/server` data function and mutates nothing.
 - **`source` tool**: reads the framework's own no-build source from

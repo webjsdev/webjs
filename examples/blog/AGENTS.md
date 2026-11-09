@@ -124,7 +124,7 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 - Client components use `connectWS()` for auto-reconnecting WebSocket connections.
 
 ### Elision fixtures (e2e-pinned)
-The app carries display-only and inert-route fixtures so the network
+The app carries display-only and zero-JS route fixtures so the network
 probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
 
 - `components/build-stamp.ts` (rendered on `/` AND on `/observed`): a
@@ -138,10 +138,10 @@ probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
   not an interactivity signal). Because the component is elided, the
   bare-import scan skips it, so `dayjs` never enters the importmap and is
   never fetched. The dayjs-formatted date is still SSR'd.
-- `app/static-info/page.ts`: a fully-static route whose inert page module
-  is dropped from the boot script. The import-only root layout is dropped
-  too (#620); the only module the boot emits is the layout's re-emitted
-  theme-toggle, which loads core and auto-enables the router.
+- `app/static-info/page.ts`: a fully-static route. No page or layout
+  module ever ships (route modules run only on the server); the only module
+  the boot emits is the root layout's theme-toggle, which loads core and
+  auto-enables the router.
 - `components/observed-badge.ts` + `components/observe-badge.ts` (rendered
   on `/observed`): a display-only component that WOULD elide, paired with a
   module that observes it via `customElements.whenDefined('observed-badge')`.

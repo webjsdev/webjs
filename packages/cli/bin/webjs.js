@@ -219,7 +219,7 @@ const HELP = {
   elision: {
     usage: 'webjs elision [--json] [--verify] [--routes <paths>]',
     summary:
-      'Report the elision verdict: which component modules the browser never downloads, and why each one that ships does.',
+      'Report what the browser loads: which component modules it never downloads and why each one that ships does, and the components each page, layout and boundary loads in its place (route modules never ship).',
     options: [
       { flag: '--json', description: 'Emit the verdict as JSON (byte-identical to the MCP list_elision tool).' },
       { flag: '--verify', description: 'Render every static page route with elision on and off and diff the observable SSR bytes. Exits non-zero on a divergence.' },
