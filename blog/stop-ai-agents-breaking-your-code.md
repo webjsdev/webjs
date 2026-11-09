@@ -80,7 +80,7 @@ webjs check --rules   # list every rule
 The rules are the concrete failure modes an agent trips over. A few real ones:
 
 - `use-server-needs-extension`, a `'use server'` directive requires a `.server.{js,ts}` filename, so server code cannot leak through a plain module.
-- `no-static-properties`, reactive properties are declared through the `WebComponent({ ... })` factory, not a hand-written `static properties` block that would throw at runtime.
+- `reactive-props-no-class-field`, a reactive property must not also be a class field like `count = 0`, which replaces the framework's accessor after `super()` and silently stops the re-renders.
 - `erasable-typescript-only`, the tsconfig must keep types strippable, because WebJs has no bundler to fall back on.
 - `shell-in-non-root-layout`, only the root layout may write `<!doctype>` / `<html>` / `<head>` / `<body>`.
 - `no-browser-globals-in-render`, a component's constructor and `render()` stay off browser globals, because both run on the server too and a `window` read there crashes the SSR pass.

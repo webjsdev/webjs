@@ -51,7 +51,7 @@ What this gets us is that an agent in autonomous mode (running with permission t
 
 - `no-server-import-in-browser-module`: a module that genuinely ships to the browser does not import a server-only file, whose client stub throws at load
 - `use-server-needs-extension`: a `'use server'` directive requires a `.server.{js,ts}` filename
-- `no-static-properties`: reactive properties are declared via the `extends WebComponent({ … })` factory, not a hand-written `static properties`
+- `reactive-props-no-class-field`: a reactive property is never also a class field, which would replace its accessor and stop the re-renders
 - `erasable-typescript-only`: `tsconfig.json` has `erasableSyntaxOnly: true`
 - `shell-in-non-root-layout`: non-root layouts and pages don't write `<!doctype>` / `<html>` / `<head>` / `<body>`
 - `no-server-env-in-components`: `process.env.X` in components only reads `WEBJS_PUBLIC_*` or `NODE_ENV`
