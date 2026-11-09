@@ -181,13 +181,19 @@ export function replayBuild(build, opts = {}) {
     execFileSync('git', ['clone', '-q', appDir, draft]);
     const root = execFileSync('git', ['-C', draft, 'rev-list', '--max-parents=0', 'HEAD'], { encoding: 'utf8' }).trim().split('\n')[0];
     execFileSync('git', ['-C', draft, 'checkout', '-q', root]);
-    symlinkSync(realpathSync(join(appDir, 'node_modules')), join(draft, 'node_modules'));
+    // Always THIS repo's node_modules, so every draft is graded against the
+    // current branch: an eval app may link an older framework checkout (an A/B
+    // baseline arm does), which would grade the draft against old code.
+    symlinkSync(join(REPO, 'node_modules'), join(draft, 'node_modules'));
     for (const f of ['.env', '.env.local']) if (existsSync(join(appDir, f))) cpSync(join(appDir, f), join(draft, f));
 
     const ranUiAdd = ops.some((o) => o.type === 'cmd' && /\bui\s+add\b/.test(o.cmd));
     const ranDbGenerate = ops.some((o) => o.type === 'cmd' && /db[: ]generate/.test(o.cmd));
-    if (ranUiAdd) {
-      // The kit files `webjs ui add` copied in, taken from the finished app.
+    // The kit files `webjs ui add` copies in are never agent-authored, and an
+    // agent may have brought them in several ways (`ui add`, a copy from another
+    // checkout), so they always come from the finished app.
+    void ranUiAdd;
+    {
       for (const rel of [...listFiles(join(appDir, 'components/ui')).map((f) => join('components/ui', f)), 'lib/utils/cn.ts', 'lib/utils/dom.ts', 'components.json']) {
         const from = join(appDir, rel);
         if (existsSync(from) && !existsSync(join(draft, rel))) { mkdirSync(dirname(join(draft, rel)), { recursive: true }); cpSync(from, join(draft, rel)); }
