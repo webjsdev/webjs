@@ -13,7 +13,12 @@ import type { PageProps, RouteHandlerContext, RouteParams } from '@webjsdev/core
 function form({ actionData }: PageProps<'/projects/[id]'>) {
   const title: string | string[] | undefined = actionData?.fieldErrors?.title;
   const typed: string | undefined = actionData?.values?.title;
-  return [title, typed, actionData?.error];
+  // A success result carried across the redirect: its `data` and any other key
+  // the action returned read with no cast (two round-3 builds hit
+  // "Property 'manageKey' does not exist on type '{}'" here).
+  const key: string | undefined = actionData?.data?.manageKey;
+  const extra = actionData?.notice;
+  return [title, typed, actionData?.error, key, extra];
 }
 void form;
 

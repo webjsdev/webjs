@@ -138,17 +138,24 @@ export type Awaitable<T> = T & PromiseLike<T>;
  * `Object.keys` sees only the data keys.
  */
 /**
- * What a failed form action hands the page it re-renders, by default: the
- * action's own failure result (`{ success: false, error, fieldErrors }` is the
- * usual shape) with the submitted text fields on `values`. Name the exact
- * shape with `PageProps`'s second type parameter.
+ * What a form action hands the page, by default: a failure result re-rendered
+ * (`{ success: false, error, fieldErrors }` is the usual shape) with the
+ * submitted text fields on `values`, or a success result carried across the
+ * redirect (`{ success: true, data }`). The common keys are typed; anything
+ * else the action returned reads as `any`, so `actionData?.data.manageKey`
+ * compiles without a cast, the way an untyped `useActionState` state does in
+ * Next. Name the exact shape with `PageProps`'s second type parameter,
+ * `PageProps<'/route', Awaited<ReturnType<typeof myAction>>>`, for full typing.
  */
 export interface FormActionData {
   success?: boolean;
   error?: string;
   fieldErrors?: Record<string, string | string[]>;
   values?: Record<string, string>;
-  [key: string]: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
 }
 
 export interface PageProps<R extends string = string, A = FormActionData> {
