@@ -58,7 +58,7 @@ import {
   applyTrailingSlash,
 } from '../redirects.js';
 import { applyConditionalGet } from '../conditional-get.js';
-import { commitHtmlCache, setAppSourceFingerprint } from '../html-cache.js';
+import { commitHtmlCache, revalidateAll, setAppSourceFingerprint } from '../html-cache.js';
 import { buildDevErrorFrame } from '../dev-error.js';
 import { isControlFlowThrow } from '../action-error.js';
 import { createDevStatus } from './dev-status.js';
@@ -1125,6 +1125,14 @@ export async function createRequestHandler(opts) {
     // runs on both boundary tiers and swaps in the changed boot script, which
     // executes and registers the new component.
     if (notify) opts.onReload?.(verdict || { v: 'reload', by: '', why: 'no-verdict' });
+    // Evict every cached HTML response LAST (#1689), on the silent path too. The
+    // cache key does not change across a rebuild, so a page with
+    // `export const revalidate` otherwise served its pre-edit HTML for the whole
+    // window, and that body carries the old `webjs-dev-reload` meta, which the
+    // reload relay reads as a page that is behind and reloads into again. Last,
+    // so any render that started before it is refused by the commit's
+    // generation check.
+    revalidateAll();
   }
 
   /**

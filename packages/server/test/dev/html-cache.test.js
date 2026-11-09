@@ -303,6 +303,72 @@ test('revalidatePath evicts the cached HTML so the next request re-renders', asy
   assert.ok(afterEvict.includes('render #2'), 'after revalidatePath the page re-renders (#2)');
 });
 
+/* ---------------- dev rebuilds (#1689) ---------------- */
+
+// A page that renders a fixed marker, so an edit to the file is visible in the
+// body regardless of how many times the page function ran.
+function markerPage(marker) {
+  return (
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `export const revalidate = 60;\n` +
+    `export default function P() { return html\`<h1>${marker}</h1>\`; }\n`
+  );
+}
+
+test('a dev rebuild evicts the cached HTML, so an edited revalidate page serves its new body', async () => {
+  freshStore();
+  const appDir = makeApp({ 'app/page.js': markerPage('EDIT_A') });
+  const app = await createRequestHandler({ appDir, dev: true });
+
+  assert.match(await (await app.handle(new Request('http://x/'))).text(), /EDIT_A/);
+  assert.match(await (await app.handle(new Request('http://x/'))).text(), /EDIT_A/, 'served from the cache');
+
+  writeFileSync(join(appDir, 'app/page.js'), markerPage('EDIT_B'));
+  await app.rebuild();
+  const after = await (await app.handle(new Request('http://x/'))).text();
+  assert.match(after, /EDIT_B/, 'the request after the rebuild renders the edited page, not the cached pre-edit body');
+});
+
+test('a render that straddles a dev rebuild is not cached', async () => {
+  freshStore();
+  const k = 'straddle';
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export const revalidate = 60;\n` +
+      `export default async function P() {\n` +
+      `  globalThis.__renders = globalThis.__renders || {};\n` +
+      `  const n = globalThis.__renders[${JSON.stringify(k)}] = (globalThis.__renders[${JSON.stringify(k)}] || 0) + 1;\n` +
+      `  await globalThis.__straddleGate;\n` +
+      `  return html\`<h1>render #\${n}</h1>\`;\n` +
+      `}\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+
+  let release;
+  globalThis.__straddleGate = new Promise((r) => { release = r; });
+  try {
+    const pending = app.handle(new Request('http://x/'));
+    // Wait until the page function is running, so the render began BEFORE the rebuild.
+    for (let i = 0; i < 200 && !(globalThis.__renders && globalThis.__renders[k]); i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(globalThis.__renders[k], 1, 'the first render is in flight');
+    await app.rebuild();
+    release();
+    assert.match(await (await pending).text(), /render #1/, 'the straddling render still answers its own request');
+  } finally {
+    release();
+    globalThis.__straddleGate = undefined;
+  }
+
+  // Its bytes describe the source before the rebuild, so they were not stored
+  // under the post-rebuild key: the next request renders afresh...
+  assert.match(await (await app.handle(new Request('http://x/'))).text(), /render #2/, 'the straddling render was not cached');
+  // ...and a render wholly after the rebuild is cached as usual.
+  assert.match(await (await app.handle(new Request('http://x/'))).text(), /render #2/, 'caching still works after the rebuild');
+});
+
 test('revalidatePath still evicts once the key carries an origin (#1097)', async () => {
   freshStore();
   const appDir = makeApp({ 'app/page.js': counterPage('evict-origin', { revalidate: 60 }) });
