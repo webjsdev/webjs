@@ -269,13 +269,16 @@ jobs:
       # through both listener shells.
       # dev-watch-poll rides here too (#1689): a directory out of file watches
       # is polled instead, over each runtime's own fs.watch and statSync.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll on Bun
+      # dev-rebuild-order rides here too (#1689): a rebuild invalidates the
+      # analysis before its route scan, through the in-process dev handler.
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh + hot-served-versions + html-cache-rebuild + service-worker + watch-poll + rebuild-order on Bun
         run: |
           bun test/bun/dev-hot-server-fresh.mjs
           bun test/bun/dev-hot-served-versions.mjs
           bun test/bun/dev-html-cache-rebuild.mjs
           bun test/bun/dev-service-worker.mjs
           bun test/bun/dev-watch-poll.mjs
+          bun test/bun/dev-rebuild-order.mjs
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-watch-error.mjs
           bun test/bun/dev-watch-replaced.mjs

@@ -1061,6 +1061,12 @@ export async function createRequestHandler(opts) {
     if (dev && changed.length && prev.graph) state.browserVersions.bump(changed, prev.graph, prev.shipped);
     // A component edit the tab can apply by re-importing its module (#1689).
     if (dev && notify) verdict = await hotVerdict(verdict, changed, prev);
+    // Invalidate the analysis BEFORE anything below can throw (#1689). The
+    // route table scan is the first step that can, and a failure there used to
+    // skip the reset further down, so the next request served the pre-edit
+    // analysis until some later edit rebuilt cleanly. It runs again at the end
+    // in case a request re-warmed against the old route table meanwhile.
+    await invalidateAnalysis();
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
@@ -1086,21 +1092,9 @@ export async function createRequestHandler(opts) {
     // modules too (#1644); the plain `webjs start` path never gets here.
     clearProdImportCache();
     state.tsCache.clear();
-    // Invalidate the lazy analysis; the next request rebuilds the graph,
-    // component scan, gate, action index, middleware, elision, and vendor map.
-    // Wait out any in-flight build first so it cannot commit stale results
-    // after the reset. A dependency edit can flip an elision verdict without
-    // changing an importer's mtime, hence the state.tsCache.clear above.
-    if (readyInFlight) { try { await readyInFlight; } catch {} }
-    // Bump the vendor generation so a vendor resolve still in flight from the
-    // previous build cannot flip vendorResolved against the fresh state.
-    vendorGen++;
-    analysisDone = false;
-    vendorResolved = false;
-    vendorAttemptedOnce = false;
-    readyDone = false;
-    readyError = null;
-    readinessFn = undefined;
+    // A dependency edit can flip an elision verdict without changing an
+    // importer's mtime, hence the state.tsCache.clear above.
+    await invalidateAnalysis();
     // Refresh the on-request regenerate rules (#967) so a `webjs.dev.regenerate`
     // config edit takes effect without a restart, mirroring the elide/router
     // re-reads above. Dev-only; a no-op array in prod.
@@ -1133,6 +1127,25 @@ export async function createRequestHandler(opts) {
     // so any render that started before it is refused by the commit's
     // generation check.
     revalidateAll();
+  }
+
+  /**
+   * Invalidate the lazy analysis; the next request rebuilds the graph,
+   * component scan, gate, action index, middleware, elision, and vendor map.
+   * Waits out any in-flight build first so it cannot commit stale results after
+   * the reset, and bumps the vendor generation so a vendor resolve still in
+   * flight from the previous build cannot flip `vendorResolved` against the
+   * fresh state.
+   */
+  async function invalidateAnalysis() {
+    if (readyInFlight) { try { await readyInFlight; } catch {} }
+    vendorGen++;
+    analysisDone = false;
+    vendorResolved = false;
+    vendorAttemptedOnce = false;
+    readyDone = false;
+    readyError = null;
+    readinessFn = undefined;
   }
 
   /**
