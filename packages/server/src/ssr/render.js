@@ -882,6 +882,10 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   let body = '<h1>404: Not found</h1>';
   /** @type {string[]} */
   let moduleUrls = [];
+  // The boundary's own `metadata` / `generateMetadata` titles the page, as a
+  // `not-found.tsx` does in Next; "Not found" is only the fallback.
+  /** @type {Record<string, unknown>} */
+  let boundaryMeta = {};
   if (!notFoundFile && opts.route) {
     const wrapped = await defaultBoundaryInChain('<h1>404: Not found</h1>', opts);
     if (wrapped) { body = wrapped.body; moduleUrls = wrapped.moduleUrls; }
@@ -890,6 +894,12 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
     const ctx = opts.ctx || boundaryCtx(opts.params, opts.url, undefined);
     try {
       const mod = await loadModule(notFoundFile, opts.dev);
+      try {
+        const m = typeof mod.generateMetadata === 'function' ? await mod.generateMetadata(ctx) : mod.metadata;
+        if (m && typeof m === 'object') boundaryMeta = m;
+      } catch (metaErr) {
+        if (typeof opts.onError === 'function') { try { opts.onError(metaErr); } catch { /* a throwing sink must not affect the response */ } }
+      }
       if (mod.default) {
         const tree = await mod.default(ctx);
         try {
@@ -931,7 +941,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   }
   const nonce = getNonce();
   return wrapInDocument(body, {
-    metadata: { title: 'Not found' },
+    metadata: { title: 'Not found', ...boundaryMeta },
     moduleUrls,
     dev: opts.dev,
     nonce,

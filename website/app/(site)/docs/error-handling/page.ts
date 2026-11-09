@@ -67,7 +67,7 @@ export default function ErrorPage({ error }: { error: Error &amp; { digest?: str
     <p>If <code>blog/error.ts</code> also throws, the parent <code>app/error.ts</code> catches it.</p>
 
     <h2>not-found.ts</h2>
-    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level, and the nearest one wins:</p>
+    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level, and the nearest one wins. As in Next.js, its own <code>metadata</code> or <code>generateMetadata</code> export titles the 404 page (<code>export const metadata = { title: 'Poll not found' }</code>); without one the title is "Not found":</p>
 
     <code-block>// app/not-found.ts
 import { html } from '@webjsdev/core';
