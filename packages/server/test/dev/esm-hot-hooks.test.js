@@ -241,7 +241,7 @@ test('movedServedModules checks only the directories it is given', async () => {
 // `require` caches by filename), so an edit to one stayed stale in the one
 // long-lived dev process. The hook records each such app file, and the dev
 // server asks the supervisor to restart for an edit to one.
-test('a CommonJS app module is recorded, an ESM one is not', () => {
+test('a CommonJS app module is recorded, an ESM one is not', { skip: !!process.versions.bun && 'the CommonJS record lives in the Node resolve hook; Bun reloads a CommonJS edit through its registry reset' }, () => {
   const dir = fixture();
   const out = mkdtempSync(join(tmpdir(), 'webjs-esm-hot-driver-'));
   try {
