@@ -338,6 +338,9 @@
     "isServer": {
       "exempt": "deferred: agent-facing (lit's isServer flag, documented on the docs site's directives page); no single-concept gallery demo yet"
     },
+    "SignalWatcher": {
+      "exempt": "deferred: agent-facing (lit's SignalWatcher mixin, an identity because every WebComponent already watches signals; documented on the docs site's components page); nothing to demo beyond a plain component"
+    },
     "unsafeSVG": {
       "exempt": "deferred: agent-facing (lit's unsafeSVG, documented on the docs site's directives page); no single-concept gallery demo yet"
     },

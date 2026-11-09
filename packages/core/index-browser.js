@@ -66,7 +66,7 @@ export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';
 
 // Signals (TC39 Stage-1 shape), also available via '@webjsdev/core/signals'
-export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+export { signal, computed, effect, batch, isSignal, Signal, SignalWatcher } from './src/signal.js';
 
 // Optimistic-mutation helper (thin signal wrapper, rolls back on failure)
 export { optimistic } from './src/optimistic.js';

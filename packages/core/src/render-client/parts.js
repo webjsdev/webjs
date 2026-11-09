@@ -6,6 +6,7 @@ import {
 } from '../form-action.js';
 import { isRepeat } from '../repeat.js';
 import { isDirectiveResult, PartType } from '../directive.js';
+import { isSignal } from '../signal.js';
 import {
   isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch
 } from '../directives.js';
@@ -358,6 +359,10 @@ function resolveDirectiveChain(part, holder, key, value, commit, releaseTop, pie
  * @param {any} p
  */
 function releasePartDirectives(p) {
+  // A part going away drops its signal subscriptions too (a bare signal or a
+  // `watch()` in it), so a later change cannot commit into detached nodes.
+  if (p.__sigSub) teardownSignalPart(p);
+  if (p.__watchSub) teardownWatch(p);
   if (p.__directive) { disconnectDirectiveRecord(p.__directive); p.__directive = undefined; }
   if (p.__pieceDirectives) {
     for (const k of Object.keys(p.__pieceDirectives)) disconnectDirectiveRecord(p.__pieceDirectives[k]);
@@ -430,6 +435,29 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       try { applyPart(part, v, undefined, undefined, reconcileFormActionsCb); } finally { p.__settingValue = false; }
     }, true);
     if (value === noChange) return;
+  }
+  // A bare `${signal}` in an attribute or boolean hole: bind the part to the
+  // signal so a change rewrites just this attribute, with no host re-render
+  // (lit's signals package does the same). An interpolated attribute tracks
+  // every signal piece under one part-level watcher. A `.prop` hole is left
+  // alone, so the property receives the signal object itself.
+  const pAny = /** @type any */ (part);
+  if ((part.kind === 'attr' || part.kind === 'bool' || part.kind === 'attr-mixed') && !pAny.__applyingSignal) {
+    const holdsSignal = part.kind === 'attr-mixed'
+      ? /** @type any */ (part).group.some((/** @type {number} */ i) => isSignalLike(allValues ? allValues[i] : value))
+      : isSignalLike(value);
+    if (holdsSignal) {
+      bindSignalPart(part, () => {
+        pAny.__applyingSignal = true;
+        try {
+          applyPart(part, part.kind === 'attr-mixed' ? value : readSignalLike(value), _prev, allValues, reconcileFormActionsCb);
+        } finally {
+          pAny.__applyingSignal = false;
+        }
+      });
+      return;
+    }
+    if (pAny.__sigSub) teardownSignalPart(pAny);
   }
   if (isAttributeMap(value)) { applyAttributeMap(part, value); return; }
   part.__mapKind = undefined;
@@ -542,6 +570,9 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
             part.el.setAttribute(part.name, text);
           }, true, j);
         }
+        // A signal piece reads its current value; the part-level watcher
+        // applyPart installed records the read, so a change rebuilds this attribute.
+        if (isSignalLike(piece)) piece = readSignalLike(piece);
         if (piece === noChange) piece = committed[j] ?? '';
         // Unwrap live() PER PIECE (#1443). The top-of-function unwrap only
         // sees the anchor hole's own value, and every hole inside a QUOTED
@@ -934,6 +965,11 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   // watcher (so the host doesn't subscribe to a full re-render too).
   if (isWatch(value)) {
     return applyWatch(part, /** @type any */ (value).signal, reconcileFormActionsCb);
+  }
+  // A bare `${signal}` in a child position binds exactly like `watch(signal)`
+  // (lit's signals package renders a bare signal the same way).
+  if (isSignal(value)) {
+    return applyWatch(part, /** @type any */ (value), reconcileFormActionsCb);
   }
 
   // asyncAppend / asyncReplace: subscribe to the AsyncIterable. Each
@@ -1740,7 +1776,7 @@ export function clearStaleDirectiveState(part, value) {
   if (partAny.__keyedKey !== undefined && !isKeyed(value)) {
     partAny.__keyedKey = undefined;
   }
-  if (partAny.__watchSub && !isWatch(value)) {
+  if (partAny.__watchSub && !isWatch(value) && !isSignal(value)) {
     teardownWatch(partAny);
   }
 }
@@ -2087,6 +2123,62 @@ function applyWatch(part, sig, reconcileFormActionsCb) {
   let initial;
   watcher.observe(() => { initial = sig.get(); });
   applyChildInner(part, initial, reconcileFormActionsCb);
+}
+
+/**
+ * Bind an attribute-shaped part (attribute, boolean, interpolated attribute)
+ * to the signals it renders. `run` applies the part's value, reading each
+ * signal inside the part's own `Signal.subtle.Watcher`, so a change re-runs
+ * `run` in a microtask and rewrites only this attribute; the host's render
+ * watcher does not see the read (the commit runs untracked), which is what
+ * keeps a signal change from re-rendering the whole component.
+ *
+ * The watcher is rebuilt on every render of the part, so the read set always
+ * matches the values the latest render bound.
+ *
+ * @param {any} part
+ * @param {() => void} run
+ */
+function bindSignalPart(part, run) {
+  teardownSignalPart(part);
+  if (currentRenderRoot) part.__commitOwner = boundaryOwnerOf(currentRenderRoot);
+  const watcher = new Signal.subtle.Watcher(() => {
+    queueMicrotask(() => {
+      if (part.__sigSub !== watcher) return;
+      try {
+        commitOutOfBand(part, () => watcher.observe(run));
+      } catch (err) {
+        reportOutOfBandCommitError(part, err);
+      }
+    });
+  });
+  part.__sigSub = watcher;
+  watcher.observe(run);
+}
+
+/**
+ * Whether an attribute-shaped hole is bound to a signal: a bare signal, or a
+ * `watch(signal)` marker (which means the same thing outside a child hole).
+ * @param {unknown} v
+ */
+function isSignalLike(v) {
+  return isSignal(v) || isWatch(v);
+}
+
+/** @param {any} v */
+function readSignalLike(v) {
+  return isWatch(v) ? v.signal.get() : v.get();
+}
+
+/**
+ * Dispose an attribute-shaped part's signal watcher.
+ * @param {any} part
+ */
+function teardownSignalPart(part) {
+  if (part.__sigSub) {
+    part.__sigSub.dispose();
+    part.__sigSub = undefined;
+  }
 }
 
 /**

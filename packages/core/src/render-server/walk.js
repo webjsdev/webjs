@@ -13,6 +13,7 @@ import {
 } from '../form-action.js';
 import { isRepeat } from '../repeat.js';
 import { isDirectiveResult, PartType } from '../directive.js';
+import { isSignal } from '../signal.js';
 import { isSuspense } from '../suspense.js';
 import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from '../directives.js';
 import { stringify } from '../serialize.js';
@@ -167,6 +168,9 @@ export class Walker {
    */
   async value(value) {
     if (isDirectiveResult(value)) value = resolveDirective(value, CHILD_PART);
+    // A bare `${signal}` renders its current value (the client binds the hole
+    // to the signal so it updates in place, as `watch()` does).
+    if (isSignal(value)) value = /** @type any */ (value).get();
     if (value == null || value === nothing || value === noChange) return;
     if (typeof (/** @type any */ (value).then) === 'function') {
       return this.value(await value);
@@ -328,6 +332,7 @@ export class Walker {
                       if (isLive(piece)) piece = piece.value;
                     }
                     if (isDirectiveResult(piece)) piece = resolveDirective(piece, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
+                    if (isSignal(piece) || isWatch(piece)) piece = signalValue(piece);
                     if (isAttributeMap(piece)) piece = attributeMapText(piece, op.name);
                     assertNotFunctionActionAttr(piece, op.name, op.tag);
                     if (piece === nothing) omitted = true;
@@ -348,6 +353,7 @@ export class Walker {
               // A hole inside a quoted/unquoted value, the `action="${fn}"` and
               // mixed `action="/x/${fn}"` shapes (#1154).
               if (isDirectiveResult(val)) val = resolveDirective(val, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
+              if (isSignal(val) || isWatch(val)) val = signalValue(val);
               assertNotFunctionActionAttr(val, op.name, op.tag);
               this.buf += escapeAttr(String(val ?? ''));
               break;
@@ -419,6 +425,10 @@ export class Walker {
       const type = op.kind === 'prop' ? PartType.PROPERTY : op.kind === 'bool' ? PartType.BOOLEAN_ATTRIBUTE : PartType.ATTRIBUTE;
       val = resolveDirective(val, { type, name: op.name, tagName: op.tag });
     }
+    // A bare signal in an attribute or boolean hole renders its current value;
+    // a `.prop` hole hands the signal object itself to the property, as lit's
+    // signals package does.
+    if ((isSignal(val) || isWatch(val)) && (op.kind === 'plain' || op.kind === 'bool')) val = signalValue(val);
     if (isAttributeMap(val)) {
       if (op.kind !== 'plain') throw new Error('classMap/styleMap require an attribute binding.');
       val = attributeMapText(val, op.name);
@@ -744,6 +754,15 @@ export class Walker {
 }
 
 const EMPTY = Object.freeze([]);
+
+/**
+ * The current value of a bare signal or a `watch(signal)` marker in an
+ * attribute-shaped hole (SSR reads it once; the client binds the hole).
+ * @param {any} v
+ */
+function signalValue(v) {
+  return isWatch(v) ? v.signal.get() : v.get();
+}
 
 /** The part info every child-position directive is constructed with. */
 const CHILD_PART = Object.freeze({ type: PartType.CHILD });

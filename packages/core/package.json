@@ -58,7 +58,8 @@
     },
     "./signals": {
       "types": "./src/signal.d.ts",
-      "default": "./src/signal.js"
+      "source": "./src/signal.js",
+      "default": "./dist/webjs-core-browser.js"
     },
     "./directive": {
       "types": "./src/directive.d.ts",

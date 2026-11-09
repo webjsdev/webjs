@@ -114,7 +114,7 @@ export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } f
 // the wire serializer, and the streaming/frame custom elements. These mirror
 // the index.js runtime re-exports; their declarations live in the matching
 // src/*.d.ts (#388 fixed the index.d.ts drift from index.js).
-export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+export { signal, computed, effect, batch, isSignal, Signal, SignalWatcher } from './src/signal.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
 export { asset, setAssetUrlProvider } from './src/asset-url.js';
 export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';

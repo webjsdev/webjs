@@ -342,6 +342,10 @@ jobs:
       # the built root bundle.
       - name: WebJs custom directives on Bun
         run: bun test/bun/custom-directive.mjs
+      # A bare signal in a template hole renders its value at SSR, and the
+      # /signals subpath carries SignalWatcher and watch on the built bundle.
+      - name: WebJs bare signals in template holes on Bun
+        run: bun test/bun/bare-signal.mjs
       # Reverse-proxy forwarded headers on Bun (#1090): the node shell corrects
       # the request url via urlFromRequest before building its Request, but the
       # Bun shell handed Bun.serve's request straight through, so behind a

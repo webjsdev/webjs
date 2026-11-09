@@ -269,6 +269,11 @@ Counter.register('my-counter');</code-block>
 
     <p>SSR inlines the current value once; subscription is a client-only concern. Pick <code>watch()</code> when the binding is a scalar (text node, attribute value) tied to one signal and the surrounding template is expensive or static. Pick <code>signal.get()</code> when the render branches on the value, derives several things from it, or reads multiple signals together.</p>
 
+    <h3>A bare signal in a hole</h3>
+    <p>As in Lit's signals package, a signal placed in a hole WITHOUT <code>.get()</code> binds that hole the way <code>watch()</code> does: <code>\${count}</code> in text, <code>title=\${label}</code>, <code>?hidden=\${closed}</code>, and a signal inside an interpolated attribute (<code>class="card \${tone}"</code>) all render the current value on the server and update in place on the client, with no re-render of the host. A <code>.prop=\${sig}</code> hole is the exception: it hands the signal object itself to the property, so a child component can read it.</p>
+    <code-block>html\`&lt;p title=\${label} class="badge \${tone}"&gt;\${count}&lt;/p&gt;\`;</code-block>
+    <p>Lit's <code>SignalWatcher</code> mixin and <code>watch</code> are both importable from <code>@webjsdev/core/signals</code> (Lit's <code>@lit-labs/signals</code>). <code>SignalWatcher</code> returns the class it is given unchanged, because every <code>WebComponent</code> already watches the signals its update reads, so <code>class X extends SignalWatcher(WebComponent)</code> works and means the same thing as <code>class X extends WebComponent</code>.</p>
+
     <h2>Styles</h2>
     <p>Use the <code>css</code> tagged template to declare scoped styles. They are automatically adopted into the component's shadow root.</p>
 

@@ -289,6 +289,9 @@ test('setCoreInstall(true): browser subpaths collapse onto the one dist bundle',
   assert.equal(map.imports['@webjsdev/core/context'], BROWSER);
   assert.equal(map.imports['@webjsdev/core/task'], BROWSER);
   assert.equal(map.imports['@webjsdev/core/client-router'], BROWSER);
+  // `./signals` folds in too: a separate source copy of the signal module
+  // would be a second signal graph the bundle's components cannot track.
+  assert.equal(map.imports['@webjsdev/core/signals'], BROWSER);
   // The lazy loader is NOT folded in: it loads on-demand for `static lazy`
   // components, off the always-load path, so it keeps its own dist file.
   assert.equal(map.imports['@webjsdev/core/lazy-loader'], '/__webjs/core/dist/webjs-core-lazy-loader.js');
