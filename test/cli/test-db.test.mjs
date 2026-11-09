@@ -31,7 +31,7 @@ function appWith(files) {
   return dir;
 }
 
-test('wantsTestDatabase: a SQLite app with migrations, unless the shell sets DATABASE_URL or opts out', () => {
+test('wantsTestDatabase: a SQLite app, with or without migrations, unless the shell sets DATABASE_URL or opts out', () => {
   const sqlite = appWith({ 'drizzle.config.ts': "export default { dialect: 'sqlite' };", 'db/migrations/0001/migration.sql': 'select 1;' });
   const pg = appWith({ 'drizzle.config.ts': "export default { dialect: 'postgresql' };", 'db/migrations/0001/migration.sql': 'select 1;' });
   const fresh = appWith({ 'drizzle.config.ts': "export default { dialect: 'sqlite' };" });
@@ -40,7 +40,7 @@ test('wantsTestDatabase: a SQLite app with migrations, unless the shell sets DAT
     assert.equal(wantsTestDatabase(sqlite, { DATABASE_URL: 'file:x.db' }), false, 'the shell wins');
     assert.equal(wantsTestDatabase(sqlite, { WEBJS_TEST_DB: '0' }), false, 'opt-out');
     assert.equal(wantsTestDatabase(pg, {}), false, 'Postgres needs a real test database');
-    assert.equal(wantsTestDatabase(fresh, {}), false, 'no migrations yet');
+    assert.equal(wantsTestDatabase(fresh, {}), true, 'no migrations yet: the schema is pushed instead');
     // Bun loads .env before any code runs, so the scaffold's own dev url arrives
     // in process.env. That is the app's file talking, not the shell.
     writeFileSync(join(sqlite, '.env'), 'DATABASE_URL=file:./db/dev.db\n');
@@ -69,8 +69,6 @@ test('webjs test runs a db test against a fresh migrated database and leaves db/
     // Running node --test inside node --test inherits NODE_TEST_CONTEXT, and the
     // inner run then reports to this process instead of setting its exit code.
     delete env.NODE_TEST_CONTEXT;
-    const gen = spawnSync(process.execPath, [CLI, 'db', 'generate'], { cwd: app, env: { ...env, DATABASE_URL: 'file:' + join(cwd, 'gen.db') }, encoding: 'utf8' });
-    assert.equal(gen.status, 0, gen.stdout + gen.stderr);
     rmSync(join(app, 'test'), { recursive: true, force: true });
     mkdirSync(join(app, 'test', 'users'), { recursive: true });
     writeFileSync(join(app, 'test', 'users', 'users.test.ts'),
@@ -87,6 +85,15 @@ test('a row round-trips through the app db', async () => {
 `);
     const run = (extra) => spawnSync(process.execPath, [CLI, 'test', '--server'], { cwd: app, env: { ...env, ...extra }, encoding: 'utf8' });
 
+    // Before the first migration exists, the schema is pushed (#1686: a first
+    // draft's tests failed with "no such table" because no migration existed).
+    const before = run({});
+    assert.equal(before.status, 0, before.stdout + before.stderr);
+    assert.match(before.stdout, /schema pushed \(no migrations yet\)/);
+    assert.equal(existsSync(join(app, 'db', 'dev.db')), false, 'the push never touched db/dev.db');
+
+    const gen = spawnSync(process.execPath, [CLI, 'db', 'generate'], { cwd: app, env: { ...env, DATABASE_URL: 'file:' + join(cwd, 'gen.db') }, encoding: 'utf8' });
+    assert.equal(gen.status, 0, gen.stdout + gen.stderr);
     const r = run({});
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /fresh migrated test database/);

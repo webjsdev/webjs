@@ -820,13 +820,14 @@ async function main() {
           const testArgs = process.versions.bun
             ? ['test', ...testFiles]
             : ['--test', ...testFiles];
-          // A SQLite app with migrations gets a fresh migrated test database,
-          // so tests never write into db/dev.db (the Rails test-database habit).
+          // A SQLite app gets a fresh test database (migrated, or the schema
+          // pushed before the first migration exists), so tests never write
+          // into db/dev.db (the Rails test-database habit).
           const { wantsTestDatabase, prepareTestDatabase } = await import('../lib/test-db.js');
           let testDb = null;
           if (wantsTestDatabase(cwd, process.env)) {
             testDb = prepareTestDatabase(cwd, { cliBin: fileURLToPath(import.meta.url) });
-            console.log('webjs test: using a fresh migrated test database (set WEBJS_TEST_DB=0 to use DATABASE_URL instead)\n');
+            console.log(`webjs test: using a fresh ${testDb.pushed ? 'test database with the schema pushed (no migrations yet)' : 'migrated test database'} (set WEBJS_TEST_DB=0 to use DATABASE_URL instead)\n`);
           }
           const child = spawn(process.execPath, testArgs, {
             stdio: 'inherit', cwd, env: { ...process.env, ...(testDb ? { DATABASE_URL: testDb.url } : {}) },
