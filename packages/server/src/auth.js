@@ -320,7 +320,7 @@ export function createAuth(config) {
       const payload = await decodeJwt(raw, secret);
       if (!payload) return null;
       let token = cb.jwt ? await cb.jwt({ token: payload, user: undefined }) : payload;
-      let session = { user: { id: token.sub, name: token.name, email: token.email, image: token.image, ...token } };
+      let session = { user: { id: token.sub, name: token.name, email: token.email, image: token.image, ...token }, expires: new Date(token.exp * 1000).toISOString() };
       delete session.user.iat; delete session.user.exp; delete session.user.sub;
       return cb.session ? cb.session({ session, token, user: undefined }) : session;
     }
@@ -333,10 +333,14 @@ export function createAuth(config) {
     return cb.session ? cb.session({ session, token: undefined, user: data }) : session;
   }
 
-  async function writeSession(user) {
+  // The jwt callback at sign-in gets what Auth.js passes it (#1686): the
+  // account (for OAuth, the provider's token response: access_token,
+  // refresh_token, expires_at, ...) and the raw profile, with trigger
+  // 'signIn', so `if (account) token.accessToken = account.access_token` works.
+  async function writeSession(user, account, profile) {
     if (strategy === 'jwt') {
       let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
-      if (cb.jwt) token = await cb.jwt({ token, user });
+      if (cb.jwt) token = await cb.jwt({ token, user, account, profile, trigger: 'signIn' });
       return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret), maxAgeMs, secure());
     }
     const sid = randomId();
@@ -384,13 +388,15 @@ export function createAuth(config) {
 
     if (provider.type === 'credentials') {
       if (!provider.authorize) return new Response('No authorize function', { status: 500 });
-      const user = await provider.authorize(data || {});
+      // Auth.js passes the request as authorize's second argument.
+      const user = await provider.authorize(data || {}, opts.req || getRequest() || undefined);
       if (!user) {
         return new Response(null, { status: 302, headers: { location: `${pages.error || pages.signIn || '/'}?error=CredentialsSignin` } });
       }
-      const refused = await signInRefusal(user, { provider: providerId });
+      const account = { provider: providerId, type: 'credentials', providerAccountId: String(user.id ?? '') };
+      const refused = await signInRefusal(user, account);
       if (refused) return refused;
-      const cookie = await writeSession(user);
+      const cookie = await writeSession(user, account);
       // `opts.redirectTo` is the app's own server-side choice and is trusted.
       // `data.redirectTo` usually arrives from a submitted form, so it goes
       // through the same local-path check the OAuth flow uses (#1495).
@@ -481,7 +487,8 @@ export function createAuth(config) {
       body: new URLSearchParams({ client_id: provider.clientId, client_secret: provider.clientSecret, code, redirect_uri: callbackUrl, grant_type: 'authorization_code' }),
     });
     if (!tokenRes.ok) return new Response('Token exchange failed', { status: 502 });
-    const { access_token: accessToken } = await tokenRes.json();
+    const tokens = await tokenRes.json();
+    const accessToken = tokens.access_token;
     if (!accessToken) return new Response('No access token', { status: 502 });
 
     // Fetch profile
@@ -501,7 +508,10 @@ export function createAuth(config) {
 
     const user = provider.profile ? provider.profile(rawProfile) : rawProfile;
 
-    const refused = await signInRefusal(user, { provider: provider.id, accessToken }, [
+    // Auth.js's account: the provider's token response, plus who it is for.
+    // `accessToken` stays alongside `access_token` for the earlier shape.
+    const account = { ...tokens, provider: provider.id, type: 'oauth', providerAccountId: String(user.id ?? ''), accessToken };
+    const refused = await signInRefusal(user, account, [
       clearCookie(cookieName(STATE_COOKIE, secure()), secure()),
       clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()),
     ]);
@@ -509,7 +519,7 @@ export function createAuth(config) {
 
     const hdrs = new Headers();
     hdrs.set('location', (await readRedirectCookie(req)) || '/');
-    hdrs.append('set-cookie', await writeSession(user));
+    hdrs.append('set-cookie', await writeSession(user, account, rawProfile));
     hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
     hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
     return new Response(null, { status: 302, headers: hdrs });

@@ -140,6 +140,7 @@ export default function LoginPage({ searchParams }) {
     },
   },
 });</code-block>
+    <p>At sign-in the <code>jwt</code> callback receives what Auth.js passes it: <code>{ token, user, account, profile, trigger: 'signIn' }</code>, where an OAuth <code>account</code> is the provider's token response (<code>access_token</code>, <code>refresh_token</code>, <code>expires_at</code>), so <code>if (account) token.accessToken = account.access_token</code> keeps it for later reads. A credentials <code>authorize(credentials, request)</code> gets the request too, and the session <code>auth()</code> returns carries <code>expires</code>.</p>
     <p>The <code>signIn</code> callback follows Auth.js's rule: return <code>true</code> to allow, a url string to send the visitor there without signing them in, and anything else (including nothing) to deny with <code>AccessDenied</code>.</p>
 
     <h2>Type the session</h2>
