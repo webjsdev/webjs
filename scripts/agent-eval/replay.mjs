@@ -47,7 +47,7 @@ export function verifyKind(cmd) {
 /** A shell command that changes files: an in-place edit, a move, a copy, a delete, a redirect into a file, or the gallery reset. */
 // `git show REF:path > dest`, the one git command that writes a file.
 const RESTORE_RE = /\bgit show [^:\s]+:("[^"]+"|\S+)\s*>\s*("[^"]+"|\S+)/g;
-const MUTATES_RE = /\bsed\s+-i|\bmv\s|\bcp\s|\brm\s|cat\s*>|\btee\s|>\s*[\w./#-]+\.(?:ts|js|mjs|json|css|md)\b|gallery:clear|clear-gallery/;
+const MUTATES_RE = /\bmkdir\s|\bsed\s+-i|\bmv\s|\bcp\s|\brm\s|cat\s*>|\btee\s|>\s*[\w./#-]+\.(?:ts|js|mjs|json|css|md)\b|gallery:clear|clear-gallery/;
 
 export function verifyPassed(kind, out) {
   if (kind === 'check') return /all checks pass/.test(out) && !/\d+ violation/.test(out);
@@ -125,7 +125,14 @@ export function firstDraftOps(transcript, appDir) {
       } else if (c.name === 'Bash') {
         const cmd = String(inp.command || '');
         const kind = verifyKind(cmd);
-        if (kind) { const op = { type: 'verify', kind, cmd, ok: null }; ops.push(op); pendingVerify.set(c.id, op); }
+        if (kind) {
+          // A command that edits and then verifies (`sed -i ... && npx webjs
+          // typecheck`): the edit is part of the draft, so the segments before
+          // the verification are replayed as a shell op of their own.
+          const before = mutatingPrefix(cmd);
+          if (before) ops.push({ type: 'sh', cmd: before, ran: true, creates: appCreates(before, appDir) });
+          const op = { type: 'verify', kind, cmd, ok: null }; ops.push(op); pendingVerify.set(c.id, op);
+        }
         else if (RESTORE_RE.test(cmd)) {
           // A file brought back from the scaffold commit (`git show REF:path >
           // dest`). Every other git command is left out of the replay.
@@ -137,8 +144,19 @@ export function firstDraftOps(transcript, appDir) {
             ops.push(op);
             pendingVerify.set(c.id, op);
           }
+        } else if (MUTATES_RE.test(cmd) && /^\s*(?:cd\s+\S+\s*&&\s*)?git\b/.test(cmd) && !cmd.includes('<<') && !/\bgit\s+worktree\b/.test(cmd)) {
+          // Moving files into a new worktree is a no-op once worktree paths
+          // fold onto the app, so a `git worktree` command is skipped whole.
+          // A git command followed by file changes (`git commit ...; mkdir -p
+          // modules/x`): git itself is never replayed, the rest is.
+          const rest = cmd.split(/\s*(?:&&|;|\|\||\n)\s*/).filter((seg) => seg && !/^(?:git|cd)\b/.test(seg) && !/\|\s*head\b/.test(seg)).join(' ; ');
+          if (rest && MUTATES_RE.test(rest)) {
+            const op = { type: 'sh', cmd: rest, ran: true, creates: appCreates(rest, appDir) };
+            ops.push(op);
+            pendingVerify.set(c.id, op);
+          }
         } else if (MUTATES_RE.test(cmd) && !/^\s*(?:cd\s+\S+\s*&&\s*)?git\b/.test(cmd)) {
-          const op = { type: 'sh', cmd, ran: true };
+          const op = { type: 'sh', cmd, ran: true, creates: appCreates(cmd, appDir) };
           ops.push(op);
           pendingVerify.set(c.id, op);
         }
@@ -146,10 +164,14 @@ export function firstDraftOps(transcript, appDir) {
       }
     }
   }
-  // The last op that creates a file not written before.
+  // The last op that creates a file not written before. A shell `cat > file`
+  // counts: outside a repo guard, agents write most files with heredocs.
   const seen = new Set();
   let lastNew = -1;
-  ops.forEach((o, i) => { if (o.type === 'write' && !seen.has(o.path)) { seen.add(o.path); lastNew = i; } });
+  ops.forEach((o, i) => {
+    const paths = o.type === 'write' ? [o.path] : o.type === 'sh' ? o.creates : [];
+    for (const p of paths) if (!seen.has(p)) { seen.add(p); lastNew = i; }
+  });
   const cut = ops.findIndex((o, i) => i > lastNew && o.type === 'verify');
   // An edit or a rewrite of a file the agent already wrote, made after a
   // verification run that FAILED, is a correction prompted by that output, so
@@ -160,11 +182,52 @@ export function firstDraftOps(transcript, appDir) {
   const kept = (cut === -1 ? ops : ops.slice(0, cut)).filter((o) => {
     if (o.type === 'verify') { if (o.ok === false) afterFailure = true; else if (o.ok === true) afterFailure = false; return false; }
     if (o.type === 'write') { const isNew = !written.has(o.path); written.add(o.path); return isNew || !afterFailure; }
+    if (o.type === 'sh' && o.creates.length) {
+      const isNew = o.creates.some((p) => !written.has(p));
+      for (const p of o.creates) written.add(p);
+      return isNew || !afterFailure;
+    }
     if (o.type === 'edit' || o.type === 'sh' || o.type === 'restore') return !afterFailure;
     return true;
   });
   const firstVerify = cut === -1 ? null : { kind: ops[cut].kind, cmd: ops[cut].cmd };
   return { ops: kept, firstVerify };
+}
+
+/**
+ * The files a shell command writes whole: `cat > path` / `cat >path` (not an
+ * append), with the path as written (relative to where the command runs).
+ * @param {string} cmd
+ * @returns {string[]}
+ */
+export function shellCreates(cmd) {
+  const out = [];
+  for (const m of cmd.matchAll(/\bcat\s*>(?!>)\s*("[^"]+"|'[^']+'|[^\s;&|<>]+)/g)) {
+    out.push(m[1].replace(/^["']|["']$/g, ''));
+  }
+  return out;
+}
+
+/**
+ * The files a shell command creates INSIDE the app: a relative path, or an
+ * absolute one under the app (folded the way `appRelative` folds a Write). A
+ * probe script the agent wrote under /tmp is not part of the app.
+ * @param {string} cmd @param {string} appDir
+ */
+function appCreates(cmd, appDir) {
+  return shellCreates(cmd)
+    .map((p) => (p.startsWith('/') ? appRelative(p, appDir) : p))
+    .filter((p) => p);
+}
+
+/**
+ * The command itself when it writes files as well as verifying (a heredoc
+ * write followed by `npx webjs check`); else ''. Splitting it would mangle a
+ * heredoc body, so the whole command is replayed, check included.
+ * @param {string} cmd
+ */
+function mutatingPrefix(cmd) {
+  return MUTATES_RE.test(cmd) ? cmd : '';
 }
 
 /** Every file under `dir`, relative to it. */
