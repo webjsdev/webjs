@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { html, renderToString } from '../../index.js';
 import { unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard, templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache, until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace } from '../../src/directives.js';
+import { nothing, noChange } from '../../src/sentinels.js';
 
 // --- unsafeHTML ---
 
@@ -11,9 +12,12 @@ test('unsafeHTML: creates marker with correct shape', () => {
   assert.equal(result.value, '<b>bold</b>');
 });
 
-test('unsafeHTML: coerces null/undefined to empty string', () => {
-  assert.equal(unsafeHTML(null).value, '');
-  assert.equal(unsafeHTML(undefined).value, '');
+test('unsafeHTML: null and undefined render nothing, as in Lit (#1686)', () => {
+  assert.equal(unsafeHTML(null), nothing);
+  assert.equal(unsafeHTML(undefined), nothing);
+  assert.equal(unsafeHTML(nothing), nothing);
+  assert.equal(unsafeHTML(noChange), noChange);
+  assert.throws(() => unsafeHTML(/** @type any */ (['a'])), /unsafeHTML\(\) takes a string/);
 });
 
 test('isUnsafeHTML: detects markers', () => {
