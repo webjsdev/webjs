@@ -82,7 +82,7 @@ bun run dev      # or: bun run start
 
 `bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun, selecting the native `Bun.serve` listener and `amaro` type stripping. The app's dependencies resolve from `node_modules` exactly as on Node. The `start.before` migrate step (`webjs db migrate`) runs under Bun too. Commit the `bun.lock` for reproducible, offline installs. The scaffold's Bun Dockerfile runs `bun install --production` and serves via `CMD ["bun", "--bun", "run", "start"]`.
 
-**What the dev watcher ignores.** On both runtimes a change to a file nothing serves never reloads the page: `*.log`, `coverage/`, `.cache/`, `test-results/`, `playwright-report/`, and anything the app's `.gitignore` ignores (except `.env*`). So `npm run dev > dev.log` in the app folder is safe.
+**What the dev watcher ignores.** On both runtimes a change to a file nothing serves never reloads the page: `*.log`, `coverage/`, `.cache/`, `test-results/`, `playwright-report/`, an editor's temp files (vim's `4913`, emacs `.#x` and `#x#`, JetBrains `___jb_tmp___`, `*.tmp`, swap files, #1689; a temp file renamed over a source file counts as an edit to that file, since Bun reports only the temp name), and anything the app's `.gitignore` ignores (except `.env*`). So `npm run dev > dev.log` in the app folder is safe.
 
 ## Deploying either runtime
 

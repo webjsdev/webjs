@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { mergeVerdicts } from '../dev-classify.js';
-import { createWatchIgnore } from './watch-ignore.js';
+import { createWatchIgnore, editorTempTarget } from './watch-ignore.js';
 import { watchTree } from './watch-tree.js';
 import { createPokeState } from './poke-state.js';
 import { relative, resolve } from 'node:path';
@@ -396,8 +396,16 @@ export async function startServer(opts) {
       // log line a reload (watch-ignore.js).
       const unserved = createWatchIgnore(root);
       const close = watchTree(root, {
-        ignore: (rel) => shouldIgnoreWatchPath(rel) || unserved(rel),
+        // An editor temp file renamed over a real file is let through, and
+        // reported below as the file it saved (#1689): Bun's fs.watch names
+        // only the temp file for such a save.
+        ignore: (rel) => shouldIgnoreWatchPath(rel) || (unserved(rel) && !editorTempTarget(rel)),
         onEvent: (filename) => {
+          const target = editorTempTarget(filename);
+          if (target) {
+            if (unserved(target) || !existsSync(resolve(root, target))) return;
+            filename = target;
+          }
           // A regenerate output (#967) is a build product the server itself
           // writes on request; ignoring it stops a spurious rebuild + reload
           // (and a reload -> refetch -> recompile -> reload cycle), same as the

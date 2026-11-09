@@ -43,7 +43,7 @@ export function createPokeState(opts = {}) {
      * @param {Iterable<string>} files
      * @param {(verdict: import('../dev-classify.js').ReloadVerdict | null, changed: string[]) => void} onFallback
      */
-    poke(v, files, onFallback) {
+    poke: function (v, files, onFallback) {
       verdict = mergeVerdicts(verdict, v || null);
       for (const f of files) changed.add(f);
       // A fresh poke supersedes a batch the fallback already applied: the
@@ -71,7 +71,7 @@ export function createPokeState(opts = {}) {
      * nothing, a silent re-derive.
      * @returns {{ verdict: import('../dev-classify.js').ReloadVerdict | null, changed: string[], notify: boolean }}
      */
-    takeForRerun() {
+    takeForRerun: function () {
       clear(timer);
       timer = null;
       if (verdict || changed.size) {

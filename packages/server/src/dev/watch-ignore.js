@@ -27,6 +27,28 @@ import { join } from 'node:path';
 const OUTPUT = /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|(?:^|[\\/])(?:\d+|\.#[^\\/]*|#[^\\/]*#|\.goutputstream-[^\\/]*|~\$[^\\/]*)$|\.(?:sw[a-p]|tmp|crswap|kate-swp)$|___jb_(?:tmp|old)___$|~$/;
 
 /**
+ * Editor temp files that are RENAMED over the file they save (#1689): `x.tmp`
+ * (`sed`-style and many atomic writers), JetBrains' `x___jb_tmp___` /
+ * `x___jb_old___`, and Chrome's `x.crswap`. Bun's `fs.watch` reports such a
+ * save ONLY under the temp name, so ignoring it outright would lose the edit
+ * there; the watcher reports the target instead.
+ */
+const RENAMED_TEMP = /(?:\.tmp|\.crswap|___jb_(?:tmp|old)___)$/;
+
+/**
+ * The file an editor temp file is renamed over, or null when the name says
+ * nothing about it (vim's `4913`, an emacs lock, a gedit stream).
+ * @param {string} rel
+ * @returns {string | null}
+ */
+export function editorTempTarget(rel) {
+  const p = String(rel || '');
+  const m = RENAMED_TEMP.exec(p);
+  if (!m || m.index === 0 || /[\\/]$/.test(p.slice(0, m.index))) return null;
+  return p.slice(0, m.index);
+}
+
+/**
  * Tool output that is never served, whatever `.gitignore` says.
  * @param {string} rel path relative to the app root
  * @returns {boolean}

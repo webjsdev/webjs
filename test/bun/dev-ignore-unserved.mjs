@@ -91,8 +91,11 @@ try {
   mkdirSync(join(dir, 'uploads'), { recursive: true });
   writeFileSync(join(dir, 'uploads/a.bin'), 'x');
   // An editor's temp files beside a real source file (#1689): vim's write
-  // probe, an emacs lock, a JetBrains safe write, a generic temp file.
-  for (const f of ['app/4913', 'app/.#page.ts', 'app/page.ts___jb_tmp___', 'app/x.tmp']) writeFileSync(join(dir, f), 'x');
+  // probe, an emacs lock, a JetBrains safe write, a generic temp file. The two
+  // renamed-over kinds name a file that does not exist: one that does is
+  // reported as that file, since Bun's fs.watch names only the temp file when
+  // it is renamed over it (test/bun/dev-watch-replaced.mjs).
+  for (const f of ['app/4913', 'app/.#page.ts', 'app/new.ts___jb_tmp___', 'app/x.tmp']) writeFileSync(join(dir, f), 'x');
   assert.equal(await quiet, false, `a write to dev.log, coverage/, a gitignored dir or an editor temp file reloaded the page on ${runtime}\n--- server log ---\n${log}`);
 
   // A tracked root file still reloads, so the silence above is not a dead
