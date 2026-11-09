@@ -67,7 +67,7 @@ export {
 export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
 
 // Task controller, also available via '@webjsdev/core/task'
-export { Task, TaskStatus } from './src/task.js';
+export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';
 
 export { nothing, noChange } from './src/sentinels.js';
 

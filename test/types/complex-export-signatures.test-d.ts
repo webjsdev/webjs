@@ -54,20 +54,35 @@ class Host extends WebComponent({}) {
 Host.register('cx-host');
 const host = new Host();
 
-/* ---- Task<T>: constructor(host, { task, args?, autoRun? }), typed value ---- */
-const task = new Task<number>(host, {
-  task: async () => 42,
-  args: () => [],
+/* ---- Task<Args, Result>: Lit's shape, task(argsArray, { signal }) ---- */
+const task = new Task(host, {
+  task: async ([n, label], { signal }) => {
+    void signal;
+    const _n: number = n;
+    const _l: string = label;
+    void _n; void _l;
+    return 42;
+  },
+  args: () => [1, 'x'] as const,
   autoRun: false,
 });
-// Exact-type pin (stronger than an assignability check): value is EXACTLY T | undefined.
-type _TaskValue = Assert<Equal<typeof task.value, number | undefined>>;
+// Exact-type pin (stronger than an assignability check): value is EXACTLY R | undefined.
+type _TaskValue = Assert<Equal<typeof task.value, 42 | undefined>>;
 const _run: Promise<void> = task.run();
 void _run;
-// @ts-expect-error Task needs a host + options, not a bare callback
-new Task<number>(async () => 1);
-// @ts-expect-error the task option must return a Promise-producing function
-new Task<number>(host, { task: 5 });
+const _done: Promise<42> = task.taskComplete;
+void _done;
+// The positional form (host, taskFn, argsFn) infers the same way.
+const positional = new Task(host, async ([id]: readonly [string]) => id.length, () => ['a'] as const);
+type _PositionalValue = Assert<Equal<typeof positional.value, number | undefined>>;
+// autoRun accepts Lit's 'afterUpdate'.
+new Task(host, { task: async () => 1, autoRun: 'afterUpdate' });
+// @ts-expect-error Task needs a host before the task
+new Task(async () => 1);
+// @ts-expect-error the task option must be a function
+new Task(host, { task: 5 });
+// @ts-expect-error autoRun is boolean or 'afterUpdate'
+new Task(host, { task: async () => 1, autoRun: 'always' });
 
 /* ---- ref / createRef: element-typed refs ---- */
 const inputRef = createRef<HTMLInputElement>();

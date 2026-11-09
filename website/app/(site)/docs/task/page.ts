@@ -7,10 +7,13 @@ export default function TaskPage() {
     <h1>Task Controller</h1>
     <p>The Task controller manages async operations inside components such as data fetching, computations, or any promise-based work. It tracks loading, success, and error states automatically, cancels in-flight requests when args change, and provides a convenient <code>render()</code> helper for mapping states to templates.</p>
 
-    <code-block>import { Task, TaskStatus } from '@webjsdev/core/task';</code-block>
+    <p>It is a port of Lit's <code>@lit/task</code>: the constructor forms, the task function's arguments, <code>autoRun</code>, <code>taskComplete</code>, <code>initialValue</code>, <code>argsEqual</code> and the rest behave exactly as they do in Lit, so code written for Lit's Task runs unchanged once the import points at <code>@webjsdev/core/task</code>. The one WebJs addition: a task never runs during server rendering.</p>
+
+    <code-block>import { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from '@webjsdev/core/task';</code-block>
 
     <h2>Basic Usage</h2>
     <p>Create a Task inside a component. Pass a task function and an <code>args</code> function that returns the reactive inputs. When the args change, the task re-runs automatically.</p>
+    <p>The task function receives ONE array, the one <code>args()</code> returned, followed by an options object carrying the <code>AbortSignal</code>. Destructure the array: <code>async ([userId], { signal }) =&gt; ...</code>. The arguments are never spread into separate parameters.</p>
 
     <code-block>import { WebComponent, html } from '@webjsdev/core';
 import { Task } from '@webjsdev/core/task';
@@ -42,6 +45,28 @@ class UserProfile extends WebComponent({ userId: String }) {
   }
 }
 UserProfile.register('user-profile');</code-block>
+
+    <p>The positional form <code>new Task(this, taskFn, argsFn)</code> is the same task without the config object:</p>
+
+    <code-block>#task = new Task(this, async ([userId], { signal }) =&gt; {
+  const res = await fetch(\`/api/users/\${userId}\`, { signal });
+  return res.json();
+}, () =&gt; [this.userId]);</code-block>
+
+    <h2>Configuration</h2>
+    <table>
+      <thead>
+        <tr><th>Option</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>task</code></td><td>The function to run, called as <code>task(args, { signal })</code>. Return (or resolve) <code>initialState</code> to put the task back into INITIAL, for example when the search box is empty.</td></tr>
+        <tr><td><code>args</code></td><td>Returns the array of inputs. Without it the task never runs on its own, only through <code>run()</code>.</td></tr>
+        <tr><td><code>autoRun</code></td><td><code>true</code> (default) runs before the host renders when the args changed, <code>'afterUpdate'</code> runs after the host rendered (so the task can read the new DOM), <code>false</code> only runs on <code>run()</code>. It is also a public field, so <code>task.autoRun = false</code> works later.</td></tr>
+        <tr><td><code>argsEqual</code></td><td>Decides whether the args changed. Default <code>shallowArrayEquals</code> (same length, every element <code>Object.is</code> equal). Pass <code>deepArrayEquals</code> when <code>args()</code> builds fresh objects each update.</td></tr>
+        <tr><td><code>initialValue</code></td><td>Starts the task COMPLETE with this value and records the current args, so it only runs once they change.</td></tr>
+        <tr><td><code>onComplete</code> / <code>onError</code></td><td>Called with the value or the error when a run settles. A throw from either is ignored.</td></tr>
+      </tbody>
+    </table>
 
     <h2>Task States</h2>
     <p>A task is always in one of four states, exposed as <code>TaskStatus</code> constants:</p>
@@ -86,12 +111,14 @@ UserProfile.register('user-profile');</code-block>
     <p>All callbacks are optional. If a callback is not provided for the current state, nothing is rendered for that state.</p>
 
     <h2>AbortSignal Support</h2>
-    <p>Every task run receives an <code>AbortSignal</code> via the second parameter. The signal is automatically aborted when:</p>
+    <p>Every task run receives an <code>AbortSignal</code> via the second parameter. The signal is aborted when:</p>
 
     <ul>
-      <li>The task's <code>args</code> change, triggering a new run (the previous run is cancelled).</li>
-      <li>The host component is disconnected from the DOM.</li>
+      <li>A new run starts while one is pending (args changed, or <code>run()</code> was called). The older run's result is dropped.</li>
+      <li>You call <code>task.abort(reason)</code>. The reason becomes <code>signal.reason</code>, and the rejection your task function produces (a <code>fetch</code> rejects with it) lands as the ERROR state.</li>
     </ul>
+
+    <p>As in Lit, removing the host from the DOM does NOT abort a pending run, so an element that is moved keeps its result. If the work must stop when the element goes away, call <code>this.#task.abort()</code> in <code>disconnectedCallback()</code>.</p>
 
     <p>Pass the signal to <code>fetch()</code> or any other AbortSignal-aware API to cancel in-flight work:</p>
 
@@ -130,7 +157,17 @@ handleSubmit(e) {
   this.#submit.run();  // manually trigger the task
 }</code-block>
 
-    <p>Use <code>autoRun: false</code> for tasks that should only fire on explicit user action: form submissions, delete confirmations, or manual refresh buttons.</p>
+    <p>Use <code>autoRun: false</code> for tasks that should only fire on explicit user action: form submissions, delete confirmations, or manual refresh buttons. <code>run(args)</code> also accepts an explicit args array for that one run.</p>
+
+    <h2>taskComplete</h2>
+    <p><code>task.taskComplete</code> is a promise for the current run: it resolves with the value or rejects with the error. With no run pending it settles straight away with the current value. Useful in tests and in code that needs the result after triggering a run:</p>
+
+    <code-block>this.userId = '42';
+await this.updateComplete;          // the update ran the task
+const user = await this.#task.taskComplete;</code-block>
+
+    <h2>Server Rendering</h2>
+    <p>A task never runs during server rendering. The server renders the INITIAL state (or the <code>initialValue</code>, as COMPLETE), and the browser runs the task when the component connects. Data that should be in the first paint belongs in an <code>async render()</code> or an async page function instead.</p>
 
     <h2>Reactive Args</h2>
     <p>The <code>args</code> function is called on every host update. When the returned array differs from the previous one (shallow comparison per element), the task re-runs. This creates a reactive chain: property change triggers host update, host update evaluates <code>args</code>, changed args trigger the task.</p>
@@ -186,11 +223,11 @@ SearchResults.register('search-results');</code-block>
 
     <h2>Full Example: Search With Debounce</h2>
 
-    <code-block>import { WebComponent, html, css } from '@webjsdev/core';
-import { Task } from '@webjsdev/core/task';
+    <code-block>import { WebComponent, html, css, signal } from '@webjsdev/core';
+import { Task, initialState } from '@webjsdev/core/task';
 
 class LiveSearch extends WebComponent {
-
+  static shadow = true;
   static styles = css\`
     :host { display: block; }
     input { width: 100%; padding: 8px; font: inherit; }
@@ -204,7 +241,7 @@ class LiveSearch extends WebComponent {
 
   #results = new Task(this, {
     task: async ([q], { signal }) =&gt; {
-      if (!q) return [];
+      if (!q) return initialState;
       const res = await fetch(\`/api/search?q=\${encodeURIComponent(q)}\`, { signal });
       if (!res.ok) throw new Error('Search failed');
       return res.json();

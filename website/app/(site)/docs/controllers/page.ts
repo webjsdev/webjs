@@ -165,7 +165,7 @@ DashboardWidget.register('dashboard-widget');</code-block>
     <p>WebJs ships three controllers out of the box:</p>
 
     <h3>Task</h3>
-    <p>Manages async operations with automatic loading/error states, abort support, and reactive args. Imported from <code>webjs/task</code>. See the <a href="/docs/task">Task Controller</a> page for full documentation.</p>
+    <p>Manages async operations with automatic loading/error states, abort support, and reactive args, a port of Lit's <code>@lit/task</code>. Imported from <code>@webjsdev/core/task</code>. See the <a href="/docs/task">Task Controller</a> page for full documentation.</p>
 
     <code-block>import { Task } from '@webjsdev/core/task';
 

@@ -1,27 +1,21 @@
 /**
- * Task: a ReactiveController for managing async data fetching inside
- * web components.
+ * @license
+ * Portions derived from Lit (`@lit/task`), Copyright Google LLC, BSD-3-Clause.
+ * https://github.com/lit/lit/blob/main/packages/task/LICENSE
+ */
+
+/**
+ * Task: a ReactiveController for async work inside a component, with the same
+ * API and the same behaviour as Lit's `@lit/task`, so a component written
+ * from Lit memory runs unchanged under the WebJs import path.
  *
  * ## When to use
  *
- * Use Task when a component needs to fetch data and render
- * loading / error / success states. Task handles `AbortController`
- * automatically: navigating away or re-running cancels the previous
- * in-flight request, preventing race conditions and wasted work.
- *
- * Good fits:
- * - Search-as-you-type / autocomplete
- * - Lazy-loaded data panels that fetch when a tab becomes active
- * - Infinite scroll / pagination within a component
- * - Any component-scoped async operation (geocoding, AI completions, etc.)
- *
- * ## When NOT to use
- *
- * - For **page-level** data loading, use async page functions or server
- *   actions instead: they run on the server, stream via Suspense, and
- *   produce real HTML for crawlers.
- * - For one-shot fire-and-forget mutations (form submit, delete), a plain
- *   `async` method on the component is usually simpler.
+ * Use Task for genuinely CLIENT-only async data: search-as-you-type, a
+ * lazily loaded panel, a fetch driven by browser state. Data that is known at
+ * request time and belongs in the first paint goes through `async render()` or
+ * an async page function instead: a Task never runs at SSR, so its INITIAL
+ * state is what the server renders.
  *
  * ## Quick example
  *
@@ -31,7 +25,8 @@
  *
  * class UserSearch extends WebComponent({ query: String }) {
  *   _search = new Task(this, {
- *     task: async (query, { signal }) => {
+ *     // ONE argument: the array `args()` returned. Destructure it.
+ *     task: async ([query], { signal }) => {
  *       const res = await fetch(`/api/users?q=${query}`, { signal });
  *       if (!res.ok) throw new Error('Search failed');
  *       return res.json();
@@ -40,67 +35,28 @@
  *   });
  *
  *   render() {
- *     return html`
- *       <input .value=${this.query}
- *              @input=${e => this.query = e.target.value}>
- *       ${this._search.render({
- *         initial:  ()     => html`<p>Type to search</p>`,
- *         pending:  ()     => html`<p>Searching…</p>`,
- *         complete: (users)=> html`<ul>${users.map(u => html`<li>${u.name}</li>`)}</ul>`,
- *         error:    (err)  => html`<p class="error">${err.message}</p>`,
- *       })}
- *     `;
+ *     return this._search.render({
+ *       initial:  ()      => html`<p>Type to search</p>`,
+ *       pending:  ()      => html`<p>Searching</p>`,
+ *       complete: (users) => html`<ul>${users.map((u) => html`<li>${u.name}</li>`)}</ul>`,
+ *       error:    (err)   => html`<p class="error">${err.message}</p>`,
+ *     });
  *   }
  * }
  * UserSearch.register('user-search');
  * ```
  *
- * ### Manual control
- *
- * Set `autoRun: false` to disable automatic re-runs on arg changes and
- * call `task.run()` explicitly (e.g. on button click):
- *
- * ```js
- * this._export = new Task(this, {
- *   task: async (format, { signal }) => { … },
- *   args: () => [this.format],
- *   autoRun: false,
- * });
- *
- * // In render:
- * html`<button @click=${() => this._export.run()}>Export</button>`
- * ```
+ * The positional form `new Task(this, taskFn, argsFn)` is accepted too.
  *
  * @module
  */
 
-// ---------------------------------------------------------------------------
-// TaskStatus enum
-// ---------------------------------------------------------------------------
-
 /**
- * Possible states of a Task.
- *
- * | Value | Name      | Meaning                              |
- * | ----- | --------- | ------------------------------------ |
- * | 0     | INITIAL   | Task has never run.                  |
- * | 1     | PENDING   | Task is in-flight (awaiting).        |
- * | 2     | COMPLETE  | Task resolved successfully.          |
- * | 3     | ERROR     | Task rejected or threw.              |
+ * The four states a Task can be in.
  *
  * @readonly
  * @enum {number}
  */
-// The SSR walker now runs controllers' hostUpdate during the pre-render pass
-// (issue #217). A Task must NOT invoke its task function server-side (that
-// would fire a fetch during SSR); the browser runs it on hydration. Read live
-// (not cached) so the auto-run gate reflects the current environment: SSR
-// ships the task's INITIAL state, unchanged from before hostUpdate fired at
-// SSR, and the browser runs it on connect.
-function inBrowser() {
-  return typeof window !== 'undefined';
-}
-
 export const TaskStatus = /** @type {const} */ ({
   INITIAL: 0,
   PENDING: 1,
@@ -108,290 +64,367 @@ export const TaskStatus = /** @type {const} */ ({
   ERROR: 3,
 });
 
-// ---------------------------------------------------------------------------
-// Task controller
-// ---------------------------------------------------------------------------
+/**
+ * Returned (or resolved) from a task function to put the task back into the
+ * INITIAL state instead of COMPLETE, the way Lit's `initialState` does. Use it
+ * when the current args mean "nothing to do yet" (an empty search box).
+ */
+export const initialState = Symbol('webjs.task.initialState');
 
 /**
- * A ReactiveController that runs an async function, tracks its lifecycle
- * (initial → pending → complete | error), and triggers host re-renders
- * on state transitions.
+ * Whether the task function may run in this environment. The SSR walk runs
+ * controllers' `hostUpdate` during its pre-render pass, and a Task must never
+ * fire its function (typically a fetch) server-side: SSR ships the INITIAL
+ * state, and the browser runs the task once the element connects. Read live,
+ * not cached, so the gate reflects the current environment.
+ * @returns {boolean}
+ */
+function inBrowser() {
+  return typeof window !== 'undefined';
+}
+
+/**
+ * Lit's default `argsEqual`: the two arrays are the same array, or have the
+ * same length and every element is `Object.is` equal (Lit's `notEqual`
+ * negated), so `NaN` equals `NaN` and `0` differs from `-0`.
  *
- * ## AI guidance
+ * @param {ReadonlyArray<unknown>} oldArgs
+ * @param {ReadonlyArray<unknown>} newArgs
+ * @returns {boolean}
+ */
+export const shallowArrayEquals = (oldArgs, newArgs) =>
+  oldArgs === newArgs ||
+  (oldArgs.length === newArgs.length && oldArgs.every((v, i) => Object.is(v, newArgs[i])));
+
+/**
+ * Structural equality for the value shapes args usually carry: primitives,
+ * arrays, plain objects, `Map`, `Set`, `RegExp`, and objects with a custom
+ * `valueOf` / `toString` (a `Date`, a `URL`). A port of `@lit/task`'s
+ * `deepEquals`, including its rule that two objects with different
+ * constructors are never equal.
  *
- * - **`task.render()`** provides declarative async UI. Pass an object
- *   with `initial`, `pending`, `complete`, and `error` callbacks and
- *   Task returns the right template for the current status:
- *   ```js
- *   task.render({
- *     pending:  ()     => html`Loading…`,
- *     complete: (data) => html`${data.name}`,
- *     error:    (err)  => html`Error: ${err.message}`,
- *   })
- *   ```
- *   Omitted callbacks return `undefined` (renders nothing).
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {boolean}
+ */
+export const deepEquals = (a, b) => {
+  if (Object.is(a, b)) return true;
+  if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
+    const x = /** @type {any} */ (a);
+    const y = /** @type {any} */ (b);
+    if (x.constructor !== y.constructor) return false;
+    if (Array.isArray(x)) {
+      if (x.length !== y.length) return false;
+      return x.every((v, i) => deepEquals(v, y[i]));
+    }
+    if (x.valueOf !== Object.prototype.valueOf) return x.valueOf() === y.valueOf();
+    if (x.toString !== Object.prototype.toString) return x.toString() === y.toString();
+    if (x instanceof Map && y instanceof Map) {
+      if (x.size !== y.size) return false;
+      for (const [k, v] of x.entries()) {
+        if (deepEquals(v, y.get(k)) === false || (v === undefined && y.has(k) === false)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (x instanceof Set && y instanceof Set) {
+      if (x.size !== y.size) return false;
+      for (const k of x.keys()) {
+        if (y.has(k) === false) return false;
+      }
+      return true;
+    }
+    if (x instanceof RegExp) {
+      return x.source === y.source && x.flags === y.flags;
+    }
+    const keys = Object.keys(x);
+    if (keys.length !== Object.keys(y).length) return false;
+    for (const key of keys) {
+      if (!Object.hasOwn(y, key) || !deepEquals(x[key], y[key])) return false;
+    }
+    return true;
+  }
+  return false;
+};
+
+/**
+ * `argsEqual` that compares each argument with {@link deepEquals}, Lit's
+ * `deepArrayEquals`. Pass it when `args()` builds fresh objects every update
+ * and identity comparison would re-run the task on every render.
  *
- * - **AbortController** is managed automatically. Each call to `run()`
- *   aborts the previous in-flight request. The `{ signal }` object
- *   passed as the last argument to your task function is wired to the
- *   internal AbortController: pass it to `fetch()`, `ReadableStream`,
- *   or any other signal-aware API.
+ * @param {ReadonlyArray<unknown>} oldArgs
+ * @param {ReadonlyArray<unknown>} newArgs
+ * @returns {boolean}
+ */
+export const deepArrayEquals = (oldArgs, newArgs) =>
+  oldArgs === newArgs ||
+  (oldArgs.length === newArgs.length && oldArgs.every((v, i) => deepEquals(v, newArgs[i])));
+
+/**
+ * A ReactiveController that runs an async function, tracks its status
+ * (INITIAL, PENDING, COMPLETE, ERROR), and requests a host update on every
+ * transition.
  *
- * - **`args`** is a function that returns an array. It is re-evaluated
- *   on every `hostUpdate()`. When `autoRun` is true (the default) and
- *   the args have changed (shallow identity comparison per element),
- *   the task automatically re-runs. This is how search-as-you-type and
- *   reactive data loading work.
+ * Behaviour, matching `@lit/task`:
+ * - The task function is called as `task(args, { signal })`, where `args` is
+ *   the ARRAY `args()` returned (not spread), so destructure it:
+ *   `async ([id], { signal }) => ...`.
+ * - `autoRun: true` (default) re-runs in `hostUpdate()` whenever `args()`
+ *   differs from the previous args under `argsEqual`. `'afterUpdate'` does the
+ *   same from `hostUpdated()`, after the host's DOM is committed. `false` runs
+ *   only on `run()`. `autoRun` is a public field and can be flipped later.
+ * - A task with no `args` function never auto-runs; call `run()`.
+ * - `initialValue` starts the task COMPLETE with that value, and records the
+ *   current args so it only runs once they change.
+ * - A newer run supersedes an older one: the older run's signal is aborted
+ *   and its result is dropped.
+ * - `abort(reason)` aborts the in-flight run. The task function's rejection
+ *   (an `AbortError` from `fetch`) then lands as the ERROR state, as in Lit.
+ * - `taskComplete` is a promise for the current run's result.
+ * - Disconnecting the host does NOT abort the run (Lit does not either), so a
+ *   moved element keeps its result. Abort it yourself in
+ *   `disconnectedCallback` if the work must stop.
+ * - Never runs at SSR (WebJs specific): the server renders the INITIAL state.
  *
- * - When the host disconnects (e.g. the component is removed from the
- *   DOM), any in-flight task is aborted automatically: no cleanup
- *   needed.
- *
- * @template T
+ * @template {ReadonlyArray<unknown>} [T=ReadonlyArray<unknown>]
+ * @template [R=unknown]
  */
 export class Task {
   /**
-   * @param {import('./component.js').WebComponent} host
-   *   The host component that owns this task.
-   * @param {{
-   *   task: (...args: [...unknown[], { signal: AbortSignal }]) => Promise<T>,
-   *   args?: () => unknown[],
-   *   autoRun?: boolean
-   * }} options
-   *   - `task`: The async function to execute. Receives the spread args
-   *     from `args()` followed by an options object with `{ signal }`.
-   *   - `args`: A function returning an array of arguments. Re-evaluated
-   *     on every host update cycle. Defaults to `() => []`.
-   *   - `autoRun`: When true (default), the task re-runs automatically
-   *     whenever `args()` returns values that differ from the previous
-   *     run. Set to false for manual-only triggering via `run()`.
+   * @param {any} host The controller host (a WebComponent).
+   * @param {any} task A task config object `{ task, args, autoRun,
+   *   argsEqual, initialValue, onComplete, onError }`, or the task function
+   *   itself when `args` is passed positionally.
+   * @param {() => T} [args] The args function, positional form only.
    */
-  constructor(host, { task, args, autoRun = true }) {
-    /** @type {import('./component.js').WebComponent} */
+  constructor(host, task, args) {
+    /** @private */
     this._host = host;
-    /** @type {(...args: any[]) => Promise<T>} */
-    this._taskFn = task;
-    /** @type {() => unknown[]} */
-    this._argsFn = args || (() => []);
-    /** @type {boolean} */
-    this._autoRun = autoRun;
-
-    /** @type {number}: current TaskStatus */
+    host.addController(this);
+    const config = typeof task === 'object' && task !== null ? task : { task, args };
+    if (typeof config.task !== 'function') {
+      throw new TypeError(
+        '[webjs] new Task(host, { task, args }) needs a task function. ' +
+        'Pass a config object or new Task(host, taskFn, argsFn).',
+      );
+    }
+    /** @private @type {(args: T, options: { signal: AbortSignal }) => any} */
+    this._task = config.task;
+    /** @private @type {(() => T) | undefined} */
+    this._argsFn = config.args;
+    /** @private @type {(oldArgs: T, newArgs: T) => boolean} */
+    this._argsEqual = config.argsEqual ?? shallowArrayEquals;
+    /** @private */
+    this._onComplete = config.onComplete;
+    /** @private */
+    this._onError = config.onError;
+    /** @type {boolean | 'afterUpdate'} */
+    this.autoRun = config.autoRun ?? true;
+    /** @private @type {number} */
     this._status = TaskStatus.INITIAL;
-    /** @type {T | undefined} */
+    /** @private @type {R | undefined} */
     this._value = undefined;
-    /** @type {unknown} */
+    /** @private @type {unknown} */
     this._error = undefined;
-
-    /** @type {AbortController | null} */
-    this._abortController = null;
-
-    /**
-     * Snapshot of args from the last run, used for shallow comparison.
-     * @type {unknown[] | null}
-     */
-    this._prevArgs = null;
-
-    if (typeof host.addController === 'function') {
-      host.addController(this);
+    /** @private @type {T | undefined} */
+    this._previousArgs = undefined;
+    /** @private */
+    this._callId = 0;
+    /** @private @type {AbortController | undefined} */
+    this._abortController = undefined;
+    /** @private @type {Promise<R> | undefined} */
+    this._taskComplete = undefined;
+    /** @private @type {((value: R) => void) | undefined} */
+    this._resolveTaskComplete = undefined;
+    /** @private @type {((error: unknown) => void) | undefined} */
+    this._rejectTaskComplete = undefined;
+    if ('initialValue' in config) {
+      this._value = config.initialValue;
+      this._status = TaskStatus.COMPLETE;
+      this._previousArgs = this._getArgs();
     }
   }
 
-  // ---- Read-only public properties ----------------------------------------
-
   /**
-   * Current status of the task.
-   * @returns {number} One of the `TaskStatus` enum values.
+   * A promise for the current run's result. It resolves with the value when
+   * the run completes and rejects with the error when it fails. When no run
+   * is pending it settles with the current value (or rejects with the current
+   * error) straight away.
+   * @returns {Promise<R>}
    */
+  get taskComplete() {
+    if (this._taskComplete) return this._taskComplete;
+    if (this._status === TaskStatus.PENDING) {
+      this._taskComplete = new Promise((resolve, reject) => {
+        this._resolveTaskComplete = resolve;
+        this._rejectTaskComplete = reject;
+      });
+    } else if (this._status === TaskStatus.ERROR) {
+      this._taskComplete = Promise.reject(this._error);
+    } else {
+      this._taskComplete = Promise.resolve(/** @type {R} */ (this._value));
+    }
+    return this._taskComplete;
+  }
+
+  /** @returns {number} One of the `TaskStatus` values. */
   get status() {
     return this._status;
   }
 
-  /**
-   * The resolved value when status is `COMPLETE`, otherwise `undefined`.
-   * @returns {T | undefined}
-   */
+  /** @returns {R | undefined} The last completed value. */
   get value() {
     return this._value;
   }
 
-  /**
-   * The rejection reason when status is `ERROR`, otherwise `undefined`.
-   * @returns {unknown}
-   */
+  /** @returns {unknown} The last error, when the status is ERROR. */
   get error() {
     return this._error;
   }
 
-  // ---- Public methods -----------------------------------------------------
-
-  /**
-   * Manually trigger (or re-trigger) the task.
-   *
-   * Any in-flight invocation is aborted before the new one starts. The
-   * `args()` function is called to produce the current arguments.
-   *
-   * @returns {Promise<void>} Resolves when the task finishes (or is
-   *   superseded). Does not reject: errors are captured in `this.error`.
-   */
-  async run() {
-    // Abort previous.
-    this.abort();
-
-    const ac = new AbortController();
-    this._abortController = ac;
-
-    const args = this._argsFn();
-    this._prevArgs = args;
-
-    this._status = TaskStatus.PENDING;
-    this._error = undefined;
-    this._requestHostUpdate();
-
-    try {
-      const result = await this._taskFn(...args, { signal: ac.signal });
-
-      // Guard: if this invocation was superseded while awaiting, discard.
-      if (ac.signal.aborted) return;
-
-      this._value = result;
-      this._status = TaskStatus.COMPLETE;
-      this._error = undefined;
-    } catch (err) {
-      if (ac.signal.aborted) return;
-
-      this._error = err;
-      this._status = TaskStatus.ERROR;
-      this._value = undefined;
-    } finally {
-      if (this._abortController === ac) {
-        this._abortController = null;
-      }
-    }
-
-    this._requestHostUpdate();
-  }
-
-  /**
-   * Abort the current in-flight task (if any).
-   *
-   * The AbortController's signal is set to aborted, which cancels any
-   * `fetch()` or other signal-aware work inside the task function. The
-   * task's status is **not** changed: it remains at whatever state it
-   * was before the abort. A subsequent `run()` will transition to
-   * PENDING.
-   */
-  abort() {
-    if (this._abortController) {
-      this._abortController.abort();
-      this._abortController = null;
-    }
-  }
-
-  /**
-   * Declarative async UI helper.
-   *
-   * Returns the result of calling the callback matching the current
-   * status. Omitted callbacks return `undefined`.
-   *
-   * ```js
-   * task.render({
-   *   initial:  ()      => html`<p>Ready</p>`,
-   *   pending:  ()      => html`<p>Loading…</p>`,
-   *   complete: (data)  => html`<p>${data}</p>`,
-   *   error:    (err)   => html`<p>Error: ${err.message}</p>`,
-   * })
-   * ```
-   *
-   * @param {{
-   *   initial?:  () => unknown,
-   *   pending?:  () => unknown,
-   *   complete?: (value: T) => unknown,
-   *   error?:    (error: unknown) => unknown,
-   * }} handlers
-   * @returns {unknown} The template result for the current status.
-   */
-  render(handlers = {}) {
-    switch (this._status) {
-      case TaskStatus.INITIAL:
-        return handlers.initial?.();
-      case TaskStatus.PENDING:
-        return handlers.pending?.();
-      case TaskStatus.COMPLETE:
-        return handlers.complete?.(/** @type {T} */ (this._value));
-      case TaskStatus.ERROR:
-        return handlers.error?.(this._error);
-      default:
-        return undefined;
-    }
-  }
-
-  // ---- ReactiveController lifecycle ---------------------------------------
-
-  /**
-   * Called before the host renders. When `autoRun` is enabled, checks
-   * whether `args()` have changed and re-runs the task if so.
-   */
+  /** ReactiveController hook: auto-run before the host renders. */
   hostUpdate() {
-    if (!this._autoRun) return;
-    // Never auto-run server-side: SSR ships the INITIAL state and the task
-    // function (typically a fetch) runs only in the browser on hydration.
-    if (!inBrowser()) return;
+    if (this.autoRun === true) this._performTask();
+  }
 
-    const nextArgs = this._argsFn();
+  /** ReactiveController hook: auto-run after the host rendered (`'afterUpdate'`). */
+  hostUpdated() {
+    if (this.autoRun === 'afterUpdate') this._performTask();
+  }
 
-    if (!this._argsEqual(this._prevArgs, nextArgs)) {
-      // Don't await: the run will trigger another host update when it
-      // transitions status.
-      this.run();
+  /**
+   * @private
+   * @returns {T | undefined}
+   */
+  _getArgs() {
+    if (this._argsFn === undefined) return undefined;
+    const args = this._argsFn();
+    if (!Array.isArray(args)) {
+      throw new Error('[webjs] The Task args function must return an array.');
     }
+    return args;
   }
-
-  /**
-   * Called after the host has rendered. Currently a no-op; required by
-   * the ReactiveController interface.
-   */
-  hostUpdated() {}
-
-  /**
-   * Called when the host connects to the DOM. Currently a no-op -
-   * initial run (if autoRun) happens on the first `hostUpdate()`.
-   */
-  hostConnected() {}
-
-  /**
-   * Called when the host disconnects from the DOM. Aborts any in-flight
-   * task to prevent updates to an unmounted component.
-   */
-  hostDisconnected() {
-    this.abort();
-  }
-
-  // ---- Internal -----------------------------------------------------------
 
   /** @private */
-  _requestHostUpdate() {
-    if (typeof this._host.requestUpdate === 'function') {
+  async _performTask() {
+    // Never at SSR: the server renders the INITIAL state, and the args are
+    // left unrecorded so the browser's first update runs the task.
+    if (!inBrowser()) return;
+    const args = this._getArgs();
+    const prev = this._previousArgs;
+    this._previousArgs = args;
+    if (args !== prev && args !== undefined && (prev === undefined || !this._argsEqual(prev, args))) {
+      await this.run(args);
+    }
+  }
+
+  /**
+   * Run the task now, with `args` or else the current `args()`. A pending
+   * run is aborted and superseded. Resolves when this run settles; never
+   * rejects (a failure lands in `error` and `taskComplete`).
+   *
+   * @param {T} [args]
+   * @returns {Promise<void>}
+   */
+  async run(args) {
+    args ??= this._getArgs();
+    this._previousArgs = args;
+    if (this._status === TaskStatus.PENDING) {
+      this._abortController?.abort();
+    } else {
+      // A settled `taskComplete` belongs to the previous run.
+      this._taskComplete = undefined;
+      this._resolveTaskComplete = undefined;
+      this._rejectTaskComplete = undefined;
+    }
+    this._status = TaskStatus.PENDING;
+    /** @type {any} */
+    let result;
+    /** @type {unknown} */
+    let error;
+    // Report the pending state. From `hostUpdated` the host is mid-cycle, so
+    // the request waits a microtask, as Lit does.
+    if (this.autoRun === 'afterUpdate') {
+      queueMicrotask(() => this._host.requestUpdate());
+    } else {
+      this._host.requestUpdate();
+    }
+    const key = ++this._callId;
+    this._abortController = new AbortController();
+    let errored = false;
+    try {
+      result = await this._task(/** @type {T} */ (args), { signal: this._abortController.signal });
+    } catch (e) {
+      errored = true;
+      error = e;
+    }
+    // Only the most recent run reports.
+    if (this._callId === key) {
+      if (result === initialState) {
+        this._status = TaskStatus.INITIAL;
+      } else {
+        if (errored === false) {
+          try {
+            this._onComplete?.(result);
+          } catch {
+            // An onComplete throw must not wedge the task, as in Lit.
+          }
+          this._status = TaskStatus.COMPLETE;
+          this._resolveTaskComplete?.(result);
+        } else {
+          try {
+            this._onError?.(error);
+          } catch {
+            // An onError throw must not wedge the task, as in Lit.
+          }
+          this._status = TaskStatus.ERROR;
+          this._rejectTaskComplete?.(error);
+        }
+        this._value = result;
+        this._error = error;
+      }
       this._host.requestUpdate();
     }
   }
 
   /**
-   * Shallow comparison of two args arrays by identity (`===`).
-   * Returns true if both are non-null, same length, and every element
-   * is strictly equal.
+   * Abort the pending run, if any, passing `reason` to its `AbortSignal`.
+   * The status is left to the task function: a fetch that rejects on abort
+   * lands as ERROR.
    *
-   * @param {unknown[] | null} a
-   * @param {unknown[]} b
-   * @returns {boolean}
-   * @private
+   * @param {unknown} [reason]
    */
-  _argsEqual(a, b) {
-    if (a === null) return false;
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false;
+  abort(reason) {
+    if (this._status === TaskStatus.PENDING) {
+      this._abortController?.abort(reason);
     }
-    return true;
+  }
+
+  /**
+   * Render the template for the current status. A missing callback renders
+   * nothing.
+   *
+   * @param {{
+   *   initial?: () => unknown,
+   *   pending?: () => unknown,
+   *   complete?: (value: R) => unknown,
+   *   error?: (error: unknown) => unknown,
+   * }} renderer
+   * @returns {unknown}
+   */
+  render(renderer) {
+    switch (this._status) {
+      case TaskStatus.INITIAL:
+        return renderer.initial?.();
+      case TaskStatus.PENDING:
+        return renderer.pending?.();
+      case TaskStatus.COMPLETE:
+        return renderer.complete?.(/** @type {R} */ (this._value));
+      case TaskStatus.ERROR:
+        return renderer.error?.(this._error);
+      default:
+        throw new Error(`[webjs] Unexpected Task status: ${this._status}`);
+    }
   }
 }

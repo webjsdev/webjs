@@ -340,6 +340,15 @@
     },
     "noChange": {
       "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "initialState": {
+      "exempt": "deferred: agent-facing (Lit's Task sentinel that returns a task to INITIAL, documented on the docs-site task page); no single-concept gallery demo yet"
+    },
+    "shallowArrayEquals": {
+      "exempt": "deferred: agent-facing (Lit's default Task argsEqual, documented on the docs-site task page); no single-concept gallery demo yet"
+    },
+    "deepArrayEquals": {
+      "exempt": "deferred: agent-facing (Lit's structural Task argsEqual, documented on the docs-site task page); no single-concept gallery demo yet"
     }
   },
   "serverSpecifier": "@webjsdev/server",

@@ -1,16 +1,27 @@
+/**
+ * Task controller: the `@lit/task` contract under `@webjsdev/core/task`.
+ *
+ * Each case pins a behaviour Lit's Task has, so a component written from Lit
+ * memory gets the same result: the args ARRAY as the first argument, both
+ * constructor forms, `taskComplete`, `initialValue`, `initialState`,
+ * `argsEqual`, `onComplete` / `onError`, `abort(reason)`, and the three
+ * `autoRun` modes. Plus the WebJs-only rule that a task never runs at SSR.
+ */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { TaskStatus, Task } from '../../src/task.js';
-
-// ---------------------------------------------------------------------------
-// Helpers: mock host
-// ---------------------------------------------------------------------------
+import {
+  TaskStatus,
+  Task,
+  initialState,
+  shallowArrayEquals,
+  deepArrayEquals,
+  deepEquals,
+} from '../../src/task.js';
 
 function createMockHost() {
   const controllers = [];
   let updateCount = 0;
-
   return {
     requestUpdate() { updateCount++; },
     addController(c) { controllers.push(c); },
@@ -20,10 +31,9 @@ function createMockHost() {
 }
 
 /**
- * Run `fn` with a stubbed `globalThis.window` so Task's browser-only auto-run
- * path executes in this Node test, then restore. Task.hostUpdate gates its
- * auto-run on `typeof window !== 'undefined'` so it never fires the task
- * function during SSR (issue #217).
+ * Run `fn` with a stubbed `globalThis.window` so the auto-run path executes
+ * in Node. Auto-run is gated on `typeof window !== 'undefined'` so the task
+ * function never fires during SSR.
  */
 async function withBrowser(fn) {
   const had = 'window' in globalThis;
@@ -37,311 +47,337 @@ async function withBrowser(fn) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// TaskStatus
-// ---------------------------------------------------------------------------
+const tick = () => new Promise((r) => setTimeout(r, 0));
 
-test('TaskStatus: has correct enum values', () => {
-  assert.equal(TaskStatus.INITIAL, 0);
-  assert.equal(TaskStatus.PENDING, 1);
-  assert.equal(TaskStatus.COMPLETE, 2);
-  assert.equal(TaskStatus.ERROR, 3);
+test('TaskStatus values match Lit', () => {
+  assert.deepEqual({ ...TaskStatus }, { INITIAL: 0, PENDING: 1, COMPLETE: 2, ERROR: 3 });
 });
 
-// ---------------------------------------------------------------------------
-// Task: lifecycle
-// ---------------------------------------------------------------------------
-
-test('Task: starts in INITIAL state', () => {
+test('starts INITIAL and registers itself as a controller', () => {
   const host = createMockHost();
   const task = new Task(host, { task: async () => {} });
-
   assert.equal(task.status, TaskStatus.INITIAL);
   assert.equal(task.value, undefined);
   assert.equal(task.error, undefined);
+  assert.equal(task.autoRun, true);
+  assert.deepEqual(host.controllers, [task]);
 });
 
-test('Task: run() transitions to PENDING then COMPLETE', async () => {
+test('the task function receives the args ARRAY, not spread arguments', async () => {
   const host = createMockHost();
-  const statuses = [];
-
+  let received;
   const task = new Task(host, {
-    task: async () => {
-      statuses.push(task.status);
-      return 'done';
-    },
+    task: async (args, options) => { received = { args, options }; },
+    args: () => ['x', 42],
     autoRun: false,
   });
-
   await task.run();
+  assert.deepEqual(received.args, ['x', 42]);
+  assert.ok(received.options.signal instanceof AbortSignal);
+});
 
+test('a destructured single arg reads the value, the Lit idiom', async () => {
+  const host = createMockHost();
+  const task = new Task(host, {
+    task: async ([attempt]) => `attempt ${attempt}`,
+    args: () => [3],
+    autoRun: false,
+  });
+  await task.run();
+  assert.equal(task.value, 'attempt 3');
+});
+
+test('positional form new Task(host, taskFn, argsFn)', async () => {
+  const host = createMockHost();
+  const task = new Task(host, async ([a, b]) => a + b, () => [2, 3]);
+  await task.run();
+  assert.equal(task.status, TaskStatus.COMPLETE);
+  assert.equal(task.value, 5);
+});
+
+test('a missing task function throws a fix message', () => {
+  assert.throws(() => new Task(createMockHost(), {}), /needs a task function/);
+});
+
+test('run(args) overrides args() for that run and records them', async () => {
+  const host = createMockHost();
+  const seen = [];
+  const task = new Task(host, {
+    task: async (args) => { seen.push(args); },
+    args: () => ['from-args-fn'],
+    autoRun: false,
+  });
+  await task.run(['explicit']);
+  assert.deepEqual(seen, [['explicit']]);
+});
+
+test('args() returning a non-array throws', async () => {
+  const task = new Task(createMockHost(), { task: async () => 1, args: () => 'nope', autoRun: false });
+  await assert.rejects(() => task.run(), /must return an array/);
+});
+
+test('run() goes PENDING then COMPLETE and requests an update for each', async () => {
+  const host = createMockHost();
+  const statuses = [];
+  const task = new Task(host, {
+    task: async () => { statuses.push(task.status); return 'done'; },
+    autoRun: false,
+  });
+  await task.run();
   assert.deepEqual(statuses, [TaskStatus.PENDING]);
   assert.equal(task.status, TaskStatus.COMPLETE);
   assert.equal(task.value, 'done');
-  assert.equal(task.error, undefined);
+  assert.equal(host.updateCount, 2);
 });
 
-test('Task: error in task transitions to ERROR', async () => {
-  const host = createMockHost();
-  const boom = new Error('boom');
-
-  const task = new Task(host, {
-    task: async () => { throw boom; },
+test('a throw lands as ERROR and run() itself never rejects', async () => {
+  const task = new Task(createMockHost(), {
+    task: async () => { throw new Error('boom'); },
     autoRun: false,
   });
-
   await task.run();
-
   assert.equal(task.status, TaskStatus.ERROR);
-  assert.equal(task.error, boom);
+  assert.equal(task.error.message, 'boom');
   assert.equal(task.value, undefined);
 });
 
-test('Task: run() calls requestUpdate on host for PENDING and final state', async () => {
-  const host = createMockHost();
-  const task = new Task(host, {
-    task: async () => 'ok',
-    autoRun: false,
-  });
-
-  const before = host.updateCount;
+test('returning initialState puts the task back into INITIAL', async () => {
+  const task = new Task(createMockHost(), { task: async () => initialState, autoRun: false });
   await task.run();
-
-  // Expect at least 2 updates: one for PENDING, one for COMPLETE.
-  assert.ok(host.updateCount - before >= 2, `expected >=2 updates, got ${host.updateCount - before}`);
+  assert.equal(task.status, TaskStatus.INITIAL);
 });
 
-test('Task: passes args to task function', async () => {
-  const host = createMockHost();
-  let receivedArgs;
+test('initialValue starts COMPLETE and records the args so it does not run', async () => {
+  await withBrowser(async () => {
+    let calls = 0;
+    const task = new Task(createMockHost(), {
+      task: async () => { calls++; return 'fresh'; },
+      args: () => [1],
+      initialValue: 'seeded',
+    });
+    assert.equal(task.status, TaskStatus.COMPLETE);
+    assert.equal(task.value, 'seeded');
+    task.hostUpdate();
+    await tick();
+    assert.equal(calls, 0, 'unchanged args do not run');
+  });
+});
 
-  const task = new Task(host, {
-    task: async (a, b, { signal }) => { receivedArgs = [a, b]; return a + b; },
-    args: () => [3, 7],
+test('taskComplete resolves with the value of the pending run', async () => {
+  let release;
+  const task = new Task(createMockHost(), {
+    task: () => new Promise((r) => { release = r; }),
     autoRun: false,
   });
-
-  await task.run();
-
-  assert.deepEqual(receivedArgs, [3, 7]);
-  assert.equal(task.value, 10);
+  const run = task.run();
+  const done = task.taskComplete;
+  release('v');
+  assert.equal(await done, 'v');
+  await run;
+  assert.equal(await task.taskComplete, 'v', 'a settled task resolves straight away');
 });
 
-// ---------------------------------------------------------------------------
-// Task.render()
-// ---------------------------------------------------------------------------
-
-test('Task.render: calls initial handler when INITIAL', () => {
-  const host = createMockHost();
-  const task = new Task(host, { task: async () => {}, autoRun: false });
-
-  const result = task.render({
-    initial: () => 'init',
-    pending: () => 'pend',
-    complete: () => 'done',
-    error: () => 'err',
-  });
-  assert.equal(result, 'init');
+test('taskComplete rejects with the error', async () => {
+  const task = new Task(createMockHost(), { task: async () => { throw new Error('bad'); }, autoRun: false });
+  const run = task.run();
+  await assert.rejects(task.taskComplete, /bad/);
+  await run;
 });
 
-test('Task.render: calls pending handler when PENDING', async () => {
-  const host = createMockHost();
-  let resolve;
-  const blocker = new Promise((r) => { resolve = r; });
+test('taskComplete before any run resolves with the initial value', async () => {
+  const task = new Task(createMockHost(), { task: async () => 1, autoRun: false });
+  assert.equal(await task.taskComplete, undefined);
+});
 
-  const task = new Task(host, {
-    task: async () => { await blocker; return 'ok'; },
+test('onComplete and onError are called, and a throw from them is swallowed', async () => {
+  const log = [];
+  const ok = new Task(createMockHost(), {
+    task: async () => 'yes',
+    onComplete: (v) => { log.push(['complete', v]); throw new Error('ignored'); },
     autoRun: false,
   });
-
-  const runPromise = task.run();
-
-  // While the task is pending:
-  const result = task.render({
-    initial: () => 'init',
-    pending: () => 'loading',
-    complete: (v) => `done:${v}`,
-    error: (e) => `err:${e}`,
-  });
-  assert.equal(result, 'loading');
-
-  resolve();
-  await runPromise;
-});
-
-test('Task.render: calls complete handler with value when COMPLETE', async () => {
-  const host = createMockHost();
-  const task = new Task(host, {
-    task: async () => 'payload',
+  await ok.run();
+  const bad = new Task(createMockHost(), {
+    task: async () => { throw new Error('no'); },
+    onError: (e) => log.push(['error', e.message]),
     autoRun: false,
   });
-
-  await task.run();
-
-  const result = task.render({
-    complete: (v) => `got:${v}`,
-  });
-  assert.equal(result, 'got:payload');
+  await bad.run();
+  assert.deepEqual(log, [['complete', 'yes'], ['error', 'no']]);
+  assert.equal(ok.status, TaskStatus.COMPLETE);
 });
 
-test('Task.render: calls error handler when ERROR', async () => {
-  const host = createMockHost();
-  const task = new Task(host, {
-    task: async () => { throw new Error('oops'); },
-    autoRun: false,
-  });
-
-  await task.run();
-
-  const result = task.render({
-    error: (e) => `err:${e.message}`,
-  });
-  assert.equal(result, 'err:oops');
-});
-
-test('Task.render: returns undefined for omitted handlers', () => {
-  const host = createMockHost();
-  const task = new Task(host, { task: async () => {}, autoRun: false });
-
-  assert.equal(task.render({}), undefined);
-  assert.equal(task.render(), undefined);
-});
-
-// ---------------------------------------------------------------------------
-// Task.abort()
-// ---------------------------------------------------------------------------
-
-test('Task.abort: aborts the signal of the in-flight task', async () => {
-  const host = createMockHost();
-  let capturedSignal;
-  let resolve;
-  const blocker = new Promise((r) => { resolve = r; });
-
-  const task = new Task(host, {
-    task: async ({ signal }) => {
-      capturedSignal = signal;
-      await blocker;
-      return 'ok';
+test('a newer run supersedes an older one, aborting its signal', async () => {
+  const signals = [];
+  const resolvers = [];
+  const task = new Task(createMockHost(), {
+    task: (_args, { signal }) => {
+      signals.push(signal);
+      return new Promise((r) => resolvers.push(r));
     },
     autoRun: false,
   });
+  const first = task.run();
+  const second = task.run();
+  assert.equal(signals[0].aborted, true);
+  resolvers[1]('second');
+  resolvers[0]('first');
+  await Promise.all([first, second]);
+  assert.equal(task.value, 'second');
+});
 
-  const runPromise = task.run();
+test('abort(reason) aborts the pending run with that reason, and the rejection is ERROR', async () => {
+  let seen;
+  const task = new Task(createMockHost(), {
+    task: (_args, { signal }) => new Promise((_r, reject) => {
+      signal.addEventListener('abort', () => { seen = signal.reason; reject(signal.reason); });
+    }),
+    autoRun: false,
+  });
+  const run = task.run();
+  task.abort('stop');
+  await run;
+  assert.equal(seen, 'stop');
+  assert.equal(task.status, TaskStatus.ERROR);
+  assert.equal(task.error, 'stop');
+});
 
-  assert.equal(capturedSignal.aborted, false);
+test('abort() when nothing is pending is a no-op', () => {
+  const task = new Task(createMockHost(), { task: async () => 1, autoRun: false });
   task.abort();
-  assert.equal(capturedSignal.aborted, true);
-
-  resolve();
-  await runPromise;
+  assert.equal(task.status, TaskStatus.INITIAL);
 });
 
-test('Task: hostDisconnected aborts in-flight task', async () => {
-  const host = createMockHost();
-  let capturedSignal;
-  let resolve;
-  const blocker = new Promise((r) => { resolve = r; });
-
-  const task = new Task(host, {
-    task: async ({ signal }) => {
-      capturedSignal = signal;
-      await blocker;
-    },
-    autoRun: false,
-  });
-
-  const runPromise = task.run();
-
-  task.hostDisconnected();
-  assert.equal(capturedSignal.aborted, true);
-
-  resolve();
-  await runPromise;
+test('the task has no hostDisconnected, so removing the host does not abort it (Lit)', () => {
+  const task = new Task(createMockHost(), { task: async () => 1 });
+  assert.equal(typeof task.hostDisconnected, 'undefined');
 });
 
-// ---------------------------------------------------------------------------
-// Auto-run
-// ---------------------------------------------------------------------------
+test('render() picks the callback for the status, missing ones render undefined', async () => {
+  const task = new Task(createMockHost(), { task: async () => 'v', autoRun: false });
+  const r = {
+    initial: () => 'I', pending: () => 'P', complete: (v) => `C:${v}`, error: (e) => `E:${e}`,
+  };
+  assert.equal(task.render(r), 'I');
+  const run = task.run();
+  assert.equal(task.render(r), 'P');
+  await run;
+  assert.equal(task.render(r), 'C:v');
+  assert.equal(task.render({}), undefined);
+});
 
-test('Task: auto-run triggers when args change on hostUpdate', async () => {
-  const host = createMockHost();
-  let currentQuery = 'foo';
-  let runCount = 0;
-
-  const task = new Task(host, {
-    task: async (q) => { runCount++; return `result:${q}`; },
-    args: () => [currentQuery],
-    autoRun: true,
-  });
-
-  // autoRun on hostUpdate is browser-only behaviour (the task fires a fetch);
-  // simulate the browser so the controller's auto-run path runs in this Node
-  // test. Without a window, hostUpdate is a no-op (the SSR-safety guard).
+test('autoRun true runs in hostUpdate when args change, compared with Object.is', async () => {
   await withBrowser(async () => {
-    // First hostUpdate: prevArgs is null so it always runs.
+    let calls = 0;
+    let arg = NaN;
+    const task = new Task(createMockHost(), {
+      task: async () => { calls++; },
+      args: () => [arg],
+    });
     task.hostUpdate();
-    // run() is async, give it a tick to settle.
-    await new Promise((r) => setTimeout(r, 10));
-    assert.equal(runCount, 1);
-
-    // Same args: should not re-run.
+    await tick();
+    assert.equal(calls, 1);
     task.hostUpdate();
-    await new Promise((r) => setTimeout(r, 10));
-    assert.equal(runCount, 1);
-
-    // Changed args: should re-run.
-    currentQuery = 'bar';
+    await tick();
+    assert.equal(calls, 1, 'NaN equals NaN under Object.is');
+    arg = 1;
     task.hostUpdate();
-    await new Promise((r) => setTimeout(r, 10));
-    assert.equal(runCount, 2);
+    await tick();
+    assert.equal(calls, 2);
+    task.hostUpdated();
+    await tick();
+    assert.equal(calls, 2, 'hostUpdated does nothing for autoRun true');
   });
-
-  assert.equal(task.status, TaskStatus.COMPLETE);
-  assert.equal(task.value, 'result:bar');
 });
 
-test('Task: autoRun false does not run on hostUpdate', async () => {
-  const host = createMockHost();
-  let runCount = 0;
-
-  const task = new Task(host, {
-    task: async () => { runCount++; },
-    args: () => ['a'],
-    autoRun: false,
-  });
-
+test("autoRun 'afterUpdate' runs from hostUpdated, never hostUpdate", async () => {
   await withBrowser(async () => {
+    let calls = 0;
+    const task = new Task(createMockHost(), {
+      task: async () => { calls++; },
+      args: () => [1],
+      autoRun: 'afterUpdate',
+    });
     task.hostUpdate();
-    assert.equal(runCount, 0);
+    await tick();
+    assert.equal(calls, 0);
+    task.hostUpdated();
+    await tick();
+    assert.equal(calls, 1);
   });
 });
 
-test('Task: hostUpdate does NOT auto-run server-side (no fetch fired during SSR)', async () => {
-  // The SSR walker runs controllers' hostUpdate during the pre-render pass
-  // (issue #217). A Task must keep its INITIAL state and never invoke its task
-  // function server-side, so an SSR'd component that owns a Task ships the
-  // pending UI without firing a request.
-  const host = createMockHost();
-  let runCount = 0;
-  const task = new Task(host, {
-    task: async () => { runCount++; },
-    args: () => ['a'],
-    autoRun: true,
+test('autoRun false never runs on its own, and autoRun can be flipped later', async () => {
+  await withBrowser(async () => {
+    let calls = 0;
+    const task = new Task(createMockHost(), {
+      task: async () => { calls++; },
+      args: () => [1],
+      autoRun: false,
+    });
+    task.hostUpdate();
+    await tick();
+    assert.equal(calls, 0);
+    task.autoRun = true;
+    task.hostUpdate();
+    await tick();
+    assert.equal(calls, 1);
   });
-  // No window in this Node context: stands in for SSR.
+});
+
+test('a task with no args function never auto-runs', async () => {
+  await withBrowser(async () => {
+    let calls = 0;
+    const task = new Task(createMockHost(), { task: async () => { calls++; } });
+    task.hostUpdate();
+    await tick();
+    assert.equal(calls, 0);
+  });
+});
+
+test('a custom argsEqual decides whether args changed', async () => {
+  await withBrowser(async () => {
+    let calls = 0;
+    let obj = { id: 1 };
+    const task = new Task(createMockHost(), {
+      task: async () => { calls++; },
+      args: () => [obj],
+      argsEqual: deepArrayEquals,
+    });
+    task.hostUpdate();
+    await tick();
+    obj = { id: 1 };
+    task.hostUpdate();
+    await tick();
+    assert.equal(calls, 1, 'a structurally equal fresh object does not re-run');
+    obj = { id: 2 };
+    task.hostUpdate();
+    await tick();
+    assert.equal(calls, 2);
+  });
+});
+
+test('hostUpdate never runs the task server-side (no window)', async () => {
+  assert.equal(typeof globalThis.window, 'undefined');
+  let calls = 0;
+  const task = new Task(createMockHost(), { task: async () => { calls++; }, args: () => [1] });
   task.hostUpdate();
-  await new Promise((r) => setTimeout(r, 10));
-  assert.equal(runCount, 0, 'task function must not run server-side');
-  assert.equal(task.status, TaskStatus.INITIAL, 'SSR ships the INITIAL state');
+  task.hostUpdated();
+  await tick();
+  assert.equal(calls, 0);
+  assert.equal(task.status, TaskStatus.INITIAL);
 });
 
-// ---------------------------------------------------------------------------
-// Controller registration
-// ---------------------------------------------------------------------------
-
-test('Task: registers itself via addController', () => {
-  const host = createMockHost();
-  const task = new Task(host, { task: async () => {} });
-
-  assert.ok(host.controllers.includes(task));
+test('shallowArrayEquals / deepArrayEquals / deepEquals', () => {
+  assert.equal(shallowArrayEquals([1, 'a'], [1, 'a']), true);
+  assert.equal(shallowArrayEquals([{}], [{}]), false);
+  assert.equal(shallowArrayEquals([0], [-0]), false);
+  assert.equal(deepArrayEquals([{ a: [1, 2] }], [{ a: [1, 2] }]), true);
+  assert.equal(deepArrayEquals([{ a: 1 }], [{ a: 2 }]), false);
+  assert.equal(deepEquals(new Date(5), new Date(5)), true);
+  assert.equal(deepEquals(new Map([['k', 1]]), new Map([['k', 1]])), true);
+  assert.equal(deepEquals(new Set([1, 2]), new Set([2, 1])), true);
+  assert.equal(deepEquals(/a/g, /a/g), true);
+  assert.equal(deepEquals(/a/g, /a/i), false);
+  assert.equal(deepEquals([1], { 0: 1 }), false, 'different constructors are never equal');
 });
