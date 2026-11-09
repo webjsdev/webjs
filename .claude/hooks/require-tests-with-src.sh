@@ -100,7 +100,13 @@ EOF
   exit 2
 fi
 
-if [ "${WEBJS_ALLOW_TEST_REMOVAL:-}" != "1" ]; then
+# The removal override reads an inline prefix the same way as the bypass above.
+allow_removal="${WEBJS_ALLOW_TEST_REMOVAL:-}"
+if printf '%s' "$cmd" | grep -Eq '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*WEBJS_ALLOW_TEST_REMOVAL=1[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*git commit([^[:alnum:]-]|$)'; then
+  allow_removal=1
+fi
+
+if [ "$allow_removal" != "1" ]; then
   nums=$(git diff --cached --numstat -- \
     '**/test/**' '*.test.*' '*.spec.*' 'test/**' 2>/dev/null || true)
   if [ -n "$nums" ]; then
