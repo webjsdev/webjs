@@ -57,7 +57,7 @@ function capturingLogger() {
 {
   const { warns, logger } = capturingLogger();
   const h = await createRequestHandler({
-    appDir: makeApp({ elide: false, trailingSlash: 'never' }),
+    appDir: makeApp({ seed: false, trailingSlash: 'never' }),
     dev: false,
     logger,
   });

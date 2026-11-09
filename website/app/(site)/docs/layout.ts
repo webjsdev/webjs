@@ -48,7 +48,7 @@ const NAV_SECTIONS = [
       { href: '/docs/ssr', label: 'Server-Side Rendering' },
       { href: '/docs/progressive-enhancement', label: 'Progressive Enhancement' },
       { href: '/docs/optimistic-ui', label: 'Optimistic UI' },
-      { href: '/docs/elision', label: 'Display-Only Elision' },
+      { href: '/docs/elision', label: 'What Ships to the Browser' },
       { href: '/docs/styling', label: 'Styling' },
       { href: '/docs/suspense', label: 'Streaming & Suspense' },
       { href: '/docs/loading-states', label: 'Loading States' },

@@ -864,8 +864,8 @@ export function wrapHead(opts) {
   // above. `vendorPreloadTargets` still excludes core deliberately; this hint
   // is emitted from the head builder, not the vendor path.
   //
-  // Gated on the boot actually shipping something. A fully elided page ships no
-  // boot module and must not be handed a preload for a runtime it never loads
+  // Gated on the boot actually shipping something. A page with no component
+  // ships no boot module and must not be handed a preload for a runtime it never loads
   // (#780), which also keeps it off `global-error.{js,ts}`, whose document is
   // returned verbatim with no importmap and no boot script.
   if (opts.moduleUrls.length || lazyEntries) {

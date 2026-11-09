@@ -59,7 +59,7 @@ test('pagePreloadHints equals the two-call form and walks the graph once', async
     });
     let out;
     const oneWalk = countGets(graph, () => {
-      out = pagePreloadHints({ graph, appDir: dir, moduleUrls, eagerComponents: components, elidableComponents: undefined, lazyFiles: undefined, serverFiles: undefined });
+      out = pagePreloadHints({ graph, appDir: dir, moduleUrls, eagerComponents: components, lazyFiles: undefined, serverFiles: undefined });
     });
     assert.deepEqual(out.preloads, preloadsOld, 'same modulepreload list as the two-call form');
     assert.deepEqual([...out.vendorSpecifiers], [...vendorsOld], 'same vendor specifier set');
@@ -72,26 +72,17 @@ test('pagePreloadHints equals the two-call form and walks the graph once', async
   }
 });
 
-test('pagePreloadHints skips an elided component and the subtree only it reaches, vendor included', async () => {
+test('pagePreloadHints hints a component the page imports and the subtree it reaches, vendor included', async () => {
   const { dir, graph } = await fixture();
   try {
-    // The badge page imports the badge component; with the badge elided
-    // (its import is stripped from the served page), neither it nor the
-    // helper only it reaches may be hinted. A rendered elided component never
-    // reaches `eagerComponents` (componentPreloads drops it), so the root here
-    // is the page alone.
+    // Every component ships (#1686), so a component the page imports and the
+    // helper only it reaches are both hinted, with the helper's vendor.
     const out = pagePreloadHints({
       graph, appDir: dir, moduleUrls: ['/app/badge-page.ts'], eagerComponents: [],
-      elidableComponents: new Set([resolve(dir, 'components/badge.ts')]), lazyFiles: undefined, serverFiles: undefined,
+      lazyFiles: undefined, serverFiles: undefined,
     });
-    assert.deepEqual(out.preloads, [], 'nothing behind the elided component is hinted');
-    assert.deepEqual([...out.vendorSpecifiers], [], 'and its vendor is not reached');
-    const kept = pagePreloadHints({
-      graph, appDir: dir, moduleUrls: ['/app/badge-page.ts'], eagerComponents: [],
-      elidableComponents: undefined, lazyFiles: undefined, serverFiles: undefined,
-    });
-    assert.deepEqual(kept.preloads, ['/components/badge.ts', '/lib/badge-only.ts'], 'counterfactual: not elided, the subtree is hinted');
-    assert.deepEqual([...kept.vendorSpecifiers], ['only-vendor']);
+    assert.deepEqual(out.preloads, ['/components/badge.ts', '/lib/badge-only.ts']);
+    assert.deepEqual([...out.vendorSpecifiers], ['only-vendor']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -103,12 +94,12 @@ test('pagePreloadHints folds lazy files into a skip set memoized per lazy map', 
     const lazy = new Map([[resolve(dir, 'components/badge.ts'), ['lazy-badge']]]);
     // A lazy component is diverted to the lazy loader before it could reach
     // `eagerComponents`, so the root is the page that imports it.
-    const run = () => pagePreloadHints({ graph, appDir: dir, moduleUrls: ['/app/badge-page.ts'], eagerComponents: [], elidableComponents: undefined, lazyFiles: lazy, serverFiles: undefined });
+    const run = () => pagePreloadHints({ graph, appDir: dir, moduleUrls: ['/app/badge-page.ts'], eagerComponents: [], lazyFiles: lazy, serverFiles: undefined });
     const a = run();
     assert.deepEqual(a.preloads, [], 'the lazy subtree is not hinted');
     assert.ok(a.skip.has(resolve(dir, 'components/badge.ts')));
     assert.equal(run().skip, a.skip, 'the skip set is one object per lazy map');
-    assert.equal(run().skip, pagePreloadHints({ graph, appDir: dir, moduleUrls: [], eagerComponents: [], elidableComponents: undefined, lazyFiles: lazy, serverFiles: undefined }).skip);
+    assert.equal(run().skip, pagePreloadHints({ graph, appDir: dir, moduleUrls: [], eagerComponents: [], lazyFiles: lazy, serverFiles: undefined }).skip);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

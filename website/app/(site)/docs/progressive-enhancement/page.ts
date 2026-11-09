@@ -55,43 +55,26 @@ export default function ProgressiveEnhancement() {
       Notice the asymmetry: <em>showing</em> things works without JS, while <em>reacting</em> to user input or external events requires it. This is the right asymmetry for the web platform.
     </p>
 
-    <h2>Display-only components ship zero JavaScript</h2>
+    <h2>Server-only markup ships zero JavaScript</h2>
 
     <p>
-      WebJs takes the asymmetry one step further. A component whose <code>render()</code> is a pure function of its inputs, with no <code>@event</code> handler, no declared reactive property, no overridden lifecycle hook, no signal or <code>Task</code>, no <code>&lt;slot&gt;</code>, produces identical HTML whether or not its module ever reaches the browser. So the framework detects these statically and <strong>strips their import from the served page</strong>. The module is never downloaded, and any npm package imported only by display-only components (an icon set, a date formatter) drops out of the importmap.
+      WebJs takes the asymmetry one step further. A page, <code>layout</code>, loading template or boundary runs only on the server, like a Next.js server component, and never loads in the browser: the boot imports the components it renders and nothing else. A route that renders no interactive component therefore ships <em>zero</em> application JavaScript and is pure server-rendered HTML. It still navigates and submits forms through native browser behavior, which is exactly the progressive-enhancement baseline, and the client router rides along automatically as soon as any component loads <code>@webjsdev/core</code>.
+    </p>
+    <p>
+      So a page can import a <code>.server.ts</code> utility, a database client or a <code>node:</code> module freely, and anything that needs a browser belongs in a component. Every component in an ordinary file ships, as in Lit. Markup that only displays server data and never needs the browser is written as a <a href="/docs/components#server-only">server-only component</a> (a <code>WebComponent</code> in a <code>*.server.ts</code> file) or a function returning <code>html</code>, and neither ships. <code>webjs check</code> refuses the shapes that would silently do nothing (a component class defined in a page, an <code>@click</code> on a page's template, interactivity inside a <code>.server</code> component), and <code>webjs status</code> warns about browser-looking code in a page. The quick check: <code>page.ts</code> / <code>layout.ts</code> never appear in the browser's network tab. See <a href="/docs/elision">What Ships to the Browser</a>.
     </p>
 
     <p>
-      This is automatic. There is no opt-in keyword and no server-versus-client split to reason about: the same component file is isomorphic, the framework just notices that its browser half would be dead weight. The analysis is deliberately conservative, so anything it cannot prove inert keeps shipping normally. A false "ship" only costs a few bytes; it never breaks behavior.
+      It is the no-build framework's answer to dead-JavaScript-on-the-wire elimination, the one benefit React Server Components offer that a progressive-enhancement framework would otherwise lack, achieved here without a bundler or a Flight protocol: where code runs is decided by where you put it (see <a href="/docs/architecture">Architecture</a>).
     </p>
 
-    <p>
-      <strong>One boundary to know.</strong> Eliding a module means its <code>customElements.define</code> never runs in the browser, so the tag stays an un-upgraded element. That is invisible for a tag that exists only as server-rendered markup, but it would matter if shipping client code observes the registration. The framework <strong>detects the statically visible forms of that observation</strong>, a literal <code>customElements.whenDefined('the-tag')</code>, a CSS <code>the-tag:defined</code> rule, or an <code>instanceof TheClass</code> check anywhere in your code, and automatically ships the observed component instead of eliding it. You only need to act where static analysis cannot see the OBSERVATION: an observer that computes the tag it waits for, a <code>:defined</code> rule in an external stylesheet outside the module graph, or a consumer that reaches the element through a string selector. There, put <code>static interactive = true</code> on the observed component. A component whose OWN registration tag is computed is a different problem and that override does not help, because the scanner never sees the component at all; give it a literal tag. See <a href="/docs/elision">Display-Only Elision</a>. This is rare in idiomatic webjs, where display-only elements are read as plain server-rendered markup.
-    </p>
-
-    <p>
-      Run <code>webjs elision</code> to see the verdict for every module in your app, and <code>webjs elision --verify</code> to prove elision changed nothing your app serves. See <a href="/docs/elision">Display-Only Elision</a> for the full signal list and the two escape hatches.
-    </p>
-
-    <p>
-      Whole routes go further. A <code>page</code>, <code>layout</code>, loading template or boundary runs only on the server, like a Next.js server component, and never loads in the browser: the boot imports the components it renders and nothing else. A route that renders no interactive component therefore ships <em>zero</em> application JavaScript and is pure server-rendered HTML. It still navigates and submits forms through native browser behavior, which is exactly the progressive-enhancement baseline, and the client router rides along automatically as soon as any component loads <code>@webjsdev/core</code>.
-    </p>
-    <p>
-      So a page can import a <code>.server.ts</code> utility, a database client or a <code>node:</code> module freely, and anything that needs a browser belongs in a component. <code>webjs check</code> refuses the shapes that would silently do nothing (a component class defined in a page, an <code>@click</code> on a page's template, a component importing a page file), and <code>webjs elision</code> lists each route module with the components it loads. The quick check: <code>page.ts</code> / <code>layout.ts</code> never appear in the browser's network tab.
-    </p>
-
-    <p>
-      It is the no-build framework's answer to dead-JavaScript-on-the-wire elimination, the one benefit React Server Components offer that a progressive-enhancement framework would otherwise lack, achieved here without a bundler, a Flight protocol, or a new mental model. (And it really is just an optimization on isomorphic modules, not an RSC-style server/client split, see <a href="/docs/architecture">Architecture</a>.)
-    </p>
-
-    <code-block>// Elided: pure render, no interactivity. SSR'd HTML is the whole story,
-// the browser never downloads this module.
+    <code-block>// components/status-badge.server.ts: server-only, the browser never downloads it.
 class Badge extends WebComponent {
   render() { return html\`&lt;span class="badge"&gt;verified&lt;/span&gt;\`; }
 }
 Badge.register('status-badge');
 
-// Shipped: a single @click makes it interactive, so its JS is fetched.
+// components/my-counter.ts: an ordinary component, so its JS ships and hydrates.
 class Counter extends WebComponent {
   render() { return html\`&lt;button @click=\${() =&gt; this.inc()}&gt;+&lt;/button&gt;\`; }
 }
@@ -100,10 +83,10 @@ Counter.register('my-counter');</code-block>
     <h3>Where your npm packages run</h3>
     <p>An npm package reaches the browser when a module that loads on the client imports it (the boot script loads the components a page renders and <code>instrumentation-client.ts</code>, never the page or layout itself; loading a module runs its <code>import</code> statements). So:</p>
     <ul>
-      <li><strong>Server-only dependency</strong> (a date library you only use during SSR): use it in the page, layout or a <code>.server.{js,ts}</code> file, none of which ever loads in the browser. It also drops automatically if it is used only inside a display-only component that gets elided.</li>
+      <li><strong>Server-only dependency</strong> (a date library you only use during SSR): use it in the page, layout or a <code>.server.{js,ts}</code> file, none of which ever loads in the browser. A server-only component (in a <code>*.server.ts</code> file) may import it too.</li>
       <li><strong>Client-only package</strong> (analytics, a polyfill): import it from <code>instrumentation-client.ts</code> for the whole app, or from the component that needs it. A side-effect import in a page or layout runs only on the server, so it never reaches the browser (<code>webjs doctor</code> warns about one). You do not need a <code>'use client'</code>-style annotation, the import in a module the browser loads is the signal.</li>
     </ul>
-    <p>The distinction the framework draws is "does this module do top-level client work?", not "does it import an npm package." A package used inside a page's body never executes on the client, and one used only in a display-only component's <code>render</code> rides away when that component is elided.</p>
+    <p>The distinction is where the importing module runs, not whether it imports an npm package. A package used inside a page's body or a server-only component never executes on the client, and one an ordinary component imports always does.</p>
 
     <h2>The design rules</h2>
 

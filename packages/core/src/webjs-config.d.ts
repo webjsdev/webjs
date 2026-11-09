@@ -278,13 +278,6 @@ export interface WebjsCspConfig {
  */
 export interface WebjsConfig {
   /**
-   * Display-only and inert-route dead-JS elision switch. Default `true`.
-   * Set to `false` to ship every module's JS app-wide. The `WEBJS_ELIDE`
-   * env override wins over this.
-   */
-  elide?: boolean;
-
-  /**
    * SSR action-result seeding switch (#472). Default `true`. When on, a
    * `'use server'` action's SSR result is serialized into the page so an
    * `async render()` component does not re-fetch it over RPC on hydration. Set

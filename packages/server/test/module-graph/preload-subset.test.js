@@ -96,10 +96,10 @@ test('dep reached via BOTH a client path and a server path stays preloaded + ser
   assert.ok(servable.has(f('lib/shared.ts')), 'and servable');
 });
 
-test('elided components are dropped from preloads (skip), still a subset', () => {
+test('skipped files are dropped from preloads, still a subset', () => {
   const g = graphOf({
     'page.ts': ['components/badge.ts', 'components/counter.ts'],
-    'components/badge.ts': ['lib/fmt.ts'], // display-only, elided
+    'components/badge.ts': ['lib/fmt.ts'], // in the skip set
     'components/counter.ts': [],
     'lib/fmt.ts': [],
   });
@@ -107,10 +107,10 @@ test('elided components are dropped from preloads (skip), still a subset', () =>
   const skip = new Set([f('components/badge.ts')]);
   const preloads = preloadSet(g, entries, skip);
   const servable = reachableFromEntries(g, entries.map(f), APP);
-  assertSubset(preloads, servable, 'elided');
-  assert.ok(!preloads.has(f('components/badge.ts')), 'elided component not preloaded');
-  // The skip prunes the elided component AND its now-unreachable dep.
-  assert.ok(!preloads.has(f('lib/fmt.ts')), 'elided component dep not preloaded');
+  assertSubset(preloads, servable, 'skipped');
+  assert.ok(!preloads.has(f('components/badge.ts')), 'skipped file not preloaded');
+  // The skip prunes the skipped file AND its now-unreachable dep.
+  assert.ok(!preloads.has(f('lib/fmt.ts')), 'skipped file dep not preloaded');
 });
 
 test('counterfactual: a preload pointing outside the servable set is detected', () => {

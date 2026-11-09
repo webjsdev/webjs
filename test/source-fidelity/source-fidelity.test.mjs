@@ -9,9 +9,10 @@
  *   - TypeScript type-strip blanks type syntax to whitespace IN PLACE, so the
  *     served bytes have the same length and every code character keeps its
  *     exact (line, column).
- *   - Elision swaps an elidable component's side-effect import for a comment
- *     on the SAME line (no newline added or removed), so line numbers are
- *     preserved for every token; only the import's own line changes.
+ *   - A side-effect import of a `static lazy` component is swapped for a
+ *     lazy-loader registration on the SAME line (no newline added or removed),
+ *     so line numbers are preserved for every token; only the import's own
+ *     line changes.
  *   - Import versioning (#369, PROD only) appends `?v=<hash>` to a same-origin
  *     relative import specifier, again on the SAME line, so it shifts columns
  *     only on that import statement's own line and never moves a line. DEV
@@ -102,9 +103,9 @@ test('a file with no types is served verbatim (byte-for-byte)', async () => {
   assert.equal(s, a, 'a file with nothing to transform must be served byte-identical to its source');
 });
 
-test('elision + versioning preserve line numbers: only import lines change, all on their own line', async () => {
-  // PROD serve. Three same-line transforms can touch THIS file: the badge
-  // import is elided (-> comment), and the two other same-origin relative
+test('lazy deferral + versioning preserve line numbers: only import lines change, all on their own line', async () => {
+  // PROD serve. Three same-line transforms can touch THIS file: the lazy badge
+  // import is deferred (-> a lazy-loader registration), and the two other same-origin relative
   // imports (typed.ts / plain.ts) are versioned (-> `?v=<hash>` appended). All
   // three stay on their own line, so line numbers never shift; every non-import
   // line is byte-identical, which is the debug-without-sourcemap promise. The
@@ -117,8 +118,8 @@ test('elision + versioning preserve line numbers: only import lines change, all 
   for (let i = 0; i < al.length; i++) {
     const authoredLine = al[i];
     if (/^import .*badge\.ts/.test(authoredLine)) {
-      // Elided: the side-effect import becomes the elision comment on its line.
-      assert.match(sl[i], /webjs: elided display-only component/, `line ${i + 1} is the elision comment`);
+      // Deferred: the side-effect import becomes a lazy-loader registration on its line.
+      assert.match(sl[i], /^import\('@webjsdev\/core\/lazy-loader'\)\.then\(.*observeLazy\(.*"display-badge"/, `line ${i + 1} is the lazy-loader registration`);
     } else if (/^import '\.\/(typed|plain)\.ts'/.test(authoredLine)) {
       // Versioned: same import, on the same line, with `?v=<hash>` appended.
       assert.match(sl[i], /^import '\.\/(typed|plain)\.ts\?v=[0-9a-f]{6,}'/, `line ${i + 1} is the versioned import`);

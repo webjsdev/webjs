@@ -456,9 +456,8 @@ export async function refreshPage(mode) {
   // browser does NOT download: a page gaining or losing a `Suspense(...)`
   // boundary is the plain case, since rendering one does not by itself make the
   // page client-effecting, so it classifies `page` rather than a reload. An edit
-  // to anything that SHIPS reloads instead and never arrives, which covers a
-  // `loading.{js,ts}` either direction (it can never be elided, so it is always
-  // shipped, and a brand-new one is in no graph at all).
+  // to anything that SHIPS reloads instead and never arrives, and so does a
+  // brand-new `loading.{js,ts}`, which is in no graph at all.
   clearPrefetchRefused();
   try {
     const res = await performNavigation(location.href, false, null, { refresh: mode === 'shell' ? 'shell' : 'page' });

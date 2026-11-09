@@ -10,7 +10,7 @@ import { importAliasBrowserEntries } from '../../src/importmap.js';
 /**
  * `#` path-alias imports (#555). The alias is Node's native `package.json
  * "imports"` subpath map; webjs expands it inside `resolveImport` so the module
- * graph, auth gate, elision, and the server-import boundary all see the REAL
+ * graph, auth gate, boot frontier, and the server-import boundary all see the REAL
  * path (an alias must not launder a `.server.ts` past those checks), and the
  * browser importmap scope is derived from the SAME map so SSR and the browser
  * agree.

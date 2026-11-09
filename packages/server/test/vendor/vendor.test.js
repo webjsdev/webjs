@@ -300,8 +300,8 @@ test('scanBareImports: a specifier reachable only through a dynamic import is re
   await rm(dir, { recursive: true, force: true });
 });
 
-test('reachedBareImports: the elision skip set prunes a specifier and the subtree behind it', async () => {
-  // badge (elided) imports dayjs plus a relative ./fmt.ts that imports fmt-pkg;
+test('reachedBareImports: the skip set prunes a specifier and the subtree behind it', async () => {
+  // badge (skipped) imports dayjs plus a relative ./fmt.ts that imports fmt-pkg;
   // counter (shipping) imports zod and the same shared-pkg as badge.
   const dir = await makeVendorApp('skip', {
     'app/page.ts': `import '../components/badge.ts';\nimport '../components/counter.ts';\nexport default function Page() { return null; }`,
@@ -317,8 +317,8 @@ test('reachedBareImports: the elision skip set prunes a specifier and the subtre
   const skip = new Set([join(dir, 'components', 'badge.ts')]);
   const found = reachedBareImports(graph, entries, dir, skip);
 
-  assert.ok(!found.has('dayjs'), 'dayjs is only in the elided component, should drop');
-  assert.ok(!found.has('fmt-pkg'), 'the subtree behind an elided component drops with it');
+  assert.ok(!found.has('dayjs'), 'dayjs is only in the skipped file, should drop');
+  assert.ok(!found.has('fmt-pkg'), 'the subtree behind a skipped file drops with it');
   assert.ok(found.has('zod'), 'zod is in a shipping component, should stay');
   assert.ok(found.has('shared-pkg'), 'a dep shared with a shipping file is retained');
 

@@ -4,15 +4,8 @@ import '#components/like-button.ts';
 import { COMPONENT_SAMPLE, TOGGLE_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE, USAGE_SAMPLE, CORE_SOURCE_SAMPLE, SERVER_SOURCE_SAMPLE } from '#lib/samples.ts';
 import { DOCS_START_PATH, GALLERY_URL, GH_URL, NEW_TAB, SAME_AS } from '#lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
-// HTML), but it does ship to the client as a small dead module: the page loads
-// in the browser to register copy-cmd, and that pulls in its
-// top-level imports. This is an accepted cost. It cannot move to a .server.ts
-// util (a server-only stub throws at load, and this is a page top-level import)
-// and it is not elision-eligible (only display-only components are elided, and
-// an elision-eligible component cannot take a reactive property, so routing the
-// code through one would just duplicate the raw sample in the HTML). Its only
-// dependency, html, is already loaded by the components, so the real cost is a
-// single tiny module fetch.
+// HTML). A page never loads in the browser, so this import never reaches it
+// either; the boot loads only the components the page renders.
 import { highlight } from '#lib/utils/highlight.ts';
 import { BTN_PRIMARY, BTN_GHOST, INSTALL} from '#lib/design/recipes.ts';
 import { ctaPanel } from '#lib/ui/cta-panel.ts';
@@ -189,7 +182,7 @@ export const metadata = {
 // keep working with JavaScript disabled, because the server sends real HTML.
 // The chips run in the order the section argues: what a component IS, then
 // what the browser does with it, then what that buys. The last two are the
-// progressive-enhancement and elision claims, which the section keeps even
+// progressive-enhancement and zero-JS-pages claims, which the section keeps even
 // though its heading no longer leads with them, because they are consequences
 // of the component model rather than a separate topic, and the P.S. dare below
 // invites the reader to check the fourth one in their own browser.
@@ -200,10 +193,10 @@ export const metadata = {
 // which discards the server's DOM and rebuilds from the compiled template.
 // What is absent is the whole-tree walk. Hydration is scheduled per element by
 // the browser's own custom-element upgrade, pages and layouts never hydrate at
-// all, and elided components never ship. Anything shorter ("no hydration
+// all, and server-only components never ship. Anything shorter ("no hydration
 // runtime", "no hydration overhead") reads as zero cost and is refuted by one
 // look at the network tab.
-const PE_CHIPS = ['Standard custom elements', 'No virtual DOM', 'Server-rendered, then upgraded', 'No whole-page hydration', 'Reads and submits before JS', 'Display components ship 0 KB'];
+const PE_CHIPS = ['Standard custom elements', 'No virtual DOM', 'Server-rendered, then upgraded', 'No whole-page hydration', 'Reads and submits before JS', 'Pages and layouts ship 0 KB'];
 
 // The hero stage shows this source beside the very component it declares,
 // running. Keep the two in step: the panel to its right is a real
@@ -647,9 +640,9 @@ export default function LandingPage() {
                SHIP, and there are two ways a file is not one of them. The action
                window on the left never reaches the browser at all (invariant 1),
                which the lede covers with "the action becomes an RPC call". And
-               an elided display-only component is not served either, which the
-               chips in the section above claim and this section does not mention
-               on purpose, since the reader has just read it. Do not widen the
+               a page, layout or server-only component is not served either,
+               which the chips in the section above claim and this section does
+               not mention on purpose, since the reader has just read it. Do not widen the
                lede to "every file you write is served", which both of those
                refute, and do not answer the tension by softening the heading:
                it is the same sentence /why-webjs uses for its first reason card,
@@ -719,8 +712,8 @@ export default function LandingPage() {
                skip the build step" and that was false of nearly every card, then
                and now. Architecture, types, auth, and the caching / rate-limit /
                storage / WebSocket set all exist in frameworks that DO build; only
-               elision has even a weak link, being per-module because there is no
-               bundler to tree-shake instead. It also fought the header, which
+               the zero-JS route has even a weak link, being per-module because
+               there is no bundler to tree-shake instead. It also fought the header, which
                promises the cards are what the BROWSER does not give you, so a
                reader hunting the build-step connection in "Auth is not a side
                quest" found nothing. The organising principle is the header's, not
@@ -767,10 +760,9 @@ export default function LandingPage() {
                every framework and argues nothing.
 
                Know what this grid no longer covers, because nothing else on the
-               page covers it either. ELISION lost this slot: the chips under
-               the web-components section above still assert it ("Display
-               components ship 0 KB") but nothing explains it any more, and it is
-               the one claim here no other framework can make. STREAMING is down
+               page covers it either. ZERO-JS PAGES lost this slot: the chips
+               under the web-components section above still assert it ("Pages and
+               layouts ship 0 KB") but nothing explains it any more. STREAMING is down
                to a word in the scaffold inventory near the bottom. The CLIENT
                ROUTER is claimed nowhere on the landing page at all. If a slot
                ever frees up, this is the note that says which to bring back. -->

@@ -8,7 +8,7 @@
  * `window.__WEBJS_CLIENT_ROUTER__=false` flag BEFORE the deferred boot module
  * so the bundle's module-end auto-enable skips.
  *
- * A module-level switch (mirroring `setBasePath` / `setElisionFingerprint`) so
+ * A module-level switch (mirroring `setBasePath` / `setServeFingerprint`) so
  * no opt has to thread through every render path. Default true keeps every
  * existing app and test byte-identical.
  *

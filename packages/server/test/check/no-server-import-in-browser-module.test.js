@@ -39,8 +39,7 @@ const AUTH_SERVER = `export async function auth() {
 }
 `;
 
-// A genuinely interactive component (reactive primitive import forces it to
-// ship), so a page that imports it is NOT elided.
+// A shipping component (every component in an ordinary file ships, #1686).
 const INTERACTIVE_COMPONENT = `import { WebComponent } from '@webjsdev/core';
 import { signal } from '@webjsdev/core';
 
@@ -54,14 +53,15 @@ CrispWorkspace.register('crisp-workspace');
 test('RULES enumerates no-server-import-in-browser-module', () => {
   const r = RULES.find((r) => r.name === RULE);
   assert.ok(r, 'rule must be listed in RULES');
-  assert.ok(/elid/i.test(r.description), 'description should mention elision');
+  assert.ok(/\.server` file never loads in the browser/.test(r.description),
+    'description should exempt a server-only component');
 });
 
-// (a) Display-only page that imports auth and IS elided -> NO violation.
-// The page does no client work, so the framework elides it (its server import
-// is stripped from the served source). This is the legitimate pattern and the
-// single biggest false-positive risk; it must pass.
-test('elided display-only page importing auth is NOT flagged', async () => {
+// (a) A page that imports auth -> NO violation. A page runs only on the
+// server and never ships (#1686), so its server import never reaches the
+// browser. This is the legitimate pattern and the single biggest
+// false-positive risk; it must pass.
+test('a page importing auth is NOT flagged', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'app/dashboard/page.ts': `import { auth } from '../../lib/auth.server.ts';
@@ -73,7 +73,7 @@ export default async function DashboardPage() {
   });
   try {
     const violations = await checkConventions(appDir);
-    assert.equal(find(violations).length, 0, 'an elided display-only page must not be flagged');
+    assert.equal(find(violations).length, 0, 'a page never ships, so it must not be flagged');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -231,9 +231,7 @@ export async function GET() { await auth(); return new Response('ok'); }
 });
 
 // Transitive (indirect) server import through a non-server helper still fires,
-// and the chain hint shows the indirection. The page imports a plain helper
-// that imports the server module; eliding logic still has the page shipping
-// because it also registers a component.
+// and the chain hint shows the indirection.
 test('indirect server import through a non-server helper IS flagged', async () => {
   // A shipping component imports a plain helper that imports the server
   // module; the chain hint shows the indirection.
@@ -296,19 +294,16 @@ export default function Home() { return '<user-badge></user-badge>'; }
     const hits = find(violations, 'user-badge.ts');
     assert.equal(hits.length, 1, 'a shipping component importing a server module must be flagged');
     assert.equal(hits[0].message.includes('component'), true, 'message identifies it as a component');
+    assert.match(hits[0].fix, /\*\.server\.ts. file \(without .'use server'.\)/, 'the fix offers the server-only component option');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
 
-// error.ts / loading.ts / not-found.ts ALSO ship to the browser, and unlike
-// pages + layouts they are never elided (the dev server's
-// computeBrowserBoundFiles adds them as browser-bound entries unconditionally;
-// only elidable-component imports are ever stripped). So a server-only import
-// reaching one of them is a real throw-at-load browser crash the rule must
-// catch. A page+layout-only candidate set would miss it (it did: 0 hits before
-// this). The fixtures pair each boundary with a sibling page so the router
-// attaches it (error/loading attach to a page in the same chain).
+// error.ts / loading.ts / not-found.ts run only on the server, like pages and
+// layouts (#1686), so a server-only import reaching one of them never loads in
+// the browser and is not flagged. The fixtures pair each boundary with a
+// sibling page so the router attaches it.
 test('an error boundary importing a server module is NOT flagged (#1686)', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
@@ -508,28 +503,6 @@ export default async function DocsPage() {
   }
 });
 
-// With elision disabled (webjs.elide === false), EVERY module ships, so even a
-// display-only page importing a server module is flagged: with elision off the
-// page really does ship its server import. This guards the elide-flag wiring.
-test('with elision disabled, a page importing auth is still NOT flagged (#1686)', async () => {
-  const appDir = await makeApp({
-    'package.json': JSON.stringify({ name: 'app', webjs: { elide: false } }),
-    'lib/auth.server.ts': AUTH_SERVER,
-    'app/dashboard/page.ts': `import { auth } from '../../lib/auth.server.ts';
-export default async function DashboardPage() {
-  const session = await auth();
-  return \`<h1>Hello \${session.user ?? 'guest'}</h1>\`;
-}
-`,
-  });
-  try {
-    const violations = await checkConventions(appDir);
-    assert.deepEqual(find(violations), [], 'elision off ships every component, never a page');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
 // A page with no app/-routable structure (no app/ dir) is not analysed: the
 // rule degrades to a no-op rather than throwing or flagging a bare lib.
 test('an app with no app/ directory is not analysed', async () => {
@@ -572,10 +545,10 @@ export default async function ProjectPage() {
   }
 });
 
-// The complement: a #-aliased server import into an ELIDED display-only page is
-// NOT flagged (the framework strips it), proving the alias resolves through to
-// the SAME elision verdict a relative import gets, not a blanket pass/fail.
-test('a # alias server import into an elided display-only page is NOT flagged', async () => {
+// The complement: a #-aliased server import into a page is NOT flagged (a page
+// never ships), proving the alias resolves through to the SAME verdict a
+// relative import gets, not a blanket pass/fail.
+test('a # alias server import into a page is NOT flagged', async () => {
   const appDir = await makeApp({
     'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }),
     'lib/auth.server.ts': AUTH_SERVER,
@@ -588,7 +561,7 @@ export default async function DashboardPage() {
   });
   try {
     const violations = await checkConventions(appDir);
-    assert.equal(find(violations).length, 0, 'an elided display-only page is not flagged, alias or not');
+    assert.equal(find(violations).length, 0, 'a page is not flagged, alias or not');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -601,8 +574,8 @@ export default async function DashboardPage() {
 // '#db/schema.server.ts'` in a shipping component: the greppable source confirms
 // the import is safe, yet the check fired, sending them into a needless
 // `types.ts`-duplication rewrite. The component ships (reactive `signal` import),
-// so this is NOT an elision pass, it is the type-only edge being correctly
-// dropped from the module graph.
+// so the pass comes from the type-only edge being correctly dropped from the
+// module graph.
 test('a TYPE-ONLY import of a server module from a shipping component is NOT flagged (#805)', async () => {
   const appDir = await makeApp({
     'db/schema.server.ts': `export type Todo = { id: number; title: string; completed: boolean };
@@ -691,9 +664,9 @@ test('message prints the full import chain and names the types-module fix (#804)
 test('a page whose helper does module-scope client work is NOT flagged (#1686)', async () => {
   // Found by an agent building an app: a page shipped because a plain helper it
   // imported did client work at module scope, and the message blamed the page,
-  // so the agent moved the wrong code. The elision verdict knows the blocker, so
-  // the message names it. (The agent's helper built an Intl formatter, which no
-  // longer ships at all; see the next test.)
+  // so the agent moved the wrong code. A page never ships now (#1686), so
+  // neither the helper nor the server import loads. (The agent's helper built an
+  // Intl formatter; see the next test.)
   const dir = await makeApp({
     'app/layout.ts': "import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html`<html><body>${children}</body></html>`; }\n",
     'lib/format.ts': "export const chan = new BroadcastChannel('events');\nexport const label = (d: Date) => d.toISOString();\n",

@@ -83,7 +83,7 @@ const FAQ = [
   {
     question: 'Does a WebJs app work without JavaScript?',
     answer:
-      'Yes, for everything that does not require interactivity. Pages and components are server-rendered to HTML, so content reads, links navigate, and forms submit with JavaScript disabled. Scripts are then layered on per interactive behaviour rather than per component, and a display-only component ships no JavaScript at all.',
+      'Yes, for everything that does not require interactivity. Pages and components are server-rendered to HTML, so content reads, links navigate, and forms submit with JavaScript disabled. Scripts are then layered on per interactive behaviour rather than per component, and a page, layout or server-only component ships no JavaScript at all.',
   },
   {
     question: 'What can you build with WebJs?',

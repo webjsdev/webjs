@@ -71,25 +71,24 @@ let _appDir = '';
 let _coreDir = '';
 
 /**
- * A fingerprint of the current elision verdict (the elidable-component +
- * inert-route set), folded into an APP MODULE's hash. An app module's SERVED
- * body is not its raw source: `dev.js` runs `elideImportsFromSource` over it,
- * stripping a side-effect import of a display-only component. That strip is a
- * property of the IMPORTED component's verdict, not of the importer's own
- * bytes, so when a component flips display-only <-> interactive the importer's
- * served body changes while its source is byte-identical. Hashing the source
- * alone would keep the same `?v`, and a returning client would hold the stale
- * immutable copy (the now-interactive component never imported, so never
- * hydrated) for the full immutable TTL. Folding the verdict fingerprint into
- * the hash busts every app module's url on a verdict change, so the stale-copy
- * window cannot open. Empty when no module is elidable (then an app module's
- * hash is exactly `sha256(bytes)`), and only mixed for files under `_appDir`
- * (core / public assets are never elision-transformed). Set by `dev.js`'s
- * `ensureReady` after `analyzeElision`, re-set on every rebuild.
+ * A fingerprint of the current `static lazy` component set, folded into an
+ * APP MODULE's hash. An app module's SERVED body is not its raw source:
+ * `dev.js` runs `deferLazyImportsFromSource` over it, rewriting a side-effect
+ * import of a lazy component into a lazy-loader registration. That rewrite is
+ * a property of the IMPORTED component, not of the importer's own bytes, so
+ * when a component gains or loses `static lazy` the importer's served body
+ * changes while its source is byte-identical. Hashing the source alone would
+ * keep the same `?v`, and a returning client would hold the stale immutable
+ * copy for the full immutable TTL. Folding the fingerprint into the hash busts
+ * every app module's url on a change, so the stale-copy window cannot open.
+ * Empty when no component is lazy (then an app module's hash is exactly
+ * `sha256(bytes)`), and only mixed for files under `_appDir` (core / public
+ * assets are never rewritten at serve time). Set by `dev.js`'s `ensureReady`
+ * after the boot analysis, re-set on every rebuild.
  *
  * @type {string}
  */
-let _elisionFp = '';
+let _serveFp = '';
 
 /**
  * Memoized per-file content hash. Keyed by absolute path. Cleared on the
@@ -118,20 +117,20 @@ export function setAssetRoots(opts) {
 }
 
 /**
- * Set the elision-verdict fingerprint folded into app-module hashes (see
- * `_elisionFp`). A no-op when the value is unchanged; on a change it clears the
- * hash cache so every app module re-hashes against the new verdict. `dev.js`
- * calls this from `ensureReady` after `analyzeElision` (and again on each
- * rebuild), passing a stable digest of the elidable-component + inert-route set
- * (or `''` when nothing is elidable).
+ * Set the lazy-component fingerprint folded into app-module hashes (see
+ * `_serveFp`). A no-op when the value is unchanged; on a change it clears the
+ * hash cache so every app module re-hashes against the new set. `dev.js`
+ * calls this from `ensureReady` after the boot analysis (and again on each
+ * rebuild), passing a stable digest of the lazy-component set (or `''` when
+ * no component is lazy).
  *
  * @param {string} fp
  * @returns {void}
  */
-export function setElisionFingerprint(fp) {
+export function setServeFingerprint(fp) {
   const next = fp || '';
-  if (next === _elisionFp) return;
-  _elisionFp = next;
+  if (next === _serveFp) return;
+  _serveFp = next;
   _hashCache.clear();
   // Past the early return on purpose: an unchanged fingerprint moves no hash,
   // so the epoch-keyed memos over those hashes stay valid (#1644).
@@ -183,8 +182,8 @@ export function assetHashFor(absPath) {
   try {
     const bytes = readFileSync(absPath);
     const h = createHash('sha256').update(bytes);
-    // An app module's served body is elision-transformed, so fold the verdict
-    // fingerprint in (see `_elisionFp`). Core and `public/` files are never
+    // An app module's served body is rewritten at serve time, so fold the
+    // fingerprint in (see `_serveFp`). Core and `public/` files are never
     // transformed, so they hash over their bytes alone, which the two
     // exclusions below enforce rather than merely assume. Empty fp leaves an
     // app module's hash at exactly `sha256(bytes)`.
@@ -200,18 +199,18 @@ export function assetHashFor(absPath) {
     //     in this monorepo, where the workspace symlink lands outside, which
     //     is exactly why no in-repo test ever caught it.
     //
-    // Neither file set is elision-transformed (core is served verbatim by
-    // `fileResponse`), so folding the verdict in buys nothing and costs
-    // correctness: any deploy that merely flips an UNRELATED component between
-    // elidable and interactive would move their urls, re-downloading the whole
+    // Neither file set is rewritten (core is served verbatim by
+    // `fileResponse`), so folding the fingerprint in buys nothing and costs
+    // correctness: any deploy that merely flips an UNRELATED component's
+    // `static lazy` would move their urls, re-downloading the whole
     // core runtime plus every marked stylesheet, image, and script even though
     // not one of those bytes changed. That is the precise cost a content hash
     // exists to avoid.
-    if (_elisionFp && _appDir && absPath.startsWith(_appDir + sep)
+    if (_serveFp && _appDir && absPath.startsWith(_appDir + sep)
         && !absPath.startsWith(join(_appDir, 'public') + sep)
         && !(_coreDir && absPath.startsWith(_coreDir + sep))) {
       h.update('\0');
-      h.update(_elisionFp);
+      h.update(_serveFp);
     }
     const hash = h.digest('hex').slice(0, HASH_LEN);
     _hashCache.set(absPath, hash);
@@ -465,7 +464,7 @@ function normalizeSpecToResolved(spec, abs) {
  *
  * The appended hash is `assetHashFor(resolvedTarget)`, the exact value
  * `withAssetHash` computes for the modulepreload href of the same file (same
- * absolute path -> same hash, elision-fingerprint fold included), so the two
+ * absolute path -> same hash, serve-fingerprint fold included), so the two
  * URLs are byte-identical by construction.
  *
  * The fetched URL is made to equal the preload href even when the specifier's
@@ -495,11 +494,11 @@ function normalizeSpecToResolved(spec, abs) {
  * splicing `?v` into the served string's value).
  *
  * A pure pass-through when fingerprinting is disabled (dev, or roots unset), so
- * dev output stays byte-identical. Runs AFTER `elideImportsFromSource` in the
- * serve path, so an elided side-effect import (already replaced by a comment)
- * is not matched.
+ * dev output stays byte-identical. Runs AFTER `deferLazyImportsFromSource` in
+ * the serve path, so a deferred side-effect import (already replaced by a
+ * lazy-loader registration that carries its own versioned url) is not matched.
  *
- * @param {string} source       the served module source (post-elision, type-stripped if TS)
+ * @param {string} source       the served module source (lazy imports deferred, type-stripped if TS)
  * @param {string} importerAbs  absolute path of the module being served
  * @returns {string}
  */

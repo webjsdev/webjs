@@ -503,3 +503,35 @@ export function matchApi(table, pathname) {
   }
   return null;
 }
+
+/**
+ * The URL paths of every STATIC page route in a route table, sorted and
+ * deduped. A DYNAMIC route is excluded rather than guessed at: listing it would
+ * mean inventing param values. A route group `(group)` and a `_private` segment
+ * drop out of the URL, and the root `.` is `/`.
+ *
+ * @param {{ pages?: Array<{ routeDir?: string, paramNames?: string[] }> } | undefined} table  a `buildRouteTable(appDir)` result
+ * @returns {string[]}
+ */
+export function staticPageRoutes(table) {
+  const out = new Set();
+  for (const r of table?.pages || []) {
+    if (r.paramNames && r.paramNames.length) continue;
+    out.add(staticRoutePath(r.routeDir));
+  }
+  return [...out].sort();
+}
+
+/**
+ * `blog` -> `/blog`, the root `.` -> `/`. Route groups and `_private` segments
+ * drop, the same normalization `buildRouteTable` uses for matching.
+ * @param {string|undefined} routeDir
+ * @returns {string}
+ */
+function staticRoutePath(routeDir) {
+  if (!routeDir || routeDir === '.') return '/';
+  const segs = routeDir
+    .split('/')
+    .filter((s) => !(s.startsWith('(') && s.endsWith(')')) && !s.startsWith('_'));
+  return segs.length ? '/' + segs.join('/') : '/';
+}

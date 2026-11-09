@@ -114,7 +114,7 @@ test('a shipping component still preloads its transitive relative-helper app mod
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import { fmt } from './fmt.js';\n` +
-      `class XClock extends WebComponent {\n  static interactive = true;\n  render() { return html\`<b>\${fmt(1)}</b>\`; }\n}\n` +
+      `class XClock extends WebComponent {\n  render() { return html\`<b>\${fmt(1)}</b>\`; }\n}\n` +
       `XClock.register('x-clock');\n`,
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +

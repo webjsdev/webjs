@@ -18,7 +18,7 @@
  * Asserts, on whichever runtime executes it: a page that ships a boot module
  * carries exactly one core modulepreload whose href equals the importmap
  * target byte for byte and which is emitted ahead of the app module hints, and
- * a fully elided page that ships no boot module carries none.
+ * a page with no component, which ships no boot module, carries none.
  */
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -100,18 +100,18 @@ assert.ok(
   `${runtime}: the core hint must lead the preload run, got ${links[0]}`,
 );
 
-// 3. A fully elided page ships no boot module, so it must not be handed a
+// 3. A page with no component ships no boot module, so it must not be handed a
 // preload for a runtime it never loads (the #780 no-over-fetch rule, which is
 // also what keeps the hint off a verbatim `global-error` document).
-const elided = await renderHome(
-  'elided',
+const zeroJs = await renderHome(
+  'zero-js',
   `import { html } from ${JSON.stringify(HTML_URL)};\n` +
   `export default () => html\`<main>static</main>\`;\n`,
 );
-assert.ok(!/<script type="module"/.test(elided), `${runtime}: the elided page must ship no boot script`);
-const elidedTarget = coreTarget(elided);
+assert.ok(!/<script type="module"/.test(zeroJs), `${runtime}: the component-free page must ship no boot script`);
+const zeroJsTarget = coreTarget(zeroJs);
 assert.ok(
-  !modulepreloadLinks(elided).some((l) => elidedTarget && l.includes(`href="${elidedTarget}"`)),
+  !modulepreloadLinks(zeroJs).some((l) => zeroJsTarget && l.includes(`href="${zeroJsTarget}"`)),
   `${runtime}: a page that never loads core must not preload it`,
 );
 

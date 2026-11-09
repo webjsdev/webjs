@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import {
   setAssetRoots,
   clearAssetHashCache,
-  setElisionFingerprint,
+  setServeFingerprint,
   withAssetHash,
   resolveAssetUrl,
   assetHashFor,
@@ -68,32 +68,32 @@ test('the hash changes when the bytes change', () => {
   assert.notEqual(resolveAssetUrl('/app.css'), before);
 });
 
-test('a public asset hash does not move with the elision verdict', () => {
-  // public/ lives under appDir, so the elision-fingerprint fold admits it
+test('a public asset hash does not move with the serve fingerprint', () => {
+  // public/ lives under appDir, so the serve-fingerprint fold admits it
   // unless excluded explicitly. That was inert while only module specifiers
   // were hashed; asset() routes public paths here. Without the exclusion a
-  // deploy that merely flips an UNRELATED component between elidable and
-  // interactive changes every marked asset url, so every visitor re-downloads
+  // deploy that merely flips an UNRELATED component's `static lazy` changes
+  // every marked asset url, so every visitor re-downloads
   // byte-identical files, which is the cost the hash exists to avoid.
   const seen = new Set();
   for (const fp of ['', 'verdict-a', 'verdict-b']) {
-    setElisionFingerprint(fp);
+    setServeFingerprint(fp);
     clearAssetHashCache();
     seen.add(resolveAssetUrl('/app.css'));
   }
-  setElisionFingerprint('');
+  setServeFingerprint('');
   clearAssetHashCache();
   assert.equal(seen.size, 1, `the url must depend on bytes alone, saw: ${[...seen].join(' ')}`);
 });
 
-test('a core file hash does not move with the elision verdict either', () => {
+test('a core file hash does not move with the serve fingerprint either', () => {
   // Same bug as the public/ case, one directory over, and invisible in this
   // monorepo: a REAL install resolves core to <appDir>/node_modules/@webjsdev/
   // core, which IS under appDir, whereas the workspace symlink here lands
   // outside it. So the fold silently applied to core in every deployed app.
-  // Core is served verbatim (never elision-transformed), so folding buys
-  // nothing and would re-download the whole runtime on any deploy that merely
-  // flipped an unrelated component's elidability.
+  // Core is served verbatim (never rewritten), so folding buys nothing and
+  // would re-download the whole runtime on any deploy that merely flipped an
+  // unrelated component's `static lazy`.
   const realInstallCore = join(appDir, 'node_modules', '@webjsdev', 'core');
   mkdirSync(realInstallCore, { recursive: true });
   const coreFile = join(realInstallCore, 'webjs-core-browser.js');
@@ -102,11 +102,11 @@ test('a core file hash does not move with the elision verdict either', () => {
 
   const seen = new Set();
   for (const fp of ['', 'verdict-a', 'verdict-b']) {
-    setElisionFingerprint(fp);
+    setServeFingerprint(fp);
     clearAssetHashCache();
     seen.add(assetHashFor(coreFile));
   }
-  setElisionFingerprint('');
+  setServeFingerprint('');
   clearAssetHashCache();
   assert.equal(seen.size, 1, `core must hash over bytes alone, saw: ${[...seen].join(' ')}`);
 });

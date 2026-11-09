@@ -36,11 +36,9 @@ let tmpRoot;
 before(() => { tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-conthash-')); });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
-function makeApp({ basePath, elide, nested } = {}) {
+function makeApp({ basePath, nested } = {}) {
   const appDir = mkdtempSync(join(tmpRoot, 'app-'));
-  const webjs = (basePath != null || elide != null)
-    ? { ...(basePath != null ? { basePath } : {}), ...(elide != null ? { elide } : {}) }
-    : undefined;
+  const webjs = basePath != null ? { basePath } : undefined;
   const files = {
     'package.json': JSON.stringify({ name: 'fixture', type: 'module', webjs }),
     'app/layout.js':
@@ -50,8 +48,8 @@ function makeApp({ basePath, elide, nested } = {}) {
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import './widget.js';\n` +
       `export default () => html\`<x-widget></x-widget>\`;\n`,
-    // An interactive component (a @click handler) so it is NOT elided and ships
-    // a module the boot path imports + a modulepreload hint.
+    // A component, so it ships a module the boot path imports + a modulepreload
+    // hint (every component ships, #1686).
     'app/widget.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
@@ -238,18 +236,13 @@ test('DEV vs PROD HTML differs ONLY by the ?v query (dev is the un-fingerprinted
   assert.equal(norm(devHtml), norm(prodHtml), 'dev and prod bodies match once the ?v is stripped');
 });
 
-/* ---------------- elision-verdict flip busts the importer's ?v ---------------- */
+/* ---------------- every component the page imports is in the boot ---------------- */
 
-test('ELISION-FLIP: a display-only -> interactive flip is reflected in the boot set (#605)', async () => {
-  // page.js imports an always-interactive component AND a `flip` component that
-  // starts DISPLAY-ONLY (elided). Since the page's only client work is importing
-  // components, it is import-only (#605): the page module is dropped and its
-  // SHIPPING components are emitted directly in the boot. When `flip` becomes
-  // interactive the boot set GAINS flip.js. Because that boot script rides the
-  // fresh (never-immutable) HTML, a returning client always picks up the new set,
-  // so the older importer-?v staleness concern is structurally moot once the page
-  // module is no longer a boot specifier.
-  const appDir = mkdtempSync(join(tmpRoot, 'elide-'));
+test('a display-only component ships beside an interactive one (#1686)', async () => {
+  // page.js imports an interactive component AND a display-only one. A page
+  // never ships, so the boot imports its component frontier in its place, and
+  // every component ships whatever it renders, as in Lit.
+  const appDir = mkdtempSync(join(tmpRoot, 'frontier-'));
   const files = {
     'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
     'app/layout.js':
@@ -258,21 +251,20 @@ test('ELISION-FLIP: a display-only -> interactive flip is reflected in the boot 
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import './always.js';\n` +
-      `import './flip.js';\n` +
-      `export default () => html\`<x-always></x-always><x-flip></x-flip>\`;\n`,
+      `import './display.js';\n` +
+      `export default () => html\`<x-always></x-always><x-display></x-display>\`;\n`,
     'app/always.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export class XAlways extends WebComponent {\n` +
       `  render() { return html\`<button @click=\${() => 1}>a</button>\`; }\n` +
       `}\nXAlways.register('x-always');\n`,
-    // DISPLAY-ONLY: no @click / signal / lifecycle, so it is elided.
-    'app/flip.js':
+    'app/display.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export class XFlip extends WebComponent {\n` +
+      `export class XDisplay extends WebComponent {\n` +
       `  render() { return html\`<span>display</span>\`; }\n` +
-      `}\nXFlip.register('x-flip');\n`,
+      `}\nXDisplay.register('x-display');\n`,
   };
   for (const [rel, body] of Object.entries(files)) {
     const abs = join(appDir, rel);
@@ -282,35 +274,13 @@ test('ELISION-FLIP: a display-only -> interactive flip is reflected in the boot 
 
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
-
-  const bootPaths = async () => {
-    const html = await (await app.handle(new Request('http://x/'))).text();
-    return new Set(
-      [...bootImportSpecifiers(html), ...modulepreloadHrefs(html)].map((u) => u.split('?')[0]),
-    );
-  };
-  const before = await bootPaths();
-  assert.ok(before.has('/app/always.js'), 'the always-interactive component is in the boot');
-  assert.ok(!before.has('/app/flip.js'), 'the display-only component is elided from the boot');
-  assert.ok(!before.has('/app/page.js'), 'the import-only page module is not a boot specifier');
-
-  // Flip x-flip to interactive WITHOUT touching page.js's bytes.
-  writeFileSync(
-    join(appDir, 'app', 'flip.js'),
-    `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
-    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-    `export class XFlip extends WebComponent {\n` +
-    `  render() { return html\`<button @click=\${() => 2}>now interactive</button>\`; }\n` +
-    `}\nXFlip.register('x-flip');\n`,
+  const html = await (await app.handle(new Request('http://x/'))).text();
+  const boot = new Set(
+    [...bootImportSpecifiers(html), ...modulepreloadHrefs(html)].map((u) => u.split('?')[0]),
   );
-  await app.rebuild();
-
-  const after = await bootPaths();
-  assert.ok(
-    after.has('/app/flip.js'),
-    'the now-interactive component appears in the boot after the flip (the verdict change is reflected)',
-  );
-  assert.ok(after.has('/app/always.js'), 'the always-interactive component is still in the boot');
+  assert.ok(boot.has('/app/always.js'), 'the interactive component is in the boot');
+  assert.ok(boot.has('/app/display.js'), 'the display-only component is in the boot too');
+  assert.ok(!boot.has('/app/page.js'), 'the page module is not a boot specifier');
 });
 
 /* ---------------- 103 Early Hints preload the SAME fingerprinted url ---------------- */
@@ -337,9 +307,9 @@ test('EARLY-HINTS: routeFor() module urls match the body fingerprinted urls (no 
     // Every Early-Hint url is fingerprinted (the prod default; never a bare url
     // that would warm a different cache entry than the body fetches).
     assert.match(u, /\?v=[0-9a-f]{6,}$/, `Early-Hint url is fingerprinted: ${u}`);
-    // For a module the body ALSO emits (page.js here; an inert layout is elided
-    // from the boot and legitimately absent, a pre-existing routeFor difference
-    // out of #243 scope), the FULL url including ?v must match, so the 103 hint
+    // For a module the body ALSO emits (a route module never does, #1686, so
+    // only a component can be absent here), the FULL url including ?v must
+    // match, so the 103 hint
     // warms exactly the url the body requests (no double-fetch).
     const bodyUrl = bodyByPath.get(pathOf(u));
     if (bodyUrl) {

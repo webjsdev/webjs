@@ -11,8 +11,7 @@ import { walk } from '../fs-walk.js';
 import { buildModuleGraph, transitiveDeps } from '../module-graph.js';
 import { scanComponents } from '../component-scanner.js';
 import { buildRouteTable } from '../router.js';
-import { analyzeElision } from '../component-elision.js';
-import { collectBootRouteModules, routeTableFiles } from '../route-frontier.js';
+import { routeTableFiles } from '../route-frontier.js';
 import {
   hasUseServerDirective,
 } from './helpers.js';
@@ -61,65 +60,45 @@ export function findImportChain(graph, from, to) {
  * Implements `no-server-import-in-browser-module`. Factored into its own
  * function (rather than an inline block) because it does the heavier
  * whole-app analysis the other rules avoid: it builds the module graph,
- * scans components, builds the route table, and runs the framework's own
- * elision analysis so the rule's notion of "ships to the browser" is
- * byte-for-byte the build's.
+ * scans components and builds the route table, and returns them for the
+ * rules that share the analysis.
  *
  * A module is flagged when BOTH hold:
- *   1. It SHIPS to the browser. For a component that means it is NOT in the
- *      elidable set; for a page / layout that means it is NOT in the inert
- *      route-module set. (Pages and layouts that do real client work are not
- *      inert and therefore ship.)
- *   2. Its transitive import closure reaches a `.server.{ts,js}` module.
- *      `transitiveDeps` stops AT a server file (it is included but not walked
- *      into), so a server file pulled in only through another server file is
- *      not attributed to a browser module that never reaches it directly.
+ *   1. It loads in the browser: a component (every component in an ordinary
+ *      file ships, as in Lit) or `instrumentation-client.*`. A route module
+ *      (page, layout, boundary) never ships (#1686), so a server import in
+ *      one is always fine.
+ *   2. Its transitive import closure reaches a `.server.{ts,js}` utility
+ *      (no `'use server'`). `transitiveDeps` stops AT a server file (it is
+ *      included but not walked into), so a server file pulled in only through
+ *      another server file is not attributed to a browser module that never
+ *      reaches it directly.
  *
- * Also flagged: error / loading / not-found modules. These ship to the browser
- * too (the dev server's `computeBrowserBoundFiles` adds them unconditionally)
- * and are never elided, so a server import reaching one of them is the same
- * throw-at-load crash.
- *
- * Never flagged: a `.server.ts` importing another `.server.ts` (server-to-
- * server, and `.server.*` modules are not components nor route modules), and
- * `middleware.ts` / `route.ts` (server-only, never page/layout/component
- * entries, so they are not in the candidate set to begin with).
+ * Never flagged: a `.server.ts` importing another `.server.ts` (server to
+ * server; a `.server.*` file is never a scanned component, so a component in
+ * one is the server-only kind and is not a candidate), and `middleware.ts` /
+ * `route.ts` (server-only, not in the candidate set to begin with).
  *
  * Scope note for dynamic imports: a string-literal `import('./widget.ts')` IS
- * tracked by the module graph now (#751), but only as a GATE edge (so the
- * lazily-imported module is servable); this rule's server-import detection
- * still runs over STATIC edges only (`transitiveDeps`), so a dynamic
- * `import('./x.server.ts')` of a no-`'use server'` utility is not flagged here.
- * That is deliberate: the throw-at-load crash is deferred to call time (when
- * the module is actually fetched), not module load, and a dynamic import is
- * also not elided framework-wide. A computed `import(expr)` cannot be resolved
- * statically at all; rather than a false-positive-prone check rule (a computed
- * import of an npm specifier or an otherwise-reachable app module is perfectly
- * valid, so it fails the check-is-correctness-only dividing line), the dev
- * server surfaces it with a 404 hint when the target 404s (see dev.js #751).
+ * tracked by the module graph (#751), but only as a GATE edge (so the lazily
+ * imported module is servable); this rule's server-import detection runs over
+ * STATIC edges only (`transitiveDeps`), so a dynamic `import('./x.server.ts')`
+ * of a no-`'use server'` utility is not flagged here. That is deliberate: the
+ * throw-at-load crash is deferred to call time. A computed `import(expr)`
+ * cannot be resolved statically at all; rather than a false-positive-prone
+ * check rule, the dev server surfaces it with a 404 hint when the target 404s
+ * (see dev.js #751).
  *
  * @param {string} appDir
  * @param {Violation[]} violations  appended to in place
  */
 // --- Rule: no-server-import-in-browser-module ---
-// A page / layout / component module that SHIPS to the browser must not
-// transitively import a server-only `.server.{ts,js}` module. The browser
-// gets a stub for the server file, so the import is harmless while the
-// module never loads client-side: a display-only page is elided, and an
-// import-only page (#605/#963) is dropped from the boot in favour of its
-// components. But the moment the page does its OWN client work (the client
-// router, a reactive primitive, module-scope code, a client-effecting util
-// on a component-free path) it ships whole, must load in the browser,
-// and drags the server import with it: the stub throws (or a server-only
-// export like `auth` is missing) the instant the module loads. That crash
-// only surfaces at runtime; typecheck and every other check pass.
-//
-// The rule reuses the BUILD'S elision verdict (analyzeElision) instead of
-// re-deriving it, so it fires ONLY on modules that genuinely ship: a
-// display-only page the framework elides is never flagged (that is the
-// legitimate pattern). The motivating case (crisp dogfood): a page that does
-// `await auth()` (import from `lib/auth.server.ts`) AND imports a component
-// directly, so it is not elided and ships the server import.
+// A module the browser loads must not transitively import a server-only
+// `.server.{ts,js}` utility. The browser gets a stub for the server file, and
+// the stub throws (or a server-only export like `auth` is missing) the
+// instant the module loads. That crash only surfaces at runtime; typecheck
+// and every other check pass. A `'use server'` action is fine: its stub is a
+// working RPC call.
 export async function checkServerImportInBrowserModule(appDir, violations) {
   /** Every non-server module the browser loads (the shipping candidates and
    * their transitive closures), returned for the env rule. @type {Set<string>} */
@@ -140,25 +119,17 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
     return { shipped, routeFiles: new Set(), componentFiles: new Set(), moduleGraph: new Map() };
   }
 
-  // What the browser loads (#1686): the components the build does not elide,
-  // plus `instrumentation-client.*`. A route module (page, layout, boundary)
-  // never ships, so a server import in one is fine wherever it sits; only the
-  // component frontier it renders is booted. The elision flag mirrors
-  // `dev.js` (`webjs.elide` / `WEBJS_ELIDE`): with it off every component
-  // ships. A `.server.*` file is never a component (the scanner skips it), so
-  // server-to-server imports are excluded by construction.
-  const elideEnabled = await readElideEnabledForCheck(appDir);
-  const routeModules = collectBootRouteModules(routeTable);
-  const { elidableComponents } = elideEnabled
-    ? await analyzeElision(components, moduleGraph, (f) => readFile(f, 'utf8'), appDir,
-      { entries: routeTable.instrumentationClient ? [routeTable.instrumentationClient] : [] })
-    : { elidableComponents: new Set() };
+  // What the browser loads (#1686): every component, as in Lit, plus
+  // `instrumentation-client.*`. A route module (page, layout, boundary) never
+  // ships, so a server import in one is fine wherever it sits. A `.server.*`
+  // file is never a scanned component (a component there is the server-only
+  // kind), so server-to-server imports are excluded by construction.
   const routeFiles = routeTableFiles(routeTable);
 
   /** @type {Map<string, { kind: string }>} keyed by ABS path */
   const candidates = new Map();
   for (const c of components) {
-    if (routeFiles.has(c.file) || elidableComponents.has(c.file)) continue;
+    if (routeFiles.has(c.file)) continue;
     candidates.set(c.file, { kind: 'component' });
   }
   if (routeTable.instrumentationClient) {
@@ -215,7 +186,7 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
     const typesHint = viaTypesModule
       ? `The edge enters via a types-shaped module (${relative(appDir, importer)}); if it re-exports a runtime VALUE from a \`.server.{ts,js}\` file, relocate that to a browser-safe typedef (a plain \`interface\` / JSDoc, or an \`import type\` which the stripper erases) so the type is shared without pinning the module. `
       : '';
-    const fixText = `${typesHint}Keep the server call out of this ${kind}. Load the data in the page (pages run only on the server) and pass it in as a property, or move the call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC.`;
+    const fixText = `${typesHint}Keep the server call out of this ${kind}. Load the data in the page (pages run only on the server) and pass it in as a property, or move the call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC. A component that only displays server data can instead live in a \`*.server.ts\` file (without \`'use server'\`): it then renders on the server, may import server code, and ships nothing, like a Next.js server component.`;
     const whyText = '';
 
     violations.push({
@@ -229,18 +200,6 @@ export async function checkServerImportInBrowserModule(appDir, violations) {
   return { shipped, routeFiles, componentFiles: new Set(components.map((c) => c.file)), moduleGraph };
 }
 
-/**
- * Read whether component elision is enabled for `appDir`, mirroring
- * `dev.js`'s `readElideEnabled` so the check's notion of "ships" matches the
- * dev server's. Elision is ON unless `webjs.elide === false` in package.json or
- * the `WEBJS_ELIDE` env var forces it off (`0` / `false` / `off` / `no`). A
- * missing or malformed package.json keeps the default (on). Inlined rather
- * than imported from `dev.js` so the check tool does not pull the whole dev
- * server module just for this flag.
- *
- * @param {string} appDir
- * @returns {Promise<boolean>}
- */
 /**
  * True if `file` is a `'use server'` action: a `.server.{ts,js}` module that
  * declares the `'use server'` directive. The dev server rewrites its browser
@@ -263,21 +222,6 @@ export async function isUseServerActionFile(file) {
   }
 }
 
-export async function readElideEnabledForCheck(appDir) {
-  const raw = process.env.WEBJS_ELIDE;
-  if (raw != null) {
-    const v = raw.trim().toLowerCase();
-    if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
-    if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
-  }
-  try {
-    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
-    if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
-  } catch {
-    // No package.json, malformed JSON, or unreadable: keep the default.
-  }
-  return true;
-}
 
 /**
  * Async fs.exists shim. Returns true if the path exists at all (file

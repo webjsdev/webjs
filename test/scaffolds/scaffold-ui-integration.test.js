@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { scaffoldApp } from '../../packages/cli/lib/create.js';
 import { DEFAULT_ALIASES, DEFAULT_TAILWIND_CSS, init } from '../../packages/ui/src/commands/init.js';
 import { add } from '../../packages/ui/src/commands/add.js';
-import { analyzeAppElision } from '../../packages/server/src/elision-report.js';
+import { analyzeRouteModules } from '../../packages/server/src/route-report.js';
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-ui-'));
@@ -164,17 +164,12 @@ test('lib/utils/cn.ts ships the pure cn() helper; onBeforeCache is in lib/utils/
   }
 });
 
-test('kit helpers add no browser code to a page or a display-only component (#1320)', async () => {
-  // The property #1320 is about: Tier-1 class helpers do no client work at
-  // module scope. Both defects that broke it were module-scope work
-  // (`...borderGroups()` in cn.ts, a stylesheet injection in native-select.ts).
-  // A page never ships any more (#1686), so the helpers now matter where a
-  // COMPONENT imports them: a display-only component using them must still be
-  // elided, and the page using them must load nothing and draw no hint.
-  //
-  // Asserted on the elision REPORT rather than on byte size: size moves with
-  // every unrelated kit change, so it would be a maintenance tax carrying no
-  // extra signal.
+test('a page using only the kit class helpers loads no JavaScript and draws no hint (#1320)', async () => {
+  // Tier-1 class helpers are pure functions returning class strings. A page
+  // never ships (#1686), and the helpers register no element, so a page that
+  // uses only them loads nothing in the browser, and nothing in it looks meant
+  // for the browser. Asserted on the route REPORT rather than on byte size:
+  // size moves with every unrelated kit change.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
@@ -205,32 +200,16 @@ test('kit helpers add no browser code to a page or a display-only component (#13
       `  </div>\`;`,
       `}`,
     ].join('\n'));
-    await writeFile(join(appDir, 'components', 'kit-card.ts'), [
-      `import { WebComponent, html } from '@webjsdev/core';`,
-      `import { buttonClass } from '#components/ui/button.ts';`,
-      `import { nativeSelectClass } from '#components/ui/native-select.ts';`,
-      `class KitCard extends WebComponent {`,
-      `  render() { return html\`<select class=\${nativeSelectClass()}></select><button class=\${buttonClass()}>Go</button>\`; }`,
-      `}`,
-      `KitCard.register('kit-card');`,
-    ].join('\n'));
-
-    const report = await analyzeAppElision(appDir);
-    assert.ok(report.analysed, `elision analysis ran (skipped: ${report.skipped})`);
+    const report = await analyzeRouteModules(appDir);
+    assert.ok(report.analysed, `the route analysis ran (skipped: ${report.skipped})`);
 
     const kit = report.routeModules.find((r) => r.file === join('app', 'kit', 'page.ts'));
-    assert.ok(kit, 'the kit page has a verdict');
+    assert.ok(kit, 'the kit page has a row');
     // It imports only Tier-1 helpers, which register no element, so there is
     // nothing for it to carry into the browser and nothing to hint about.
     assert.deepEqual(kit.emits, [], 'the kit page loads no JavaScript');
     assert.deepEqual(kit.hints, [], 'and holds nothing that looks meant for the browser');
 
-    // The helpers do no module-scope client work, so a display-only component
-    // using them stays elided. This is the assertion that fails if either
-    // #1320 regression comes back.
-    const card = report.components.find((c) => c.tags.includes('kit-card'));
-    assert.ok(card, 'the kit component has a verdict');
-    assert.equal(card.verdict, 'elided', `kit component ships: ${card.evidence} ${card.reason}`);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

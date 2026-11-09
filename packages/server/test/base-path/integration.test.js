@@ -63,8 +63,8 @@ function makeApp({ basePath } = {}) {
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import './widget.js';\n` +
       `export default () => html\`<x-widget></x-widget>\`;\n`,
-    // A simple interactive component (an @click handler) so it is NOT elided
-    // and ships a module the boot path imports + a modulepreload hint. It
+    // A simple component (an @click handler), so it ships a module the boot
+    // path imports + a modulepreload hint. It
     // imports a server action so the served browser module carries the
     // generated RPC stub, whose fetch() target must also be base-path-prefixed.
     'app/widget.js':

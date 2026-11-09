@@ -123,7 +123,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
   // conditionally closed slot at snapshot time) where the structural
   // slot-marker detector has nothing to see. The chooser consumes and removes
   // the attribute on upgrade.
-  // (An ELIDED display-only host never upgrades, so its stamp is retained as
+  // (A server-only host never upgrades, so its stamp is retained as
   // an inert attribute; diffElementInPlace never copies it onto a live host,
   // and the upgrade path consumes it, so it cannot mis-route anything.)
   try {

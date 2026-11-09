@@ -203,8 +203,8 @@ export const MIME = {
  * The transformed bytes are cached per request handler in `state.tsCache`
  * (a `Map<string, { mtimeMs, code, map }>`), bounded to `TS_CACHE_MAX`
  * entries. The cache is per-handler rather than module-global because the
- * cached code bakes in that handler's elision verdict, so two handlers for
- * the same app with different elision settings must not share it.
+ * cached code bakes in that handler's lazy-component set, so two handlers for
+ * the same app at different moments must not share it.
  */
 export const TS_CACHE_MAX = 500;
 

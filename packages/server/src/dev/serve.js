@@ -1,7 +1,7 @@
 /**
  * Serving a request once the dev/prod handler has decided what it is: the
  * framework's own static files, an app source module (with TypeScript stripped
- * and elision applied), and the per-segment middleware chain around a route.
+ * and lazy imports deferred), and the per-segment middleware chain around a route.
  *
  * Split off handler.js, which was 1460 lines. The seam is real rather than
  * arithmetic: nothing here builds or configures the handler, and the handler
@@ -26,7 +26,7 @@ import { maybeRegenerate } from '../dev-regenerate.js';
 import { stripTypeScript } from '../ts-strip.js';
 import { serveDownloadedBundle } from '../vendor.js';
 import { resolveImport } from '../module-graph.js';
-import { elideImportsFromSource, deferLazyImportsFromSource } from '../component-elision.js';
+import { deferLazyImportsFromSource } from '../lazy-components.js';
 import { annotateSourceLocations, isSourceLocationCandidate, sourceLocationFile } from '../dev-source-locations.js';
 import { basePath } from '../importmap.js';
 import { withBasePath } from '../base-path.js';
@@ -306,11 +306,10 @@ export async function handleCore(req, ctx) {
         });
       }
       // TypeScript source: strip types via Node 24+'s built-in, cache by mtime.
-      // Both module paths also strip side-effect imports of display-only
-      // components so the browser never downloads their JS.
-      const elideOpts = {
+      // Both module paths also defer side-effect imports of `static lazy`
+      // components to the lazy loader.
+      const serveOpts = {
         moduleGraph: state.moduleGraph,
-        elidableComponents: state.elidableComponents,
         // A browser test imports the component it tests and expects it defined
         // when the import resolves, so the test handler serves every import as
         // written (#1524).
@@ -323,10 +322,10 @@ export async function handleCore(req, ctx) {
       // A `?v=<hash>` app-module request is content-addressed -> immutable
       // (#243); an un-fingerprinted request keeps the 1h fallback.
       if (/\.m?ts$/.test(abs)) {
-        return tsResponse(abs, dev, elideOpts, state.tsCache, versioned, reportDevError);
+        return tsResponse(abs, dev, serveOpts, state.tsCache, versioned, reportDevError);
       }
       if (/\.m?js$/.test(abs)) {
-        return jsModuleResponse(abs, dev, elideOpts, versioned, reportDevError);
+        return jsModuleResponse(abs, dev, serveOpts, versioned, reportDevError);
       }
       return fileResponse(abs, { dev, immutable: versioned });
     }
@@ -429,7 +428,6 @@ export async function handleCore(req, ctx) {
       const ssrOpts = {
         dev, appDir, moduleGraph: state.moduleGraph,
         serverFiles: state.actionIndex.fileToHash,
-        elidableComponents: state.elidableComponents,
         lazyComponentFiles: state.lazyComponentFiles,
         routeFrontiers: state.routeFrontiers,
         notFoundFile: state.routeTable.notFound,
@@ -698,21 +696,19 @@ export async function fileResponse(abs, opts) {
  *
  * @param {string} abs
  * @param {boolean} dev
- * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, lazyComponentFiles?: Map<string, string[]>, appDir: string }} elideOpts
+ * @param {{ moduleGraph: any, lazyComponentFiles?: Map<string, string[]>, appDir: string }} serveOpts
  * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
  *   serve `immutable` (1 year) instead of the 1h fallback. Dev stays `no-cache`.
  * @param {(error: unknown, info?: object) => void} [reportDevError]  dev overlay hook
  */
-export async function jsModuleResponse(abs, dev, elideOpts, immutable, reportDevError) {
+export async function jsModuleResponse(abs, dev, serveOpts, immutable, reportDevError) {
   let source;
   try { source = await readFile(abs, 'utf8'); }
   catch { return new Response('Not found', { status: 404 }); }
-  const refused = decoratorRefusal(source, abs, dev, elideOpts && elideOpts.appDir, reportDevError);
+  const refused = decoratorRefusal(source, abs, dev, serveOpts && serveOpts.appDir, reportDevError);
   if (refused) return refused;
-  let code = elideImportsFromSource(
-    annotateServedModule(source, abs, elideOpts), abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
-  );
-  code = deferLazyImports(code, abs, elideOpts);
+  let code = annotateServedModule(source, abs, serveOpts);
+  code = deferLazyImports(code, abs, serveOpts);
   // Version same-origin relative import specifiers so the URL the browser
   // fetches matches the `?v=`-versioned modulepreload + boot specifier (#369).
   // A no-op in dev (fingerprinting disabled).
@@ -833,21 +829,21 @@ export async function stripTs(source, _abs) {
 /**
  * Serve a `.ts` / `.mts` source file as JavaScript via {@link stripTs}.
  * Result is cached by mtime in the handler's own `cache` so subsequent
- * requests are instant; a file edit invalidates naturally. `elideOpts`
- * additionally strips side-effect imports of display-only components from
- * the served code, which is exactly why `cache` is the per-handler
+ * requests are instant; a file edit invalidates naturally. `serveOpts`
+ * additionally defers side-effect imports of `static lazy` components in the
+ * served code, which is exactly why `cache` is the per-handler
  * `state.tsCache` and not a module-global: the cached bytes bake in this
- * handler's elision verdict.
+ * handler's lazy set.
  *
  * @param {string} abs
  * @param {boolean} dev
- * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, lazyComponentFiles?: Map<string, string[]>, appDir: string }} [elideOpts]
+ * @param {{ moduleGraph: any, lazyComponentFiles?: Map<string, string[]>, appDir: string }} [serveOpts]
  * @param {Map<string, { mtimeMs: number, code: string, map: string | null }>} cache the handler's `state.tsCache`
  * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
  *   serve `immutable` (1 year) instead of the 1h fallback. The cached BODY is
  *   the same bytes regardless; only the cache header varies. Dev stays `no-cache`.
  */
-export async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDevError) {
+export async function tsResponse(abs, dev, serveOpts, cache, immutable, reportDevError) {
   // The body bytes are identical with or without `?v`; only the cache header
   // changes, so the per-mtime cache stays a single entry.
   const cacheControl = dev ? 'no-cache' : immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600';
@@ -914,18 +910,15 @@ export async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDe
   // browser receives the module and fails it with a bare SyntaxError that
   // names neither the decorator nor the fix. Not cached, so the next request
   // after the edit re-strips and re-checks.
-  const refused = decoratorRefusal(code, abs, dev, elideOpts && elideOpts.appDir, reportDevError);
+  const refused = decoratorRefusal(code, abs, dev, serveOpts && serveOpts.appDir, reportDevError);
   if (refused) return refused;
-  if (elideOpts) {
-    code = annotateServedModule(code, abs, elideOpts);
-    code = elideImportsFromSource(
-      code, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
-    );
-    code = deferLazyImports(code, abs, elideOpts);
+  if (serveOpts) {
+    code = annotateServedModule(code, abs, serveOpts);
+    code = deferLazyImports(code, abs, serveOpts);
   }
   // Version same-origin relative import specifiers so the URL the browser
   // fetches matches the `?v=`-versioned modulepreload + boot specifier (#369).
-  // A no-op in dev (fingerprinting disabled). Cached with the elision result:
+  // A no-op in dev (fingerprinting disabled). Cached with the lazy rewrite:
   // PROD files are static within a deploy, so the baked `?v` stays correct.
   code = versionModuleImports(code, abs);
   // Evict oldest entry if cache is full (simple FIFO: Map preserves insertion order).

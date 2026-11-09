@@ -169,12 +169,6 @@ const TOOL_DEFS = [
     inputSchema: APPDIR_SCHEMA,
   },
   {
-    name: 'list_elision',
-    description:
-      'Report what the browser loads: every component module with whether it is elided (the browser never downloads it) or shipped plus the evidence that produced the verdict, every route module (page, layout, boundary) with its kind, the component modules the boot imports in its place (a route module never ships) and any hints about code in it that looks meant for the browser, and any ORPHAN component class, one that either has no registration call at all or registers a computed tag, which the scanner cannot see either way. Identical to `webjs elision --json`. Read-only.',
-    inputSchema: APPDIR_SCHEMA,
-  },
-  {
     name: 'check',
     description:
       'Run webjs check (correctness rules) and return the structured violations { rule, file, message, fix } plus a summary count and per-rule breakdown. Read-only.',
@@ -309,7 +303,7 @@ export function extractActionConfig(src) {
  * JSON-serialisable projection of an existing server data function. All are
  * read-only.
  *
- * @param {{ buildRouteTable: Function, buildActionIndex: Function, hashFile: Function, scanComponents: Function, analyzeAppElision: Function, checkConventions: Function, projectCheck: Function, readFile: Function }} deps
+ * @param {{ buildRouteTable: Function, buildActionIndex: Function, hashFile: Function, scanComponents: Function, checkConventions: Function, projectCheck: Function, readFile: Function }} deps
  */
 export function makeToolRunners(deps) {
   const {
@@ -317,7 +311,6 @@ export function makeToolRunners(deps) {
     buildActionIndex,
     hashFile,
     scanComponents,
-    analyzeAppElision,
     checkConventions,
     projectCheck,
     readFile,
@@ -379,15 +372,6 @@ export function makeToolRunners(deps) {
           className: c.className,
         }))
         .sort((a, b) => a.tag.localeCompare(b.tag));
-    },
-
-    async list_elision(appDir) {
-      // The whole report IS the contract: `analyzeAppElision` already returns
-      // an app-relative, sorted, JSON-serializable object, so unlike
-      // `list_routes` there is no projector leaf here and nothing to keep in
-      // sync. `webjs elision --json` prints this same object, and a drift test
-      // asserts the two are equal.
-      return analyzeAppElision(appDir);
     },
 
     async check(appDir) {
@@ -527,7 +511,6 @@ export async function runMcpServer(opts) {
       buildActionIndex: server.buildActionIndex,
       hashFile: server.hashFile,
       scanComponents: server.scanComponents,
-      analyzeAppElision: server.analyzeAppElision,
       checkConventions: check.checkConventions,
       projectCheck,
       readFile,

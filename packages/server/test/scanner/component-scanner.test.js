@@ -152,8 +152,7 @@ test('findOrphanComponents: a COMPUTED template-literal tag is an orphan (#1308)
   // orphan scan used its own looser pattern, a redacted interpolated template
   // (`A.register(`${p}__STR_1__`)`) satisfied it but NOT `extractComponents`,
   // so the class was neither a component nor an orphan and disappeared from
-  // every surface: the dev warning, the elision report, the CLI section, and
-  // the doctor check. An interpolated template is the most idiomatic way to
+  // every surface: the dev warning, the route report, and the doctor check. An interpolated template is the most idiomatic way to
   // write a computed tag, so this is the shape the report most needs to catch.
   //
   // A LITERAL backtick tag is the counterpart and must NOT be an orphan;

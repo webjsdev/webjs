@@ -50,10 +50,9 @@ function walk(value: ClassValue, out: string[]): void {
 // IMPORTANT: text-size (text-sm, text-xs, text-base, text-lg, …) and
 // text-color (text-primary, text-foreground, …) are DIFFERENT properties
 // and must be in different groups. Same for bg-size vs bg-color etc.
-// Built on FIRST USE, not at module load. A module-scope `...borderGroups()`
-// spread is a real top-level call, so the elision analyser reads this module as
-// client-effecting and every page that reaches `cn` on a component-free path
-// ships whole instead of being elided (#1320).
+// Built on FIRST USE, not at module load, so a module that imports `cn` does no
+// work at load and a page that never merges a class never builds the table
+// (#1320).
 let _groups: Array<[RegExp, string]> | undefined;
 function GROUPS(): Array<[RegExp, string]> {
   return (_groups ??= [

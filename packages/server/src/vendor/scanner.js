@@ -86,11 +86,10 @@ export function extractPackageName(spec) {
  *
  * This is the OUT-OF-PROCESS entry point (`pinAll`, `webjs doctor`). It builds
  * its own graph, route table and component scan, roughly 70-200ms on the
- * in-repo apps, and applies NO elision pruning, so the result is a SUPERSET of
- * what the running server serves. That superset relation is what lets
- * `prunePinToReachable` intersect a committed pin down to the runtime answer
- * (#197). The dev server calls `reachedBareImports` instead, with the graph it
- * already has and its elision skip set.
+ * in-repo apps, and skips the same route-table files the running server does,
+ * so the result is what that server serves. `prunePinToReachable` intersects a
+ * committed pin down to it (#197). The dev server calls `reachedBareImports`
+ * instead, with the graph it already has.
  *
  * @param {string} appDir
  * @returns {Promise<Set<string>>}
@@ -103,7 +102,7 @@ export async function scanBareImports(appDir) {
     routeTable = await buildRouteTable(appDir);
   } catch {
     // An app the analysis cannot process yields no vendor specifiers rather
-    // than a throw, matching how check.js and elision-report.js degrade. The
+    // than a throw, matching how check.js and route-report.js degrade. The
     // dev server surfaces the real problem.
     return new Set();
   }
@@ -112,13 +111,13 @@ export async function scanBareImports(appDir) {
 
 /**
  * The in-process form: the caller already has a module graph, the entry set,
- * and (on the runtime path) the elision skip set. Used by the dev server so a
+ * and the route-table skip set. Used by the dev server so a
  * vendor resolve does not rebuild analysis it just built.
  *
  * @param {import('../module-graph.js').ModuleGraph} graph
  * @param {string[]} entryFiles
  * @param {string} appDir
- * @param {Set<string>} [skip]  elided / inert / import-only modules
+ * @param {Set<string>} [skip]  files never loaded in the browser (the route-table files)
  * @returns {Set<string>}
  */
 export function reachedBareImports(graph, entryFiles, appDir, skip) {

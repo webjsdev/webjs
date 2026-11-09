@@ -21,8 +21,8 @@ import { publishDraft } from '#modules/feedback/actions/publish-draft.server.ts'
  * identity, so it submits correctly inside `/feedback/triage-split`'s unbound,
  * method-less form, with JavaScript on or off.
  *
- * The component itself is display-only, so elision drops its module from the
- * browser. That is the point rather than an oversight: the button is a plain
+ * The component itself is display-only. Its module still ships, as every
+ * component does, but it adds nothing: the button is a plain
  * HTML submitter once SSR has run, and the no-JS e2e proves it needs no
  * script at all.
  */

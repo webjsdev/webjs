@@ -11,14 +11,11 @@ import { WebComponent, html } from '@webjsdev/core';
 import { serverGreeting } from '../queries/server-greeting.server.ts';
 
 export class ServerClock extends WebComponent {
-  // A bare async-render component (no other client signal, light DOM) is
-  // ELIDED: its SSR'd HTML is already the complete output, so the framework
-  // serves it with ZERO JavaScript and skips the redundant on-hydration
-  // re-fetch. This is the common fetch-and-display leaf shape. If you ever need
-  // to force a component to ship when the analyser would elide it (for
-  // interactivity static analysis cannot see, like an observer that computes
-  // the tag it waits for), declare `static interactive = true`. Run
-  // `webjs elision` to see the verdict for every component in this app.
+  // A bare async-render component ships like every component and re-renders on
+  // hydration, where the SSR action seed answers its `serverGreeting()` call so
+  // hydration does no round trip. To serve it with ZERO JavaScript instead, put
+  // it in a `*.server.ts` file: a server-only component is rendered on the
+  // server and never defined in the browser.
   async render() {
     const info = await serverGreeting();
     return html`<p class="font-mono text-sm">server rendered this at

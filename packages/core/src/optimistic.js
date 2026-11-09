@@ -108,8 +108,8 @@ async function runImperativeOptimistic(signal, value, action) {
  * Imperative form (signal-based rollback), for a one-shot toggle:
  *   await optimistic(signal, value, () => likePost(postId));
  *
- * Client-only: it calls `host.requestUpdate()` (client work), so a component
- * importing it is never elided as display-only.
+ * Client-only: it calls `host.requestUpdate()` (client work), so it belongs in
+ * a component, never in a server-only one.
  *
  * @template State
  * @template Action

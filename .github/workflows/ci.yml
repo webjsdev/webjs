@@ -91,8 +91,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      # Some integration tests boot the blog example in-process (e.g. the
-      # differential elision test renders its mixed `/` page), which calls
+      # Some integration tests boot the blog example in-process (e.g.
+      # test/integration/blog-http.test.mjs renders its `/` page), which calls
       # listPosts() and needs a migrated SQLite DB, the same setup the e2e job
       # does.
       - name: Prepare the blog example database

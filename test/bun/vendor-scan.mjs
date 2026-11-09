@@ -14,8 +14,9 @@
  *
  * Both entry points are asserted, because they answer deliberately different
  * questions and the relation between them is load-bearing: `scanBareImports`
- * is the out-of-process pin-side superset (no elision pruning) and
- * `reachedBareImports` is the dev server's in-process runtime set (pruned).
+ * is the out-of-process pin-side scan and `reachedBareImports` is the dev
+ * server's in-process runtime set. Both skip the route-table files, so today
+ * they agree.
  * `prunePinToReachable` intersects the first down to the second, so a runtime
  * set that stopped being a subset would break pinned/unpinned parity (#197).
  *
@@ -25,7 +26,7 @@
  * the repo root so `@webjsdev/core` resolves for the fixture's components.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -34,8 +35,7 @@ import { buildModuleGraph } from '../../packages/server/src/module-graph.js';
 import { browserEntryFiles } from '../../packages/server/src/browser-entries.js';
 import { scanComponents } from '../../packages/server/src/component-scanner.js';
 import { buildRouteTable } from '../../packages/server/src/router.js';
-import { analyzeElision } from '../../packages/server/src/component-elision.js';
-import { collectBootRouteModules } from '../../packages/server/src/route-frontier.js';
+import { routeTableFiles } from '../../packages/server/src/route-frontier.js';
 
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
 const dir = mkdtempSync(join(tmpdir(), 'webjs-vendor-scan-x-'));
@@ -58,7 +58,7 @@ export class Counter extends WebComponent {
 }
 Counter.register('my-counter');
 `);
-  // Display-only: elided, so its vendor is in the pin superset only (#170).
+  // Display-only, and still shipped: every component ships (#1686).
   write('components/badge.js', `
 import { WebComponent, html } from '@webjsdev/core';
 import dayjs from 'dayjs';
@@ -91,19 +91,16 @@ export default () => html\`<my-counter></my-counter><my-badge></my-badge>\`;
   const graph = await buildModuleGraph(dir);
   const components = await scanComponents(dir);
   const routeTable = await buildRouteTable(dir);
-  // The dev server's skip set: elided components and every route module, since
-  // a route module never ships (#1686).
-  const ic = routeTable.instrumentationClient;
-  const r = await analyzeElision(components, graph, async (f) => readFileSync(f, 'utf8'), dir, { entries: ic ? [ic] : [] });
-  const skip = new Set([...r.elidableComponents, ...collectBootRouteModules(routeTable)]);
+  // The dev server's skip set: every route-table file, since a route module
+  // never ships (#1686).
+  const skip = routeTableFiles(routeTable);
   const rt = [...reachedBareImports(graph, [...browserEntryFiles(routeTable, components)], dir, skip)].sort();
 
   assert.deepEqual(pin, ['analytics-sdk', 'dayjs', 'zod'],
-    'pin side: reachable vendors with no elision pruning, so the elided badge keeps dayjs and '
-    + 'instrumentation-client keeps analytics-sdk; pg is behind a server boundary and '
-    + 'playwright / drizzle-orm were never edges');
-  assert.deepEqual(rt, ['analytics-sdk', 'zod'],
-    'runtime side: the same roots, pruned of the elided component and the subtree behind it');
+    'pin side: reachable vendors, so the badge keeps dayjs and instrumentation-client keeps '
+    + 'analytics-sdk; pg is behind a server boundary and playwright / drizzle-orm were never edges');
+  assert.deepEqual(rt, ['analytics-sdk', 'dayjs', 'zod'],
+    'runtime side: the same roots and the same route-file skip, so the same set');
   assert.ok(rt.every((s) => pin.includes(s)),
     'the runtime set must stay a subset of the pin set (#197 relies on it)');
 

@@ -14,8 +14,8 @@
  *
  * Asserts, on whichever runtime executes it: a public asset resolves to
  * `?v=<sha256(bytes) prefix>` computed the same way, the hash tracks the bytes,
- * a fragment survives with the query ahead of it, the hash ignores the elision
- * verdict (core and `public/` are never elision-transformed), and every
+ * a fragment survives with the query ahead of it, the hash ignores the serve
+ * fingerprint (core and `public/` are never transformed at serve time), and every
  * non-public or traversal path is refused WITHOUT reading the file.
  */
 import assert from 'node:assert/strict';
@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
 
 import {
   setAssetRoots,
-  setElisionFingerprint,
+  setServeFingerprint,
   clearAssetHashCache,
   resolveAssetUrl,
 } from '../../packages/server/src/asset-hash.js';
@@ -65,15 +65,15 @@ assert.match(
   `${runtime}: fragment must survive with the query before it`,
 );
 
-// 4. The elision verdict must not reach a public asset's hash (path
+// 4. The serve fingerprint must not reach a public asset's hash (path
 // containment comparisons use `sep`, which is worth pinning per runtime).
 const seen = new Set();
-for (const fp of ['', 'verdict-a', 'verdict-b']) {
-  setElisionFingerprint(fp);
+for (const fp of ['', 'lazy:a', 'lazy:b']) {
+  setServeFingerprint(fp);
   clearAssetHashCache();
   seen.add(resolveAssetUrl('/app.css'));
 }
-setElisionFingerprint('');
+setServeFingerprint('');
 clearAssetHashCache();
 assert.equal(seen.size, 1, `${runtime}: a public url must depend on bytes alone`);
 

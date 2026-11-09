@@ -80,7 +80,7 @@ test('a non-object config block is nothing to report', () => {
 test('a representative valid block is nothing to report', () => {
   const problems = validateAppWebjsConfig({
     webjs: {
-      elide: false,
+      seed: false,
       trailingSlash: 'never',
       basePath: '/app',
       maxBodyBytes: 262144,
@@ -99,7 +99,7 @@ test('a typo names the key that was dropped', () => {
 
 test('a bad enum value and a wrong-typed leaf are reported', () => {
   assert.equal(validateAppWebjsConfig({ webjs: { trailingSlash: 'sometimes' } }).length, 1);
-  assert.equal(validateAppWebjsConfig({ webjs: { elide: 'yes' } }).length, 1);
+  assert.equal(validateAppWebjsConfig({ webjs: { seed: 'yes' } }).length, 1);
 });
 
 test('every problem in one block is reported, not just the first', () => {
@@ -141,7 +141,7 @@ test('several problems ride one aggregated warning', async () => {
 
 test('a clean config leaves the boot output unchanged', async () => {
   const { warns, logger } = capturingLogger();
-  const appDir = makeApp({ elide: false, trailingSlash: 'never' });
+  const appDir = makeApp({ seed: false, trailingSlash: 'never' });
 
   await createRequestHandler({ appDir, dev: true, logger });
 

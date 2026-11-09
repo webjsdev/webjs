@@ -67,7 +67,7 @@ export function withHostMarker(opening) {
  * `getAttribute` API so it works whether the instance is the server shim or a
  * real `HTMLElement`. Returns the opening tag unchanged when there is nothing
  * to add, so existing SSR output stays byte-identical when no component
- * reflects, which preserves the elision on-vs-off differential invariant.
+ * reflects.
  *
  * @param {string} opening  the element's opening tag, ending in `>`
  * @param {any} instance

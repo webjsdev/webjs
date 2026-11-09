@@ -8,7 +8,7 @@
  * a response split inside a boundary (a network chunk, or the parser yielding
  * under load) it cloned a truncated `content` into the page, and the inline
  * `__webjsResolve` script that follows the template then found it gone. The
- * blog's differential-elision e2e caught it under load as a `<muted-text>`
+ * blog's e2e caught it under load as a `<muted-text>`
  * with no projected slot.
  *
  * This serves the REAL boot script (`suspenseBootScript`) from a raw server

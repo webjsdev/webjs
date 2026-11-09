@@ -9,52 +9,8 @@ import { readCspConfig } from '../csp.js';
 import { readBodyLimits, computeServerTimeouts } from '../body-limit.js';
 
 /**
- * Read the `WEBJS_ELIDE` environment override, if set.
- * `0` / `false` / `off` / `no` (case-insensitive) force elision OFF;
- * `1` / `true` / `on` / `yes` force it ON. Any other value, or an unset
- * variable, returns `undefined` so the caller falls through to the
- * `package.json` switch. The env override is the deploy-time / ops escape
- * hatch: force-disable elision to rule it out while debugging a wrong-strip
- * without editing committed code, or force-enable it regardless of an
- * app's `package.json`. It is also the seam the differential elision test
- * uses to render the same app on and off in one process.
- * @returns {boolean | undefined}
- */
-function elideEnvOverride() {
-  const raw = process.env.WEBJS_ELIDE;
-  if (raw == null || raw === '') return undefined;
-  const v = String(raw).trim().toLowerCase();
-  if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
-  if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
-  return undefined;
-}
-
-/**
- * Read the project-level elision switch.
- * Precedence: the `WEBJS_ELIDE` env override wins when set, otherwise the
- * `package.json` `{ "webjs": { "elide": false } }` switch disables
- * display-only and inert-route elision app-wide (everything ships, like
- * before the feature existed). Any other value, or an absent key, leaves
- * elision enabled (the default). Re-read on every rebuild so toggling
- * either control takes effect without a server restart.
- * @param {string} appDir
- * @returns {Promise<boolean>}
- */
-export async function readElideEnabled(appDir) {
-  const override = elideEnvOverride();
-  if (override !== undefined) return override;
-  try {
-    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
-    if (pkg && pkg.webjs && pkg.webjs.elide === false) return false;
-  } catch {
-    // No package.json, malformed JSON, or unreadable. Keep the default.
-  }
-  return true;
-}
-
-/**
- * Read the `WEBJS_SEED` environment override, if set. Same grammar as
- * `WEBJS_ELIDE`: `0`/`false`/`off`/`no` force seeding OFF, `1`/`true`/`on`/`yes`
+ * Read the `WEBJS_SEED` environment override, if set. `0`/`false`/`off`/`no`
+ * force seeding OFF, `1`/`true`/`on`/`yes`
  * force it ON, anything else (or unset) falls through to the package.json
  * switch. The deploy-time / ops escape hatch and the seam tests use to render
  * an app with seeding on and off in one process.
@@ -73,11 +29,11 @@ function seedEnvOverride() {
  * Read the project-level SSR action-seeding switch (#472). Precedence: the
  * `WEBJS_SEED` env override wins when set, otherwise the package.json
  * `{ "webjs": { "seed": false } }` switch disables it (the client re-fetches on
- * hydration as it did before the feature). Default ON (opt-out), mirroring
- * elision: any value other than the literal `false` keeps seeding enabled.
+ * hydration as it did before the feature). Default ON (opt-out): any value
+ * other than the literal `false` keeps seeding enabled.
  *
- * Seeding installs a process-global `module.registerHooks` load hook, so unlike
- * elision it is read ONCE at boot (not re-read per rebuild): toggling it needs a
+ * Seeding installs a process-global `module.registerHooks` load hook, so it is
+ * read ONCE at boot (not re-read per rebuild): toggling it needs a
  * restart, like a deploy.
  * @param {string} appDir
  * @returns {Promise<boolean>}
@@ -101,7 +57,7 @@ export async function readSeedEnabled(appDir) {
  * `{ "webjs": { "clientRouter": false } }` opts the WHOLE app out (pure MPA,
  * full-page navigation), which the render path signals to the browser so the
  * core bundle's module-end auto-enable is skipped. Any other value, or an
- * absent key, keeps the router on. Re-read on every rebuild (alongside elide)
+ * absent key, keeps the router on. Re-read on every rebuild
  * so toggling it takes effect without a server restart.
  * @param {string} appDir
  * @returns {Promise<boolean>}

@@ -2,9 +2,7 @@
 # Guardrail: a webjs custom element must extend the framework's WebComponent
 # base class, never raw HTMLElement.
 #
-# Why: a raw `extends HTMLElement` custom element is invisible to the webjs
-# elision analyser (it ships unconditionally, defeats display-only elision, and
-# keeps any importing page/layout from being import-only), it bypasses the
+# Why: a raw `extends HTMLElement` custom element bypasses the webjs
 # SSR / lifecycle / reactive-prop machinery, and it usually applies its DOM work
 # in connectedCallback (client-only), a progressive-enhancement bug.
 #
@@ -69,9 +67,9 @@ BLOCKED: a webjs custom element must extend the WebComponent base class, not raw
   MyThing.register('my-thing');
 
 A display-only element (just host classes / static markup) can set its classes
-in the constructor (runs at SSR, so it is progressive-enhancement-safe) and
-stays elidable, so it ships zero JS. A raw `extends HTMLElement` element cannot
-be elided, defeats import-only routes, and applies its work client-only.
+in the constructor (runs at SSR, so it is progressive-enhancement-safe); put it
+in a `*.server.ts` file and it ships zero JS. A raw `extends HTMLElement`
+element applies its work client-only.
 
 If WebComponent genuinely cannot express this (a rare native-API edge case),
 add a marker comment containing `webjs-allow-htmlelement: <reason>` to the file

@@ -2,7 +2,7 @@
  * Unit tests for the SSR action-seeding switch resolution (#472): the
  * `WEBJS_SEED` environment override takes precedence over the `package.json`
  * `{ "webjs": { "seed": false } }` key, which overrides the default-on
- * behaviour. Mirrors the elision switch (`elide-switch.test.js`).
+ * behaviour.
  */
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';

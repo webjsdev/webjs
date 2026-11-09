@@ -217,18 +217,14 @@ function orphanScan(file, src) {
  *     cross-reference is app-wide precisely so a class registered by a sibling
  *     module is not accused of this.
  *   - A registration whose tag is COMPUTED (`X.register(TAG)`). That call is
- *     ordinary code, so it runs IF the module reaches the browser, which
- *     requires the importing module to ship WHOLE. An inert, import-only, or
- *     elided importer is dropped from the boot and takes the import with it,
- *     and then the element does not upgrade either. Assume it does not. An
- *     orphan is not in `componentFiles`, so it never joins the frontier an
- *     import-only page emits in its place, and a page that renders a real
- *     component alongside the orphan is import-only unless it ALSO does its
- *     own client work (which ships it whole, #963). Shipping whole is the
- *     narrower case, so treat the upgrade as lost until proven otherwise.
+ *     ordinary code, so it runs only IF the module reaches the browser. A
+ *     route module never does (#1686), and an orphan is not in
+ *     `componentFiles`, so it never joins the frontier a route module emits in
+ *     its place. It loads only when a shipping component imports it, so treat
+ *     the upgrade as lost until proven otherwise.
  *
- * Lost in EVERY case, whichever shape: the elision verdict, the tag-to-module
- * registry entry, and the modulepreload hint. That, not the upgrade, is the
+ * Lost in EVERY case, whichever shape: the tag-to-module registry entry and
+ * the modulepreload hint. That, not the upgrade, is the
  * part that is always true, and it is what every message about this should
  * lead with.
  *

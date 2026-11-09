@@ -29,7 +29,7 @@ test('components reached through plain helpers are emitted; the walk stops at a 
   assert.deepEqual(out.get('/app/page.ts')?.sort(), ['/c/a.ts', '/c/b.ts']);
 });
 
-test('an elided component and a .server file are skipped, and so is everything behind them', () => {
+test('a skipped file and a .server file are skipped, and so is everything behind them', () => {
   const g = graph({
     '/app/page.ts': ['/c/static.ts', '/lib/db.server.ts'],
     '/c/static.ts': ['/c/inner.ts'],

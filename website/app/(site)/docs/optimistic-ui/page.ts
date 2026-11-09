@@ -30,7 +30,7 @@ export default function OptimisticUI() {
     </ul>
 
     <p>
-      Both are client-only, because both do client work (the declarative form calls <code>host.requestUpdate()</code>, the imperative form writes a signal). A component that imports <code>optimistic</code> is therefore never elided as a display-only component, and its module always ships to the browser. See <a href="/docs/elision">Display-Only Elision</a>.
+      Both are client-only, because both do client work (the declarative form calls <code>host.requestUpdate()</code>, the imperative form writes a signal). A component that imports <code>optimistic</code> ships to the browser, as every component in an ordinary file does.
     </p>
 
     <h2>Declarative: <code>optimistic(host, { source, update })</code></h2>

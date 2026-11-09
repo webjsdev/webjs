@@ -693,18 +693,12 @@ function reportBoundaryLayoutError(err, opts, cfg = {}) {
  * The boot module set for a boundary response: what actually RENDERED, the
  * boundary module plus the layouts wrapping it (#1298).
  *
- * Applies the SAME inert / import-only substitution as the happy-path boot
- * (#963), so a boundary never ships a route module the normal render drops.
- * Pre-substitution, an import-only layout with a bare `.server.*` import
- * (legal, it never loads client-side) would load here whole and crash the
- * boundary page's boot on the throw-at-load stub, killing the sibling
- * component registrations in the same module script.
- *
- * The substitution applies to the boundary file harmlessly: only page and
- * layout files are fed to the elision analysis, so a boundary is never inert
- * and never import-only, gets no verdict, and is pushed as-is. Every boundary
- * kind is a `browserEntryFiles` entry (browser-entries.js), so each of these
- * URLs is servable through the auth gate.
+ * Applies the SAME frontier substitution as the happy-path boot, so a
+ * boundary response never ships a route module (#1686): the boundary and each
+ * wrapping layout are replaced by the components they import. Shipped whole, a
+ * layout with a bare `.server.*` import (legal, it never loads client-side)
+ * would crash the boundary page's boot on the throw-at-load stub, killing the
+ * sibling component registrations in the same module script.
  *
  * @param {string | null} boundaryFile  Null for the framework's default body,
  *   which has no module of its own; only the layouts boot then.
@@ -1200,11 +1194,11 @@ export async function ssrPage(route, params, url, opts) {
     // preloads and instead loaded via IntersectionObserver when they
     // enter the viewport.
     const { eager: eagerComponents, lazy: renderedLazy } =
-      componentPreloads(suspenseCtx.usedComponents, opts.appDir, opts.elidableComponents, lazyFiles);
+      componentPreloads(suspenseCtx.usedComponents, opts.appDir, lazyFiles);
     const lazyComponents = { ...frontierLazy, ...renderedLazy };
     // Both preload passes (the app-module hints and the vendor hints, #754)
     // root at the BOOT's shipped set plus the rendered components and skip a
-    // lazy component (#1524) or an elided one and the subtree only it reaches;
+    // lazy component (#1524) and the subtree only it reaches;
     // `pagePreloadHints` walks that closure ONCE for both (#1644), where the
     // two passes used to walk it twice. The over-fetch rules (#780, #754) are
     // documented on the helper.
@@ -1213,7 +1207,6 @@ export async function ssrPage(route, params, url, opts) {
       appDir: opts.appDir,
       moduleUrls,
       eagerComponents,
-      elidableComponents: opts.elidableComponents,
       lazyFiles,
       serverFiles: opts.serverFiles,
     });
@@ -1426,11 +1419,10 @@ export async function ssrPage(route, params, url, opts) {
         // needed (a throw out of renderToString is not attributable to one
         // layout anyway, so tracking would be absent exactly when it mattered).
         const body = await renderBoundaryInChain(tree, route, route.errors[i], ctx, opts.dev);
-        // Apply the SAME inert / import-only substitution as the happy-path
-        // boot (#963): the error page must not ship a page/layout module the
-        // normal render drops. Pre-substitution, an import-only page with a
-        // bare `.server.*` import (legal, it never loads client-side) would
-        // load here whole and crash the error page's boot on the throw-at-load
+        // Apply the SAME frontier substitution as the happy-path boot
+        // (#1686): the error page must not ship a route module. Shipped whole,
+        // one with a bare `.server.*` import (legal, it never loads
+        // client-side) would crash the error page's boot on the throw-at-load
         // stub, killing the sibling component registrations in the same
         // module script.
         //
@@ -1438,10 +1430,7 @@ export async function ssrPage(route, params, url, opts) {
         // the layouts wrapping it. It used to be the page module plus every
         // layout, so a boundary shipped the page (which never ran) and any
         // deeper layout (which never ran either), while omitting the boundary
-        // itself, and a component the boundary rendered never upgraded. The
-        // substitution applies to the boundary file harmlessly: only page and
-        // layout files are fed to the elision analysis, so a boundary is never
-        // inert and never import-only, gets no verdict, and is pushed as-is.
+        // itself, and a component the boundary rendered never upgraded.
         const errModuleUrls = boundaryModuleUrls(route.errors[i], wrapLayouts, opts);
         const html = wrapInDocument(body, { metadata, moduleUrls: errModuleUrls, dev: opts.dev, nonce: errNonce });
         return htmlResponse(html, 500, opts.req, url);

@@ -455,8 +455,8 @@
     "actionSignal": {
       "demoed": true
     },
-    "analyzeAppElision": {
-      "exempt": "internal: framework/CLI plumbing"
+    "analyzeRouteModules": {
+      "exempt": "internal: framework/CLI plumbing (the doctor route checks)"
     },
     "applyCorsHeaders": {
       "exempt": "internal: framework/CLI plumbing"
@@ -632,9 +632,6 @@
     "loginAndGetCookies": {
       "demoed": true
     },
-    "maskJsSet": {
-      "exempt": "internal: the differential comparator behind `webjs elision --verify`, exported so an app can diff its own two captures with the framework comparator instead of a copy"
-    },
     "matchApi": {
       "demoed": true
     },
@@ -777,7 +774,7 @@
       "demoed": true
     },
     "staticPageRoutes": {
-      "exempt": "internal: the `webjs elision --verify` render corpus, exported alongside maskJsSet for the same reason"
+      "exempt": "internal: route-table helper the website's /llms.txt builder reads to list static pages"
     },
     "storeSession": {
       "demoed": true

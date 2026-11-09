@@ -93,7 +93,7 @@ test('last-write-wins: a later render\'s seed replaces an unconsumed earlier one
 
 test('staleness counterfactual: a soft nav\'s seed wins over the previous page\'s unconsumed one', async () => {
   // Two SEPARATE scans, the shape `applySwap` produces: render 1 seeds a key
-  // nothing consumes (its component elided), then a soft navigation scans
+  // nothing consumes (its component is server-only), then a soft navigation scans
   // render 2's block for the same key. Reverting `ingest` to first-write-wins
   // makes this return 'render-1-value'.
   scanSeeds(root([el('script', await stringify({ 'h/getUser/[1]': 'render-1-value' }))]));
@@ -350,10 +350,10 @@ test('a scan whose seeds all REPLACE unconsumed ones still counts as seeds merge
   // re-emits a key the store still holds makes every seed a replacement, so
   // counting only `ingested` measures zero and the report falls to the silent
   // branch even though the page plainly carried a seed.
-  const payload = await stringify({ 'h/elided/[1]': 'never-consumed' });
+  const payload = await stringify({ 'h/unconsumed/[1]': 'never-consumed' });
   const first = await withReporter(async () => {
     scanSeeds(root([el('script', payload, 'ok')]));
-    takeSeed('h', 'elided', '[99]');
+    takeSeed('h', 'unconsumed', '[99]');
   });
   assert.equal(first.warns.length, 1);
   assert.match(first.warns[0], /1 seed\(s\) on this page/);
@@ -361,7 +361,7 @@ test('a scan whose seeds all REPLACE unconsumed ones still counts as seeds merge
 
   const second = await withReporter(async () => {
     scanSeeds(root([el('script', payload, 'ok')]));
-    takeSeed('h', 'elided', '[99]');
+    takeSeed('h', 'unconsumed', '[99]');
   });
   assert.equal(second.warns.length, 1);
   assert.match(second.warns[0], /1 seed\(s\) on this page/, 'a replacement is still a seed on the page');

@@ -30,7 +30,7 @@ const SERVER_FILE_RE = /\.server\.m?[jt]s$/;
  * @param {Iterable<string>} routeFiles  absolute route-module paths (`collectBootRouteModules`)
  * @param {Map<string, Set<string>>} moduleGraph  file -> its static imports
  * @param {Set<string>} componentFiles  every registered component's file
- * @param {Set<string>} skip  files that never load in the browser: elided display-only components and server files
+ * @param {Set<string>} skip  files that never load in the browser (route-table files)
  * @returns {Map<string, string[]>}  route file -> component files to import in its place (possibly empty)
  */
 export function routeFrontiers(routeFiles, moduleGraph, componentFiles, skip) {
@@ -48,7 +48,7 @@ export function routeFrontiers(routeFiles, moduleGraph, componentFiles, skip) {
       for (const dep of deps) {
         if (visited.has(dep)) continue;
         visited.add(dep);
-        // An elided component never loads; a `.server.*` module is a stub in the
+        // A skipped file never loads; a `.server.*` module is a stub in the
         // browser, so nothing behind it can load either (inside or outside appDir).
         if (skip.has(dep) || SERVER_FILE_RE.test(dep)) continue;
         // A component is imported in the route module's place, and its own

@@ -1,7 +1,7 @@
 /**
  * `routeModuleBrowserHints` (#1686): a page, layout or boundary runs only on
  * the server, so code in one that looks meant for the browser silently does
- * nothing. These hints feed `webjs elision` and the `ROUTE_BROWSER_CODE`
+ * nothing. These hints feed `webjs status` and the `ROUTE_BROWSER_CODE`
  * doctor advisory. Each case pins one pattern, and its negative pins the
  * shape that must stay quiet, since an advisory that fires on healthy code
  * trains the reader to skip it.
@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { routeModuleBrowserHints } from '../../src/component-elision.js';
+import { routeModuleBrowserHints } from '../../src/client-signals.js';
 
 const APP = '/srv/app';
 const FILE = `${APP}/app/page.ts`;

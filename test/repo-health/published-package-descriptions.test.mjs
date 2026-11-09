@@ -128,7 +128,7 @@ test('the brand matcher fires on prose and spares a literal token', () => {
   assert.deepEqual(brandViolations(`Run ${LOWER} dev to start the server.`), []);
   assert.deepEqual(brandViolations(`Run \`${LOWER} dev\` to start the server.`), []);
   assert.deepEqual(brandViolations(`Install @${LOWER}dev/core, documented at ${LOWER}.dev today.`), []);
-  assert.deepEqual(brandViolations(`Set WEBJS_ELIDE=0 in ${LOWER}dev/${LOWER} to opt out.`), []);
+  assert.deepEqual(brandViolations(`Set WEBJS_SEED=0 in ${LOWER}dev/${LOWER} to opt out.`), []);
 });
 
 test('the derived package list is not silently empty', () => {

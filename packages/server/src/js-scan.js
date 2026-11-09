@@ -1,6 +1,7 @@
 /**
  * Low-level lexical scanning helpers shared by the convention validator
- * (`check.js`) and the component-elision analyser (`component-elision.js`).
+ * (`check.js`), the component scanner and the browser-code signals
+ * (`client-signals.js`).
  *
  * These are deliberately a hand-rolled lexer, NOT a full TS parse. The
  * framework prioritises fast dev-time rebuilds; a real parser would be ~50x
@@ -320,7 +321,7 @@ function scanLiterals(src, { placeholder = false, blankStrings = false } = {}) {
  * Blank ONLY comments, keeping string AND template-literal content verbatim
  * (position-preserving: same length, newlines kept). The sibling
  * `redactStringsAndTemplates` blanks templates too, which is wrong for callers
- * that need to read inside `html` templates (the elision render-tag scanner) or
+ * that need to read inside `html` templates (the render-tag scanner) or
  * inside string arguments (`whenDefined('tag')`). This keeps both and removes
  * only comment text, so prose in a comment cannot be read as a real signal
  * (issue #179). It reuses the same regex-versus-division and tagged-template
@@ -434,8 +435,8 @@ export function extractWebComponentClassBodies(content) {
   const bodies = [];
   // The optional `(?:\s*<[^{}();]*?>)?` skips a TypeScript generic parameter
   // list on the class name (`class Grid<T> extends WebComponent`), so a generic
-  // component is not missed (which would let elision wrongly strip an
-  // interactive component, the unsafe direction). The exclusion class keeps the
+  // component is not missed (which would leave its class body unlinted, the
+  // unsafe direction). The exclusion class keeps the
   // generic from swallowing the class body / a call, and stops it staying
   // within the type-parameter list (#753, found differentially).
   const re = /class\s+\w+(?:\s*<[^{}();]*?>)?\s+extends\s+WebComponent/g;

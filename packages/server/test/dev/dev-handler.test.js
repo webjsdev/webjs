@@ -125,7 +125,7 @@ test('handle: a transient vendor failure does not block readiness', async () => 
   // therefore not held down. The failed resolve is re-attempted on the next
   // request, not via a background timer.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
     // The bare import sits in a component: a page never ships (#1686), so a
@@ -153,7 +153,7 @@ test('handle: a transiently failed vendor resolve is retried per backoff window,
   // jspm fetch per request. The backoff gate opens a 2 s window after the
   // first failure, so fifty requests inside it fire no second attempt.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
     // The bare import sits in a component: a page never ships (#1686), so a
@@ -191,7 +191,7 @@ test('handle: one failed vendor attempt widens the backoff window once, however 
   // a request 4.1 s after that failure fires a third attempt. With per-caller
   // bookkeeping the window is at the cap and the third attempt never comes.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
     // The bare import sits in a component: a page never ships (#1686), so a
@@ -238,7 +238,7 @@ test('handle: a malformed pin file falls through to the real deferred resolve', 
   // through to the normal deferred resolve, which scans the real imports. We
   // detect that by spying on the jspm fetch: the broken path never reaches it.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
     // The bare import sits in a component: a page never ships (#1686), so a
@@ -699,7 +699,7 @@ test('routeFor: returns the component frontier, never a route module (#1686)', a
       `export default function L({ children }) { return html\`<nav-widget></nav-widget><main>\${children}</main>\`; }\n`,
     'components/page-widget.js': comp('PageWidget', 'page-widget'),
     'components/nav-widget.js': comp('NavWidget', 'nav-widget'),
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
   });
   const app = await createRequestHandler({ appDir, dev: true });
   await app.warmup();

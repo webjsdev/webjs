@@ -1,11 +1,9 @@
 /**
  * Parse a jspm install string into its package name, version, and subpath.
  *
- * Shared by the two vendor fixtures, which need the same parse for different
- * reasons. `test/e2e/fixtures/stub-jspm.mjs` (#1228) uses it to decide whether
- * it can serve an install from this repo, and `test/fixtures/jspm-double.mjs`
- * (#1150) uses it to mint a jspm-shaped URL. Both would otherwise reach for the
- * `install.replace(/@[^@]*$/, '')` shortcut that several inline mocks in
+ * `test/fixtures/jspm-double.mjs` (#1150) uses it to mint a jspm-shaped URL.
+ * It would otherwise reach for the `install.replace(/@[^@]*$/, '')` shortcut
+ * that several inline mocks in
  * `packages/server/test/vendor/vendor.test.js` use, which is wrong on any
  * install carrying a subpath: on `dayjs@1.11.13/plugin/utc` the trailing
  * `@1.11.13/plugin/utc` is one match, so the whole subpath disappears with the

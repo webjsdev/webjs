@@ -1,8 +1,7 @@
-// #197: a committed vendor pin is pruned to the specifiers still reachable
-// from non-elided modules, so a pinned app serves the same import map an
-// unpinned app would. A vendor package whose ONLY importer is a display-only
-// (elided) component must NOT appear in the served importmap, even when it is
-// in the committed pin file. This mirrors the #170 elision e2e but with a pin.
+// #197: a committed vendor pin is pruned to the specifiers the browser can
+// reach, so a pinned app serves the same import map an unpinned app would. A
+// vendor package whose ONLY importer is a page (which never ships, #1686) must
+// NOT appear in the served importmap, even when it is in the committed pin file.
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,9 +25,8 @@ function makeApp(files) {
   return appDir;
 }
 
-// Display-only: a vendor package used only in render (a binding import, NOT an
-// interactivity signal), so the component is elidable and `pad` is its only
-// importer.
+// A component using a vendor package in its render: it ships, so `pad` is
+// reachable from the browser.
 const BADGE = `
 import { WebComponent, html } from '@webjsdev/core';
 import pad from 'leftpad';
@@ -38,10 +36,11 @@ class Badge extends WebComponent {
 Badge.register('x-badge');
 `;
 
+// A page that uses the vendor package itself: it runs only on the server.
 const PAGE = `
 import { html } from '@webjsdev/core';
-import '../components/badge.ts';
-export default () => html\`<x-badge></x-badge>\`;
+import pad from 'leftpad';
+export default () => html\`<p>\${pad('x', 3)}</p>\`;
 `;
 
 const PIN = JSON.stringify({
@@ -62,26 +61,24 @@ async function importmapOf(appDir) {
   return importmapFromHandler(app);
 }
 
-test('a pinned vendor dep used only by an elided component is pruned from the served map', async () => {
+test('a pinned vendor dep used only by a page is pruned from the served map', async () => {
   const appDir = makeApp({
     'app/page.ts': PAGE,
-    'components/badge.ts': BADGE,
     '.webjs/vendor/importmap.json': PIN,
   });
   const map = await importmapOf(appDir);
   assert.ok(
     !Object.keys(map.imports).some((k) => k === 'leftpad' || k.startsWith('leftpad/')),
-    `leftpad should be pruned (its only importer is elided), got keys: ${Object.keys(map.imports).join(', ')}`,
+    `leftpad should be pruned (its only importer is a page), got keys: ${Object.keys(map.imports).join(', ')}`,
   );
 });
 
 test('the prune survives a rebuild (the pinned map does not regrow)', async () => {
   // After an fs.watch rebuild the vendor stage re-runs; it must re-prune, not
   // re-apply the full pin. (Regression guard: an earlier version pruned only on
-  // first warm, so a rebuild regrew the elided-only dep.)
+  // first warm, so a rebuild regrew the page-only dep.)
   const appDir = makeApp({
     'app/page.ts': PAGE,
-    'components/badge.ts': BADGE,
     '.webjs/vendor/importmap.json': PIN,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -95,15 +92,11 @@ test('the prune survives a rebuild (the pinned map does not regrow)', async () =
     `still pruned after rebuild, got keys: ${Object.keys(map.imports).join(', ')}`);
 });
 
-test('a pinned vendor dep used by a NON-elided (interactive) component is kept', async () => {
-  // Same component but with a @click handler, so it ships and `pad` stays reachable.
-  const INTERACTIVE_BADGE = BADGE.replace(
-    'render() { return html`<span>${pad(\'x\', 3)}</span>`; }',
-    'render() { return html`<button @click=${() => {}}>${pad(\'x\', 3)}</button>`; }',
-  );
+test('a pinned vendor dep a component uses is kept', async () => {
+  // Every component ships, so `pad` stays reachable from the browser.
   const appDir = makeApp({
     'app/page.ts': PAGE,
-    'components/badge.ts': INTERACTIVE_BADGE,
+    'components/badge.ts': BADGE,
     '.webjs/vendor/importmap.json': PIN,
   });
   const map = await importmapOf(appDir);

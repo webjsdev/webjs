@@ -35,7 +35,7 @@ import {
 export function checkNoMissingLocalImport(appDir, files, violations) {
   // --- Rule: no-missing-local-import ---
   // A named value import of a symbol an app-internal module does not export is a
-  // runtime crash (the binding is undefined) that the elision-based checks miss,
+  // runtime crash (the binding is undefined) that the graph-based checks miss,
   // so `check` can stay green while `typecheck` is red (a dropped schema table
   // orphaning a gallery module is the motivating dogfood case). Conservative by
   // construction: only app-internal specifiers resolving to a known app file,

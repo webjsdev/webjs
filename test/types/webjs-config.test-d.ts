@@ -24,7 +24,7 @@ import type {
 /* ------------- A fully-populated, valid config ------------- */
 
 const full: WebjsConfig = {
-  elide: false,
+  seed: false,
   clientRouter: false,
   headers: [
     { source: '/embed/:path*', headers: [{ key: 'X-Frame-Options', value: null }] },
@@ -135,9 +135,9 @@ void slash;
 
 /* ------------- Counterfactuals (each MUST be an error) ------------- */
 
-// @ts-expect-error elide is a boolean, not a string.
-const badElide: WebjsConfig = { elide: 'yes' };
-void badElide;
+// @ts-expect-error seed is a boolean, not a string.
+const badSeed: WebjsConfig = { seed: 'yes' };
+void badSeed;
 
 // @ts-expect-error trailingSlash is a fixed enum; 'sometimes' is not a member.
 const badEnum: WebjsConfig = { trailingSlash: 'sometimes' };

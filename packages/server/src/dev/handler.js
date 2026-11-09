@@ -41,14 +41,15 @@ import { browserEntryFiles } from '../browser-entries.js';
 import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport, bareImports, dynamicBareImports } from '../module-graph.js';
 import { foreignImportProblems, registerForeignImportGuard } from '../foreign-imports.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
-import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles, routeModuleBrowserHints } from '../component-elision.js';
+import { lazyComponentFiles, bindingImportedLazyFiles } from '../lazy-components.js';
+import { routeModuleBrowserHints } from '../client-signals.js';
 import { routeFrontiers, collectBootRouteModules, routeTableFiles, leadsToComponent } from '../route-frontier.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
 import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
-import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setServeFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
 import { bumpBuildEpoch } from '../build-epoch.js';
 import { hintedBootModules } from '../ssr/shipped-modules.js';
 import { createRetryBackoff } from './vendor-retry.js';
@@ -66,7 +67,6 @@ import { createDevStatus } from './dev-status.js';
 import { devReloadState } from '../dev-reload-state.js';
 
 import {
-  readElideEnabled,
   readSeedEnabled,
   readClientRouterEnabled,
   readHeaderRules,
@@ -93,7 +93,7 @@ import { devImport, clearProdImportCache } from '../dev-import.js';
 /**
  * A short content digest of a single file's bytes for the app-source deploy
  * signal (#899). Raw `sha256(bytes)`, deliberately independent of `assetHashFor`
- * (which folds the elision fingerprint and memoizes for `?v` emission): the
+ * (which folds the serve fingerprint and memoizes for `?v` emission): the
  * signal only needs "did the source bytes change", and server-only files never
  * enter the asset-hash memo anyway. Returns `''` on a read failure, so a
  * transient error degrades the id rather than throwing during analysis.
@@ -419,10 +419,10 @@ export async function createRequestHandler(opts) {
   // rendered deterministically at runtime). Pinning stays optional; an unpinned
   // app does no vendor work at boot and publishes its id after the first
   // successful resolve instead. Either way the EXPENSIVE analysis (graph, scan,
-  // gate, elision) and the UNPINNED jspm resolve stay deferred to the first
+  // gate, frontiers) and the UNPINNED jspm resolve stay deferred to the first
   // request, so #143's win is intact; only the cheap committed-file read moves
   // back to boot, and only when a VALID pin exists. A committed pin file is
-  // served as-is (elision never prunes it), so the boot-resolved map equals the
+  // served as-is (nothing prunes it), so the boot-resolved map equals the
   // final served map and the published id is authoritative.
   //
   // Validate the pin with readPinFile BEFORE treating the app as pinned-at-boot.
@@ -448,7 +448,7 @@ export async function createRequestHandler(opts) {
   }
 
   // Whole-app analysis (module graph, component scan, browser-bound gate,
-  // action index, middleware, elision, vendor) is NOT run at boot. It is
+  // action index, middleware, frontiers, vendor) is NOT run at boot. It is
   // computed on the first request via ensureReady() below and memoized, so the
   // server starts without walking or reading the app's source, executing any
   // server module, or hitting the network. Only the route table is built
@@ -552,7 +552,6 @@ export async function createRequestHandler(opts) {
     // the core / vendor serving are unchanged, so no server source is exposed.
     testMode: opts.testMode === true,
     moduleGraph: null,
-    elidableComponents: new Set(),
     // Route module -> the component files the boot imports in its place
     // (#1686). Route modules never ship; see `route-frontier.js`.
     /** @type {Map<string, string[]>} */
@@ -563,16 +562,16 @@ export async function createRequestHandler(opts) {
     routeHints: [],
     // `static lazy` component files -> their tags (#1524): a side-effect import
     // of one is served as a lazy-loader registration, and the preload walks
-    // skip it. Independent of the elision switch.
+    // skip it.
     lazyComponentFiles: new Map(),
-    // The browser-bound ENTRY files (pages / layouts / boundaries / components),
+    // The browser-bound ENTRY files (components and instrumentation-client),
     // kept alongside the expanded gate set because the vendor scan roots at the
     // entries rather than at the closure.
     browserEntryFiles: new Set(),
     browserBoundFiles: null,
     // Dev live-reload classification (#1398). `shippedFiles` is the transitive
     // closure of what the browser can ACTUALLY load (the gate set minus every
-    // module elision drops), `graphFiles` is every app source the graph walked,
+    // module the frontier walk skips), `graphFiles` is every app source the graph walked,
     // and `pageFiles` is the route table's pages. Together they are the whole
     // input to `classifyChangedPath`, so a watch event can be answered without
     // reaching into the rest of this state. Dev-only; left empty in prod.
@@ -582,11 +581,10 @@ export async function createRequestHandler(opts) {
     graphFiles: new Set(),
     /** @type {Set<string>} */
     pageFiles: new Set(),
-    // Transformed-source cache (stripped TS + applied elision). Per-handler,
-    // NOT module-global: the cached bytes bake in THIS handler's elision
-    // verdict, so two handlers for the same app with different elision
-    // settings (a multi-tenant embedder, or the differential elision test)
-    // must not share it, or the second would serve the first's elided source.
+    // Transformed-source cache (stripped TS + the lazy-import rewrite).
+    // Per-handler, NOT module-global: the cached bytes bake in THIS handler's
+    // lazy set and source-location setting, so two handlers for the same app
+    // must not share it.
     tsCache: new Map(),
     // Dev source locations (#1499), fixed for the handler's lifetime, so the
     // per-handler tsCache above never mixes annotated and plain bytes.
@@ -640,7 +638,7 @@ export async function createRequestHandler(opts) {
   // All whole-app analysis is built lazily on the first request, memoized so
   // boot does none of it. It runs in two stages. The deterministic analysis
   // (module graph, component scan + prime, browser-bound gate, action index,
-  // middleware, elision) is network-free and, once built, never re-runs unless
+  // middleware, frontiers) is network-free and, once built, never re-runs unless
   // a rebuild invalidates it; readiness gates on it. Vendor resolution is a
   // SEPARATE, best-effort stage: a pinned app reads a committed importmap file,
   // an unpinned app auto-fetches from jspm. It does NOT gate readiness, so an
@@ -662,7 +660,7 @@ export async function createRequestHandler(opts) {
   let analysisEverDone = false;
   // A pinned app applied its FULL vendor map and published the build id at boot
   // (above). The deferred vendor stage still runs once (and after every rebuild)
-  // to PRUNE that map to the elision-reachable specifiers, so a pinned app serves
+  // to PRUNE that map to the browser-reachable specifiers, so a pinned app serves
   // the same map an unpinned one does (#197); it does not re-publish the build id
   // (the boot hash stays the deploy fingerprint). An unpinned app starts false and
   // resolves live on the first request.
@@ -767,25 +765,17 @@ export async function createRequestHandler(opts) {
             // Client-router opt-out (#629): re-read each pass so toggling
             // `webjs.clientRouter` takes effect on rebuild without a restart.
             setClientRouterEnabled(await readClientRouterEnabled(appDir));
-            // Read the switch ONCE: the dev summary below reports it too, and
-            // calling readElideEnabled twice per warm re-reads package.json.
-            const elideOn = await readElideEnabled(appDir);
-            const ic = state.routeTable.instrumentationClient;
-            const r = elideOn
-              ? await analyzeElision(components, state.moduleGraph, (f) => readFile(f, 'utf8'), appDir,
-                  { entries: ic ? [ic] : [] })
-              : { elidableComponents: new Set(), componentVerdicts: new Map() };
-            state.elidableComponents = r.elidableComponents;
             // Route modules never ship (#1686): each is replaced in the boot by
-            // its component frontier. Computed whether or not elision is on,
-            // since `webjs.elide` only switches display-only COMPONENT elision.
-            // Every route-table file is in the skip set, so a route module is
-            // never emitted or walked through even when another one imports it.
+            // its component frontier. Every component ships, as in Lit; a
+            // component in a `.server` file is a stub in the browser, so the walk
+            // stops there. Every route-table file is in the skip set, so a route
+            // module is never emitted or walked through even when another one
+            // imports it.
             {
               const routeFiles = collectBootRouteModules(state.routeTable);
               state.routeFrontiers = routeFrontiers(routeFiles, state.moduleGraph,
                 new Set(components.map((c) => c.file)),
-                new Set([...state.elidableComponents, ...state.routeModuleFiles]));
+                state.routeModuleFiles);
             }
             // Dev only: code in a route module that looks meant for the browser
             // but runs only on the server (#1686), reported by `webjs status` as
@@ -804,48 +794,36 @@ export async function createRequestHandler(opts) {
               }
               state.routeHints = hints;
             }
-            state.lazyComponentFiles = lazyComponentFiles(components, state.elidableComponents);
+            state.lazyComponentFiles = lazyComponentFiles(components);
             // A lazy component some module imports WITH bindings loads eagerly
             // anyway, so it keeps its preload hint and its imports as written.
             for (const f of await bindingImportedLazyFiles(state.lazyComponentFiles, state.moduleGraph,
               (f) => readFile(f, 'utf8'), resolveImport, appDir)) state.lazyComponentFiles.delete(f);
             // Dev live-reload classification (#1398): derive the three sets the
             // watch-event classifier reads. `browserBoundFiles` above is the
-            // AUTHORIZATION gate (it walks from every entry, elided ones
-            // included, because an elided module's URL must still 404 rather
-            // than leak), so it is the wrong input here: the question is what
-            // the browser actually HOLDS. Re-walk from the entries elision
-            // keeps, and an edit to anything reachable from those is a reload.
-            // An import-only page's substituted components are themselves
-            // entries, so dropping the page loses none of its reach.
+            // AUTHORIZATION gate, so it is the wrong input here: the question is
+            // what the browser actually HOLDS. Re-walk from the entries, and an
+            // edit to anything reachable from those is a reload.
             if (dev) {
-              const shippedEntries = [...state.browserEntryFiles].filter((f) =>
-                !state.elidableComponents.has(f)
-                && !state.routeModuleFiles.has(f));
+              const shippedEntries = [...state.browserEntryFiles].filter((f) => !state.routeModuleFiles.has(f));
               state.shippedFiles = reachableFromEntries(state.moduleGraph, shippedEntries, appDir);
               state.graphFiles = seenFilesFor(state.moduleGraph);
               state.pageFiles = new Set((state.routeTable.pages || []).map((p) => p.file).filter(Boolean));
             }
-            // Fold the elision verdict into app-module content hashes (#243): an
-            // app module's served body is elision-transformed, so a verdict flip
-            // must bust its `?v` even when its source is byte-identical. A stable
-            // string of the sorted elidable + inert paths, RELATIVIZED to appDir
-            // so the fingerprint is a property of the app's STRUCTURE, not its
-            // filesystem location (two deploys at different absolute paths, or
-            // two identical apps, produce the same fingerprint). asset-hash
-            // digests it into each app-module hash; '' when nothing is elidable,
-            // so a no-elision app's hash stays exactly `sha256(bytes)`.
+            // Fold the lazy set into app-module content hashes (#243, #1524): a
+            // file flipping to or from `static lazy` changes how every importer
+            // serves its import of it, so the flip must bust the importer's `?v`
+            // even when its source is byte-identical. A stable string of the
+            // sorted lazy paths, RELATIVIZED to appDir so the fingerprint is a
+            // property of the app's STRUCTURE, not its filesystem location.
+            // asset-hash digests it into each app-module hash; '' when nothing is
+            // lazy, so such an app's hash stays exactly `sha256(bytes)`.
             {
               // `appDir + sep` boundary (matches asset-hash's containment guard)
               // so a sibling-prefix dir cannot be mis-relativized.
               const rel = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
-              const elidedPaths = [
-                ...state.elidableComponents,
-                // A file flipping to or from `static lazy` changes how every
-                // importer serves its import of it (#1524).
-                ...[...state.lazyComponentFiles.keys()].map((f) => `lazy:${f}`),
-              ].map((p) => (p.startsWith('lazy:') ? `lazy:${rel(p.slice(5))}` : rel(p))).sort();
-              setElisionFingerprint(elidedPaths.length ? elidedPaths.join('\n') : '');
+              const lazyPaths = [...state.lazyComponentFiles.keys()].map((f) => `lazy:${rel(f)}`).sort();
+              setServeFingerprint(lazyPaths.length ? lazyPaths.join('\n') : '');
             }
             // App-source fingerprint for the HTML cache key (#318): a
             // deterministic, location-independent digest of the browser-bound
@@ -853,8 +831,8 @@ export async function createRequestHandler(opts) {
             // module's bytes (which the importmap-only build id misses) re-keys
             // the cache instead of serving a body with stale `?v` boot URLs.
             // PROD only (asset-hash is enabled there); '' in dev, where fs.watch
-            // handles staleness. Computed AFTER the elision fingerprint, so each
-            // per-file hash already reflects the elision verdict (an elision
+            // handles staleness. Computed AFTER the serve fingerprint, so each
+            // per-file hash already reflects the lazy set (a lazy
             // flip changes the served output, so it moves this fingerprint too).
             // This eagerly hashes the WHOLE browser-bound set once (not just the
             // first route's files), but `assetHashFor` is memoized and already
@@ -882,7 +860,7 @@ export async function createRequestHandler(opts) {
             // fingerprint above: hashes ALL app source (the module-graph `seen`
             // set, INCLUDING server-only `.server.ts` that `browserBoundFiles`
             // omits) with a raw per-file byte digest (decoupled from the
-            // asset-hash memo/elision machinery), plus the installed
+            // asset-hash memo and serve fingerprint), plus the installed
             // `@webjsdev/server` version, so an app-source OR a server-framework
             // deploy moves it. Sorted + appDir-relative for determinism across
             // instances. Drives the client's soft cache-evict (not a reload).
@@ -897,44 +875,29 @@ export async function createRequestHandler(opts) {
             } else {
               setAppSourceId('');
             }
-            t.elision = now() - m;
+            t.frontiers = now() - m;
             if (dev) {
               // An orphan is EITHER shape `findOrphanComponents` reports: no
               // registration call at all, or one whose tag is computed. The
               // scanner matches only a literal tag, so it sees neither, and
-              // what is ALWAYS lost is the verdict, the registry entry, and the
+              // what is ALWAYS lost is the registry entry, the boot import and the
               // preload hint. The upgrade is the part that differs, and a
               // computed tag only survives when its importer ships WHOLE (see
               // findOrphanComponents for why that is the exception). The doctor
-              // check and `webjs elision` say the same thing.
+              // check says the same thing.
               for (const { className, file } of await findOrphanComponents(appDir)) {
                 logger.warn?.(
                   `[webjs] ${className} extends WebComponent but is never registered with a literal tag in ${file} ` +
                     `(either there is no registration call, or its tag is computed), so the scanner cannot see it: ` +
-                    `no elision verdict, no registry entry, no preload hint. ` +
+                    `no registry entry, no preload hint, and no boot import. ` +
                     `<${kebab(className)}> tags never upgrade with no registration call, and a computed tag ` +
                     `upgrades only while its importing module ships whole. ` +
                     `Add \`${className}.register('<tag-name>');\` with a literal tag.`,
                 );
               }
-              // The elision summary (#1308), one server-console line. NOT a
-              // browser push: an inert route ships zero application JS, and the
-              // most useful manual check an author has is opening the network
-              // tab on that route and seeing nothing, which a dev-only boot
-              // script would corrupt on exactly the pages this proves. The fact
-              // is also app-wide while a browser channel is per-tab, and the
-              // per-page detail already has a home in `webjs elision`.
-              // Re-emitted after each fs.watch rebuild, because doRebuild sets
-              // analysisDone = false and this sits inside that stage.
-              logger.info?.(
-                elideOn
-                  ? `[webjs] elision: ${r.elidableComponents.size}/${new Set(components.map((c) => c.file)).size} components elided; ` +
-                    `pages, layouts and boundaries run on the server only. Run \`webjs elision\` for the per-module verdict.`
-                  : `[webjs] elision: disabled (WEBJS_ELIDE / webjs.elide), every component ships.`,
-              );
             }
             // The analysis stage is the last writer of per-build inputs (the
-            // elision fingerprint, the import-only and lazy sets, the route
+            // serve fingerprint, the frontiers and the lazy set, the route
             // table), so every epoch-keyed memo is invalidated here once,
             // unconditionally: a request that rendered in the pre-warm window
             // hinted against an empty fingerprint and must not keep serving
@@ -986,11 +949,11 @@ export async function createRequestHandler(opts) {
           readyDone = true;
           if (ranAnalysis) {
             const ms = (x) => Math.round(x || 0);
-            const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.elision) + ms(t.vendor);
+            const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.frontiers) + ms(t.vendor);
             logger.info?.(
               `[webjs] analysis warm in ${total}ms (graph ${ms(t.graph)}, scan ${ms(t.scan)}, ` +
                 `gate ${ms(t.gate)}, actions ${ms(t.actions)}, middleware ${ms(t.middleware)}, ` +
-                `elision ${ms(t.elision)}, vendor ${ms(t.vendor)})`,
+                `frontiers ${ms(t.frontiers)}, vendor ${ms(t.vendor)})`,
             );
           } else if (ranVendor && vendorResolved) {
             logger.info?.(`[webjs] vendor resolved in ${Math.round(t.vendor || 0)}ms`);
@@ -1021,16 +984,15 @@ export async function createRequestHandler(opts) {
     vendorResolveInFlight = (async () => {
       try {
         const scan = async () => {
-          const skip = new Set([...state.elidableComponents, ...state.routeModuleFiles]);
-          return reachedBareImports(state.moduleGraph, [...state.browserEntryFiles], appDir, skip);
+          return reachedBareImports(state.moduleGraph, [...state.browserEntryFiles], appDir, state.routeModuleFiles);
         };
         const v = await resolveVendorImports(appDir, scan);
         let { imports, integrity } = v;
         if (bootVendorPinned) {
           // resolveVendorImports returns a committed pin VERBATIM (it never runs
-          // the scan for a pinned app). Prune it to the elision-reachable
+          // the scan for a pinned app). Prune it to the browser-reachable
           // specifiers so a pinned app serves the same map an unpinned one does
-          // (#197): an elided-only dep like dayjs is dropped. One scan; the pin
+          // (#197): a dep only a page imports is dropped. One scan; the pin
           // path skipped it. This runs on the first warm AND after every rebuild,
           // so the pruned map is the single source of truth.
           const reachable = await scan();
@@ -1142,9 +1104,9 @@ export async function createRequestHandler(opts) {
     clearProdImportCache();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
-    // component scan, gate, action index, middleware, elision, and vendor map.
+    // component scan, gate, action index, middleware, frontiers, and vendor map.
     // Wait out any in-flight build first so it cannot commit stale results
-    // after the reset. A dependency edit can flip an elision verdict without
+    // after the reset. A dependency edit can flip a lazy or frontier answer without
     // changing an importer's mtime, hence the state.tsCache.clear above.
     if (readyInFlight) { try { await readyInFlight; } catch {} }
     // Bump the vendor generation so a vendor resolve still in flight from the
@@ -1157,7 +1119,7 @@ export async function createRequestHandler(opts) {
     readyError = null;
     readinessFn = undefined;
     // Refresh the on-request regenerate rules (#967) so a `webjs.dev.regenerate`
-    // config edit takes effect without a restart, mirroring the elide/router
+    // config edit takes effect without a restart, mirroring the router
     // re-reads above. Dev-only; a no-op array in prod.
     if (dev) state.regenerateRules = await readRegenerateRules(appDir);
     // Optimistically clear the dev error (#264): the rebuild itself only
@@ -1711,7 +1673,7 @@ export async function createRequestHandler(opts) {
     routeFor,
     /**
      * Proactively run the first-request analysis (module graph, component
-     * scan, gate, action index, middleware, elision, vendor map) in the
+     * scan, gate, action index, middleware, frontiers, vendor map) in the
      * background, so a real first request finds it already memoized. Safe to
      * call any number of times and concurrently: the work is single-flighted,
      * so this never duplicates it or races a real request. It is a single

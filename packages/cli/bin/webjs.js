@@ -49,19 +49,6 @@ if (cmd !== 'help' && cmd !== undefined && !wantsHelp && !wantsVersion) {
 // truth. README.md and the docs site mirror it.
 const TEMPLATES = ['full-stack', 'api'];
 
-/**
- * The one thing `webjs elision --verify` must say about its own boundary, in
- * the command's own output rather than only in the docs. The differential masks
- * the JS-loaded set by construction, so it can only ever see the DANGEROUS
- * direction (elision changed the served bytes); a wrongly dropped module shows
- * up as a dead click, which is bytes-identical.
- */
-const VERIFY_CAVEAT = `
-This proves elision did not change the bytes your app serves. It does NOT prove
-post-hydration behaviour: a wrongly dropped module shows up as a dead click, not
-as different bytes. Run your browser or e2e suite twice to cover that half:
-  WEBJS_ELIDE=1 <your e2e command>
-  WEBJS_ELIDE=0 <your e2e command>`;
 
 /**
  * `--routes /a,/b` or `--routes=/a,/b` -> ['/a', '/b']. Every value is
@@ -95,14 +82,12 @@ const USAGE = `webjs commands:
                                                   exit 1 on any failure). The same list a cloud pipeline runs via "npm run ci".
                                                   --only runs one step or group by title; --signoff runs "gh signoff" after a green run
   webjs routes [--json|--table] [--no-headers]    Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape; --no-headers drops the --table header
-  webjs elision [--json] [--verify]               Report which component modules are elided and why each shipped one ships;
-                                                  --verify diffs SSR output with elision on vs off (exits non-zero on a divergence)
   webjs status [path...] [--port N] [--json]      Wait for a running dev server to settle after an edit, request each path, and
                                                   report every error since the last rebuild; exit 1 on any problem, 2 if no server
-  webjs mcp                                       Start the read-only MCP server (routes / actions / components / elision / check)
+  webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
   webjs source <Export> [--pkg <name>]            Print the signature plus doc comment of one export from the installed @webjsdev/*
                                                   packages (typed declarations first, the authored JSDoc as the fallback); exit 1 on a miss
-  webjs doctor [--json] [--strict]                Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision, component elision, un-versioned stylesheet links).
+  webjs doctor [--json] [--strict]                Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, browser code in a route module, orphan components, un-versioned stylesheet links).
                                                   --json emits the structured results (with stable codes). --strict additionally fails on every remaining warning.
                                                   Per-check severity is CONFIG: map a code to off/warn/error under "webjs": { "doctor": { "gate": {...} } }
                                                   in package.json, so CI gates on a chosen subset without every warning becoming fatal
@@ -216,24 +201,6 @@ const HELP = {
     ],
     examples: ['webjs routes', 'webjs routes --table', 'webjs routes --table --no-headers', 'webjs routes --json'],
   },
-  elision: {
-    usage: 'webjs elision [--json] [--verify] [--routes <paths>]',
-    summary:
-      'Report what the browser loads: which component modules it never downloads and why each one that ships does, and the components each page, layout and boundary loads in its place (route modules never ship).',
-    options: [
-      { flag: '--json', description: 'Emit the verdict as JSON (byte-identical to the MCP list_elision tool).' },
-      { flag: '--verify', description: 'Render every static page route with elision on and off and diff the observable SSR bytes. Exits non-zero on a divergence.' },
-      { flag: '--routes <paths>', description: 'Comma-separated URL paths to add to the --verify corpus (the only way to cover a dynamic route).' },
-    ],
-    notesTitle: 'What --verify proves',
-    notes: [
-      '--verify proves elision did not change the bytes your app serves. It does NOT',
-      'prove post-hydration behaviour: a wrongly dropped module shows up as a dead',
-      'click, not as different bytes. Run your browser or e2e suite twice',
-      '(WEBJS_ELIDE=1 then WEBJS_ELIDE=0) to cover that half.',
-    ],
-    examples: ['webjs elision', 'webjs elision --json', 'webjs elision --verify', 'webjs elision --verify --routes /,/blog/hello'],
-  },
   audit: {
     usage: 'webjs audit [--json]',
     summary:
@@ -345,7 +312,7 @@ const HELP = {
   },
   mcp: {
     usage: 'webjs mcp',
-    summary: 'Start the read-only MCP server (routes / actions / components / elision / check, plus the WebJs brief and the framework source).',
+    summary: 'Start the read-only MCP server (routes / actions / components / check, plus the WebJs brief and the framework source).',
     examples: ['webjs mcp'],
   },
   source: {
@@ -418,8 +385,7 @@ function printCommandHelp(name) {
   // Optional per-command prose for surface a flag table cannot carry (doctor's
   // package.json severity gate is the one that needs it). The heading defaults
   // to `Config:` because that is what doctor's block is and what its help test
-  // pins; a command whose prose is not configuration names its own heading
-  // (`webjs elision`'s is a caveat about what --verify proves).
+  // pins; a command whose prose is not configuration names its own heading.
   if (h.notes) {
     console.log(`\n${h.notesTitle || 'Config'}:`);
     for (const line of h.notes) console.log(`  ${line}`);
@@ -1375,252 +1341,6 @@ async function main() {
       }
       if (!pages.length && !apis.length) {
         console.log('  No routes found. Add an app/page.ts or an app/**/route.ts.');
-      }
-      break;
-    }
-    case 'elision': {
-      // Report the elision verdict for the app in cwd (#1308): which component
-      // modules the browser never downloads, why each one that ships does,
-      // the component frontier each route module is replaced by (route modules
-      // never ship, #1686), and any orphan class that gets no verdict at all. Reuses the ONE analysis pass
-      // (`analyzeAppElision`, the same reporting layer `webjs doctor` and
-      // the MCP `list_elision` tool call), so `--json` is byte-identical to
-      // that tool. Read-only: no autofix, and nothing is written to disk.
-      const appDir = process.cwd();
-
-      // --verify: the app-level differential. Renders every static page route
-      // with elision ON and OFF in this one process and diffs the observable
-      // SSR bytes, which is literally the framework's own guard
-      // (`packages/server/test/elision/differential-elision.test.js`) pointed
-      // at an arbitrary app's route table.
-      if (rest.includes('--verify')) {
-        const { createRequestHandler, buildRouteTable, maskJsSet, staticPageRoutes } =
-          await import('@webjsdev/server');
-
-        const extra = parseRoutesFlag(rest);
-        let table;
-        try {
-          table = await buildRouteTable(appDir);
-        } catch (err) {
-          console.error(`webjs elision --verify: cannot read the route table here (${err && err.message}).`);
-          process.exit(1);
-        }
-        const staticRoutes = staticPageRoutes(table);
-        const dynamic = (table.pages || [])
-          .filter((r) => r.paramNames && r.paramNames.length)
-          .map((r) => (r.routeDir && r.routeDir !== '.' ? '/' + r.routeDir : '/'))
-          .sort();
-        // An extra route the author named explicitly is REQUIRED to render; a
-        // static one that does not is merely reported (a page may legitimately
-        // throw notFound() for every visitor).
-        const required = new Set(extra);
-        const routes = [...new Set([...staticRoutes, ...extra])];
-
-        // The app's access log would drown the verdict, and a verification
-        // run is not a server: keep errors (a real boot failure must surface)
-        // and drop the per-request info lines.
-        const quiet = { info: () => {}, warn: () => {}, debug: () => {}, error: (...a) => console.error(...a) };
-
-        const capture = async (h, r) => {
-          const resp = await h.handle(new Request('http://localhost' + r));
-          return { status: resp.status, html: await resp.text() };
-        };
-        // The module URLs a response preloads, with the content-hash query
-        // stripped. Comparing the two sides' sets is how the run reports what
-        // elision actually DROPPED, which is the only thing that distinguishes
-        // a real pass from two identical renders.
-        const preloadSet = (html) => new Set(
-          [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].map((m) => m[1].split('?')[0]),
-        );
-
-        const ORIG = process.env.WEBJS_ELIDE;
-        /** @type {Record<string, {status:number, html:string}>} */
-        const onA = {}, onB = {}, off = {};
-        try {
-          // Elision ON, FORCED. Deleting the override would only fall back to
-          // `webjs.elide`, so on an app that opts out this side would run with
-          // elision OFF too and the command would compare two identical renders
-          // and report them "identical with elision on vs off", which is false
-          // about a run where elision was never on. The env override wins over
-          // the config key, which is exactly what makes it the right seam here.
-          // Warm fully so the memoized verdict is locked before the env flips
-          // for the second handler.
-          process.env.WEBJS_ELIDE = '1';
-          const hOn = await createRequestHandler({ appDir, dev: false, logger: quiet });
-          if (hOn.warmup) await hOn.warmup();
-          for (const r of routes) onA[r] = await capture(hOn, r);
-          // A SECOND capture through the same warm handler. A route whose two
-          // ON captures already differ is nondeterministic (live data, a random
-          // id, a clock the masker does not normalize), so a differential over
-          // it proves nothing and reporting it as a failure would be a red the
-          // author cannot act on. The framework's own test needs no such pass
-          // because its corpus is fixed and known; an arbitrary app's is not.
-          for (const r of routes) onB[r] = await capture(hOn, r);
-          // Elision OFF via the env override; a fresh handler reads it on its
-          // own first warm.
-          process.env.WEBJS_ELIDE = '0';
-          const hOff = await createRequestHandler({ appDir, dev: false, logger: quiet });
-          if (hOff.warmup) await hOff.warmup();
-          for (const r of routes) off[r] = await capture(hOff, r);
-        } catch (err) {
-          console.error(`webjs elision --verify: could not boot the app (${err && err.message}).`);
-          process.exit(1);
-        } finally {
-          if (ORIG === undefined) delete process.env.WEBJS_ELIDE;
-          else process.env.WEBJS_ELIDE = ORIG;
-        }
-
-        const unrenderable = [], nondeterministic = [], diverged = [];
-        /** @type {Set<string>} modules the OFF side preloads and the ON side does not */
-        const dropped = new Set();
-        let compared = 0;
-        for (const r of routes) {
-          if (onA[r].status >= 400) { unrenderable.push(`${r} (${onA[r].status})`); continue; }
-          if (maskJsSet(onA[r].html) !== maskJsSet(onB[r].html)) { nondeterministic.push(r); continue; }
-          compared++;
-          // What elision removed on this route. A pass over a corpus where this
-          // stays empty is TRUE but trivially so, and the author needs to see
-          // that rather than read it as proof elision was exercised.
-          const onSet = preloadSet(onA[r].html);
-          for (const u of preloadSet(off[r].html)) if (!onSet.has(u)) dropped.add(u);
-          const a = maskJsSet(onA[r].html);
-          const b = maskJsSet(off[r].html);
-          if (onA[r].status !== off[r].status) {
-            diverged.push({ route: r, kind: 'status', a: String(onA[r].status), b: String(off[r].status), at: 0 });
-            continue;
-          }
-          if (a !== b) {
-            let i = 0;
-            while (i < a.length && i < b.length && a[i] === b[i]) i++;
-            diverged.push({
-              route: r, kind: 'body', at: i,
-              a: a.slice(Math.max(0, i - 40), i + 40),
-              b: b.slice(Math.max(0, i - 40), i + 40),
-            });
-          }
-        }
-
-        for (const d of diverged) {
-          console.error(
-            d.kind === 'status'
-              ? `FAIL ${d.route}: status differs with elision on vs off (on=${d.a}, off=${d.b})`
-              : `FAIL ${d.route}: elision changed observable output near offset ${d.at}\n` +
-                `  ON : ...${JSON.stringify(d.a)}\n  OFF: ...${JSON.stringify(d.b)}`,
-          );
-        }
-        const badRequired = unrenderable.filter((u) => required.has(u.split(' ')[0]));
-        for (const u of badRequired) console.error(`FAIL ${u}: a --routes path must render`);
-
-        const skips = [
-          dynamic.length ? `${dynamic.length} skipped (dynamic: ${dynamic.join(', ')})` : '0 skipped (dynamic)',
-          `${nondeterministic.length} skipped (nondeterministic${nondeterministic.length ? ': ' + nondeterministic.join(', ') : ''})`,
-        ];
-        if (unrenderable.length) skips.push(`${unrenderable.length} skipped (did not render: ${unrenderable.join(', ')})`);
-
-        if (diverged.length || badRequired.length) {
-          console.error(`\nwebjs elision --verify: ${diverged.length} route(s) diverged out of ${compared} compared.`);
-          process.exit(1);
-        }
-        if (compared === 0) {
-          // A vacuous pass is a failure, the same posture scripts/run-bun-tests.js
-          // takes for a run that executed zero tests.
-          console.error(
-            `webjs elision --verify: nothing was compared (${skips.join(', ')}).\n` +
-            'Pass --routes /a,/b to name renderable paths, or add a static page route.',
-          );
-          process.exit(1);
-        }
-        console.log(
-          `webjs elision --verify: ${compared} route(s) identical with elision on vs off, ${skips.join(', ')}.\n` +
-          (dropped.size
-            ? `Elision dropped ${dropped.size} module(s) across that corpus, so the comparison was a real one.`
-            : 'Elision dropped NO modules across that corpus: nothing on these routes was elidable, so '
-              + 'there was nothing for elision to change. The comparison holds, it just had no work to '
-              + 'do. Run `WEBJS_ELIDE=1 webjs elision` to see why every module here ships (the same '
-              + 'override this run used, so the verdict matches even in an app that opts out).'),
-        );
-        console.log(VERIFY_CAVEAT);
-        break;
-      }
-
-      const { analyzeAppElision } = await import('@webjsdev/server');
-      const report = await analyzeAppElision(appDir);
-
-      // --json: the machine contract, identical to the MCP `list_elision` shape.
-      if (rest.includes('--json')) {
-        console.log(JSON.stringify(report));
-        break;
-      }
-
-      if (!report.analysed) {
-        const why = {
-          'no-app': 'no app/ directory here, so there is nothing to analyse',
-          unanalysable: 'the app could not be analysed (`webjs check` and `webjs dev` name the real problem)',
-        }[report.skipped] || 'nothing was analysed';
-        console.log(`webjs elision: ${why}.`);
-        break;
-      }
-
-      const s = report.summary;
-      console.log(
-        `webjs elision: ${s.components} component module(s), ${s.elided} elided, ${s.shipped} shipped. ` +
-        `${s.routeModules} route module(s), which never ship: ${s.zeroJs} load no JavaScript, ${s.carriers} load the components they render.` +
-        (report.elide ? '\n' : ' Component elision is disabled, so every component ships.\n'),
-      );
-
-      const elided = report.components.filter((c) => c.verdict === 'elided');
-      const shipped = report.components.filter((c) => c.verdict === 'shipped');
-      // Column width, capped so one outlier does not push every other row off
-      // the terminal. An over-long cell overflows its own row rather than
-      // widening the table. The FILE column gets the generous cap because a
-      // module path is what a reader scans by; the tag column gets the tight
-      // one because a file registering five tags is the rare case.
-      const pad = (rows, col, cap) => Math.min(cap, Math.max(0, ...rows.map((r) => r[col].length)));
-      const FILE_W = 58, TAG_W = 30;
-
-      if (elided.length) {
-        console.log('Elided components (the browser never downloads these)');
-        const rows = elided.map((c) => [c.file, c.tags.join(', ')]);
-        const w = pad(rows, 0, FILE_W);
-        for (const [file, tags] of rows) console.log(`  ${file.padEnd(w)}  ${tags}`.trimEnd());
-        console.log();
-      }
-      if (shipped.length) {
-        console.log('Shipped components (and the evidence that forced each one)');
-        const rows = shipped.map((c) => [c.file, c.tags.join(', '), `${c.evidence || 'unknown'}: ${c.reason || 'no evidence recorded'}`]);
-        const w0 = pad(rows, 0, FILE_W), w1 = pad(rows, 1, TAG_W);
-        for (const [file, tags, why] of rows) console.log(`  ${file.padEnd(w0)}  ${tags.padEnd(w1)}  ${why}`.trimEnd());
-        console.log();
-      }
-      if (report.routeModules.length) {
-        console.log('Route modules (run on the server only; the browser loads the components listed)');
-        const rows = report.routeModules.map((r) => [
-          r.kind, r.file,
-          r.emits.length ? `loads ${r.emits.join(', ')}` : 'no JavaScript',
-        ]);
-        const w0 = pad(rows, 0, 16), w1 = pad(rows, 1, FILE_W);
-        for (const [kind, file, note] of rows) {
-          console.log(`  ${kind.padEnd(w0)}  ${file.padEnd(w1)}  ${note}`.trimEnd());
-        }
-        for (const r of report.routeModules) {
-          for (const h of r.hints) console.log(`  hint: ${r.file}: ${h}`);
-        }
-        console.log();
-      }
-      if (report.orphans.length) {
-        console.log('Orphan components (no elision verdict; `static interactive = true` cannot rescue these)');
-        for (const o of report.orphans) {
-          console.log(`  ${o.className} in ${o.file} is never registered with a literal tag`);
-        }
-        console.log('  Either there is no registration call at all, or the tag is computed. The scanner matches');
-        console.log('  only a literal tag, so either way the module gets no verdict, no registry entry, and no');
-        console.log('  preload hint. With no registration call the element never upgrades at all; with a computed');
-        console.log('  tag it upgrades only while its module still reaches the browser through a shipping importer.');
-        console.log('  Fix: register it with a literal tag, Class.register(\'my-tag\'), or delete the class.');
-        console.log();
-      }
-      if (!report.components.length && !report.routeModules.length) {
-        console.log('  Nothing to report. Add a component or a page under app/.');
       }
       break;
     }

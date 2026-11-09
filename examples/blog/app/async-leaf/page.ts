@@ -3,15 +3,14 @@ import '#components/inline-quote.ts';
 
 export const metadata = {
   title: 'Async leaf · WebJs Blog',
-  description: 'A bare async-render leaf, elided yet present in the first paint.',
+  description: 'A bare async-render leaf, present in the first paint with JS on or off.',
 };
 
 /**
  * `/async-leaf` renders ONLY a bare async-render display-only component
- * (`<inline-quote>`). It is the elision corpus's proof for #474: with elision
- * ON the `<inline-quote>` module is dropped from the browser, yet the SSR'd
- * quote is in the first paint (JS-off readable) and identical to the elision-OFF
- * render. Network-probed + differential-tested.
+ * (`<inline-quote>`). It is the proof for #474: the SSR'd quote is in the first
+ * paint (JS-off readable) and stays on screen through hydration with no page
+ * error. E2e-probed with JS off and on.
  */
 export default function AsyncLeaf() {
   return html`
@@ -21,8 +20,8 @@ export default function AsyncLeaf() {
       </h1>
       <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
         The quote below is fetched <strong class="text-foreground font-bold">inside the component</strong>
-        with a bare async render() and no other client signal, so its module is
-        elided and the quote is still in the first paint.
+        with a bare async render(), so the quote is in the first paint and stays
+        there when the component hydrates.
       </p>
       <inline-quote></inline-quote>
     </section>

@@ -6,11 +6,11 @@
  *  - `vendorPreloadTargets` (unit): maps reached bare specifiers to
  *    `{ href, integrity }` taken DIRECTLY from the importmap (byte-identical, so
  *    no double-fetch), excludes `@webjsdev/core`, dedups, and drops a specifier
- *    not in the importmap (an unpinned / unreached / elided vendor -> no
+ *    not in the importmap (an unpinned / unreached vendor -> no
  *    over-fetch).
- *  - the HTTP layer: a page rendering an interactive component that imports a
+ *  - the HTTP layer: a page rendering a component that imports a
  *    cross-origin vendor emits `<link rel="modulepreload" href integrity
- *    crossorigin>` for the reached vendor URL; an elided/unused vendor is NOT
+ *    crossorigin>` for the reached vendor URL; an unused vendor is NOT
  *    preloaded; the modulepreload href is byte-identical to the importmap target.
  *
  * Also covers the CORE runtime hint (#1118), which lives in the same head
@@ -133,8 +133,8 @@ function makeApp({ pin = null, stubs = ['dayjs'] } = {}) {
   return appDir;
 }
 
-/** An INTERACTIVE component (a `@click`, so elision keeps it) that imports the
- * bare `dayjs` specifier, so dayjs stays reachable in the pruned vendor map. */
+/** A component (every component ships, #1686) that imports the bare `dayjs`
+ * specifier, so dayjs stays reachable in the pruned vendor map. */
 function writeVendorWidget(appDir) {
   writeFileSync(
     join(appDir, 'app', 'widget.js'),
@@ -188,7 +188,7 @@ test('a page reaching a cross-origin vendor emits a modulepreload (with integrit
   assert.ok(dayjs[0].includes(`href="${target}"`), 'preload href === importmap target (no double fetch)');
 });
 
-test('an unused/elided vendor is NOT preloaded (no over-fetch)', async () => {
+test('an unused vendor is NOT preloaded (no over-fetch)', async () => {
   // Pin TWO vendors but the page reaches only dayjs. `left-pad` is pinned yet
   // never imported by a shipped module, so it must not be preloaded.
   const LEFTPAD = 'https://ga.jspm.io/npm:left-pad@1.3.0/index.js';
@@ -260,14 +260,14 @@ test('an inert page does not preload an SSR-only vendor a SIBLING route ships (#
   await setCoreInstall(CORE_DIR, true);
 });
 
-test('a vendor imported ONLY by an elided (display-only) component is NOT preloaded', async () => {
-  // A display-only component (no interactivity signal) is elided, so its bare
-  // import is stripped from the served source and must not be preloaded.
+test('a vendor imported ONLY by a server-only component is NOT preloaded', async () => {
+  // A component in a `.server` file never ships (#1686), so its bare import
+  // never reaches the browser and must not be preloaded.
   const appDir = makeApp({
     pin: { imports: { dayjs: DAYJS_URL }, integrity: { [DAYJS_URL]: DAYJS_INTEGRITY } },
   });
   writeFileSync(
-    join(appDir, 'app', 'badge.js'),
+    join(appDir, 'app', 'badge.server.js'),
     `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
     `import { html } from ${JSON.stringify(HTML_URL)};\n` +
     `import dayjs from 'dayjs';\n` +
@@ -279,14 +279,14 @@ test('a vendor imported ONLY by an elided (display-only) component is NOT preloa
   writeFileSync(
     join(appDir, 'app', 'page.js'),
     `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-    `import './badge.js';\n` +
+    `import './badge.server.js';\n` +
     `export default () => html\`<x-badge></x-badge>\`;\n`,
   );
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
   const html = await (await app.handle(new Request('http://x/'))).text();
   assert.ok(!modulepreloadLinks(html).some((l) => l.includes('dayjs')),
-    'an elided component\'s vendor is not preloaded');
+    'a server-only component\'s vendor is not preloaded');
   await setCoreInstall(CORE_DIR, true);
 });
 
@@ -406,8 +406,8 @@ test('a page shipping a boot module preloads @webjsdev/core, byte-identical to t
   assert.ok(links.some((l) => l.includes('/app/widget.js')), 'the component preloads are still emitted');
 });
 
-test('a fully elided page (no boot module) does NOT preload core (#780 no over-fetch)', async () => {
-  // A display-only page ships nothing, so a preload for the runtime it never
+test('a page with no component (no boot module) does NOT preload core (#780 no over-fetch)', async () => {
+  // A page with no component ships nothing, so a preload for the runtime it never
   // loads is pure over-fetch. Same rule that keeps a core hint off
   // `global-error.{js,ts}`, whose document is returned verbatim with no boot.
   const appDir = makeApp();
@@ -422,7 +422,7 @@ test('a fully elided page (no boot module) does NOT preload core (#780 no over-f
 
   // Precondition: nothing ships, so the assertion below cannot pass vacuously
   // for the wrong reason (a rendered page that simply had no modules at all).
-  assert.ok(!/<script type="module"/.test(html), 'the elided page ships no boot script');
+  assert.ok(!/<script type="module"/.test(html), 'the component-free page ships no boot script');
   const target = importmapTarget(html, '@webjsdev/core');
   assert.ok(
     !modulepreloadLinks(html).some((l) => target && l.includes(`href="${target}"`)),

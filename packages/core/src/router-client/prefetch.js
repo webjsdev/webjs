@@ -92,10 +92,9 @@ function prefetchRefusedRecently(key) {
  * dev live-reload path, where an edit can add or remove a `Suspense` boundary
  * and so start or stop the route streaming. Only an edit to a file the browser
  * does NOT download arrives there; anything that SHIPS takes a full reload
- * instead. A `loading.{js,ts}` reloads either way, though for two different
- * reasons: editing or deleting one reloads because it can never be elided and
- * so always ships, while ADDING one reloads because a brand-new file is in no
- * set the previous build produced.
+ * instead. A `loading.{js,ts}` is a route module, so editing one arrives here
+ * like a page edit (it never ships, #1686), while ADDING one reloads because a
+ * brand-new file is in no set the previous build produced.
  *
  * NEITHER form of `revalidate` clears them, which is a cost/benefit call rather
  * than an impossibility. It is the post-MUTATION api an app calls after an RPC

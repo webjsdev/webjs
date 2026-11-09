@@ -4,7 +4,7 @@
  *
  * INVARIANT (#197): a pinned app serves the SAME importmap as an unpinned
  * app, because a committed pin is pruned to the specifiers still reachable
- * from non-elided modules. So `prunePinToReachable(pin, integrity, reachable)`
+ * from modules the browser loads. So `prunePinToReachable(pin, integrity, reachable)`
  * keeps exactly the pin entries whose specifier (or whose base package, for a
  * subpath) is reachable, and drops the rest along with their integrity
  * hashes, which is precisely the set an unpinned live resolve would emit.
@@ -79,10 +79,10 @@ test('pruned pin equals the reachable-filtered set across random combinations', 
   }
 });
 
-test('an unreachable pinned specifier (only an elided importer) is dropped', () => {
+test('an unreachable pinned specifier (only a route-module importer) is dropped', () => {
   const imports = { dayjs: 'u-dayjs', picocolors: 'u-pico' };
   const integrity = { 'u-dayjs': 'h-dayjs', 'u-pico': 'h-pico' };
-  // Only picocolors is reachable; dayjs's only importer was an elided component.
+  // Only picocolors is reachable; dayjs's only importer was a route module.
   const pruned = prunePinToReachable(imports, integrity, new Set(['picocolors']));
   assert.deepEqual(pruned.imports, { picocolors: 'u-pico' }, 'unreachable dayjs is dropped');
   assert.deepEqual(pruned.integrity, { 'u-pico': 'h-pico' }, 'dropped dayjs integrity is pruned too');

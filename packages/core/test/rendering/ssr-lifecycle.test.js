@@ -186,8 +186,7 @@ test('a component that neither reflects nor sets attributes keeps a byte-identic
 
   const out = await renderToString(html`<ssr-plain name="x" class="y"></ssr-plain>`);
   // The authored attributes are preserved verbatim and the framework appends
-  // only `data-wj-host` (a light host, uniformly marked). That uniform append is
-  // what preserves the elision on-vs-off differential invariant.
+  // only `data-wj-host` (a light host, uniformly marked).
   assert.match(out, /<ssr-plain name="x" class="y" data-wj-host><!--webjs-hydrate-->/, 'authored attrs kept, marker appended');
 });
 

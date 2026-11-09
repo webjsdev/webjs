@@ -6,7 +6,7 @@
  *   node test/bun/route-modules-server-only.mjs
  *   bun  test/bun/route-modules-server-only.mjs
  *
- * Asserts, under whichever runtime runs it, with elision on AND off: a page
+ * Asserts, under whichever runtime runs it: a page
  * that does module-scope work an older lexical guess read as client work (an
  * `Intl` formatter, an `Array.from`, a call to a class-name helper), imports
  * a no-directive `.server.ts` utility, and renders an interactive component,
@@ -29,7 +29,6 @@ const quiet = { info() {}, warn() {}, error() {}, debug() {} };
 
 const dir = mkdtempSync(join(tmpdir(), 'webjs-route-server-only-'));
 const w = (rel, body) => { const abs = join(dir, rel); mkdirSync(dirname(abs), { recursive: true }); writeFileSync(abs, body); };
-const prevElide = process.env.WEBJS_ELIDE;
 try {
   w('package.json', JSON.stringify({ name: 'route-server-only', type: 'module' }));
   w('lib/db.server.ts', 'export function listEvents() { return [1, 2, 3]; }\n');
@@ -54,24 +53,22 @@ try {
     "const cls = cn('a', 'b');\n" +
     'export default () => html`<p class=${cls}>${fmt.format(listEvents().length)} ${HOURS.length}</p><x-counter></x-counter>`;\n');
 
-  for (const elide of ['1', '0']) {
-    process.env.WEBJS_ELIDE = elide;
+  {
     const app = await createRequestHandler({ appDir: dir, dev: false, logger: quiet });
     await app.warmup();
     const res = await app.handle(new Request('http://localhost/'));
-    assert.equal(res.status, 200, `the page renders on ${runtime} (elide=${elide})`);
+    assert.equal(res.status, 200, `the page renders on ${runtime}`);
     const html = await res.text();
     const boot = (html.match(/<script type="module"[^>]*>([\s\S]*?)<\/script>/) || [])[1] || '';
     const imports = [...boot.matchAll(/import\s+"([^"]+)"/g)].map((m) => m[1].split('?')[0]);
     const preloads = [...html.matchAll(/rel="modulepreload" href="([^"]+)"/g)].map((m) => m[1].split('?')[0]);
-    assert.ok(imports.includes('/components/x-counter.ts'), `the component boots on ${runtime} (elide=${elide}): ${imports}`);
+    assert.ok(imports.includes('/components/x-counter.ts'), `the component boots on ${runtime}: ${imports}`);
     for (const f of ['/app/page.ts', '/app/layout.ts', '/lib/db.server.ts', '/lib/cn.ts']) {
-      assert.ok(!imports.includes(f), `${f} is not booted on ${runtime} (elide=${elide})`);
-      assert.ok(!preloads.includes(f), `${f} is not preloaded on ${runtime} (elide=${elide})`);
+      assert.ok(!imports.includes(f), `${f} is not booted on ${runtime}`);
+      assert.ok(!preloads.includes(f), `${f} is not preloaded on ${runtime}`);
     }
   }
   console.log(`[route-modules-server-only] OK on ${runtime}`);
 } finally {
-  if (prevElide === undefined) delete process.env.WEBJS_ELIDE; else process.env.WEBJS_ELIDE = prevElide;
   rmSync(dir, { recursive: true, force: true });
 }

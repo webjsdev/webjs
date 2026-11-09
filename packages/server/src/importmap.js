@@ -36,7 +36,7 @@ let _extraEntries = {};
 /**
  * Per-build memos (#1644), each `{ epoch, value }` keyed on `buildEpoch()`.
  * Every setter in this module bumps the epoch, as do the asset-hash roots,
- * the elision fingerprint, the hash-cache clear, and the dev rebuild.
+ * the serve fingerprint, the hash-cache clear, and the dev rebuild.
  * @type {{ epoch: number, value: { imports: Record<string, string>, integrity?: Record<string, string> } }}
  */
 let _mapMemo = { epoch: 0, value: { imports: {} } };
@@ -550,7 +550,7 @@ export function buildImportMap(opts = {}) {
  * BYTE-IDENTICAL to the importmap target (same base-path + `?v` rewrite): a
  * differing href would make the browser treat the preload and the import as two
  * resources and double-fetch. The matching `integrity` comes from the same map.
- * A specifier NOT in the importmap (an unpinned / unreached / elided vendor)
+ * A specifier NOT in the importmap (an unpinned / unreached vendor)
  * yields nothing, so this never over-fetches. Duplicate hrefs are collapsed.
  *
  * Framework runtime specifiers (`@webjsdev/core`...) are excluded: core is

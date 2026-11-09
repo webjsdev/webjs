@@ -2,7 +2,6 @@ import { html, repeat, Suspense } from '@webjsdev/core';
 import '#components/counter.ts';
 import '#components/muted-text.ts';
 import '#components/build-stamp.ts';
-import '#components/vendor-badge.ts';
 import '#modules/chat/components/chat-box.ts';
 
 import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
@@ -86,7 +85,6 @@ export default async function HomePage() {
 
     <footer class="mt-18 pt-6 border-t border-border flex flex-col gap-1">
       <build-stamp></build-stamp>
-      <vendor-badge></vendor-badge>
     </footer>
   `;
 }

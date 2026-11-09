@@ -276,6 +276,14 @@ export declare function matchApi(
   table: unknown,
   pathname: string,
 ): { route: { file: string }; params: Record<string, string> } | null;
+/**
+ * The URL paths of every STATIC page route in a route table, sorted and
+ * deduped. Dynamic routes are excluded (listing one would mean inventing
+ * param values).
+ */
+export declare function staticPageRoutes(table: {
+  pages?: Array<{ routeDir?: string; paramNames?: string[] }>;
+} | undefined): string[];
 
 // ---------------------------------------------------------------------------
 // route-types.js (#258)
@@ -370,8 +378,7 @@ export declare function setVendorEntries(
 /**
  * Bare-specifier npm imports an app could load in the browser, found by walking
  * the module graph from every browser-bound entry rather than by scanning the
- * directory. Applies no elision pruning, so the result is a superset of what the
- * running server serves.
+ * directory. The result is a superset of what the running server serves.
  */
 export declare function scanBareImports(dir: string): Promise<Set<string>>;
 /** Extract the package name from an import specifier (`dayjs/plugin/utc` -> `dayjs`). */
@@ -520,8 +527,8 @@ export declare function extractComponents(src: string): Array<{ className: strin
  * because there is no registration call anywhere or because the tag is
  * computed. The registration cross-reference is app-wide, so a class a sibling
  * module registers is not an orphan. Neither is visible to the
- * scanner, so both always lose the elision verdict, the tag-to-module registry
- * entry, and the preload hint; assume the element does not upgrade either.
+ * scanner, so both always lose the tag-to-module registry entry, the boot import
+ * and the preload hint; assume the element does not upgrade either.
  * This is about REGISTRATION, never about import reachability. The full
  * semantics, including the one case where a computed tag still upgrades, live
  * on `findOrphanComponents` in `src/component-scanner.js`.
@@ -531,30 +538,14 @@ export declare function findOrphanComponents(
 ): Promise<Array<{ className: string; file: string }>>;
 
 // ---------------------------------------------------------------------------
-// elision-report.js (#646, #1308)
+// route-report.js (#1686)
 // ---------------------------------------------------------------------------
-
-/** Which rule in the analyser forced a component to ship. First match wins. */
-export type ElisionEvidence = 'own' | 'observed' | 'closure' | 'render' | 'import' | 'unreadable';
-
-/** One component module's verdict. `evidence` / `reason` / `by` are null when elided. */
-export interface ElisionComponentRow {
-  /** App-relative path of the component module. */
-  file: string;
-  /** Every tag this file registers, sorted. */
-  tags: string[];
-  verdict: 'elided' | 'shipped';
-  evidence: ElisionEvidence | null;
-  reason: string | null;
-  /** App-relative path of the module that forced the ship, where one did. */
-  by: string | null;
-}
 
 /**
  * One route module (page, layout or boundary). A route module never ships to
  * the browser; the boot imports `emits`, its component frontier, in its place.
  */
-export interface ElisionRouteModuleRow {
+export interface RouteModuleRow {
   file: string;
   kind: 'page' | 'layout' | 'error' | 'loading' | 'not-found' | 'forbidden' | 'unauthorized' | 'global-not-found';
   /** The component modules the boot imports in this module's place (empty: zero JS). */
@@ -564,15 +555,12 @@ export interface ElisionRouteModuleRow {
 }
 
 /** A `class X extends WebComponent` with no literal-tag registration. */
-export interface ElisionOrphanRow {
+export interface OrphanRow {
   file: string;
   className: string;
 }
 
-export interface ElisionSummary {
-  components: number;
-  elided: number;
-  shipped: number;
+export interface RouteReportSummary {
   routeModules: number;
   /** Route modules whose frontier is empty: the browser loads nothing for them. */
   zeroJs: number;
@@ -581,30 +569,22 @@ export interface ElisionSummary {
   orphans: number;
 }
 
-/** The whole app-level elision verdict. Every path is app-relative; every array is sorted by `file`. */
-export interface ElisionReport {
+/** What each route costs the browser. Every path is app-relative; every array is sorted by `file`. */
+export interface RouteReport {
   analysed: boolean;
   /** Why nothing was analysed, when `analysed` is false. */
   skipped: 'no-app' | 'unanalysable' | null;
-  /** Whether display-only component elision is on (`webjs.elide` / `WEBJS_ELIDE`). */
-  elide: boolean;
-  components: ElisionComponentRow[];
-  routeModules: ElisionRouteModuleRow[];
-  orphans: ElisionOrphanRow[];
-  summary: ElisionSummary;
+  routeModules: RouteModuleRow[];
+  orphans: OrphanRow[];
+  summary: RouteReportSummary;
 }
 
 /**
- * App-level elision report, BOTH directions (#646, #1308): every component
- * module as elided or shipped (a shipped one naming the evidence and the module
- * that forced it), every route module with the component frontier the boot
- * imports in its place (route modules never ship), and every orphan
- * component class that gets no verdict at all. A reporting layer over
- * `analyzeElision`, never a second analysis and never a build artifact.
- * Consumed by `webjs elision`, the MCP `list_elision` tool, and both `webjs
- * doctor` elision checks.
+ * Every route module with the components the boot loads in its place and any
+ * hints about browser-looking code in it, plus every orphan component class.
+ * Consumed by both `webjs doctor` route checks.
  */
-export declare function analyzeAppElision(appDir: string): Promise<ElisionReport>;
+export declare function analyzeRouteModules(appDir: string): Promise<RouteReport>;
 
 // ---------------------------------------------------------------------------
 // dev-regenerate.js (#967, #1672)
@@ -646,28 +626,6 @@ export declare function regenerateOutputs(
 export declare function regenerateStatus(
   appDir: string,
 ): Promise<Array<{ output: string; command: string; state: RegenerateState }>>;
-
-// ---------------------------------------------------------------------------
-// elision-differential.js (#1308)
-// ---------------------------------------------------------------------------
-
-/**
- * Mask the JS-loaded set (importmap, boot script, modulepreload hints, vendor
- * connection hints, content stamps) out of an SSR response so a diff sees only
- * observable output. The ONE definition shared by the framework's own
- * differential guard and `webjs elision --verify`, so an app can diff its own
- * two captures with exactly the framework's comparator.
- */
-export declare function maskJsSet(html: string): string;
-
-/**
- * The URL paths of every STATIC page route in a `buildRouteTable` result,
- * sorted and deduped. Dynamic routes are excluded (rendering one would mean
- * inventing param values).
- */
-export declare function staticPageRoutes(table: {
-  pages?: Array<{ routeDir?: string; paramNames?: string[] }>;
-}): string[];
 
 // ---------------------------------------------------------------------------
 // context.js (per-request context helpers)

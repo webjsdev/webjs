@@ -236,7 +236,7 @@ if has 'verify (the |this |that |it )?(change|fix|feature|pr|work|it works|behav
    || has '(confirm|prove|make sure) .{0,30}(works|working|fixed|fixes it)' \
    || has '(manually|actually) (test|try|check) .{0,20}(it|the (fix|change|app|feature))' \
    || has '(boot|dogfood|smoke).{0,20}(app|apps|blog|website|docs)'; then
-  add_match "verify: the request is to confirm a change actually works. Invoke the verify skill (run the app and observe the behaviour). For a change to a shared runtime surface (core/server SSR, client router, importmap, dist, elision), boot the AFFECTED dogfood apps and report evidence. CI covers both in-repo apps (blog and website). A docs-only, test-only, or tooling change needs no app boot."
+  add_match "verify: the request is to confirm a change actually works. Invoke the verify skill (run the app and observe the behaviour). For a change to a shared runtime surface (core/server SSR, client router, importmap, dist, route frontiers), boot the AFFECTED dogfood apps and report evidence. CI covers both in-repo apps (blog and website). A docs-only, test-only, or tooling change needs no app boot."
 fi
 
 # Assemble the additional context. The standing rule is always present; the

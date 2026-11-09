@@ -43,7 +43,7 @@ export type {
 } from './src/routes.d.ts';
 
 // The package.json `webjs` config block (#259). Typed reference for the
-// elide / headers / redirects / trailingSlash / csp / ingress-limit knobs;
+// seed / headers / redirects / trailingSlash / csp / ingress-limit knobs;
 // the companion JSON Schema (packages/server/webjs-config.schema.json) gives
 // editors native validation of package.json itself.
 export type {

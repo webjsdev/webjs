@@ -29,11 +29,9 @@
  * The sibling `cspNonce()` carries the same server/browser asymmetry and the
  * same scoping, for the same hydration reason.
  *
- * Call it INSIDE the render function, not at module scope. A depth-0 call is a
- * module-scope side effect, which the elision analyser reads as client work, so
- * hoisting `const CSS = asset('/app.css')` pins the whole page or layout
- * into the browser bundle for no benefit. Resolver ordering is not the issue
- * (the server installs its resolver at boot, before any app module loads).
+ * Calling it at module scope works too: the server installs its resolver at
+ * boot, before any app module loads, so a hoisted `const CSS =
+ * asset('/app.css')` in a page or layout resolves the same as one in render.
  *
  * Under `webjs.basePath`, write the prefix yourself: `asset('/app/x.css')`.
  * The framework only base-path-prefixes urls IT emits, so an author-written

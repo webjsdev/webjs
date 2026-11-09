@@ -29,11 +29,8 @@
  * pass. Unexpected requests land on `double.unexpected` instead, which
  * `withJspmDouble` asserts is empty and the preload turns into a non-zero exit.
  *
- * This is deliberately NOT the same fixture as `test/e2e/fixtures/
- * stub-jspm.mjs`. That one must emit a real executable module for a browser to
- * run, and it passes anything it cannot serve through to the real network. This
- * one only needs jspm-SHAPED urls and some bytes, and it must never pass
- * anything through. Keep them separate.
+ * It only needs jspm-SHAPED urls and some bytes, and it must never pass
+ * anything through to the real network.
  *
  * This module has NO side effects. Importing it patches nothing; call
  * `jspmDouble()` or `withJspmDouble()` to use it.

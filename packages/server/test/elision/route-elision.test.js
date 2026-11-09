@@ -1,15 +1,14 @@
 /**
  * Unit tests for what the boot imports in a route module's place (#1686): a
  * page, layout or boundary never ships, so the boot imports its component
- * FRONTIER (`route-frontier.js`), with display-only components elided out of
- * it. A fully-static route ships zero JS, and client work written in a route
+ * FRONTIER (`route-frontier.js`). Every component ships, as in Lit. A route
+ * that renders no component ships zero JS, and client work written in a route
  * module itself (a router import, a signal, a browser global, a side-effect
  * import) never reaches the browser, because the module never loads there.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { analyzeElision } from '../../src/component-elision.js';
 import { routeFrontiers } from '../../src/route-frontier.js';
 
 const DISPLAY_ONLY = `
@@ -34,29 +33,28 @@ function graphOf(edges) {
   return g;
 }
 
-/** The analysis the dev server runs: component elision, then each route module's frontier. */
-async function run({ files, components = [], routeModules, edges = {} }) {
+/** The analysis the dev server runs: each route module's frontier. */
+async function run({ components = [], routeModules, edges = {} }) {
   const graph = graphOf(edges);
-  const { elidableComponents } = await analyzeElision(components, graph, async (f) => files[f], '/app');
-  const frontiers = routeFrontiers(routeModules, graph, new Set(components.map((c) => c.file)),
-    new Set([...elidableComponents, ...routeModules]));
-  return { elidableComponents, frontiers };
+  const frontiers = routeFrontiers(routeModules, graph, new Set(components.map((c) => c.file)), new Set(routeModules));
+  return { frontiers };
 }
 
-test('a static page importing only core + a display-only component boots nothing', async () => {
-  const page = `
-    import { html } from '@webjsdev/core';
-    import './components/badge.js';
-    export default () => html\`<x-badge></x-badge>\`;
-  `;
-  const { elidableComponents, frontiers } = await run({
-    files: { '/app/page.js': page, '/app/components/badge.js': DISPLAY_ONLY },
+test('a page with no component import boots nothing', async () => {
+  const { frontiers } = await run({
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/lib/format.js'] },
+  });
+  assert.deepEqual(frontiers.get('/app/page.js'), [], 'a page that renders no component ships zero JS');
+});
+
+test('a display-only component the page imports ships, as in Lit', async () => {
+  const { frontiers } = await run({
     components: [{ tag: 'x-badge', file: '/app/components/badge.js' }],
     routeModules: ['/app/page.js'],
     edges: { '/app/page.js': ['/app/components/badge.js'] },
   });
-  assert.ok(elidableComponents.has('/app/components/badge.js'), 'badge elided');
-  assert.deepEqual(frontiers.get('/app/page.js'), [], 'static page ships zero JS');
+  assert.deepEqual(frontiers.get('/app/page.js'), ['/app/components/badge.js']);
 });
 
 test('a page importing an interactive component boots exactly that component', async () => {
@@ -140,7 +138,7 @@ test('a .server dep of a page contributes nothing to its frontier', async () => 
 // Each of these pinned the WHOLE page to the browser before #1686, and a page
 // wrongly judged to ship had its server import refused. A route module never
 // loads in the browser now, so none of this code runs there and none of it
-// adds to the boot. `webjs elision` and `webjs doctor` surface the patterns
+// adds to the boot. `webjs status` and `webjs doctor` surface the patterns
 // that look meant for the browser as hints (`routeModuleBrowserHints`).
 const ROUTE_CLIENT_WORK = {
   'the client router': `import { html } from '@webjsdev/core';\nimport '@webjsdev/core/client-router';\nexport default () => html\`<p>hi</p>\`;`,
@@ -201,24 +199,4 @@ test('a page importing a component AND a self-executing helper boots only the co
     edges: { '/app/page.js': ['/app/components/counter.js', '/app/analytics.js'] },
   });
   assert.deepEqual(frontiers.get('/app/page.js'), ['/app/components/counter.js']);
-});
-
-test('client work in a helper a COMPONENT imports still ships that component', async () => {
-  // The heuristics that used to judge pages now only judge components, where a
-  // false positive can only over-ship: a display-only component whose helper
-  // does a dynamic import() ships.
-  const badge = DISPLAY_ONLY.replace("import { WebComponent, html } from '@webjsdev/core';",
-    "import { WebComponent, html } from '@webjsdev/core';\nimport { boot } from '../helper.js';");
-  const { elidableComponents, frontiers } = await run({
-    files: {
-      '/app/page.js': `import './components/badge.js';\nexport default () => '';`,
-      '/app/components/badge.js': badge,
-      '/app/helper.js': `export function boot() {} import('./deferred.js');`,
-    },
-    components: [{ tag: 'x-badge', file: '/app/components/badge.js' }],
-    routeModules: ['/app/page.js'],
-    edges: { '/app/page.js': ['/app/components/badge.js'], '/app/components/badge.js': ['/app/helper.js'] },
-  });
-  assert.ok(!elidableComponents.has('/app/components/badge.js'), 'the closure client work ships the component');
-  assert.deepEqual(frontiers.get('/app/page.js'), ['/app/components/badge.js']);
 });

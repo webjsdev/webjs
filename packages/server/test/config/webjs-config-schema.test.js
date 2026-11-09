@@ -48,7 +48,6 @@ const schemaPath = fileURLToPath(
  * this key list against the schema in BOTH directions.
  */
 const KNOWN_KEYS = [
-  'elide', // readElideEnabled (dev.js)
   'seed', // readSeedEnabled (dev.js)
   'clientRouter', // readClientRouterEnabled (dev.js)
   'headers', // compileHeaderRules (headers.js)
@@ -131,8 +130,8 @@ test('key shapes match the reader contracts', () => {
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
   const p = schema.properties;
 
-  // elide is a boolean (readElideEnabled checks `=== false`).
-  assert.equal(p.elide.type, 'boolean');
+  // seed is a boolean (readSeedEnabled checks `=== false`).
+  assert.equal(p.seed.type, 'boolean');
 
   // trailingSlash is the three-value enum readTrailingSlashPolicy accepts.
   assert.deepEqual(p.trailingSlash.enum, ['never', 'always', 'ignore']);
@@ -261,7 +260,7 @@ test('webjs.ci.steps is a recursive step list in both the schema and the WebjsCo
 test('representative valid configs pass the structural validator', () => {
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
   const valids = [
-    { elide: false },
+    { seed: false },
     { trailingSlash: 'never' },
     { csp: true },
     { csp: { directives: { 'connect-src': "'self'" }, reportOnly: true } },
@@ -293,9 +292,9 @@ test('typo and bad-enum configs are rejected by the validator', () => {
     validateWebjsBlock(schema, { trailingSlash: 'sometimes' }).length > 0,
     'a bad trailingSlash enum must be rejected',
   );
-  // A wrong-typed elide.
+  // A wrong-typed boolean key.
   assert.ok(
-    validateWebjsBlock(schema, { elide: 'yes' }).length > 0,
-    'a non-boolean elide must be rejected',
+    validateWebjsBlock(schema, { seed: 'yes' }).length > 0,
+    'a non-boolean seed must be rejected',
   );
 });

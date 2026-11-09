@@ -112,7 +112,7 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   ]);
   const tools = frames[0].result.tools;
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['check', 'init', 'list_actions', 'list_components', 'list_elision', 'list_routes', 'source', 'ui']);
+  assert.deepEqual(names, ['check', 'init', 'list_actions', 'list_components', 'list_routes', 'source', 'ui']);
   for (const t of tools) {
     assert.equal(typeof t.description, 'string');
     assert.equal(t.inputSchema.type, 'object');
@@ -229,35 +229,10 @@ test('mcp: tools/call list_components reports tag + file + className', async () 
   assert.match(c.file, /my-thing\.ts$/);
 });
 
-test('mcp: list_elision output equals analyzeAppElision (no drift with the CLI)', async () => {
-  // `list_elision` returns the report VERBATIM, and `webjs elision --json`
-  // prints the same object, so the two surfaces cannot disagree about an app.
-  // Unlike list_routes there is no projector leaf to delegate to, which makes
-  // this equality the only thing holding the contract together.
-  const { analyzeAppElision } = await import('@webjsdev/server');
-  const dir = tmpDir();
-  write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
-  write(dir, 'components/badge.ts',
-    `import { WebComponent, html } from '@webjsdev/core';\n` +
-    `export class Badge extends WebComponent { render() { return html\`<span>x</span>\`; } }\n` +
-    `Badge.register('my-badge');\n`);
-  write(dir, 'app/page.ts',
-    `import { html } from '@webjsdev/core';\nimport '../components/badge.ts';\nexport default () => html\`<my-badge></my-badge>\`;\n`);
-
-  const { frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'list_elision', arguments: {} } },
-  ]);
-  const toolOut = JSON.parse(frames[0].result.content[0].text);
-  assert.deepEqual(toolOut, JSON.parse(JSON.stringify(await analyzeAppElision(dir))));
-  const badge = toolOut.components.find((c) => c.file.includes('badge'));
-  assert.equal(badge.verdict, 'elided', 'the display-only badge is never downloaded');
-});
-
-test('mcp: list_components stays a cheap lexical inventory (no elision fields)', async () => {
-  // The guard for the rejected alternative: growing an `elided` flag onto
-  // list_components would silently turn a scan that loads no module and builds
-  // no graph into one that does both, and it still could not carry the route
-  // verdicts or the orphans. The elision verdict lives in its own tool.
+test('mcp: list_components stays a cheap lexical inventory', async () => {
+  // Growing a field that needs the module graph onto list_components would
+  // silently turn a scan that loads no module and builds no graph into one
+  // that does both.
   const dir = tmpDir();
   write(dir, 'components/my-thing.ts',
     `import { WebComponent, html } from '@webjsdev/core';\n` +
@@ -497,7 +472,7 @@ function appWithMcp(version) {
 test('mcp: every app-scoped tool ADVERTISES appDir, so a conforming client can actually send one', async () => {
   const { frames } = await driveMcp(tmpDir(), [{ jsonrpc: '2.0', id: 87, method: 'tools/list' }]);
   const byName = Object.fromEntries(frames[0].result.tools.map((t) => [t.name, t]));
-  for (const name of ['init', 'list_routes', 'list_actions', 'list_components', 'list_elision', 'check']) {
+  for (const name of ['init', 'list_routes', 'list_actions', 'list_components', 'check']) {
     assert.ok(byName[name], `${name} is advertised`);
     assert.equal(typeof byName[name].inputSchema.properties.appDir, 'object', `${name} advertises appDir`);
     assert.equal(byName[name].inputSchema.properties.appDir.type, 'string', `${name}'s appDir is a string`);

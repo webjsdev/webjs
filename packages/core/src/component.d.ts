@@ -246,18 +246,6 @@ interface WebComponentStatics {
   /** Flatten and dedupe `static styles`; override to post-process. */
   finalizeStyles(styles?: CSSResultGroup | null): CSSResultOrNative[];
   lazy?: boolean;
-  /**
-   * Force this component to ship (hydrate) even when the elision analyser would
-   * drop it as display-only. The escape hatch for interactivity the analyser
-   * cannot see statically: an OBSERVER that computes the tag it waits for, a
-   * `:defined` rule in an external stylesheet outside the module graph, or a
-   * consumer reaching the element through a string selector. It
-   * cannot rescue a component whose OWN registration tag is computed, since
-   * the scanner requires a literal tag (invariant 3) and never sees that
-   * component at all. Leave unset for the automatic verdict; inspect it with
-   * `webjs elision`.
-   */
-  interactive?: boolean;
   register(tag: string): void;
   readonly observedAttributes: string[];
   /** Every declared reactive property, own and inherited, as name to declaration. */

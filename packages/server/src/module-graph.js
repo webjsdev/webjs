@@ -46,7 +46,7 @@ export function appImportsMap(appDir) {
  * Expand a `package.json "imports"` subpath alias (e.g. `#lib/db.server.ts`
  * with the scaffold's catch-all `"#*": "./*"`) to its real APP-RELATIVE target
  * string (`./lib/db.server.ts`).
- * The security-critical seam (#555): the graph walker, auth gate, elision, and
+ * The security-critical seam (#555): the graph walker, auth gate, boot frontier, and
  * `no-server-import-in-browser-module` all route through `resolveImport`, so
  * expanding the alias here (to the real path) is what stops an alias from
  * laundering a `.server.ts` past those checks. Driven off the actual `"imports"`
@@ -134,9 +134,9 @@ const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/gd;
  * the static graph and keyed by it in a WeakMap. The authorization gate
  * (`reachableFromEntries`) unions these in so a lazily-imported app module is
  * servable instead of 404ing, but the preload walk (`transitiveDeps`) and the
- * elision analysis stay on the static graph ONLY: a dynamic import is lazy by
- * author intent, so eagerly preloading its target would over-fetch on every
- * page load, and feeding dynamic edges into elision could flip a verdict. The
+ * boot frontier stay on the static graph ONLY: a dynamic import is lazy by
+ * author intent, so eagerly preloading or booting its target would over-fetch
+ * on every page load. The
  * module is fetched at call time, now served correctly by the gate.
  * @type {WeakMap<ModuleGraph, ModuleGraph>}
  */
@@ -423,9 +423,8 @@ export function reachableFromEntries(graph, entryFiles, appDir, stopAt) {
  * imported by a server file must never enter the importmap.
  *
  * `skip` files are neither collected nor traversed into, so a specifier
- * reachable ONLY through an elided component drops out along with the subtree
- * behind it (#197 / #170). Omit `skip` for the un-pruned superset the pin path
- * needs.
+ * reachable ONLY through a route module drops out along with the subtree
+ * behind it (#197 / #170). Omit `skip` for the un-pruned superset.
  *
  * @param {ModuleGraph} graph
  * @param {string[]} entryFiles  absolute paths
@@ -586,7 +585,7 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
       // `export type *` is fully erased by the TS stripper, so it never becomes
       // a browser fetch or a runtime edge. Skip it, so a type-only import of a
       // `.server.ts` (a common, correct way to share a derived row type) is not
-      // mistaken for a runtime dependency by the gate / elision / the
+      // mistaken for a runtime dependency by the gate / boot frontier / the
       // no-server-import check. Two carve-outs keep this from over-dropping:
       //   - `import type from '...'` is a VALUE default import whose binding is
       //     literally named `type` (the stripper keeps it), so `type` directly
@@ -608,7 +607,7 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
       // within the project. A bare npm specifier (dayjs) has no alias match
       // and is skipped FROM THE GRAPH, but recorded as a vendor edge so SSR
       // can emit a modulepreload for the reached vendor URL (#754); an aliased
-      // `#lib/x.server.ts` IS followed so the graph / auth gate / elision see
+      // `#lib/x.server.ts` IS followed so the graph / auth gate / frontier see
       // the real path through the alias.
       if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) {
         if (isVendorSpecifier(spec)) bareDeps.add(spec);
@@ -708,7 +707,7 @@ export function resolveImport(spec, fromFile, appDir) {
   if (aliased) {
     // `#`-style subpath alias (#555): the app-relative target is resolved
     // against the app root, then run through the same extension fallback below
-    // so the boundary / elision / preload all see the real on-disk path.
+    // so the boundary / frontier / preload all see the real on-disk path.
     target = resolve(appDir, aliased);
   } else if (spec.startsWith('/')) {
     // Absolute from app root (how browser sees it)

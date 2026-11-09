@@ -20,10 +20,10 @@ export default function Components() {
     </ul>
 
     <h2 id="server-only">Server-only components</h2>
-    <p>A component runs in the browser, as in Lit. One that provably does no client work is elided automatically: its HTML is already server-rendered, so its JavaScript is never downloaded (see <a href="/docs/elision">Elision</a>). When you want that as a guarantee rather than an inference, or the markup needs server code, write it one of two ways, the same split Next.js draws between client and server components.</p>
+    <p>A component runs in the browser, as in Lit: it always ships. Markup that only the server should render is written one of two ways, the same split Next.js draws between client and server components (see <a href="/docs/elision">What Ships to the Browser</a>).</p>
     <ul>
-      <li><strong>Needs the browser</strong> (state, events, lifecycle): a <code>WebComponent</code> in an ordinary file. It ships and hydrates (and is elided when it does no client work).</li>
-      <li><strong>Server only, as a custom element</strong>: a <code>WebComponent</code> in a <code>*.server.ts</code> file. It renders on the server and is never defined in the browser, so it costs no JavaScript and may import server code directly.</li>
+      <li><strong>Needs the browser</strong> (state, events, lifecycle): a <code>WebComponent</code> in an ordinary file. It always ships and hydrates.</li>
+      <li><strong>Server only, as a custom element</strong>: a <code>WebComponent</code> in a <code>*.server.ts</code> file that does not start with <code>'use server'</code> (that directive turns a file's function exports into actions, and a class is a function, so <code>webjs check</code> refuses the pair). It renders on the server and is never defined in the browser, so it costs no JavaScript and may import server code directly.</li>
       <li><strong>Server only, as a function</strong>: a function returning <code>html</code>, called from a page or layout. It may be <code>async</code> and query the database, like a Next.js server component, and it never ships.</li>
     </ul>
     <code-block>// components/user-card.server.ts: renders on the server, ships nothing
@@ -54,7 +54,7 @@ return html\`&lt;x-tabs&gt;&lt;user-card id=\${id}&gt;&lt;/user-card&gt;&lt;/x-t
 
   &lt;review-list .reviews=\${product.reviews}&gt;&lt;/review-list&gt;
 &lt;/article&gt;</code-block>
-    <p>Only <code>&lt;add-to-cart&gt;</code> ships. <code>&lt;spec-table&gt;</code> and <code>&lt;review-list&gt;</code> are display-only, so the framework elides them and the browser fetches neither. Wrapping the whole article in a <code>&lt;product-page&gt;</code> component would ship all three, because a component rendered by a component that ships can no longer be elided. The cost of an oversized island is therefore not linear in what you moved.</p>
+    <p>Only <code>&lt;add-to-cart&gt;</code> needs the browser. Write <code>&lt;spec-table&gt;</code> and <code>&lt;review-list&gt;</code> as <a href="#server-only">server-only components</a> (in <code>*.server.ts</code> files) and the browser fetches neither, while the page still renders them. Wrapping the whole article in a <code>&lt;product-page&gt;</code> component would ship all three, because a client component cannot render a server-only one, so both would have to become client components. The cost of an oversized island is therefore not linear in what you moved.</p>
     <p>To check a component you are about to write, walk its template and ask of each element whether a handler touches it, a state change alters it, or it sits in a template hole. If all three are no, that element is a passenger. A template that is mostly passengers wants splitting. The exception is markup that is static today but is what a near-term behaviour will read, since the alternative is a component that reaches outward for it later. When ownership and bytes genuinely collide, ownership wins.</p>
 
     <h2>The WebComponent Base Class</h2>
@@ -601,7 +601,7 @@ card.querySelector('slot').addEventListener('slotchange', ...);</code-block>
 
     <p>A generic DOM library that reaches into a component should operate on the assigned nodes, never on the host element itself.</p>
 
-    <p><strong>Live writes need the component's JS on the page.</strong> A display-only slotted wrapper (a component that only renders a <code>&lt;slot&gt;</code>, with no interactivity) is elided, so it ships no JavaScript and its post-mount native writes are inert, the same as any elided component. A component that is actually interacted with ships automatically (a client module references its tag); if a consumer reaches an otherwise-display-only wrapper through a string selector the analyzer cannot see, force it to ship with <code>static interactive = true</code>. Shadow-DOM components always ship, so this is the one boundary set by elision rather than by slots. See <a href="/docs/elision">Display-Only Elision</a> for what the override does and does not rescue.</p>
+    <p><strong>Live writes need the component's JS on the page.</strong> Every component in an ordinary file ships, so its slots stay live after mount. A slotted wrapper written as a <a href="#server-only">server-only component</a> renders its slot on the server and never defines itself in the browser, so post-mount native writes into it are plain DOM writes with no slot runtime behind them. Keep a wrapper you write into after load in an ordinary file.</p>
 
     <p><strong>Forwarded slots project their content everywhere.</strong> A template can forward a slot into a nested component (<code>html\`&lt;inner-shell&gt;&lt;slot&gt;&lt;/slot&gt;&lt;/inner-shell&gt;\`</code>), and the outer component's content projects through it on a client-only mount, in the server-rendered first paint, and across hydration (it does not flash back to the fallback on the client). The renderer stamps each slot with the host whose template produced it, so a forwarded slot routes to the outer component that rendered it rather than the child it nests in.</p>
 

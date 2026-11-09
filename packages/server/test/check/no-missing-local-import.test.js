@@ -9,7 +9,7 @@ import { checkConventions, RULES } from '../../src/check.js';
 /**
  * Tests for `no-missing-local-import`: a NAMED value import of a symbol a
  * resolvable app-internal module does not export is a runtime crash the
- * elision-based checks miss. The rule fills that gap while staying conservative
+ * graph-based checks miss. The rule fills that gap while staying conservative
  * enough to never false-positive on a valid app (the whole point of it).
  */
 const RULE = 'no-missing-local-import';

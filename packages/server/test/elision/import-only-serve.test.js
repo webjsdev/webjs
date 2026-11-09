@@ -1,5 +1,5 @@
 /**
- * Integration test for import-only route-module elision (#605), through the
+ * Integration test for the route-module frontier (#605, #1686), through the
  * real `createRequestHandler` render path. A page / layout whose only client
  * relevance is importing shipping components is dropped from the boot script
  * and replaced by its component imports directly, so the browser fetches only
@@ -67,52 +67,6 @@ export default () => html\`<x-counter></x-counter>\`;`,
     rmSync(dir, { recursive: true, force: true });
   }
 });
-
-// Strip the parts elision is ALLOWED to change (the boot module script + the
-// modulepreload hints) so the rest of the document can be compared byte for byte.
-function maskJsSet(html) {
-  return html
-    .replace(/<script type="module">[\s\S]*?<\/script>/g, '<script type="module"></script>')
-    .replace(/<link[^>]+rel=["']modulepreload["'][^>]*>\s*/g, '');
-}
-
-test('the boot is the same frontier with elision on and off (#605, #1686)', async () => {
-  const files = {
-    'app/layout.ts': INERT_LAYOUT,
-    'app/page.ts': `import { html } from '@webjsdev/core';
-import '../components/counter.ts';
-export default () => html\`<x-counter>seed</x-counter><p>static copy</p>\`;`,
-    'components/counter.ts': COUNTER,
-  };
-  const onDir = makeApp(files);
-  const offDir = makeApp(files);
-  const prev = process.env.WEBJS_ELIDE;
-  try {
-    const onApp = await createRequestHandler({ appDir: onDir, dev: false });
-    if (onApp.warmup) await onApp.warmup();
-    const onHtml = await (await onApp.handle(new Request('http://x/'))).text();
-
-    process.env.WEBJS_ELIDE = '0';
-    const offApp = await createRequestHandler({ appDir: offDir, dev: false });
-    if (offApp.warmup) await offApp.warmup();
-    const offHtml = await (await offApp.handle(new Request('http://x/'))).text();
-
-    // A route module never ships (#1686), whatever WEBJS_ELIDE says: the
-    // switch only governs display-only COMPONENT elision. With the one
-    // component interactive, both runs boot exactly that component.
-    for (const [label, html] of [['on', onHtml], ['off', offHtml]]) {
-      const boot = bootOf(html);
-      assert.match(boot, /\/components\/counter\.ts/, `elision ${label}: the component boots`);
-      assert.doesNotMatch(boot, /\/app\/(page|layout)\.ts/, `elision ${label}: no route module boots`);
-    }
-    assert.equal(maskJsSet(onHtml), maskJsSet(offHtml), 'the SSR body is identical apart from the boot JS set');
-  } finally {
-    if (prev === undefined) delete process.env.WEBJS_ELIDE; else process.env.WEBJS_ELIDE = prev;
-    rmSync(onDir, { recursive: true, force: true });
-    rmSync(offDir, { recursive: true, force: true });
-  }
-});
-
 test('a layout importing the client router still never ships (#1686)', async () => {
   const dir = makeApp({
     'app/layout.ts': ROUTER_LAYOUT,

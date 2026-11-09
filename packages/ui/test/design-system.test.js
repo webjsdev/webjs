@@ -13,7 +13,6 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { analyzeElision } from '../../server/src/component-elision.js';
 import { init } from '../src/commands/init.js';
 import { registryItemSchema } from '../src/registry/schema.js';
 import { loadRegistryItem, loadRegistryIndex } from '../src/registry/local.js';
@@ -112,25 +111,7 @@ test('the five icon libraries are registry items exporting the same function nam
   }
 });
 
-test('no icon library ships a display-only component that imports it', async () => {
-  // A glyph class can spell a browser global (`lucide-app-window`). The elision
-  // analyser reads a string literal as data, not a reference, so an icon file
-  // stays pure markup and a display-only component rendering it stays elided.
-  // A page never ships (#1686), so the component is the module whose verdict
-  // the icon file can move. Drive the real analyser rather than grepping for
-  // the word, so the test tracks its rule. The analyser only scans files under
-  // the app, so mount each library there.
-  const comp = '/app/components/app-badge.js';
-  for (const lib of ICON_LIBRARIES) {
-    const file = `/app/${lib.path}`;
-    const files = {
-      [comp]: `import { WebComponent, html } from '@webjsdev/core';\nimport { AppWindowIcon } from '${file}';\nexport class AppBadge extends WebComponent {\n  render() { return html\`<p>\${AppWindowIcon()}</p>\`; }\n}\nAppBadge.register('app-badge');`,
-      [file]: readFileSync(join(REGISTRY, lib.path), 'utf8'),
-    };
-    const graph = new Map([[comp, new Set([file])]]);
-    const r = await analyzeElision([{ tag: 'app-badge', file: comp, className: 'AppBadge' }], graph, async (f) => files[f], '/app');
-    assert.ok(r.elidableComponents.has(comp), `${lib.path} ships its importer: ${r.componentVerdicts.get(comp)?.reason ?? ''}`);
-  }
+test('the icon library class strings carry the glyph names literally', () => {
   // The class string carries the word literally, so the runtime class is the glyph's own.
   assert.match(readFileSync(join(REGISTRY, 'lib', 'icons.ts'), 'utf8'), /'lucide lucide-app-window'/);
 });

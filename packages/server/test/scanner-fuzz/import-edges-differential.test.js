@@ -2,7 +2,7 @@
 // AST (#753).
 //
 // Three correctness-critical subsystems (the browser-bound authorization gate
-// in module-graph.js, component elision, and `webjs check`) read import edges
+// in module-graph.js, the boot frontier, and `webjs check`) read import edges
 // off the hand-rolled lexical scanner (js-scan.js `redactStringsAndTemplates`)
 // plus the module-graph regexes, NOT a real parse. A lexer desync (a misread
 // string boundary or template-interpolation edge) can drop a real `import`

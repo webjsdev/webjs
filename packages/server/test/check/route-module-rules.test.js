@@ -222,3 +222,21 @@ test('no-server-component-in-client-template: the page passing it in as a child 
   }, 'no-server-component-in-client-template');
   assert.deepEqual(v, []);
 });
+
+test("no-component-in-use-server-file: a component in a 'use server' file is refused", async () => {
+  const v = await hits({
+    'components/user-card.server.ts': `'use server';\n${SERVER_CARD()}`,
+    'app/page.ts': PAGE("import '../components/user-card.server.ts';", '<user-card name="Ada"></user-card>'),
+  }, 'no-component-in-use-server-file');
+  assert.equal(v.length, 1);
+  assert.match(v[0].fix, /Drop `'use server'`/);
+});
+
+test("no-component-in-use-server-file: a server component without the directive, and actions without a component, are fine", async () => {
+  const v = await hits({
+    'components/user-card.server.ts': SERVER_CARD(),
+    'modules/users/actions.server.ts': "'use server';\nexport async function rename(name: string) { return name; }\n",
+    'app/page.ts': PAGE("import '../components/user-card.server.ts';", '<user-card name="Ada"></user-card>'),
+  }, 'no-component-in-use-server-file');
+  assert.deepEqual(v, []);
+});

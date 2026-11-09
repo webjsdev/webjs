@@ -18,9 +18,9 @@ function graphOf(edges) {
 }
 
 /** The page's frontier, with route files and server files skipped as the dev server does. */
-function frontierOf({ edges, components, routeModules = ['/app/page.js'], elided = [] }) {
+function frontierOf({ edges, components, routeModules = ['/app/page.js'], skipped = [] }) {
   const out = routeFrontiers(routeModules, graphOf(edges), new Set(components),
-    new Set([...elided, ...routeModules]));
+    new Set([...skipped, ...routeModules]));
   return out.get('/app/page.js');
 }
 
@@ -83,11 +83,11 @@ test('a component nested BEHIND another shipping component is not re-emitted (ca
   );
 });
 
-test('an elided component is never emitted, and the walk does not continue through it', () => {
+test('a skipped component is never emitted, and the walk does not continue through it', () => {
   assert.deepEqual(
     frontierOf({
       components: ['/app/components/badge.js', '/app/components/inner.js'],
-      elided: ['/app/components/badge.js'],
+      skipped: ['/app/components/badge.js'],
       edges: {
         '/app/page.js': ['/app/components/badge.js'],
         '/app/components/badge.js': ['/app/components/inner.js'],

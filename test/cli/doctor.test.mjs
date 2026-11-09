@@ -1266,27 +1266,14 @@ test('a static app passes the route-module check (no advisory)', async () => {
   assert.equal(byName(results, ROUTE_CHECK).status, 'pass', 'a static page holds no browser code, nothing to advise');
 });
 
-test('elision disabled (webjs.elide=false) still reports: route modules never ship either way', async () => {
-  const dir = tmpDir();
-  write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module', webjs: { elide: false } }));
-  write(dir, 'app/page.js',
-    `import { html } from '@webjsdev/core';\nimport '../lib/track.js';\nexport default () => html\`<p>hi</p>\`;\n`);
-  write(dir, 'lib/track.js', `document.title = 'x';\nexport const y = 1;\n`);
-
-  const results = await runDoctorChecks(dir, baseOpts());
-  const r = byName(results, ROUTE_CHECK);
-  assert.equal(r.status, 'warn', 'the switch only covers component elision, so the advice still applies');
-  assert.match(r.message, /app\/page\.js/);
-});
-
 // ---------------------------------------------------------------------------
-// Component elision verdict (#1308): which component modules were DROPPED,
-// which is where a wrong verdict silently costs an app its interactivity.
+// Orphan components (#1308): a component class with no literal-tag
+// registration is invisible to the scanner, so it is never booted.
 // ---------------------------------------------------------------------------
-const COMPONENT_CHECK = 'Component elision (what the browser drops)';
+const ORPHAN_CHECK = 'Components (orphan classes the scanner cannot see)';
 
-/** A page rendering one display-only component, which the analyser elides. */
-function elidedComponentApp(extraPkg = {}) {
+/** A page rendering one registered component. */
+function registeredComponentApp(extraPkg = {}) {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module', ...extraPkg }));
   write(dir, 'components/badge.js',
@@ -1296,22 +1283,15 @@ function elidedComponentApp(extraPkg = {}) {
   return dir;
 }
 
-test('a healthy app PASSES and the message carries the elided inventory', async () => {
-  // An elided component is the DESIRED outcome, so this must never warn about
-  // one: a check that fires on every healthy app trains the reader to skip
-  // doctor output entirely. The inventory rides the passing message instead,
-  // which is what makes the check a discovery surface.
-  const r = byName(await runDoctorChecks(elidedComponentApp(), baseOpts()), COMPONENT_CHECK);
+test('a healthy app PASSES the orphan check', async () => {
+  const r = byName(await runDoctorChecks(registeredComponentApp(), baseOpts()), ORPHAN_CHECK);
   assert.equal(r.status, 'pass');
-  assert.match(r.message, /1 of 1 component module\(s\) are elided/);
-  assert.match(r.message, /my-badge/, 'names the tag the browser never downloads');
-  assert.match(r.message, /webjs elision/, 'points at the detail surface');
+  assert.match(r.message, /literal tag/);
 });
 
 test('an orphan class WARNS, names the class and file, and never fails', async () => {
-  // The one always-wrong condition: a class registered with a computed tag is
-  // invisible to the scanner, so it gets no elision verdict at all
-  // and `static interactive = true` cannot rescue it.
+  // A class registered with a computed tag is invisible to the scanner, so it
+  // is never booted and never preloaded.
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
   write(dir, 'components/dyn.js',
@@ -1320,21 +1300,17 @@ test('an orphan class WARNS, names the class and file, and never fails', async (
     `import { html } from '@webjsdev/core';\nimport '../components/dyn.js';\nexport default () => html\`<p>hi</p>\`;\n`);
 
   const results = await runDoctorChecks(dir, baseOpts());
-  const r = byName(results, COMPONENT_CHECK);
+  const r = byName(results, ORPHAN_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /DynBadge/, 'names the class');
   assert.match(r.message, /components\/dyn\.js/, 'names the file');
-  assert.match(r.message, /static interactive = true. cannot rescue/, 'says the override does not help');
   assert.ok(r.fix, 'offers an actionable fix line');
   assert.ok(!results.some((x) => x.status === 'fail'), 'this check never hard-fails');
 });
 
 test('an orphan with NO registration call at all is reported the same way', async () => {
-  // `findOrphanComponents` reports TWO shapes under one name, and this is the
-  // ORIGINAL one the dev server has always warned about (a class someone
-  // forgot to register). The computed-tag shape is the other. The message must
-  // fit both, or a plain forgot-to-register class gets diagnosed with a cause
-  // it does not have.
+  // `findOrphanComponents` reports TWO shapes under one name: a class someone
+  // forgot to register, and a computed tag. The message must fit both.
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
   write(dir, 'components/unreg.js',
@@ -1342,7 +1318,7 @@ test('an orphan with NO registration call at all is reported the same way', asyn
   write(dir, 'app/page.js',
     `import { html } from '@webjsdev/core';\nimport '../components/unreg.js';\nexport default () => html\`<p>hi</p>\`;\n`);
 
-  const r = byName(await runDoctorChecks(dir, baseOpts()), COMPONENT_CHECK);
+  const r = byName(await runDoctorChecks(dir, baseOpts()), ORPHAN_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /Unregistered/);
   assert.match(r.message, /no registration call at all/,
@@ -1350,27 +1326,18 @@ test('an orphan with NO registration call at all is reported the same way', asyn
   assert.match(r.fix, /Register it with a literal tag/);
 });
 
-test('elision disabled reports pass and names the switch', async () => {
-  const r = byName(await runDoctorChecks(elidedComponentApp({ webjs: { elide: false } }), baseOpts()), COMPONENT_CHECK);
-  assert.equal(r.status, 'pass');
-  assert.match(r.message, /elision is disabled/);
-  assert.match(r.message, /WEBJS_ELIDE/);
-});
-
-test('the check carries the stable code ELISION_COMPONENTS and is gateable', async () => {
+test('the check carries the stable code ORPHAN_COMPONENTS and is gateable', async () => {
   // `webjs.doctor.gate` (#1257) addresses a check by its stable code, and
   // `readDoctorPolicy` rejects an UNKNOWN code as a hard config error, so this
-  // is also the counterfactual for the DOCTOR_CODES entry: drop that entry and
-  // the gate below stops being accepted.
-  const r = byName(await runDoctorChecks(elidedComponentApp(), baseOpts()), COMPONENT_CHECK);
-  assert.equal(r.code, 'ELISION_COMPONENTS');
+  // is also the counterfactual for the DOCTOR_CODES entry.
+  const r = byName(await runDoctorChecks(registeredComponentApp(), baseOpts()), ORPHAN_CHECK);
+  assert.equal(r.code, 'ORPHAN_COMPONENTS');
 
   // Gate the case that actually FIRES: a passing check contributes `pass`
-  // whatever the gate says (a check that did not fire contributes nothing), so
-  // only the orphan warning can demonstrate the clamp.
+  // whatever the gate says, so only the orphan warning can demonstrate it.
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({
-    name: 'x', type: 'module', webjs: { doctor: { gate: { ELISION_COMPONENTS: 'off' } } },
+    name: 'x', type: 'module', webjs: { doctor: { gate: { ORPHAN_COMPONENTS: 'off' } } },
   }));
   write(dir, 'components/dyn.js',
     `import { WebComponent, html } from '@webjsdev/core';\nconst TAG = 'dyn-' + 'badge';\nexport class DynBadge extends WebComponent {\n  render() { return html\`<span>x</span>\`; }\n}\nDynBadge.register(TAG);\n`);
@@ -1379,11 +1346,11 @@ test('the check carries the stable code ELISION_COMPONENTS and is gateable', asy
 
   const policy = readDoctorPolicy(dir);
   assert.deepEqual(policy.malformed, [], 'a known code is accepted, so the DOCTOR_CODES entry is present');
-  assert.deepEqual(policy.unknownCodes ?? [], [], 'ELISION_COMPONENTS is a known code');
-  assert.equal(policy.gate.ELISION_COMPONENTS, 'off');
+  assert.deepEqual(policy.unknownCodes ?? [], [], 'ORPHAN_COMPONENTS is a known code');
+  assert.equal(policy.gate.ORPHAN_COMPONENTS, 'off');
 
   const cli = runCliArgs(dir, ['--json']);
-  const gated = JSON.parse(cli.stdout).results.find((x) => x.code === 'ELISION_COMPONENTS');
+  const gated = JSON.parse(cli.stdout).results.find((x) => x.code === 'ORPHAN_COMPONENTS');
   assert.equal(gated.status, 'warn', 'the check still FOUND the orphan');
   assert.equal(gated.severity, 'off', 'but the gate silences what it contributes');
 });

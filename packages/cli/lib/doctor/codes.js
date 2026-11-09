@@ -46,7 +46,7 @@ export const DOCTOR_CODES = {
   'importmap-coherence': 'IMPORTMAP_COHERENCE',
   'git-hook': 'GIT_HOOK',
   'Route modules (browser code that runs only on the server)': 'ROUTE_BROWSER_CODE',
-  'Component elision (what the browser drops)': 'ELISION_COMPONENTS',
+  'Components (orphan classes the scanner cannot see)': 'ORPHAN_COMPONENTS',
   'Static build outputs (dev.regenerate freshness)': 'STATIC_ASSET_FRESHNESS',
   'Asset urls (unmarked stylesheet links)': 'UNMARKED_ASSET_LINKS',
   'workspace-overrides': 'WORKSPACE_OVERRIDES',

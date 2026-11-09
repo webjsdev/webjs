@@ -14,7 +14,8 @@ import { builtinModules } from 'node:module';
 import { relative } from 'node:path';
 
 import { maskComments, redactToPlaceholders } from '../js-scan.js';
-import { EVENT_BINDING_RE, REACTIVE_IMPORTS, extractRenderedTags } from '../component-elision.js';
+import { hasUseServerDirective } from './helpers.js';
+import { EVENT_BINDING_RE, REACTIVE_IMPORTS, extractRenderedTags } from '../client-signals.js';
 
 /**
  * @typedef {import('./rules.js').Violation} Violation
@@ -70,6 +71,19 @@ export function checkRouteModuleBoundaries(appDir, files, violations, ctx) {
   const serverTags = new Map();
   for (const { rel, content } of files) {
     if (!SERVER_FILE_RE.test(rel) || !/extends\s+WebComponent\b/.test(content)) continue;
+    // --- no-component-in-use-server-file ---
+    // Every function export of a `'use server'` file is wrapped as an action
+    // (a class is a function), so a component there is neither a component
+    // nor a usable action.
+    if (hasUseServerDirective(content)) {
+      violations.push({
+        rule: 'no-component-in-use-server-file',
+        file: rel,
+        message: "This `'use server'` file defines a component. Every function export of a `'use server'` file is wrapped as a server action, and a class is a function, so the component is neither a working component nor a usable action.",
+        fix: "Drop `'use server'` to make it a server-only component (a component in a `.server` file without the directive renders on the server and ships nothing), or move the class to an ordinary file to make it a component that runs in the browser. Keep the actions in their own `'use server'` file.",
+      });
+      continue;
+    }
     for (const m of maskComments(content).matchAll(REGISTER_RE)) serverTags.set(m[2], rel);
     checkServerComponent(rel, content, violations);
   }

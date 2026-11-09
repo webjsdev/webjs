@@ -1,12 +1,12 @@
 // Unit tests for prunePinToReachable (#197): a committed pin is pruned to the
-// vendor specifiers still reachable from non-elided modules, so a pinned app
+// vendor specifiers still reachable from modules the browser loads, so a pinned app
 // serves the same import map an unpinned app would.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { prunePinToReachable } from '../../src/vendor.js';
 
-test('drops a pinned package that is no longer reachable (elided-only dep)', () => {
+test('drops a pinned package that is no longer reachable (route-module-only dep)', () => {
   const imports = {
     dayjs: 'https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js',
     picocolors: 'https://ga.jspm.io/npm:picocolors@1.0.0/picocolors.js',
@@ -15,8 +15,8 @@ test('drops a pinned package that is no longer reachable (elided-only dep)', () 
     'https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js': 'sha384-dayjs',
     'https://ga.jspm.io/npm:picocolors@1.0.0/picocolors.js': 'sha384-pico',
   };
-  // Only picocolors is still imported by non-elided code; dayjs's only
-  // importer was elided, so the scan does not surface it.
+  // Only picocolors is still imported by browser code; dayjs's only importer
+  // is a route module, so the scan does not surface it.
   const reachable = new Set(['picocolors']);
   const out = prunePinToReachable(imports, integrity, reachable);
   assert.deepEqual(Object.keys(out.imports), ['picocolors'], 'dayjs pruned');

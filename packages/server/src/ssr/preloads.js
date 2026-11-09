@@ -31,21 +31,16 @@ export function toUrlPath(file, appDir) {
  * are NOT preloaded: they're loaded by the IntersectionObserver-based
  * lazy-loader when the element enters the viewport.
  *
- * Elidable (display-only) components are skipped entirely: their imports
- * are stripped from the served source, so preloading their module would
- * fetch JS the browser never executes.
- *
  * A tag counts as lazy when its class says so at runtime (`isLazy`) OR its
  * file declares `static lazy = true` in source (`lazyFiles`, #1524), the same
  * per-file verdict the served-source rewrite uses, so the two never disagree.
  *
  * @param {Set<string>} usedTags
  * @param {string} appDir
- * @param {Set<string>} [elidable]  absolute paths of elidable component files
  * @param {Map<string, string[]>} [lazyFiles]  lazy component file -> its tags
  * @returns {{ eager: string[], lazy: Record<string, string> }}
  */
-export function componentPreloads(usedTags, appDir, elidable, lazyFiles) {
+export function componentPreloads(usedTags, appDir, lazyFiles) {
   const eager = [];
   /** @type {Record<string, string>} */
   const lazy = {};
@@ -55,7 +50,6 @@ export function componentPreloads(usedTags, appDir, elidable, lazyFiles) {
     try {
       const abs = fileURLToPath(fileUrl);
       if (!abs.startsWith(appDir)) continue;
-      if (elidable && elidable.has(abs)) continue;
       const url = toUrlPath(abs, appDir);
       if (isLazy(tag) || (lazyFiles && lazyFiles.has(abs))) {
         lazy[tag] = url;
@@ -90,13 +84,13 @@ export function componentPreloads(usedTags, appDir, elidable, lazyFiles) {
  * @param {import('../module-graph.js').ModuleGraph | undefined} graph
  * @param {string[]} entryFiles     absolute paths of the SHIPPED page/layout modules (from `moduleUrls`)
  * @param {string} appDir
- * @param {Set<string>} [elidableComponents]  absolute paths to skip in the walk
  * @param {Set<string>} [serverFiles]  the action / server-file index, never preloaded
+ * @param {Set<string>} [skip]  absolute paths to skip in the walk (the lazy files)
  * @param {string[]} [precomputedDeps]  the transitive closure `pagePreloadHints` already walked for
  *   THESE roots and THIS skip set. Omitted, the walk runs here (a direct caller)
  * @returns {string[]}
  */
-export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appDir, serverFiles, elidableComponents, precomputedDeps) {
+export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appDir, serverFiles, skip, precomputedDeps) {
   const seen = new Set(moduleUrls);
   const result = [];
 
@@ -133,10 +127,9 @@ export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFile
         const abs = resolve(appDir, url.startsWith('/') ? url.slice(1) : url);
         allEntries.push(abs);
       }
-      // Skip elidable components and any subtree reachable only through
-      // them: their imports are stripped from served source, so the
-      // browser never fetches these modules.
-      deps = transitiveDeps(graph, allEntries, appDir, elidableComponents);
+      // Skip the lazy components and any subtree reachable only through
+      // them: the lazy loader fetches those on first sight, not up front.
+      deps = transitiveDeps(graph, allEntries, appDir, skip);
     }
     for (const dep of deps) {
       if (byIndex(dep)) continue;
@@ -153,11 +146,11 @@ export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFile
 /**
  * Collect the bare npm vendor specifiers the page's SHIPPED modules import
  * (#754). The walk ROOTS are the boot's actually-shipped module set: the caller
- * passes `entryFiles` = the absolute paths of `moduleUrls` (which already drops
- * inert page/layout modules and substitutes an import-only page with its
- * components), plus `componentUrls` = the rendered components. From those roots
- * it walks the transitive app-graph closure (elidable components and the subtree
- * reachable only through them excluded), and collects each reached file's bare
+ * passes `entryFiles` = the absolute paths of `moduleUrls` (the components each
+ * route module renders, never a route module itself, #1686), plus
+ * `componentUrls` = the rendered components. From those roots it walks the
+ * transitive app-graph closure (the lazy components and the subtree reachable
+ * only through them excluded), and collects each reached file's bare
  * imports, excluding server files. The specifiers are resolved to `modulepreload`
  * targets via the vendor importmap; a specifier not in the map (unpinned /
  * unreached) drops out there.
@@ -166,35 +159,34 @@ export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFile
  * dropped from the boot, whether a dropped page's SSR-only DIRECT vendor import
  * or its SSR-only RELATIVE HELPER's vendor, is never collected: the dropped
  * module is not a root, and nothing that ships imports it (pages/layouts are not
- * importable). So the canonical SSR-only-dependency pattern (which elision keeps
- * off the client) is never preloaded (no over-fetch).
+ * importable). So the canonical SSR-only-dependency pattern is never preloaded
+ * (no over-fetch).
  *
  * @param {import('../module-graph.js').ModuleGraph | undefined} graph
  * @param {string[]} entryFiles  absolute paths of the SHIPPED page/layout modules (from `moduleUrls`)
  * @param {string[]} componentUrls  rendered eager component URL paths
  * @param {string} appDir
- * @param {Set<string>} [elidableComponents]
+ * @param {Set<string>} [skip]  absolute paths to skip in the walk (the lazy files)
  * @param {Set<string>} [serverFiles]  the action / server-file index (`'use server'`, incl. no-`.server.` files)
  * @param {string[]} [precomputedDeps]  the transitive closure `pagePreloadHints` already walked for
  *   THESE roots and THIS skip set. Omitted, the walk runs here (a direct caller)
  * @returns {Set<string>}
  */
-export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elidableComponents, serverFiles, precomputedDeps) {
+export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, skip, serverFiles, precomputedDeps) {
   /** @type {Set<string>} */
   const specs = new Set();
   if (!graph) return specs;
   const bare = bareImports(graph);
   if (!bare.size) return specs;
-  // Roots = the SHIPPED page/layout modules (already inert-dropped + import-only
-  // expanded by the caller) + the rendered components, keyed by the graph's own
-  // absolute paths. Walk their non-elided transitive closure, unless
+  // Roots = the boot's shipped modules + the rendered components, keyed by the
+  // graph's own absolute paths. Walk their transitive closure, unless
   // `pagePreloadHints` already walked it for this render (#1644).
   const allEntries = [...entryFiles];
   for (const url of componentUrls) {
     allEntries.push(resolve(appDir, url.startsWith('/') ? url.slice(1) : url));
   }
   const files = new Set(allEntries);
-  for (const dep of precomputedDeps || transitiveDeps(graph, allEntries, appDir, elidableComponents)) files.add(dep);
+  for (const dep of precomputedDeps || transitiveDeps(graph, allEntries, appDir, skip)) files.add(dep);
   for (const file of files) {
     // A server file is never served to the browser (its source is an RPC /
     // throw-at-load stub), so a vendor it imports never ships and must NOT be
@@ -211,28 +203,23 @@ export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir
 }
 
 /**
- * The skip set for the preload walks: the elidable components plus, when the
- * app has `static lazy` components (#1524), every lazy file. Built once per
- * lazy map (a per-build object), since it was rebuilt per render (#1644).
- * @type {WeakMap<Map<string, string[]>, WeakMap<Set<string>, Set<string>>>}
+ * The skip set for the preload walks: every `static lazy` component file
+ * (#1524). Built once per lazy map (a per-build object), since it was rebuilt
+ * per render (#1644).
+ * @type {WeakMap<Map<string, string[]>, Set<string>>}
  */
 const SKIP_MEMO = new WeakMap();
-const NO_ELIDABLE = new Set();
 
 /**
- * @param {Set<string> | undefined} elidable
  * @param {Map<string, string[]> | undefined} lazyFiles
  * @returns {Set<string> | undefined}
  */
-function preloadSkipSet(elidable, lazyFiles) {
-  if (!lazyFiles || !lazyFiles.size) return elidable;
-  const key = elidable || NO_ELIDABLE;
-  let byElidable = SKIP_MEMO.get(lazyFiles);
-  if (!byElidable) { byElidable = new WeakMap(); SKIP_MEMO.set(lazyFiles, byElidable); }
-  let skip = byElidable.get(key);
+function preloadSkipSet(lazyFiles) {
+  if (!lazyFiles || !lazyFiles.size) return undefined;
+  let skip = SKIP_MEMO.get(lazyFiles);
   if (!skip) {
-    skip = new Set([...(elidable || []), ...lazyFiles.keys()]);
-    byElidable.set(key, skip);
+    skip = new Set(lazyFiles.keys());
+    SKIP_MEMO.set(lazyFiles, skip);
   }
   return skip;
 }
@@ -245,8 +232,8 @@ function preloadSkipSet(elidable, lazyFiles) {
  * walks it once and hands the closure to both.
  *
  * The walk roots are the BOOT's actually-shipped module set (`moduleUrls`,
- * inert modules already dropped and an import-only page already substituted)
- * plus the rendered eager components, NOT the raw route entries: rooting at
+ * the component frontier of each route module, #1686) plus the rendered eager
+ * components, NOT the raw route entries: rooting at
  * the raw entries would walk a dropped page's SSR-only subtree and hint a
  * `modulepreload` for a module nothing that ships imports (#780, the
  * app-module analog of the #754 vendor over-fetch).
@@ -256,15 +243,14 @@ function preloadSkipSet(elidable, lazyFiles) {
  *   appDir: string,
  *   moduleUrls: string[],
  *   eagerComponents: string[],
- *   elidableComponents: Set<string> | undefined,
  *   lazyFiles: Map<string, string[]> | undefined,
  *   serverFiles: Set<string> | undefined,
  * }} input
  * @returns {{ preloads: string[], vendorSpecifiers: Set<string>, skip: Set<string> | undefined }}
  */
 export function pagePreloadHints(input) {
-  const { graph, appDir, moduleUrls, eagerComponents, elidableComponents, lazyFiles, serverFiles } = input;
-  const skip = preloadSkipSet(elidableComponents, lazyFiles);
+  const { graph, appDir, moduleUrls, eagerComponents, lazyFiles, serverFiles } = input;
+  const skip = preloadSkipSet(lazyFiles);
   const shippedRoots = moduleUrls.map((u) => resolve(appDir, u.startsWith('/') ? u.slice(1) : u));
   /** @type {string[] | undefined} */
   let deps;
