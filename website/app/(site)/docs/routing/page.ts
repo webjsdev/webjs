@@ -583,8 +583,30 @@ export default async function ProtectedPage() {
       <code>303</code> See Other.
     </p>
 
+    <h3><code>permanentRedirect(url, type?)</code></h3>
     <p>
-      Both server helpers can be called from pages, layouts, and
+      Next.js's <code>permanentRedirect</code>, exported from
+      <code>@webjsdev/core</code>, behaves as <code>redirect(url, 308)</code>
+      and answers a <code>308</code> Permanent Redirect, which browsers and
+      search engines remember. Use it when a URL has moved for good, such as a
+      renamed slug.
+    </p>
+    <code-block>import { permanentRedirect } from '@webjsdev/core';
+
+export default async function OldSlug({ params }: { params: { slug: string } }) {
+  const post = await findPostByOldSlug(params.slug);
+  if (post) permanentRedirect(\`/blog/\${post.slug}\`);  // 308
+}</code-block>
+    <p>
+      Both <code>redirect()</code> and <code>permanentRedirect()</code> also
+      accept Next's <code>RedirectType</code>, <code>'push'</code> or
+      <code>'replace'</code>, as the second argument. It only matters when the
+      redirect reaches the browser from a server action called over RPC, where
+      it decides whether the client navigation adds a history entry.
+    </p>
+
+    <p>
+      These server helpers can be called from pages, layouts, and
       <code>generateMetadata</code> functions, anywhere in the server-side rendering
       chain.
     </p>
