@@ -7,7 +7,7 @@
  * The data below is sample data. Replace it with your own, point each `url`
  * at a real route, and mark the current page from your router.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import {
   sidebarContentClass,
@@ -103,7 +103,7 @@ export function appSidebar(opts: { side?: 'left' | 'right' } = {}) {
                     ? html`<ul data-slot="sidebar-menu-sub" data-sidebar="menu-sub" class=${sidebarMenuSubClass()}>
                         ${item.items.map((sub) => html`
                           <li data-slot="sidebar-menu-sub-item" data-sidebar="menu-sub-item" class=${sidebarMenuSubItemClass()}>
-                            <a href=${sub.url} data-slot="sidebar-menu-sub-button" data-sidebar="menu-sub-button" data-size="md" data-active=${sub.isActive ? 'true' : 'false'} aria-current=${sub.isActive ? 'page' : null} class=${sidebarMenuSubButtonClass()}>${sub.title}</a>
+                            <a href=${sub.url} data-slot="sidebar-menu-sub-button" data-sidebar="menu-sub-button" data-size="md" data-active=${sub.isActive ? 'true' : 'false'} aria-current=${sub.isActive ? 'page' : nothing} class=${sidebarMenuSubButtonClass()}>${sub.title}</a>
                           </li>
                         `)}
                       </ul>`

@@ -11,7 +11,7 @@
  * a real route, marked `data-active="true"` and `aria-current="page"` on the
  * current one.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import { cardClass } from '../../../components/card.ts';
@@ -37,7 +37,7 @@ function group(label: string, cls: string, entries: Entry[]) {
       <ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
         ${entries.map(([icon, text, active]) => html`
           <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
-            <a href="#" data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : null} class=${sidebarMenuButtonClass()}>${icon()}${text}</a>
+            <a href="#" data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : nothing} class=${sidebarMenuButtonClass()}>${icon()}${text}</a>
           </li>`)}
       </ul>
     </div>

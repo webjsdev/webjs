@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { listBlocks } from '#modules/ui/queries/blocks.server.ts';
@@ -44,7 +44,7 @@ async function blocksNav(current: string) {
         ${links.map((c) => {
           const href = c.slug ? `/ui/blocks/${c.slug}` : '/ui/blocks';
           const active = c.slug === current;
-          return html`<a href=${href} class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : null}>${c.name}</a>`;
+          return html`<a href=${href} class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : nothing}>${c.name}</a>`;
         })}
       </div>
     </div>

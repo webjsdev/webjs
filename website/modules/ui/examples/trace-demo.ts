@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { bubbleClass, bubbleContentClass } from '#modules/ui/components/bubble.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -49,7 +49,7 @@ function ThinkingRow() {
 function ToolRow(command: string, result: { stdout?: string; errorText?: string }, defaultOpen = false) {
   const failed = result.errorText !== undefined;
   return TraceCollapsible(
-    html`<span data-slot="trace-line" data-status=${failed ? 'error' : null} class=${traceLineClass()}>
+    html`<span data-slot="trace-line" data-status=${failed ? 'error' : nothing} class=${traceLineClass()}>
       <span data-slot="trace-icon" aria-hidden="true" class=${traceIconClass()}>${failed ? CircleAlertIcon() : CircleCheckIcon()}</span>
       <span data-slot="trace-title" class=${traceTitleClass()}>${failed ? 'Failed to run' : 'Ran'} ${command}</span>
     </span>`,

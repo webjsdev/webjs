@@ -10,7 +10,7 @@
  * for its trigger. "Messages & media" is the current section. Point each
  * `href` at a real settings route and mark the current one from your router.
  */
-import { html, cspNonce } from '@webjsdev/core';
+import { html, cspNonce, nothing } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import {
@@ -69,7 +69,7 @@ export function settingsDialog() {
                       const active = item.name === 'Messages & media';
                       return html`
                         <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
-                          <a href="#" data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : null} class=${sidebarMenuButtonClass()}>
+                          <a href="#" data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : nothing} class=${sidebarMenuButtonClass()}>
                             ${item.icon()}
                             <span>${item.name}</span>
                           </a>

@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import type { ActionResult } from '@webjsdev/server';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass, buttonVariants } from '#modules/ui/components/button.ts';
@@ -29,9 +29,9 @@ function userAuthForm(actionData: ActionResult | undefined) {
   return html`<div class="grid gap-6">
     <form action=${createAccount}>
       <div class=${fieldGroupClass()} data-slot="field-group">
-        <div class=${fieldClass()} data-slot="field" data-orientation="vertical" data-invalid=${error ? 'true' : null}>
+        <div class=${fieldClass()} data-slot="field" data-orientation="vertical" data-invalid=${error ? 'true' : nothing}>
           <label class=${cn(fieldLabelClass(), 'sr-only')} data-slot="field-label" for="email">Email</label>
-          <input class=${inputClass()} data-slot="input" id="email" name="email" placeholder="name@example.com" type="email" autocapitalize="none" autocomplete="email" autocorrect="off" required value=${value} aria-invalid=${error ? 'true' : null} aria-describedby=${error ? 'email-error' : null}>
+          <input class=${inputClass()} data-slot="input" id="email" name="email" placeholder="name@example.com" type="email" autocapitalize="none" autocomplete="email" autocorrect="off" required value=${value} aria-invalid=${error ? 'true' : nothing} aria-describedby=${error ? 'email-error' : nothing}>
           ${error ? html`<div class=${fieldErrorClass()} data-slot="field-error" id="email-error" role="alert">${error}</div>` : ''}
         </div>
         <div class=${fieldClass()} data-slot="field" data-orientation="vertical">

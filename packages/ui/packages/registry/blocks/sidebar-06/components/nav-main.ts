@@ -6,7 +6,7 @@
  * Each page is a real link inside its menu item, so a click follows it. Give
  * the item for the current page `aria-current="page"` on its link.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import '../../../components/dropdown-menu.ts';
@@ -42,7 +42,7 @@ export function navMain({ items }: { items: NavMainItem[] }) {
                 ? html`<ui-dropdown-menu-content class="min-w-56 rounded-lg" side="right" align="start">
                     ${item.items.map((sub) => html`
                       <ui-dropdown-menu-item>
-                        <a href=${sub.url} class="flex-1 text-inherit no-underline" aria-current=${sub.isActive ? 'page' : null}>${sub.title}</a>
+                        <a href=${sub.url} class="flex-1 text-inherit no-underline" aria-current=${sub.isActive ? 'page' : nothing}>${sub.title}</a>
                       </ui-dropdown-menu-item>
                     `)}
                   </ui-dropdown-menu-content>`

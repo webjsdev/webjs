@@ -1,4 +1,4 @@
-import { html, svg } from '@webjsdev/core';
+import { html, svg, nothing } from '@webjsdev/core';
 import { unsafeHTML } from '@webjsdev/core/directives';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -106,7 +106,7 @@ function chartsNav(current: string) {
       <div class="flex items-center">
         ${CHART_TYPES.map((t) => {
           const active = t.type === current;
-          return html`<a href=${`/ui/charts/${t.type}#charts`} class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : null}>${t.name}</a>`;
+          return html`<a href=${`/ui/charts/${t.type}#charts`} class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : nothing}>${t.name}</a>`;
         })}
       </div>
     </div>

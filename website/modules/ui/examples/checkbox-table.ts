@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { checkboxClass } from '#modules/ui/components/checkbox.ts';
 import {
@@ -41,7 +41,7 @@ export default function CheckboxTable() {
         </thead>
         <tbody data-slot="table-body" class=${tableBodyClass()}>
           ${tableData.map((row) => html`
-            <tr data-slot="table-row" data-state=${selected.has(row.id) ? 'selected' : null} class=${tableRowClass()}>
+            <tr data-slot="table-row" data-state=${selected.has(row.id) ? 'selected' : nothing} class=${tableRowClass()}>
               <td data-slot="table-cell" class=${tableCellClass()}>
                 <input
                   type="checkbox"

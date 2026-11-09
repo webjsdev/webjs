@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { tokenize, tokenClass, trimBlock } from '#lib/utils/highlight.ts';
 
 /**
@@ -72,6 +72,6 @@ export function codeFigure(code: string, opts: { title?: string; lineNumbers?: b
   return html`<figure data-rehype-pretty-code-figure data-not-typeset>
     ${opts.title ? html`<figcaption data-rehype-pretty-code-title data-language=${lang} class="flex items-center gap-2 text-code-foreground [&_svg]:size-4 [&_svg]:text-code-foreground [&_svg]:opacity-70">${languageIcon(opts.lang ?? extension(opts.title) ?? lang)}${opts.title}</figcaption>` : ''}
     ${opts.copy === false ? '' : copyButton()}
-    <pre tabindex="0" data-language=${lang} data-not-typeset class="no-scrollbar min-w-0 overflow-x-auto overflow-y-auto overscroll-x-contain overscroll-y-auto px-4 py-3.5 outline-none has-data-highlighted-line:px-0 has-data-line-numbers:px-0"><code data-language=${lang} data-line-numbers=${opts.lineNumbers ? '' : null}>${body}</code></pre>
+    <pre tabindex="0" data-language=${lang} data-not-typeset class="no-scrollbar min-w-0 overflow-x-auto overflow-y-auto overscroll-x-contain overscroll-y-auto px-4 py-3.5 outline-none has-data-highlighted-line:px-0 has-data-line-numbers:px-0"><code data-language=${lang} data-line-numbers=${opts.lineNumbers ? '' : nothing}>${body}</code></pre>
   </figure>`;
 }

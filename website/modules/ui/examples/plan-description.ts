@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import {
   traceClass, traceLineClass, traceIconClass, traceTitleClass, traceDescriptionClass,
@@ -34,7 +34,7 @@ export default function PlanDescription() {
           </p>
           <div data-slot="trace" class=${traceClass()}>
             ${steps.map((step, index) => html`
-              <span data-slot="trace-line" data-status=${index > 0 ? 'pending' : null} class=${traceLineClass()}>
+              <span data-slot="trace-line" data-status=${index > 0 ? 'pending' : nothing} class=${traceLineClass()}>
                 <span data-slot="trace-icon" aria-hidden="true" class=${traceIconClass()}>${index === 0 ? CircleCheckIcon() : CircleIcon()}</span>
                 <span data-slot="trace-title" class=${traceTitleClass()}>${step}</span>
               </span>

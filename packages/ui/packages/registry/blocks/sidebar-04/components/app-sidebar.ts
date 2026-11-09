@@ -10,7 +10,7 @@
  * The data below is sample data. Replace it with your own, point each `url`
  * at a real route, and mark the current page with `isActive`.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import {
   sidebarContentClass,
@@ -95,7 +95,7 @@ const data: { navMain: NavSection[] } = {
 
 export function appSidebar(opts: { class?: string } = {}) {
   return html`
-    <ui-sidebar variant="floating" class=${opts.class ?? null}>
+    <ui-sidebar variant="floating" class=${opts.class ?? nothing}>
       <div data-slot="sidebar-header" data-sidebar="header" class=${sidebarHeaderClass()}>
         <ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
           <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
@@ -121,7 +121,7 @@ export function appSidebar(opts: { class?: string } = {}) {
                   <ul data-slot="sidebar-menu-sub" data-sidebar="menu-sub" class=${cn(sidebarMenuSubClass(), 'ms-0 border-s-0 px-1.5')}>
                     ${section.items.map((item) => html`
                       <li data-slot="sidebar-menu-sub-item" data-sidebar="menu-sub-item" class=${sidebarMenuSubItemClass()}>
-                        <a href=${item.url} data-slot="sidebar-menu-sub-button" data-sidebar="menu-sub-button" data-size="md" data-active=${item.isActive ? 'true' : 'false'} aria-current=${item.isActive ? 'page' : null} class=${sidebarMenuSubButtonClass()}>${item.title}</a>
+                        <a href=${item.url} data-slot="sidebar-menu-sub-button" data-sidebar="menu-sub-button" data-size="md" data-active=${item.isActive ? 'true' : 'false'} aria-current=${item.isActive ? 'page' : nothing} class=${sidebarMenuSubButtonClass()}>${item.title}</a>
                       </li>
                     `)}
                   </ul>

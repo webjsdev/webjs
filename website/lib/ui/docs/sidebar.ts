@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import {
   sidebarContentClass, sidebarGroupClass, sidebarGroupLabelClass, sidebarGroupContentClass,
@@ -29,7 +29,7 @@ export function sectionActive(href: string, pathname: string): boolean {
 function item(link: DocLink, active: boolean, prefix: boolean) {
   return html`
     <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
-      <a href=${link.href} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} data-match=${prefix ? 'prefix' : 'exact'} aria-current=${active ? 'page' : null} class=${cn(sidebarMenuButtonClass(), ITEM_BUTTON)}>
+      <a href=${link.href} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${active ? 'true' : 'false'} data-match=${prefix ? 'prefix' : 'exact'} aria-current=${active ? 'page' : nothing} class=${cn(sidebarMenuButtonClass(), ITEM_BUTTON)}>
         <span class="absolute inset-0 flex w-(--sidebar-menu-width) bg-transparent"></span>
         ${link.title}
       </a>

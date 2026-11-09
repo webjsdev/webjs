@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { PREVIEW_ITEMS, createHref, previewHref, type CreateParams } from './params.ts';
@@ -61,7 +61,7 @@ export function previewFrame(params: CreateParams, groups: readonly ExplorerGrou
           data-item=${item.value}
           data-prefetch="false"
           data-active=${String(params.item === item.value)}
-          aria-current=${params.item === item.value ? 'page' : null}
+          aria-current=${params.item === item.value ? 'page' : nothing}
           title=${item.label}
           data-slot="button"
           class=${pill()}

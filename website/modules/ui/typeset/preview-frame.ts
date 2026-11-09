@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { CONTENT_OPTIONS, builderHref, previewHref, type TypesetParams } from './params.ts';
@@ -30,7 +30,7 @@ export function previewFrame(params: TypesetParams) {
           data-item=${option.value}
           data-prefetch="false"
           data-active=${String(params.item === option.value)}
-          aria-current=${params.item === option.value ? 'page' : null}
+          aria-current=${params.item === option.value ? 'page' : nothing}
           title=${option.label}
           data-slot="button"
           class=${cn(buttonClass({ variant: 'ghost', size: 'sm' }), 'h-7 min-w-7 cursor-pointer rounded-lg px-2 text-xs font-medium text-muted-foreground no-underline transition-colors hover:text-foreground data-[active=true]:bg-accent data-[active=true]:text-accent-foreground')}

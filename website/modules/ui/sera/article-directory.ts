@@ -3,7 +3,7 @@
  * apps/v4/app/(app)/(styles)/sera/article-directory/ (index.tsx, the preview
  * header and the article-directory card) element for element as server markup.
  */
-import { html, svg } from '@webjsdev/core';
+import { html, svg, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { badgeClass, type BadgeVariant } from '#modules/ui/components/badge.ts';
 import {
@@ -238,7 +238,7 @@ function articleDirectoryCard() {
             </li>
             ${[1, 2, 3].map((page) => html`
               <li data-slot="pagination-item">
-                <a href="#" aria-current=${page === 1 ? 'page' : null} data-slot="pagination-link" data-active=${page === 1 ? 'true' : 'false'} class=${paginationLinkClass({ size: 'icon-sm', isActive: page === 1 })}>
+                <a href="#" aria-current=${page === 1 ? 'page' : nothing} data-slot="pagination-link" data-active=${page === 1 ? 'true' : 'false'} class=${paginationLinkClass({ size: 'icon-sm', isActive: page === 1 })}>
                   ${page}
                 </a>
               </li>

@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import {
   dialogHeaderClass, dialogTitleClass, dialogDescriptionClass, dialogFooterClass,
@@ -58,7 +58,7 @@ export default function DialogRtl() {
         <ui-dialog-trigger>
           <button type="button" data-slot="button" data-variant="outline" data-size="default" class=${buttonClass({ variant: 'outline' })}>${t.openDialog}</button>
         </ui-dialog-trigger>
-        <ui-dialog-content class="sm:max-w-sm" dir=${dir} data-lang=${dir === 'rtl' ? lang : null}>
+        <ui-dialog-content class="sm:max-w-sm" dir=${dir} data-lang=${dir === 'rtl' ? lang : nothing}>
           <div data-slot="dialog-header" class=${dialogHeaderClass()}>
             <h2 data-slot="dialog-title" class=${dialogTitleClass()}>${t.editProfile}</h2>
             <p data-slot="dialog-description" class=${dialogDescriptionClass()}>${t.description}</p>
