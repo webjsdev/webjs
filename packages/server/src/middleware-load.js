@@ -135,13 +135,14 @@ export function compileMatcher(matcher, file) {
 }
 
 /**
- * Give a middleware's request Next's extras: `request.cookies` (the request's
+ * Give a middleware's or a route handler's request Next's extras (#1686:
+ * `NextRequest` is what both receive in Next.js): `request.cookies` (the request's
  * cookie store, so a set there reaches the response) and, in dev, a
  * `request.nextUrl` that throws naming `new URL(request.url)`.
  * @param {Request} req
  * @param {boolean} dev
  */
-function decorateRequest(req, dev) {
+export function decorateRequest(req, dev) {
   try {
     if (!Object.prototype.hasOwnProperty.call(req, 'cookies')) {
       Object.defineProperty(req, 'cookies', { configurable: true, get: () => { markDynamicAccess(); return requestCookieStore(); } });

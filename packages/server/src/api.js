@@ -2,6 +2,7 @@ import { isRedirect, isNotFound, isForbidden, isUnauthorized } from '@webjsdev/c
 import { headerSafeLocation } from './redirect-location.js';
 import { makeThenable } from './thenable-params.js';
 import { devImport } from './dev-import.js';
+import { decorateRequest } from './middleware-load.js';
 
 /** Every method a route module may export (Next's HTTP_METHODS). */
 const HTTP_METHODS = ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'DELETE', 'PATCH'];
@@ -52,6 +53,9 @@ export async function handleApi(route, params, webRequest, dev) {
   // spreads / JSON-stringifies params is unaffected.
   const thenableParams = makeThenable(params);
   /** @type any */ (webRequest).params = thenableParams;
+  // A Next.js route handler receives a NextRequest, so `request.cookies.get()`
+  // is how agents read a cookie there; it is the request's cookies() store.
+  decorateRequest(webRequest, dev);
   let result;
   try {
     result = await handler(webRequest, { params: thenableParams });

@@ -41,7 +41,7 @@ export async function GET(req: Request, { params }: { params: Promise&lt;{ id: s
   { params }: { params: Record&lt;string, string | string[]&gt; }
 ): Promise&lt;Response | object&gt;</code-block>
     <ul>
-      <li><strong>req</strong>: a standard Web API <code>Request</code>. Read headers, cookies, URL, query params, body.</li>
+      <li><strong>req</strong>: a standard Web API <code>Request</code>. Read headers, cookies, URL, query params, body. As on Next.js's <code>NextRequest</code>, <code>req.cookies.get('token')?.value</code> reads a cookie; it is the same store <code>cookies()</code> returns.</li>
       <li><strong>params</strong>: an object containing dynamic route segment values (from <code>[slug]</code> folder names).</li>
     </ul>
     <p>Return a <code>Response</code> for full control over status, headers, and body. Or return a plain object (or array, number, null) and WebJs wraps it with <code>Response.json()</code> automatically.</p>
