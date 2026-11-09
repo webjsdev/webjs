@@ -225,14 +225,21 @@ export function isVersionedModule(abs) {
  * ones Bun's `fs.watch` may have reported no event for (see
  * `recordModuleLoad`). Each returned file's stamp is updated, so a later
  * rebuild does not report the same change again. Empty off Bun.
+ *
+ * `dirs` limits the scan to modules directly in those directories. The event
+ * Bun drops is always a sibling of one it reported, written in the same
+ * directory, so the rebuild passes the directories of its changed files and
+ * stats a handful of modules instead of every one the process ever served.
+ * @param {Set<string>} [dirs]
  * @returns {string[]}
  */
-export function movedServedModules() {
+export function movedServedModules(dirs) {
   const st = state();
   /** @type {string[]} */
   const moved = [];
   if (!st.loaded) return moved;
   for (const [f, stamp] of st.loaded) {
+    if (dirs && !dirs.has(dirname(f))) continue;
     const now = diskStamp(f);
     if (now !== stamp) { st.loaded.set(f, now); moved.push(f); }
   }

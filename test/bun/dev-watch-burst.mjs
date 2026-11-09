@@ -6,7 +6,9 @@
  * entered the browser versions or the hot-swap verdict, and the tab kept its
  * old code with no reload. A rebuild now also takes every served or shipped
  * module whose disk stamp moved without an event (`withMissedChanges` in
- * `dev/handler.js`).
+ * `dev/handler.js`), checking only the directories of the files the watcher
+ * did report, since the dropped event is a sibling in the same directory: the
+ * two components below share one, which is the case that has to hold.
  *
  *   node test/bun/dev-watch-burst.mjs
  *   bun  test/bun/dev-watch-burst.mjs

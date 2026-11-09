@@ -203,3 +203,35 @@ test('without the bump the page still sees the old dependency', { skip: !!proces
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Review of #1689: on Bun a rebuild looks for an edit fs.watch dropped by
+// statting served modules, and it used to stat EVERY module the process ever
+// served on every save. The dropped event is a sibling in the same directory,
+// so the scan is limited to the directories the batch reported; a module
+// elsewhere keeps its stamp and is found by the rebuild that reports its own
+// directory.
+test('movedServedModules checks only the directories it is given', async () => {
+  const { recordModuleLoad, movedServedModules } = await import('../../src/dev/esm-hot-hooks.js');
+  const key = Symbol.for('webjs.dev.esmHot');
+  const saved = globalThis[key];
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-moved-served-'));
+  try {
+    globalThis[key] = { roots: new Set([dir]), versions: new Map(), importers: new Map(), next: 1, installed: true, loaded: new Map() };
+    mkdirSync(join(dir, 'a'));
+    mkdirSync(join(dir, 'b'));
+    const a = join(dir, 'a/x.ts');
+    const b = join(dir, 'b/y.ts');
+    writeFileSync(a, 'export const x = 1;\n');
+    writeFileSync(b, 'export const y = 1;\n');
+    recordModuleLoad(a);
+    recordModuleLoad(b);
+    writeFileSync(a, 'export const x = 22;\n');
+    writeFileSync(b, 'export const y = 22;\n');
+    assert.deepEqual(movedServedModules(new Set([join(dir, 'a')])), [a], 'only the reported directory is scanned');
+    assert.deepEqual(movedServedModules(new Set([join(dir, 'b')])), [b], 'the other module kept its stamp for its own rebuild');
+    assert.deepEqual(movedServedModules(), [], 'with no directories every module is scanned, and nothing moved since');
+  } finally {
+    globalThis[key] = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -4,7 +4,7 @@ import { registerBunAppSource } from './bun-app-source.js';
 import { evictPoisonedBunTranspilerCache } from '../bun-transpiler-cache.js';
 import { serverRuntime } from '../listener-core.js';
 import { createHash } from 'node:crypto';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 // Server-side `.ts` imports are handled natively by Node 24+'s default
 // type-stripping (`process.features.typescript === 'strip'`) or by Bun. The
@@ -1061,17 +1061,24 @@ export async function createRequestHandler(opts) {
    * whose disk stamp moved without the watcher reporting it (Bun only). Each
    * extra file is classified against the analysis the tabs hold, the same
    * ladder the watcher applies, and its stamp is updated so it is reported
-   * once.
+   * once. Only modules in the directories of the changed files are checked:
+   * the event Bun drops is a sibling written in the same directory, and a
+   * synchronous stat over every module would block the loop on each save.
    * @param {import('../dev-classify.js').ReloadVerdict | undefined} verdict
    * @param {string[]} changed
    * @returns {{ verdict: import('../dev-classify.js').ReloadVerdict | undefined, changed: string[] }}
    */
   function withMissedChanges(verdict, changed) {
     const seen = new Set(changed);
+    /** @type {Set<string>} */
+    const dirs = new Set();
+    // A reported path may be a directory itself (a folder created or renamed).
+    for (const f of changed) { dirs.add(dirname(f)); dirs.add(f); }
     /** @type {string[]} */
     const missed = [];
-    for (const f of movedServedModules()) if (!seen.has(f)) { seen.add(f); missed.push(f); }
+    for (const f of movedServedModules(dirs)) if (!seen.has(f)) { seen.add(f); missed.push(f); }
     for (const [f, stamp] of state.shippedStamps) {
+      if (!dirs.has(dirname(f))) continue;
       const now = diskStamp(f);
       if (now === stamp) continue;
       state.shippedStamps.set(f, now);
