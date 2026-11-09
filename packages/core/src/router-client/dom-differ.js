@@ -224,9 +224,25 @@ export function diffElementInPlace(dst, src) {
   }
   // Update attributes from src; remove ones not in src.
   const srcAttrs = new Set();
+  // A server-passed `.prop` binding on a reused, upgraded component (#1686):
+  // its `data-webjs-prop-*` attribute was read once at upgrade and stripped,
+  // so writing the new value as an attribute changed nothing and the property
+  // stayed stale after a same-page update. A binding whose value changed is
+  // handed to the component to decode; an unchanged one is left alone, so a
+  // value the component changed locally survives, as in Lit.
+  const hydrated = isHydratedComponent(dst) && typeof (/** @type any */ (dst))._hydratePropAttrs === 'function';
+  let propsChanged = false;
   for (const attr of src.attributes) {
     srcAttrs.add(attr.name);
     if (LIVE_ATTRS.has(attr.name)) continue;
+    if (hydrated && attr.name.startsWith('data-webjs-prop-')) {
+      const seen = /** @type any */ (dst).__webjsPropAttrValues;
+      if (!seen || seen.get(attr.name) !== attr.value) {
+        dst.setAttribute(attr.name, attr.value);
+        propsChanged = true;
+      }
+      continue;
+    }
     // The serialized-restore stamp is a message to a NOT-YET-UPGRADED
     // element's connectedCallback; copying it onto a live reused host would
     // leave a consume-once marker lingering in the live DOM forever. Note
@@ -243,6 +259,7 @@ export function diffElementInPlace(dst, src) {
     if (LIVE_ATTRS.has(attr.name)) continue;
     if (!srcAttrs.has(attr.name)) dst.removeAttribute(attr.name);
   }
+  if (propsChanged) /** @type any */ (dst)._hydratePropAttrs();
   // For form-control-like elements, preserve live IDL state.
   // (`value`, `checked`, `open`, etc.: see LIVE_ATTRS below for full list.)
   // The attribute version is skipped above; we deliberately do nothing

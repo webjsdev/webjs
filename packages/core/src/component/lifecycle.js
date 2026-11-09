@@ -803,10 +803,16 @@ class WebComponentBase extends Base {
       const n = attrs[i].name;
       if (n.startsWith('data-webjs-prop-')) names.push(n);
     }
+    // The last value each binding carried, so a later morph re-reads only the
+    // ones the server changed (router-client/dom-differ.js), the way Lit
+    // commits a property binding only when its value changed.
+    /** @type any */ const self = this;
+    if (!self.__webjsPropAttrValues) self.__webjsPropAttrValues = new Map();
     for (const fullName of names) {
       const raw = this.getAttribute(fullName);
       this.removeAttribute(fullName);
       if (raw == null) continue;
+      self.__webjsPropAttrValues.set(fullName, raw);
       const propName = camelCase(fullName.slice('data-webjs-prop-'.length));
       try {
         /** @type any */ (this)[propName] = deserializeProp(raw);

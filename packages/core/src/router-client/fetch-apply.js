@@ -74,6 +74,57 @@ import { _swapCommit, applySwap } from './swap.js';
  *   boundary scan). A caller deciding whether to fall back to a full page load
  *   wants `applied`; one reporting the submission's success wants `ok`.
  */
+/**
+ * Whether two urls name the same document (origin, path and query; the hash
+ * is a position within it).
+ * @param {string} a @param {string} b
+ */
+function sameDocumentUrl(a, b) {
+  try {
+    const x = new URL(a, location.href);
+    const y = new URL(b, location.href);
+    return x.origin === y.origin && x.pathname === y.pathname && x.search === y.search;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The focused element and its text selection, for a same-page update.
+ * @returns {{ el: Element, start: number | null, end: number | null } | null}
+ */
+function captureFocus() {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  /** @type any */
+  const input = el;
+  let start = null;
+  let end = null;
+  try { start = input.selectionStart ?? null; end = input.selectionEnd ?? null; } catch { /* not a text control */ }
+  return { el, start, end };
+}
+
+/**
+ * Give focus back to the element that had it, when the morph kept the node.
+ * @param {{ el: Element, start: number | null, end: number | null }} state
+ */
+function restoreFocus(state) {
+  const { el, start, end } = state;
+  if (!el.isConnected || document.activeElement === el) return;
+  /** @type any */
+  const target = el;
+  if (typeof target.focus !== 'function') return;
+  // WebKit scrolls a text control into view on setSelectionRange even after a
+  // preventScroll focus, so the window offset is put back afterwards.
+  const x = window.scrollX;
+  const y = window.scrollY;
+  target.focus({ preventScroll: true });
+  if (start !== null && end !== null) {
+    try { target.setSelectionRange(start, end); } catch { /* not a text control */ }
+  }
+  if (window.scrollX !== x || window.scrollY !== y) window.scrollTo({ left: x, top: y, behavior: 'instant' });
+}
+
 export async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token, revalidating, opts) {
   method = method || 'GET';
   const refresh = (opts && opts.refresh) || undefined;
@@ -349,14 +400,22 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
   // (see the `applied` comment below). Keeping the tail call preserves them byte
   // for byte, so this commit changes the ORDER on committing swaps and nothing
   // else.
+  // A write that lands back on the page it was submitted from (a validation
+  // re-render, or a PRG redirect to the same url) updates that page in place,
+  // the way a Next.js server action does after revalidatePath (#1686): the
+  // history entry is replaced rather than duplicated, the scroll position is
+  // kept, and the focused control keeps focus when it survives the morph.
+  const samePage = mutation && !refresh && sameDocumentUrl(finalUrl, location.href);
   let historyRecorded = false;
   const recordHistoryNow = recordHistory
     ? () => {
       if (historyRecorded) return;
       historyRecorded = true;
-      history.pushState(null, '', finalUrl);
+      if (samePage) history.replaceState(history.state, '', finalUrl);
+      else history.pushState(null, '', finalUrl);
     }
     : null;
+  const focusState = samePage ? captureFocus() : null;
 
   const disposition = applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc, refresh || (mutation ? 'layouts' : undefined), recordHistoryNow);
   // The temporary stylesheet copies are released once the swap has COMMITTED:
@@ -364,6 +423,7 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
   // lands a frame later. A copy with no twin in the result (a discarded or
   // uncommitted swap) goes as soon as the commit settles.
   if (sheets) _swapCommit.then(() => releaseIncomingStylesheets(sheets), () => releaseIncomingStylesheets(sheets));
+  if (focusState) _swapCommit.then(() => { if (myToken === currentNavigationToken) restoreFocus(focusState); }, () => {});
   // `'none'` means applySwap returned WITHOUT committing anything: the frame the
   // response was for is missing, or it degraded to a hard navigation (an
   // importmap/build mismatch, a poisoned boundary scan). The page is not left
@@ -434,7 +494,7 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
       // `#section` link is exactly where an app's `scroll-behavior: smooth`
       // is wanted, and native browsers animate it too.
       target.scrollIntoView();
-    } else if (!preserveScroll) {
+    } else if (!preserveScroll && !samePage) {
       // Scroll-to-top on a forward nav. behavior:'instant' so an app-level
       // `scroll-behavior: smooth` does not animate it (match native nav).
       warnIfSmoothScrollOnHtml();
@@ -461,7 +521,7 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
   }
 
   document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId, from: 'navigate' } }));
-  return { ok: respOk, status: respStatus, aborted: false, applied };
+  return { ok: respOk, status: respStatus, aborted: false, applied, samePage };
   } finally {
     // Clear the frame's busy state on every exit path (the early returns
     // above all unwind through here). No-op when this was not a frame nav.
