@@ -19,9 +19,7 @@ Every scaffolded WebJs app (the starter project `webjs create` generates for you
 
 ```
 AGENTS.md                                  agent contract (this is the load-bearing one)
-CONVENTIONS.md                             project-specific overridable conventions
 CLAUDE.md                                  Claude Code import file (points at AGENTS.md)
-.agents/skills/webjs/                      the teaching skill, loaded on demand
 .agents/rules/workflow.md                  Antigravity (Google) workspace rules
 .github/pull_request_template.md           PR template (also AI-readable)
 .editorconfig                              text-tool consistency
@@ -31,7 +29,7 @@ The trick is that all of them say the same thing, and that there are fewer of th
 
 Most agents read whichever file matches their tool first. AGENTS.md is the cross-tool standard ([emerging spec, FYI](https://agents.md/)). Every WebJs scaffold ships it.
 
-Concretely, the AGENTS.md file is around 40k characters. It covers: file conventions (where every kind of file goes), the public API of each package, framework invariants (the things that crash in production if you violate them), recipes for common tasks, and a list of `Deliberately deferred` items (so the agent does not try to add a bundler or a build command).
+Concretely, the AGENTS.md file is short: a brief of a couple of hundred words saying that routing follows the Next.js App Router, components use Lit's APIs from `@webjsdev/core`, light DOM is the default, TypeScript must be erasable, and server code lives in `*.server.ts`, followed by the commands to run after each edit. It used to be around 40k characters of file conventions, API tables, invariants and recipes. The last section says why most of that is gone.
 
 # The pre-commit hook
 
@@ -108,6 +106,6 @@ The hooks fragment across tools. Every new agent CLI (Cline, Codex, Factory Droi
 
 What I have not solved is enforcement for a tool that is not Claude Code. The blocking tool-call gates only fire there, so an agent in another editor gets the contract and the commit-time gates but not the live ones that catch a mistake as it is typed.
 
-The other thing is the AGENTS.md size budget. We are at ~40k characters and growing. Each new feature adds a recipe, an invariant, or a doc-link. Agents have token windows that get pricey above ~50k. We are about to need a "load this section on demand" mechanism. The skill at `.agents/skills/webjs/` (SKILL.md plus its `references/`) is the start of that pattern: detail references that load only when relevant.
+The other thing was the AGENTS.md size budget. It grew past 40k characters, and a teaching skill of about 65k words grew next to it, loaded on demand. I deleted both. An agent already knows Next.js routing and Lit components, so the better move was to make WebJs behave like them wherever it can, and to make every place it cannot refuse the code at `webjs check` or at load time with the fix in the message. What is left for the agent to read is the short brief, and the framework source in `node_modules`, which is the code that runs because there is no build.
 
 If you are building tooling for AI agents, the takeaway is to put the rules where the agent will find them, in a format the agent can parse, with enforcement at the seams where mistakes happen. Everything else is a marketing tag.

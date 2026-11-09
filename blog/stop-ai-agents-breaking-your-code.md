@@ -19,10 +19,8 @@ An agent reads whichever instruction file matches its tool. Most of them now agr
 
 ```
 AGENTS.md                        the contract (source of truth)
-CONVENTIONS.md                   project conventions, overridable
 CLAUDE.md                        Claude Code (imports AGENTS.md)
 .agents/rules/workflow.md        Antigravity workspace rules
-.agents/skills/webjs/            the teaching skill, loaded on demand
 ```
 
 Plus a `.claude/settings.json` wiring up hooks, a PR template, and an `.editorconfig`. The point is not the file count, and the count has gone down: Cursor, opencode, and Copilot's coding agent all read AGENTS.md directly, so the separate rule files they each used to need are gone. The point is that whichever agent you happen to be driving, it lands in the project and finds the same conventions. There is no "the agent didn't know" excuse, because the knowledge is in the file the agent reads first.
@@ -68,7 +66,7 @@ Git enforces one branch per worktree, so two agents in two worktrees physically 
 
 WebJs draws a hard line between two kinds of rules, and keeping them separate is what makes each one trustworthy.
 
-`CONVENTIONS.md` holds project conventions. Where actions live, one function per file, how features are tested. These are preferences a reasonable project could do differently, so they are guidance you can customize.
+Project conventions are the first kind. Where actions live, one function per file, how features are tested. These are preferences a reasonable project could do differently, so they sit in the app's own `AGENTS.md` as guidance you can customize.
 
 `webjs check` is the other kind. It runs correctness-only rules, the things that are wrong to ship. Code that crashes in production, a server secret leaking into a browser bundle, TypeScript that will not strip, a shell written in a non-root layout. These run unconditionally with no per-project disabling, because the answer to "could a sensible app want this to pass?" is no.
 
