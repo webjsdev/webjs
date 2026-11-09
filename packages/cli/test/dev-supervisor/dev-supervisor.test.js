@@ -24,7 +24,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { planDevSupervisor, sourceLocationsOn } from '../../lib/dev-supervisor.js';
+import { planDevSupervisor, sourceLocationsOn, isRestartFile, RESTART_FILES, WATCH_FILES } from '../../lib/dev-supervisor.js';
 
 const ARGV = ['/path/to/webjs.js', 'dev', '--port', '8080'];
 const WATCH = {
@@ -34,6 +34,9 @@ const WATCH = {
     // The boot hooks run once per process, so an edit restarts it (#1575).
     'instrumentation.ts', 'instrumentation.js', 'instrumentation.mts', 'instrumentation.mjs',
     'env.ts', 'env.js', 'env.mts', 'env.mjs',
+    // So do `.env`, package.json and the lockfiles (#1689).
+    '.env', 'package.json', 'package-lock.json', 'npm-shrinkwrap.json',
+    'bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock',
   ],
 };
 
@@ -95,9 +98,52 @@ test('Node restarts the child on a change, and never runs it under `node --watch
   // EACCES on a temp file another user created) and never came back. The
   // supervisor owns the watching now, so the child's argv is the plain script.
   const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
-  assert.deepEqual(plan, { mode: 'supervise', args: [...ARGV], restartOnChange: true, ...WATCH });
+  assert.ok(plan.mode === 'supervise');
+  const { restartFor, inPlaceRestartFor, ...rest } = plan;
+  assert.deepEqual(rest, { mode: 'supervise', args: [...ARGV], restartOnChange: true, ...WATCH });
   for (const flag of ['--watch', '--watch-preserve-output', '--watch-path']) {
     assert.ok(!plan.args.includes(flag), `Node args must not include ${flag}`);
+  }
+  // Until the child announces it reloads in place, every change restarts it.
+  for (const p of ['app/page.ts', 'lib/x.ts', 'db/schema.server.ts', 'components/card.js', '.env']) {
+    assert.equal(restartFor(p), true, p);
+  }
+});
+
+// #1689: a Node child with the module resolve hook re-evaluates app edits in
+// place and announces it, so the supervisor narrows to the restart files, the
+// same contract the Bun child has had since #1575. Without `inPlaceRestartFor`
+// the plan restarts the child for every edit, which is the COUNTERFACTUAL.
+test('a Node child that reloads in place narrows the restarts to the restart files (#1689)', async () => {
+  const { inPlaceRestarts, HOT_IN_PLACE_MESSAGE } = await import('../../lib/dev-reload.js');
+  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
+  assert.ok(plan.mode === 'supervise');
+  assert.equal(plan.inPlaceRestartFor, isRestartFile);
+  const r = inPlaceRestarts(plan);
+  assert.equal(r.restartFor('app/page.ts'), true, 'an un-announced child restarts for an app edit');
+  r.onMessage({ webjs: HOT_IN_PLACE_MESSAGE });
+  for (const p of ['app/page.ts', 'lib/x.ts', 'modules/a/b.server.ts', 'db/schema.server.ts', 'components/card.js', 'middleware.ts']) {
+    assert.equal(r.restartFor(p), false, p);
+  }
+  for (const p of ['.env', 'package.json', 'instrumentation.ts', 'env.mjs', 'bun.lock']) assert.equal(r.restartFor(p), true, p);
+});
+
+test('isRestartFile: the boot hooks, .env, package.json and every lockfile, at the root only', () => {
+  for (const p of [
+    'instrumentation.ts', 'instrumentation.js', 'instrumentation.mts', 'instrumentation.mjs',
+    'env.ts', 'env.js', 'env.mts', 'env.mjs',
+    '.env', 'package.json', 'package-lock.json', 'npm-shrinkwrap.json',
+    'bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock',
+  ]) assert.equal(isRestartFile(p), true, p);
+  for (const p of [
+    'app/page.ts', '.env.example', '.env.local', 'lib/env.ts', 'app/package.json',
+    'packages.json', 'package.json.bak', 'instrumentation-client.ts', 'env.d.ts',
+  ]) assert.equal(isRestartFile(p), false, p);
+  // Every restart file is a literal the supervisor watches at the root, or a
+  // restart file would never be seen at all.
+  for (const f of RESTART_FILES) {
+    assert.ok(WATCH_FILES.includes(f), `${f} is watched`);
+    assert.equal(isRestartFile(f), true, `${f} restarts`);
   }
 });
 

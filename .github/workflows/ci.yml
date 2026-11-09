@@ -257,8 +257,12 @@ jobs:
       # port-in-use rides here too (#1527): Bun.serve's default SO_REUSEPORT let
       # a second server bind a taken port silently, so the fail-fast path has
       # to be proven on the Bun shell.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use on Bun
+      # dev-hot-server-fresh rides here too (#1689): a lib/ edit applies in the
+      # SAME dev process, through the module resolve hook on Node and bun --hot
+      # on Bun, so the in-place path has to be proven on both.
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error + port-in-use + hot-server-fresh on Bun
         run: |
+          bun test/bun/dev-hot-server-fresh.mjs
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-watch-error.mjs
           bun test/bun/dev-watch-replaced.mjs

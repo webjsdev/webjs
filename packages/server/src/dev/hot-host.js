@@ -36,9 +36,11 @@ import { pathToFileURL } from 'node:url';
 const HOSTS = Symbol.for('webjs.dev.hotHosts');
 
 /**
- * Sent to the `webjs dev` supervisor over IPC once the hot host is up, so it
- * stops restarting the process for plugin-served edits this server now reloads
- * in place. Mirrors `HOT_IN_PLACE_MESSAGE` in `@webjsdev/cli`'s `dev-reload.js`.
+ * Sent to the `webjs dev` supervisor over IPC once the server is up and able
+ * to reload app edits in place: the Bun hot host (plugin-served edits, #1575),
+ * or a Node server with the module resolve hook (`esm-hot-hooks.js`, #1689).
+ * The supervisor then restarts only for its restart files. Mirrors
+ * `HOT_IN_PLACE_MESSAGE` in `@webjsdev/cli`'s `dev-reload.js`.
  */
 export const HOT_IN_PLACE_MESSAGE = 'hot-reload-in-place';
 

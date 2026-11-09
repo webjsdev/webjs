@@ -22,6 +22,13 @@
  * a plain path, so on Bun it falls back to the file URL (no fresh import; the
  * dev supervisor's restart still picks the edit up).
  *
+ * The content query covers the ENTRY only: a module the entry imports is not
+ * re-imported through here. On Node the dev resolve hook (`dev/esm-hot-hooks.js`,
+ * #1689) versions everything below it, adding `webjs-v=<n>` to an edited module
+ * and its importers on top of this query, which is also what carries a
+ * dependency's edit to an entry whose own bytes did not change. On Bun
+ * `bun --hot` and the fresh-reading app plugin do that job.
+ *
  * Outside dev the specifier is the plain file URL, exactly as before.
  */
 import { pathToFileURL } from 'node:url';

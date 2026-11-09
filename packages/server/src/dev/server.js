@@ -286,7 +286,9 @@ export async function startServer(opts) {
   // identically on both). Built before the handler so its onReload / onDevError
   // callbacks can fan out through it.
   // A Bun hot host, or a server outside the dev supervisor (`--no-hot`, an
-  // embedder), applies an edit in place; a supervised Node child is restarted.
+  // embedder), applies an edit in place. A supervised Node child does too once
+  // its handler has the module resolve hook (#1689), which is set below; only a
+  // Node without `module.registerHooks` is still restarted.
   const hub = new SseHub({ inPlace: dev && (!!hotKey || process.env.__WEBJS_DEV_CHILD !== '1') });
   // Pages render the stream's state into a meta tag (#1516), so the relay can
   // re-check a page against the server on every reconnect.
@@ -306,6 +308,9 @@ export async function startServer(opts) {
     hub.closeAll();
     throw e;
   }
+  // Node re-evaluates edited app modules in place (#1689), so its frames say so
+  // and the relay waits the short in-place window rather than a restart's.
+  if (app.hotModules) hub.inPlace = true;
 
   /** @type {AbortController | null} */
   let watcherAbort = null;
@@ -461,6 +466,11 @@ export async function startServer(opts) {
       });
       announceHotInPlace();
     }
+    // A Node child with the module resolve hook (#1689) tells the supervisor
+    // the same thing, so an app edit no longer restarts it; only the restart
+    // files (`instrumentation.*`, `env.*`, `.env`, `package.json`, a lockfile)
+    // still do.
+    if (app.hotModules) announceHotInPlace();
     return handle;
   } catch (e) {
     // The listener never came up (a taken port, #1527): stop what was started

@@ -33,9 +33,10 @@ import { PORT_IN_USE_EXIT_CODE } from './port.js';
 export const RESTART_DEBOUNCE_MS = 50;
 
 /**
- * The IPC message a dev server child sends when it reloads every module in
- * place under `bun --hot`, plugin-served ones included (#1575). Mirrors
- * `HOT_IN_PLACE_MESSAGE` in `@webjsdev/server`'s `dev/hot-host.js`.
+ * The IPC message a dev server child sends when it reloads app edits in place:
+ * under `bun --hot`, plugin-served modules included (#1575), or on Node through
+ * the module resolve hook (#1689). Mirrors `HOT_IN_PLACE_MESSAGE` in
+ * `@webjsdev/server`'s `dev/hot-host.js`.
  */
 export const HOT_IN_PLACE_MESSAGE = 'hot-reload-in-place';
 
@@ -348,9 +349,10 @@ export function createSupervisor({
 }
 
 /**
- * Which changed paths restart the live child. A Bun child that reloads
- * plugin-served modules in place announces it over IPC once it is up (#1575);
- * from then on only `plan.inPlaceRestartFor` (the boot hooks) restarts it.
+ * Which changed paths restart the live child. A child that reloads app edits in
+ * place (a Bun hot host, #1575, or a Node server with the module resolve hook,
+ * #1689) announces it over IPC once it is up; from then on only
+ * `plan.inPlaceRestartFor` (the restart files) restarts it.
  * Per child: `reset()` on every spawn, so a child that never announces (an
  * older `@webjsdev/server`) keeps the restarts it needs.
  *

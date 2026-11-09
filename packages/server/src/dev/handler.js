@@ -18,6 +18,7 @@ import {
   buildActionIndex,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
+import { installEsmHotHooks, bumpModuleVersions } from './esm-hot-hooks.js';
 import { sourceLocationsRequested } from '../dev-source-locations.js';
 import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
 import { readRegenerateRules, isRegenerateOutputPath } from '../dev-regenerate.js';
@@ -354,6 +355,16 @@ export async function createRequestHandler(opts) {
   // `webjs.seed` switch. Action identity (#1155) rides the same hook, and it is
   // what a bound `<form action=${action}>` resolves through, so gating the hook
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
+  //
+  // Before it, in dev on Node, the resolve hook that versions edited app
+  // modules (#1689), so a rebuild re-evaluates an edit and its importers in
+  // this process instead of the supervisor restarting it. Same timing rule: it
+  // has to be in place before the first app module is imported. Module URLs
+  // are realpaths, so a symlinked app dir registers both forms.
+  const hotModules = dev && serverRuntime() === 'node' && installEsmHotHooks(appDir);
+  if (hotModules) {
+    try { const real = realpathSync(appDir); if (real !== appDir) installEsmHotHooks(real); } catch { /* appDir only */ }
+  }
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
@@ -1011,6 +1022,10 @@ export async function createRequestHandler(opts) {
    * @param {string[]} [changed] absolute paths of the files that changed
    */
   async function doRebuild(verdict, notify = true, changed = []) {
+    // Version the edited modules and their importers FIRST (#1689), so every
+    // import from here on, the re-warm included, gets the new instances. A
+    // no-op where the resolve hook is not installed.
+    if (dev && changed.length) bumpModuleVersions(changed);
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
@@ -1649,6 +1664,10 @@ export async function createRequestHandler(opts) {
       analysisReady: analysisEverDone,
       sep,
     }),
+    /** Whether this handler re-evaluates edited server modules in place on
+     * Node (#1689), so `startServer` can tell the dev supervisor it need not
+     * restart the process for an app edit. */
+    hotModules: !!hotModules,
     appDir,
     dev,
     logger,
