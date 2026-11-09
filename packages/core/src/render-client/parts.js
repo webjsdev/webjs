@@ -413,6 +413,99 @@ function isWrapperDirective(value) {
   return isKeyed(value) || isGuard(value) || isCache(value) || isLive(value);
 }
 
+/** Settled values of the promises `until` has seen, so a re-render that
+ * passes an already-settled promise commits its value at once rather than
+ * flashing the placeholder (Lit's until keeps the same per-part memory). */
+const settledUntil = new WeakMap();
+
+/**
+ * `until(...args)` outside a child position: the value to commit now (the
+ * first non-promise argument, or the value of a higher-priority promise that
+ * has already settled), with each higher-priority promise still pending
+ * scheduled to commit through `onLater` when it settles, while `isCurrent()`.
+ * `has` is false when every argument is a pending promise, which commits
+ * nothing, as Lit's `noChange`.
+ * @param {unknown[]} args
+ * @param {() => boolean} isCurrent
+ * @param {(v: unknown) => void} onLater
+ * @returns {{ has: boolean, value?: unknown }}
+ */
+function untilValueNow(args, isCurrent, onLater) {
+  const isThenable = (/** @type any */ x) => !!x && typeof x.then === 'function';
+  const syncIdx = args.findIndex((x) => !isThenable(x));
+  let limit = syncIdx < 0 ? args.length : syncIdx;
+  /** @type {{ has: boolean, value?: unknown }} */
+  let now = syncIdx < 0 ? { has: false } : { has: true, value: args[syncIdx] };
+  for (let i = 0; i < limit; i++) {
+    if (settledUntil.has(/** @type object */ (args[i]))) {
+      now = { has: true, value: settledUntil.get(/** @type object */ (args[i])) };
+      limit = i;
+      break;
+    }
+  }
+  let best = limit;
+  for (let i = 0; i < limit; i++) {
+    const p = /** @type object */ (args[i]);
+    Promise.resolve(p).then((v) => {
+      settledUntil.set(p, v);
+      if (!isCurrent() || i >= best) return;
+      best = i;
+      onLater(v);
+    }, () => {});
+  }
+  return now;
+}
+
+/**
+ * @param {unknown} prev
+ * @param {unknown} deps
+ */
+function sameGuardDeps(prev, deps) {
+  if (prev === undefined) return false;
+  if (Array.isArray(prev) && Array.isArray(deps)) {
+    return prev.length === deps.length && deps.every((d, i) => Object.is(d, prev[i]));
+  }
+  return Object.is(prev, deps);
+}
+
+/**
+ * One piece of an interpolated attribute through the same unwrap a whole
+ * attribute gets (#1686): `guard`, `keyed`, `cache`, and `until`, whose
+ * later promise rewrites just this piece. A piece with nothing to commit yet
+ * keeps the text it last committed (empty on a first render), as `noChange`.
+ * @param {any} part
+ * @param {number} j
+ * @param {unknown} piece
+ * @param {string[]} committed
+ * @param {{ statics: string[], group: number[] }} mp
+ */
+function mixedPieceValue(part, j, piece, committed, mp) {
+  const guards = (part.__pieceGuardDeps ??= []);
+  const untils = (part.__pieceUntil ??= []);
+  untils[j] = null;
+  if (isGuard(piece)) {
+    const deps = /** @type any */ (piece).deps;
+    if (sameGuardDeps(guards[j], deps)) return committed[j] ?? '';
+    guards[j] = deps;
+    piece = /** @type any */ (piece).fn();
+  } else {
+    guards[j] = undefined;
+  }
+  while (isKeyed(piece) || isCache(piece)) piece = /** @type any */ (piece).value;
+  if (!isUntil(piece)) return piece;
+  const token = {};
+  untils[j] = token;
+  const now = untilValueNow(/** @type any */ (piece).args, () => untils[j] === token, (v) => {
+    if (v === nothing) { part.el.removeAttribute(part.name); return; }
+    assertNotFunctionActionAttr(v, part.name, part.el.localName);
+    committed[j] = String(v ?? '');
+    let text = mp.statics[0];
+    for (let k = 0; k < mp.group.length; k++) text += (committed[k] ?? '') + (mp.statics[k + 1] || '');
+    part.el.setAttribute(part.name, text);
+  });
+  return now.has ? now.value : (committed[j] ?? '');
+}
+
 /**
  * @param {BoundPart} part
  * @param {unknown} value
@@ -461,6 +554,36 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
   }
   if (isAttributeMap(value)) { applyAttributeMap(part, value); return; }
   part.__mapKind = undefined;
+  // The value-carrying built-in directives outside a child position, as in
+  // Lit (#1686): `guard` commits its callback's result (re-run only when its
+  // deps change), `keyed` and `cache` their value, and `until` its first
+  // non-promise argument now and a higher-priority promise's value once it
+  // settles. They used to be written as "[object Object]". The pieces of an
+  // interpolated attribute take the same unwrap in the 'attr-mixed' case.
+  if (part.kind === 'attr' || part.kind === 'prop' || part.kind === 'bool' || part.kind === 'event') {
+    if (!pAny.__untilApplying) {
+      pAny.__attrUntil = null;
+      if (isGuard(value)) {
+        const deps = /** @type any */ (value).deps;
+        if (sameGuardDeps(pAny.__attrGuardDeps, deps)) return;
+        pAny.__attrGuardDeps = deps;
+        value = /** @type any */ (value).fn();
+      } else {
+        pAny.__attrGuardDeps = undefined;
+      }
+    }
+    while (isKeyed(value) || isCache(value)) value = /** @type any */ (value).value;
+    if (isUntil(value)) {
+      const token = {};
+      pAny.__attrUntil = token;
+      const now = untilValueNow(/** @type any */ (value).args, () => pAny.__attrUntil === token, (v) => {
+        pAny.__untilApplying = true;
+        try { applyPart(part, v, undefined, allValues, reconcileFormActionsCb); } finally { pAny.__untilApplying = false; }
+      });
+      if (!now.has) return;
+      value = now.value;
+    }
+  }
   // Unwrap live() to dirty-check against the live DOM value, not the
   // last rendered value. Essential for <input> two-way binding.
   if (isLive(value)) {
@@ -582,6 +705,7 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         // stringification on the next client commit. Mirrors the reconciler's
         // effectiveFormAttr, which already unwraps each group piece.
         if (isLive(piece)) piece = /** @type any */ (piece).value;
+        piece = mixedPieceValue(part, j, piece, committed, mp);
         // #1154: same function guard for each piece of a mixed attribute.
         assertNotFunctionActionAttr(piece, part.name, part.el.localName);
         if (piece === nothing) { part.el.removeAttribute(part.name); return; }

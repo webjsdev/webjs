@@ -7,23 +7,17 @@
  * timing, multi-render replacement, and teardown plus late-resolve abort
  * behaviour.
  *
+ * The attribute, interpolated-attribute, property, boolean and event
+ * positions are ported too (#1686): `until` unwraps at every binding
+ * position, as in Lit.
+ *
  * Skipped tests, each explained inline:
- *   1. All "renders a fallback to an attribute / property / boolean /
- *      event / interpolated attribute" variants. webjs's `applyPart`
- *      does NOT unwrap directive markers like `until()` at non-child
- *      positions (attr / attr-mixed / prop / bool / event). The marker
- *      object stringifies directly (e.g. "[object Object]"). This is a
- *      known divergence from lit. The ported tests cover only ChildPart
- *      positions, plus one xtest that asserts the divergence to make the
- *      gap explicit.
- *   2. "renders a nothing fallback to an interpolated attribute" uses
- *      lit's `nothing` sentinel; webjs does not ship `nothing`.
- *   3. "disconnection" subsuite: lit returns a `ChildPart` from
+ *   1. "disconnection" subsuite: lit returns a `ChildPart` from
  *      `render()` with `setConnected(bool)`. webjs's `render()` returns
  *      void; there is no setConnected surface. One test from the suite
  *      (the "same promise rendered into two until instances" case) is
  *      still applicable and is ported separately.
- *   4. "memorySuite" memory-leak test depends on `window.gc()` plus
+ *   2. "memorySuite" memory-leak test depends on `window.gc()` plus
  *      `performance.memory` which require browser flags and are not
  *      stable across the WTR Playwright run; the equivalent
  *      abort-on-teardown behaviour is asserted directly via the "late
@@ -32,6 +26,7 @@
 import { html } from '../../../src/html.js';
 import { render } from '../../../src/render-client.js';
 import { until } from '../../../src/directives.js';
+import { nothing } from '../../../src/sentinels.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -156,31 +151,126 @@ suite('until directive (lit parity port)', () => {
   });
 
   // ============================================================
-  // Non-child positions (attr / prop / bool / event).
-  //
-  // Skipped: webjs does not unwrap until() at non-child positions.
-  // Documented as a known divergence; see file header. One
-  // assert-the-divergence test below makes the gap visible to humans.
+  // Non-child positions (attr / interpolated attr / prop / bool / event),
+  // ported from lit's until_test.ts (#1686).
   // ============================================================
 
-  test('DIVERGENCE: until() in attribute position is stringified, NOT unwrapped (webjs)', async () => {
-    // In lit this would render '<div></div>' and after resolution
-    // '<div test="foo"></div>'. In webjs the directive marker is
-    // stringified verbatim. If webjs ever gains attr-position support,
-    // this test will fail loudly and prompt a port of the lit tests.
-    const p = Promise.resolve('foo');
-    render(html`<div test=${until(p)}></div>`, container);
-    await p;
+  test('renders a Promise to an attribute', async () => {
+    const promise = Promise.resolve('foo');
+    render(html`<div test=${until(promise)}></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div></div>');
+    await promise;
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="foo"></div>');
+  });
+
+  test('renders defaultContent to an attribute', async () => {
+    const promise = Promise.resolve('foo');
+    render(html`<div test=${until(promise, 'bar')}></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="bar"></div>');
+    await promise;
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="foo"></div>');
+  });
+
+  test('renders a Promise to an interpolated attribute', async () => {
+    const promise = Promise.resolve('foo');
+    render(html`<div test="value:${until(promise)}"></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="value:"></div>');
+    await promise;
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="value:foo"></div>');
+  });
+
+  test('renders a nothing fallback to an interpolated attribute', async () => {
+    const promise = Promise.resolve('foo');
+    render(html`<div test="value:${until(promise, nothing)}"></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div></div>');
+    await promise;
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="value:foo"></div>');
+  });
+
+  test('renders defaultContent to an interpolated attribute', async () => {
+    const promise = Promise.resolve('foo');
+    render(html`<div test="value:${until(promise, 'bar')}"></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="value:bar"></div>');
+    await promise;
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test="value:foo"></div>');
+  });
+
+  test('renders a Promise to a property', async () => {
+    const promise = Promise.resolve('foo');
+    render(html`<div .test=${until(promise)}></div>`, container);
+    const div = container.querySelector('div');
+    assert.equal(div.test, undefined);
+    await promise;
+    assert.equal(div.test, 'foo');
+  });
+
+  test('renders a Promise to a boolean attribute', async () => {
+    const promise = Promise.resolve(true);
+    render(html`<div ?test=${until(promise)}></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div></div>');
+    await promise;
+    assert.equal(stripExpressionComments(container.innerHTML), '<div test=""></div>');
+  });
+
+  test('renders a Promise to an event binding', async () => {
+    let called = false;
+    const promise = Promise.resolve(() => { called = true; });
+    render(html`<div @test=${until(promise)}></div>`, container);
+    const div = container.querySelector('div');
+    div.dispatchEvent(new CustomEvent('test'));
+    assert.equal(called, false);
+    await promise;
+    div.dispatchEvent(new CustomEvent('test'));
+    assert.equal(called, true);
+  });
+
+  test('renders literals in an interpolated AttributePart', () => {
+    render(html`<div data-attr="other ${until('a')} ${until('b')}"></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div data-attr="other a b"></div>');
+  });
+
+  test('renders a literal in an EventPart', () => {
+    let callCount = 0;
+    render(html`<div @some-event="${until(() => callCount++)}"></div>`, container);
+    container.querySelector('div').dispatchEvent(new Event('some-event'));
+    assert.equal(callCount, 1);
+  });
+
+  test('renders a literal in a PropertyPart', () => {
+    render(html`<div .someProp="${until('a')}"></div>`, container);
+    assert.equal(container.querySelector('div').someProp, 'a');
+  });
+
+  test('renders Promises in an interpolated AttributePart', async () => {
+    render(html`<div data-attr="other ${until(Promise.resolve('a'))} ${until(Promise.resolve('b'))}"></div>`, container);
+    assert.equal(stripExpressionComments(container.innerHTML), '<div data-attr="other  "></div>');
     await laterTask();
-    const test = container.querySelector('div').getAttribute('test');
-    // The marker stringifies to '[object Object]' under current behaviour.
-    assert.equal(
-      test,
-      '[object Object]',
-      `webjs DIVERGENCE: attr-position until() is stringified, not unwrapped. ` +
-      `Lit unwraps the directive at every binding position; webjs only ` +
-      `handles ChildPart in applyChild's directive dispatch. Got: ${test}`,
-    );
+    assert.equal(stripExpressionComments(container.innerHTML), '<div data-attr="other a b"></div>');
+  });
+
+  test('renders a promise-like in a PropertyPart', async () => {
+    const thenable = { then(resolve) { resolve('a'); } };
+    render(html`<div .someProp="${until(thenable)}"></div>`, container);
+    await laterTask();
+    assert.equal(container.querySelector('div').someProp, 'a');
+  });
+
+  test('a settled promise passed again commits its value with no placeholder flash', async () => {
+    const promise = Promise.resolve('foo');
+    const go = () => render(html`<div test=${until(promise, 'bar')}></div>`, container);
+    go();
+    await laterTask();
+    go();
+    assert.equal(container.querySelector('div').getAttribute('test'), 'foo');
+  });
+
+  test('a stale promise never overwrites a newer render', async () => {
+    const slow = new Deferred();
+    render(html`<div test=${until(slow.promise, 'a')}></div>`, container);
+    render(html`<div test=${'b'}></div>`, container);
+    slow.resolve('stale');
+    await laterTask();
+    assert.equal(container.querySelector('div').getAttribute('test'), 'b');
   });
 
   // ============================================================

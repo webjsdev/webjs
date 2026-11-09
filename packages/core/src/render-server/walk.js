@@ -333,6 +333,7 @@ export class Walker {
                       if (piece && typeof piece.then === 'function') piece = await piece;
                       if (isLive(piece)) piece = piece.value;
                     }
+                    piece = await attrValueOf(piece);
                     if (isDirectiveResult(piece)) piece = resolveDirective(piece, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
                     if (isSignal(piece) || isWatch(piece)) piece = signalValue(piece);
                     if (isAttributeMap(piece)) piece = attributeMapText(piece, op.name);
@@ -354,6 +355,7 @@ export class Walker {
               }
               // A hole inside a quoted/unquoted value, the `action="${fn}"` and
               // mixed `action="/x/${fn}"` shapes (#1154).
+              val = await attrValueOf(val);
               if (isDirectiveResult(val)) val = resolveDirective(val, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
               if (isSignal(val) || isWatch(val)) val = signalValue(val);
               assertNotFunctionActionAttr(val, op.name, op.tag);
@@ -371,6 +373,8 @@ export class Walker {
   // -------------------------------------------------------------------------
   // Start tags
   // -------------------------------------------------------------------------
+  // (attrValueOf, the attribute-position unwrap of the value-carrying
+  // built-in directives, is a module function below.)
 
   /** @param {string} tag */
   open(tag) {
@@ -420,6 +424,7 @@ export class Walker {
    * @param {unknown} val
    */
   async attr(op, val) {
+    if (op.kind !== 'event') val = await attrValueOf(val);
     // A custom directive renders its `render()` result at SSR (lit's server
     // rule: `update()` needs a DOM). An event part is client-only, so its
     // directive never runs here.
@@ -889,4 +894,31 @@ function pageBindingError(isEvent, name, tag) {
     + `Move the interactive markup into a WebComponent and render its tag from the page (its render() hydrates in the browser)`
     + (!isEvent ? ', or write a plain attribute (\`' + name.toLowerCase() + '=${value}\`) when the value only needs to reach the HTML' : '')
     + '. This check runs in dev only. See https://webjs.dev/docs/troubleshooting#binding-in-page-template';
+}
+
+/**
+ * The value a value-carrying built-in directive stands for in an ATTRIBUTE,
+ * property or boolean position, as in Lit (#1686): `guard` renders its
+ * callback's result, `until` its first non-promise argument (else the first
+ * promise to settle, a rejection reading as no value), `keyed` and `cache`
+ * their value. A child position unwraps these in `value()`; an attribute hole
+ * used to stringify the directive object to "[object Object]".
+ * @param {unknown} v
+ * @returns {Promise<unknown>}
+ */
+async function attrValueOf(v) {
+  for (let depth = 0; depth < 8; depth++) {
+    /** @type any */
+    const d = v;
+    if (isGuard(d)) v = d.fn();
+    else if (isKeyed(d) || isCache(d)) v = d.value;
+    else if (isLive(d)) v = d.value;
+    else if (isUntil(d)) {
+      const sync = d.args.find((a) => !a || typeof a.then !== 'function');
+      if (sync !== undefined || d.args.some((a) => !a || typeof a.then !== 'function')) v = sync;
+      else if (d.args.length) v = await Promise.race(d.args.map((p) => Promise.resolve(p).catch(() => undefined)));
+      else v = undefined;
+    } else return v;
+  }
+  return v;
 }

@@ -87,6 +87,7 @@ html\`&lt;div&gt;\${templateContent(tpl)}&lt;/div&gt;\`;</code-block>
     <h2>until(...args)</h2>
     <p>Render the highest-priority resolved candidate. Priority is left-to-right: <code>args[0]</code> is highest. The highest-priority synchronous candidate renders immediately; higher-priority Promises that later resolve replace the rendered value. Lower-priority Promises are ignored once a higher-priority candidate is in place.</p>
     <code-block>html\`&lt;div&gt;\${until(this.dataPromise, html\`&lt;p&gt;Loading…&lt;/p&gt;\`)}&lt;/div&gt;\`;</code-block>
+    <p>As in Lit, it works at every binding position, not only as a child: <code>src=\${until(this.avatar, '/placeholder.png')}</code> writes the placeholder now and the resolved url later, and the same holds inside an interpolated attribute and for <code>.prop</code>, <code>?bool</code> and <code>@event</code> bindings. <code>guard</code>, <code>keyed</code> and <code>cache</code> unwrap in those positions too.</p>
     <p>When the marker is torn down (a re-render replaces the directive), in-flight Promise tracking is aborted so late resolves cannot overwrite newer DOM. On the server, <code>until</code> awaits <code>Promise.race</code> when all candidates are Promises, or renders the highest-priority synchronous candidate.</p>
     <p>For component-scoped async data with full pending/error states, prefer the <code>Task</code> controller from <code>@webjsdev/core/task</code>.</p>
 
