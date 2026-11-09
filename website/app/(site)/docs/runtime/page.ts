@@ -47,7 +47,7 @@ export default function Runtime() {
         <tr><td>a component, or a browser module only components import</td><td>hot-swaps the component class, keeping its state (see <a href="/docs/components">Components</a>)</td><td><code>[webjs] hot-swapped &lt;my-tag&gt; (&lt;file&gt;)</code></td></tr>
         <tr><td>a <code>.css</code> file outside the module graph (a <code>public/</code> stylesheet, a Tailwind input)</td><td>swaps the stylesheets in place, no re-render</td><td><code>[webjs] stylesheets refreshed (&lt;file&gt;)</code></td></tr>
         <tr><td><code>.env</code>, <code>package.json</code>, a lockfile, <code>instrumentation.*</code>, <code>env.*</code></td><td>the server restarts and the tab reloads once</td><td><code>[webjs] full reload: server-restarted</code></td></tr>
-        <tr><td>anything else: a new or deleted file, another <code>public/</code> asset, a browser module a page imports directly, a component edit the hot swap refuses</td><td>a full reload</td><td><code>[webjs] full reload: &lt;reason&gt; (&lt;file&gt;)</code></td></tr>
+        <tr><td>anything else: a new or deleted file, another <code>public/</code> asset, a browser module a page that ships whole imports directly, a component edit the hot swap refuses</td><td>a full reload</td><td><code>[webjs] full reload: &lt;reason&gt; (&lt;file&gt;)</code></td></tr>
       </tbody>
     </table>
     <p>The full-reload line is printed by the page that loads after the reload, so it survives the reload it explains, and its reason names the rule that forced it. When an edit breaks a page render, the error overlay goes up over the last good page instead of replacing it, and the edit that fixes it applies in place.</p>

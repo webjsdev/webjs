@@ -73,7 +73,7 @@ One limit worth knowing: the rewrite belongs to `startServer`. An app embedded t
 | a component, or a browser module only components import | hot-swaps the component class (see `components.md` under "Hot swap in dev") | `[webjs] hot-swapped <tag> (<file>)` |
 | a `.css` file outside the module graph (a `public/` sheet, a Tailwind input) | swaps every same-origin stylesheet in place, no re-render | `[webjs] stylesheets refreshed (<file>)` |
 | `.env`, `package.json`, a lockfile, `instrumentation.*`, `env.*` | the server restarts, the tab reloads once | `[webjs] full reload: server-restarted` |
-| anything else: a new or deleted file, a non-CSS `public/` asset, a browser module a shipping page imports directly, an edit a hot swap refuses | full reload | `[webjs] full reload: <reason> (<file>)` |
+| anything else: a new or deleted file, a non-CSS `public/` asset, a browser module a page that ships whole imports directly, an edit a hot swap refuses | full reload | `[webjs] full reload: <reason> (<file>)` |
 
 The full-reload line is printed by the page that loads AFTER the reload, so it survives the reload it explains. The `<reason>` names the rule that forced it (`ships-to-browser`, `constructor-changed`, `unknown-path`, and so on). A CSS module script (`import sheet from './x.css' with { type: 'css' }`) is part of the module graph and reloads. A `webjs.dev.regenerate` output such as `public/tailwind.css` is rebuilt on the request the update makes, so a template edit that adds a utility class lands with its rule. When a page render fails, the error overlay goes up over the last good page, and the edit that fixes it applies in place.
 
