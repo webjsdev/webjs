@@ -107,9 +107,10 @@ test('elision + versioning preserve line numbers: only import lines change, all 
   // import is elided (-> comment), and the two other same-origin relative
   // imports (typed.ts / plain.ts) are versioned (-> `?v=<hash>` appended). All
   // three stay on their own line, so line numbers never shift; every non-import
-  // line is byte-identical, which is the debug-without-sourcemap promise.
-  const s = await served('app/page.ts');
-  const a = await authored('app/page.ts');
+  // line is byte-identical, which is the debug-without-sourcemap promise. The
+  // served module is a component: a page never ships (#1686).
+  const s = await served('components/shell.ts');
+  const a = await authored('components/shell.ts');
   assert.ok(sameLineCount(s, a), `transforms must not shift line numbers (served ${s.split('\n').length}, authored ${a.split('\n').length})`);
   const sl = s.split('\n'), al = a.split('\n');
 
@@ -118,9 +119,9 @@ test('elision + versioning preserve line numbers: only import lines change, all 
     if (/^import .*badge\.ts/.test(authoredLine)) {
       // Elided: the side-effect import becomes the elision comment on its line.
       assert.match(sl[i], /webjs: elided display-only component/, `line ${i + 1} is the elision comment`);
-    } else if (/^import '\.\.\/components\/(typed|plain)\.ts'/.test(authoredLine)) {
+    } else if (/^import '\.\/(typed|plain)\.ts'/.test(authoredLine)) {
       // Versioned: same import, on the same line, with `?v=<hash>` appended.
-      assert.match(sl[i], /^import '\.\.\/components\/(typed|plain)\.ts\?v=[0-9a-f]{6,}'/, `line ${i + 1} is the versioned import`);
+      assert.match(sl[i], /^import '\.\/(typed|plain)\.ts\?v=[0-9a-f]{6,}'/, `line ${i + 1} is the versioned import`);
     } else {
       // Everything else (the bare `@webjsdev/core` import, the body) is byte-identical.
       assert.equal(sl[i], authoredLine, `non-transformed line ${i + 1} must be byte-identical`);

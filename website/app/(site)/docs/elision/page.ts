@@ -18,6 +18,16 @@ export default function Elision() {
       This is the mechanism that makes progressive enhancement pay. A page whose whole subtree is display-only ships <strong>zero</strong> application JavaScript, while a page with one interactive leaf ships that leaf and nothing else.
     </p>
 
+    <h2 id="route-modules">Pages, layouts and boundaries never ship</h2>
+
+    <p>
+      A page, layout, loading template or boundary (error, not-found, forbidden, unauthorized) runs only on the server, the way a Next.js server component does. Its module is never sent to the browser: the client boot imports the components it renders instead, and that set is called its frontier. This holds whether or not elision is on, and it is why a page can import a <code>.server.ts</code> utility, a database client or a <code>node:</code> module without any of it reaching the browser.
+    </p>
+
+    <p>
+      The consequence is the one Next.js has for server components: anything that needs a browser belongs in a component. A component class defined inside a page, an <code>@click</code> binding on a page's template, a component importing a page file, and a Node builtin reached from a component are each refused by <code>webjs check</code> with the fix. For app-wide browser code that belongs to no component, use <code>instrumentation-client.ts</code>.
+    </p>
+
     <p>
       Elision is automatic, and it stays automatic. There is no <code>'use client'</code> and no per-component annotation to remember, because a directive-based model puts the failure on the author with no compiler to catch a forgotten one. The analyser instead biases toward SHIPPING: a wrong "display-only" verdict breaks a page, a wrong "interactive" verdict only misses an optimization, so anything ambiguous or unreadable keeps its JavaScript.
     </p>
@@ -108,7 +118,7 @@ webjs elision --json     # the same object, for a tool or an agent</code-block>
     </p>
 
     <p>
-      Every page and layout is reported too, as <code>inert</code> (ships nothing), <code>import-only</code> (the boot emits its components directly and drops the module), or <code>shipped</code> (with the first client-effecting blocker that pins it). The same verdict is available to an agent as the MCP <code>list_elision</code> tool, and <code>webjs doctor</code> carries it as a one-line inventory that warns only on an orphan.
+      Every page, layout and boundary is reported too, with its kind and the components the boot loads in its place (none means the route costs the browser no JavaScript), plus a hint for any code in it that looks meant for the browser but will only ever run on the server. The same report is available to an agent as the MCP <code>list_elision</code> tool. <code>webjs doctor</code> carries it as a one-line inventory that warns only on an orphan, and warns (<code>ROUTE_BROWSER_CODE</code>) on a route-module hint.
     </p>
 
     <h2>Proving it for your own app</h2>
@@ -154,7 +164,7 @@ WEBJS_ELIDE=0 npm run test:e2e</code-block>
     <code-block>WEBJS_ELIDE=0 npm run start</code-block>
 
     <p>
-      With elision off, every module ships and <code>webjs elision</code> reports that rather than a verdict. Reach for the switch to isolate a bug, not as a permanent setting: everything it turns off is JavaScript your users would otherwise never download.
+      With elision off, every component ships and <code>webjs elision</code> says so; pages, layouts and boundaries still run on the server only. Reach for the switch to isolate a bug, not as a permanent setting: everything it turns off is JavaScript your users would otherwise never download.
     </p>
   `;
 }

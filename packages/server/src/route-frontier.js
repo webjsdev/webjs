@@ -104,3 +104,17 @@ export function routeModuleKinds(routeTable) {
 export function collectBootRouteModules(routeTable) {
   return [...routeModuleKinds(routeTable).keys()];
 }
+
+/**
+ * Every route-table file the browser must never load: the boot route modules
+ * plus `global-error`. The serve gate refuses these (#1686), and the gate and
+ * vendor walks stop at them, so a page-only import is neither servable nor
+ * vendored.
+ * @param {any} routeTable
+ * @returns {Set<string>}
+ */
+export function routeTableFiles(routeTable) {
+  const files = new Set(routeModuleKinds(routeTable).keys());
+  if (routeTable.globalError) files.add(routeTable.globalError);
+  return files;
+}

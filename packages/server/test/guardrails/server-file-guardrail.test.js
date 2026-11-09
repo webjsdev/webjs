@@ -48,6 +48,22 @@ function makeApp(files) {
   return appDir;
 }
 
+/**
+ * The importer every fixture uses: a registered component, whose module the
+ * browser loads, plus a page rendering it. A page never loads in the browser
+ * (#1686), so a module only a page imports is not servable at all; the stub
+ * guardrail is reached through what a component imports.
+ */
+function viaComponent(importLine, use) {
+  return {
+    'app/page.ts': `import '../components/importer.ts';\nexport default function P() { return '<x-importer></x-importer>'; }\n`,
+    'components/importer.ts':
+      `import { WebComponent } from '@webjsdev/core';\n${importLine}\n` +
+      `class Importer extends WebComponent { get used() { return ${use}; } }\n` +
+      `Importer.register('x-importer');\n`,
+  };
+}
+
 function assertIsRpcStub(text) {
   assert.ok(
     text.startsWith('// webjs: generated server-action stub'),
@@ -81,9 +97,7 @@ function assertNoSourceLeak(text) {
 
 test(`guardrail: .server.ts with 'use server' returns RPC stub, never source`, async () => {
   const appDir = makeApp({
-    'app/page.ts':
-      `import { listPosts } from '../modules/posts/queries/list-posts.server.ts';\n` +
-      `export default function P() { return listPosts; }\n`,
+    ...viaComponent(`import { listPosts } from '../modules/posts/queries/list-posts.server.ts';`, 'listPosts'),
     'modules/posts/queries/list-posts.server.ts':
       `'use server';\n` +
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
@@ -104,9 +118,7 @@ test(`guardrail: .server.ts with 'use server' returns RPC stub, never source`, a
 
 test(`guardrail: .server.ts without 'use server' returns throw-at-load stub`, async () => {
   const appDir = makeApp({
-    'app/page.ts':
-      `import { db } from '../lib/db.server.ts';\n` +
-      `export default function P() { return db; }\n`,
+    ...viaComponent(`import { db } from '../lib/db.server.ts';`, 'db'),
     'lib/db.server.ts':
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
       `const fakeDbClient = () => ({ findMany: () => [] });\n` +
@@ -128,9 +140,7 @@ test(`guardrail: 'use server' WITHOUT .server.ts is NOT source-protected (lint r
   // to the browser as plain TS source. The `use-server-needs-extension`
   // lint rule flags it at check time.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { greeting } from '../lib/loose.ts';\n` +
-      `export default function P() { return greeting; }\n`,
+    ...viaComponent(`import { greeting } from '../lib/loose.ts';`, 'greeting'),
     'lib/loose.ts':
       `'use server';\n` +
       `export const greeting = 'hi from loose.ts';\n`,
@@ -150,9 +160,7 @@ test(`guardrail: 'use server' WITHOUT .server.ts is NOT source-protected (lint r
 
 test('guardrail: .server.js request returns throw-at-load stub when no directive', async () => {
   const appDir = makeApp({
-    'app/page.ts':
-      `import { doWork } from '../lib/util.server.js';\n` +
-      `export default function P() { return doWork; }\n`,
+    ...viaComponent(`import { doWork } from '../lib/util.server.js';`, 'doWork'),
     'lib/util.server.js':
       `const SECRET_DB_PASSWORD = 'hunter2';\n` +
       `export function doWork() { return 1; }\n`,
@@ -167,9 +175,7 @@ test('guardrail: .server.js request returns throw-at-load stub when no directive
 
 test('guardrail: ordinary .ts files still serve source (negative control)', async () => {
   const appDir = makeApp({
-    'app/page.ts':
-      `import { hello } from '../components/widget.ts';\n` +
-      `export default function P() { return hello; }\n`,
+    ...viaComponent(`import { hello } from '../components/widget.ts';`, 'hello'),
     'components/widget.ts':
       `export function hello() { return 'hi'; }\n`,
   });
@@ -192,15 +198,13 @@ test('guardrail: file created AFTER boot is still caught (index race)', async ()
   // it on first request regardless of index state. The new file has
   // 'use server' so it's a server action; the response is the RPC stub.
   //
-  // Page already imports the path so it's in the browser-bound graph
+  // A component already imports the path so it's in the browser-bound graph
   // (the module-graph resolver records the resolved path even when the
   // file doesn't exist yet at boot time). The membership gate then
   // passes through to the guardrail, which catches the late-created
   // file by re-reading its `'use server'` directive at request time.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { late } from '../modules/late.server.ts';\n` +
-      `export default function P() { return late; }\n`,
+    ...viaComponent(`import { late } from '../modules/late.server.ts';`, 'late'),
   });
   const app = await createRequestHandler({ appDir, dev: true });
 
@@ -217,4 +221,37 @@ test('guardrail: file created AFTER boot is still caught (index race)', async ()
   ));
   assert.equal(resp.status, 200);
   assertIsRpcStub(await resp.text());
+});
+
+test('guardrail: a .server file only a page imports is not servable, one a component imports gets its stub (#1686)', async () => {
+  // A page runs only on the server, so nothing it imports is browser-bound:
+  // the request 404s before the guardrail is even reached, and no stub (nor
+  // any source) leaves. The same kind of file imported by a component is
+  // browser-bound and gets its stub as before.
+  const appDir = makeApp({
+    'app/page.ts':
+      `import { db } from '../lib/page-only.server.ts';\n` +
+      `import '../components/importer.ts';\n` +
+      `export default function P() { return db; }\n`,
+    'lib/page-only.server.ts':
+      `const SECRET_DB_PASSWORD = 'hunter2';\n` +
+      `export const db = 1;\n`,
+    'components/importer.ts':
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `import { util } from '../lib/shared.server.ts';\n` +
+      `class Importer extends WebComponent { get used() { return util; } }\n` +
+      `Importer.register('x-importer');\n`,
+    'lib/shared.server.ts':
+      `const SECRET_DB_PASSWORD = 'hunter2';\n` +
+      `export const util = 1;\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const pageOnly = await app.handle(new Request('http://localhost/lib/page-only.server.ts'));
+  assert.equal(pageOnly.status, 404, 'a server file only a page imports is not browser-bound');
+  assertNoSourceLeak(await pageOnly.text());
+  const shared = await app.handle(new Request('http://localhost/lib/shared.server.ts'));
+  assert.equal(shared.status, 200);
+  assertIsServerOnlyStub(await shared.text());
+  assert.equal((await app.handle(new Request('http://localhost/app/page.ts'))).status, 404,
+    'and the page itself is never served');
 });

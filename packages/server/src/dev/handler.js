@@ -42,7 +42,7 @@ import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableF
 import { foreignImportProblems, registerForeignImportGuard } from '../foreign-imports.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
 import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
-import { routeFrontiers, collectBootRouteModules } from '../route-frontier.js';
+import { routeFrontiers, collectBootRouteModules, routeTableFiles } from '../route-frontier.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
@@ -742,7 +742,11 @@ export async function createRequestHandler(opts) {
             await primeComponentRegistry(appDir, components);
             t.scan = now() - m; m = now();
             state.browserEntryFiles = browserEntryFiles(state.routeTable, components);
-            state.browserBoundFiles = reachableFromEntries(state.moduleGraph, [...state.browserEntryFiles], appDir);
+            // Route-table files never load in the browser (#1686): the gate
+            // stops at them and the serve branch refuses them by path.
+            state.routeModuleFiles = routeTableFiles(state.routeTable);
+            state.browserBoundFiles = reachableFromEntries(state.moduleGraph, [...state.browserEntryFiles], appDir,
+              state.routeModuleFiles);
             t.gate = now() - m; m = now();
             state.actionIndex = await buildActionIndex(appDir, dev);
             t.actions = now() - m; m = now();
@@ -777,7 +781,6 @@ export async function createRequestHandler(opts) {
             // never emitted or walked through even when another one imports it.
             {
               const routeFiles = collectBootRouteModules(state.routeTable);
-              state.routeModuleFiles = new Set(routeFiles);
               state.routeFrontiers = routeFrontiers(routeFiles, state.moduleGraph,
                 new Set(components.map((c) => c.file)),
                 new Set([...state.elidableComponents, ...state.routeModuleFiles]));
@@ -838,11 +841,20 @@ export async function createRequestHandler(opts) {
             // first route's files), but `assetHashFor` is memoized and already
             // runs for `?v` emission in prod, so it stays a one-time bounded cost
             // inside the lazy analysis (never at boot).
+            // Since #1686 a page, layout or boundary is not browser-bound, so an
+            // edit to one alone would leave that set unchanged while the HTML it
+            // renders moved. The raw digest of every graph file (the #899 set
+            // below) is folded in, so a page-only deploy re-keys too.
             if (!dev && state.browserBoundFiles) {
               const relApp = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
               const lines = [...state.browserBoundFiles]
                 .map((abs) => `${relApp(abs)}:${assetHashFor(abs)}`)
                 .sort();
+              if (state.moduleGraph) {
+                for (const abs of [...seenFilesFor(state.moduleGraph)].sort()) {
+                  lines.push(`src:${relApp(abs)}:${fileByteHash(abs)}`);
+                }
+              }
               setAppSourceFingerprint(lines.join('\n'));
             } else {
               setAppSourceFingerprint('');

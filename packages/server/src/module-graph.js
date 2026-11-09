@@ -358,9 +358,10 @@ const SERVER_FILE_RE = /\.server\.m?[jt]s$/;
  * @param {ModuleGraph} graph
  * @param {string[]} entryFiles absolute paths of browser-bound entries
  * @param {string} appDir
+ * @param {Set<string>} [stopAt]  files never admitted or walked (the route-table files)
  * @returns {Set<string>}
  */
-export function reachableFromEntries(graph, entryFiles, appDir) {
+export function reachableFromEntries(graph, entryFiles, appDir, stopAt) {
   // The gate unions in dynamic-import edges (#751) so a lazily-imported app
   // module (`await import('./widget.ts')`) is servable instead of 404ing. A
   // dynamically-imported module's OWN static imports are then walked normally
@@ -392,6 +393,9 @@ export function reachableFromEntries(graph, entryFiles, appDir) {
       for (const dep of set) {
         if (visited.has(dep)) continue;
         if (!dep.startsWith(appDir)) continue;
+        // A route-table file never loads in the browser (#1686), even when a
+        // component imports one, so it is neither servable nor walked.
+        if (stopAt && stopAt.has(dep)) continue;
         visited.add(dep);
         queue.push(dep);
       }

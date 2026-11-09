@@ -260,7 +260,11 @@ export async function handleCore(req, ctx) {
     // them by path (the import rewrites to an RPC stub at request time).
     // In test mode any app file is servable (see the `state.testMode` note
     // above); otherwise the file must be in the browser-bound module graph.
-    const inGraph = state.testMode || (state.browserBoundFiles && state.browserBoundFiles.has(abs));
+    // A route-table file (page, layout, boundary) is refused by PATH, test mode
+    // included: it runs only on the server (#1686), so its source never leaves.
+    const isRouteModule = !!(state.routeModuleFiles && state.routeModuleFiles.has(abs));
+    const inGraph = !isRouteModule
+      && (state.testMode || (state.browserBoundFiles && state.browserBoundFiles.has(abs)));
     // Containment: `abs` must be appDir itself or genuinely UNDER it. The
     // trailing `sep` (matching the public-asset branch) stops a `..` path that
     // resolves to a sibling sharing the appDir name-prefix (`/x/app` ->

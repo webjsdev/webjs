@@ -198,14 +198,19 @@ test('onError: fires when a server action throws unexpectedly', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `import { boom } from '../modules/x/actions.server.js';\n` +
-      `export default function P() { return html\`<p>\${boom}</p>\`; }\n`,
+      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+    // A component imports the action, which puts its RPC stub behind the gate
+    // (a page never ships, #1686).
+    'components/host.js':
+      `import '../modules/x/actions.server.js';\n` +
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `class XHost extends WebComponent {}\nXHost.register('x-host');\n`,
     'modules/x/actions.server.js':
       `'use server';\n` +
       `export async function boom() { throw new Error('action-died'); }\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true, onError });
-  // Discover the action hash + a CSRF token via the page + stub.
+  // Discover the action hash via the stub.
   const stub = await (await app.handle(new Request('http://x/modules/x/actions.server.js'))).text();
   const hash = /\/__webjs\/action\/([a-f0-9]+)\//.exec(stub)[1];
   const resp = await app.handle(new Request(`http://x/__webjs/action/${hash}/boom`, {

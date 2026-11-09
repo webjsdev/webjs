@@ -397,15 +397,16 @@ test('NESTED-IMPORTS: a served module versions its relative imports to the prelo
 });
 
 test('NESTED-IMPORTS: DEV serves the bare relative specifier (no ?v), byte-identical to before', async () => {
-  const appDir = makeApp({});
+  // The served module is the booted component: a page never ships (#1686).
+  const appDir = makeApp({ nested: true });
   const app = await createRequestHandler({ appDir, dev: true });
   await app.warmup();
 
-  const pageRes = await app.handle(new Request('http://x/app/page.js'));
-  assert.equal(pageRes.status, 200);
-  const body = await pageRes.text();
-  assert.match(body, /import\s+'\.\/widget\.js'/, 'dev keeps the bare specifier');
-  assert.ok(!body.includes('widget.js?v='), 'dev appends no ?v to a nested import');
+  const widgetRes = await app.handle(new Request('http://x/app/widget.js'));
+  assert.equal(widgetRes.status, 200);
+  const body = await widgetRes.text();
+  assert.match(body, /from\s+'\.\/label\.js'/, 'dev keeps the bare specifier');
+  assert.ok(!body.includes('label.js?v='), 'dev appends no ?v to a nested import');
 });
 
 /* ---------------- basePath composes ---------------- */

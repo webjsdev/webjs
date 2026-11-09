@@ -1,9 +1,11 @@
 /**
  * End-to-end test of display-only component elision through the dev
  * request handler. Pins the acceptance criterion: a display-only
- * component's module is never imported by the served page source (so the
- * browser never downloads it), while an interactive component's import
- * survives untouched.
+ * component's module is never imported by the served source of a module that
+ * does ship (so the browser never downloads it), while an interactive
+ * component's import survives untouched. The importer here is a shipping
+ * component: a page never loads in the browser (#1686), so its source is
+ * never served at all.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,16 +55,45 @@ import '../components/counter.ts';
 export default () => html\`<x-badge>hi</x-badge><x-counter></x-counter>\`;
 `;
 
-test('display-only import is stripped from the served page, interactive import kept', async () => {
+/**
+ * The served importer: a shipping component that side-effect-imports the
+ * badge (registering it, the barrel shape) and the counter, and renders only
+ * the counter. The page renders the badge. A shipping component that RENDERS a
+ * tag forces that component to ship, so the panel must not render the badge
+ * for the badge to stay display-only.
+ */
+const panel = (badgeFile = './badge.ts') => `
+import { WebComponent, html } from '@webjsdev/core';
+import '${badgeFile}';
+import './counter.ts';
+class Panel extends WebComponent {
+  render() { return html\`<x-counter @click=\${() => {}}></x-counter>\`; }
+}
+Panel.register('x-panel');
+`;
+
+const panelPage = (badgeTag = 'x-badge') => `
+import { html } from '@webjsdev/core';
+import '../components/panel.ts';
+export default () => html\`<${badgeTag}>hi</${badgeTag}><x-panel></x-panel>\`;
+`;
+const PANEL_PAGE = panelPage();
+
+const PANEL = 'http://x/components/panel.ts';
+
+test('display-only import is stripped from the served component, interactive import kept', async () => {
   const appDir = makeApp({
-    'app/page.ts': PAGE,
+    'app/page.ts': PANEL_PAGE,
+    'components/panel.ts': panel(),
     'components/badge.ts': BADGE,
     'components/counter.ts': COUNTER,
   });
   const app = await createRequestHandler({ appDir, dev: true });
 
-  const resp = await app.handle(new Request('http://x/app/page.ts'));
-  assert.equal(resp.status, 200, 'page module should be served');
+  assert.equal((await app.handle(new Request('http://x/app/page.ts'))).status, 404,
+    'the page itself is never served (#1686)');
+  const resp = await app.handle(new Request(PANEL));
+  assert.equal(resp.status, 200, 'the shipping component module is served');
   const code = await resp.text();
 
   assert.doesNotMatch(code, /badge\.ts/, 'display-only badge import must be elided');
@@ -82,22 +113,17 @@ class FactoryBadge extends WebComponent({}) {
 FactoryBadge.register('x-factory-badge');
 `;
 
-const FACTORY_PAGE = `
-import { html } from '@webjsdev/core';
-import '../components/factory-badge.ts';
-import '../components/counter.ts';
-export default () => html\`<x-factory-badge>hi</x-factory-badge><x-counter></x-counter>\`;
-`;
 
-test('a display-only FACTORY-form component is stripped from the served page (#604)', async () => {
+test('a display-only FACTORY-form component is stripped from the served component (#604)', async () => {
   const appDir = makeApp({
-    'app/page.ts': FACTORY_PAGE,
+    'app/page.ts': panelPage('x-factory-badge'),
+    'components/panel.ts': panel('./factory-badge.ts'),
     'components/factory-badge.ts': FACTORY_BADGE,
     'components/counter.ts': COUNTER,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/app/page.ts'));
-  assert.equal(resp.status, 200, 'page module should be served');
+  const resp = await app.handle(new Request(PANEL));
+  assert.equal(resp.status, 200, 'the shipping component module is served');
   const code = await resp.text();
   assert.doesNotMatch(code, /factory-badge\.ts/, 'display-only factory component import must be elided');
   assert.match(code, /counter\.ts/, 'interactive import must survive');
@@ -123,12 +149,13 @@ test('a single @click flips the verdict: counterpart import is NOT stripped', as
     '<span @click=${() => {}}>verified</span>',
   );
   const appDir = makeApp({
-    'app/page.ts': PAGE,
+    'app/page.ts': PANEL_PAGE,
+    'components/panel.ts': panel(),
     'components/badge.ts': interactiveBadge,
     'components/counter.ts': COUNTER,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  const resp = await app.handle(new Request(PANEL));
   const code = await resp.text();
   assert.match(code, /badge\.ts/, 'an interactive badge must keep its import');
 });
@@ -165,12 +192,13 @@ test('webjs.elide: false disables elision app-wide (display-only import survives
   // would normally be stripped keeps its import, like before the feature.
   const appDir = makeApp({
     'package.json': JSON.stringify({ name: 'opt-out-app', webjs: { elide: false } }),
-    'app/page.ts': PAGE,
+    'app/page.ts': PANEL_PAGE,
+    'components/panel.ts': panel(),
     'components/badge.ts': BADGE,
     'components/counter.ts': COUNTER,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  const resp = await app.handle(new Request(PANEL));
   assert.equal(resp.status, 200);
   const code = await resp.text();
   assert.match(code, /badge\.ts/, 'elision disabled: display-only import must survive');
@@ -183,12 +211,13 @@ test('webjs.elide omitted keeps elision on (default), proving the switch is opt-
   // package.json at all. Guards against reading the key as a fail-closed flag.
   const appDir = makeApp({
     'package.json': JSON.stringify({ name: 'default-app' }),
-    'app/page.ts': PAGE,
+    'app/page.ts': PANEL_PAGE,
+    'components/panel.ts': panel(),
     'components/badge.ts': BADGE,
     'components/counter.ts': COUNTER,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  const resp = await app.handle(new Request(PANEL));
   const code = await resp.text();
   assert.doesNotMatch(code, /badge\.ts/, 'default (no key): display-only import still elided');
 });
@@ -197,12 +226,13 @@ test('rebuild re-applies elision after a component becomes interactive', async (
   // doRebuild re-runs analyzeElision; a file edit that adds interactivity must
   // flip the verdict so the now-interactive component ships.
   const appDir = makeApp({
-    'app/page.ts': PAGE,
+    'app/page.ts': PANEL_PAGE,
+    'components/panel.ts': panel(),
     'components/badge.ts': BADGE,
     'components/counter.ts': COUNTER,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  let code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  let code = await (await app.handle(new Request(PANEL))).text();
   assert.doesNotMatch(code, /badge\.ts/, 'badge elided at boot');
 
   writeFileSync(
@@ -211,23 +241,24 @@ test('rebuild re-applies elision after a component becomes interactive', async (
   );
   await app.rebuild();
 
-  code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  code = await (await app.handle(new Request(PANEL))).text();
   assert.match(code, /badge\.ts/, 'badge ships after rebuild picks up the @click');
 });
 
 test('rebuild picks up webjs.elide: false toggled on after boot', async () => {
   const appDir = makeApp({
-    'app/page.ts': PAGE,
+    'app/page.ts': PANEL_PAGE,
+    'components/panel.ts': panel(),
     'components/badge.ts': BADGE,
     'components/counter.ts': COUNTER,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  let code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  let code = await (await app.handle(new Request(PANEL))).text();
   assert.doesNotMatch(code, /badge\.ts/, 'badge elided while elision is on');
 
   writeFileSync(join(appDir, 'package.json'), JSON.stringify({ name: 'x', webjs: { elide: false } }));
   await app.rebuild();
 
-  code = await (await app.handle(new Request('http://x/app/page.ts'))).text();
+  code = await (await app.handle(new Request(PANEL))).text();
   assert.match(code, /badge\.ts/, 'rebuild re-reads the switch and disables elision');
 });

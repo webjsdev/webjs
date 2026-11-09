@@ -30,8 +30,12 @@ function makeApp(files) {
 test('handle: a string-literal dynamic import target is served (no 404)', async () => {
   const appDir = makeApp({
     'app/page.ts': `import '../components/host.ts';\nexport default () => 'ok';\n`,
+    // A registered component, since a page never ships (#1686) and the gate
+    // roots at components.
     'components/host.ts':
-      `export class Host { async open() { return import('./widget.ts'); } }\n`,
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Host extends WebComponent { async open() { return import('./widget.ts'); } }\n` +
+      `Host.register('x-host');\n`,
     'components/widget.ts': `export const widget = (): number => 1;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -44,8 +48,9 @@ test('handle: a dynamic import inside a template ${} hole is served (no 404, #91
   const appDir = makeApp({
     'app/page.ts': `import '../components/host.ts';\nexport default () => 'ok';\n`,
     'components/host.ts':
-      `import { html } from '@webjsdev/core';\n` +
-      `export class Host { render() { return html\`<div>\${import('./widget.ts')}</div>\`; } }\n`,
+      `import { WebComponent, html } from '@webjsdev/core';\n` +
+      `export class Host extends WebComponent { render() { return html\`<div>\${import('./widget.ts')}</div>\`; } }\n` +
+      `Host.register('x-host');\n`,
     'components/widget.ts': `export const widget = (): number => 1;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -58,7 +63,9 @@ test('handle: a computed dynamic import target 404s WITH a dev hint', async () =
   const appDir = makeApp({
     'app/page.ts': `import '../components/host.ts';\nexport default () => 'ok';\n`,
     'components/host.ts':
-      `export class Host { load(name: string) { return import('./pages/' + name + '.ts'); } }\n`,
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Host extends WebComponent { load(name: string) { return import('./pages/' + name + '.ts'); } }\n` +
+      `Host.register('x-host');\n`,
     'components/pages/a.ts': `export const a = (): number => 1;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -73,7 +80,9 @@ test('handle: the dev hint does NOT fire in prod (bare 404)', async () => {
   const appDir = makeApp({
     'app/page.ts': `import '../components/host.ts';\nexport default () => 'ok';\n`,
     'components/host.ts':
-      `export class Host { load(name: string) { return import('./pages/' + name + '.ts'); } }\n`,
+      `import { WebComponent } from '@webjsdev/core';\n` +
+      `export class Host extends WebComponent { load(name: string) { return import('./pages/' + name + '.ts'); } }\n` +
+      `Host.register('x-host');\n`,
     'components/pages/a.ts': `export const a = (): number => 1;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: false });

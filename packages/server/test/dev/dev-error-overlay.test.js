@@ -31,6 +31,16 @@ function makeApp(files) {
   return appDir;
 }
 
+/**
+ * A component module that side-effect-imports `spec`. A page never ships
+ * (#1686), so a module reaches the serve gate only through a component; the
+ * scanner reads the class and the literal tag from source, so it never runs.
+ * @param {string} spec
+ */
+const hostImporting = (spec) =>
+  `import '${spec}';\nimport { WebComponent } from '@webjsdev/core';\n` +
+  `class XHost extends WebComponent {}\nXHost.register('x-host');\n`;
+
 test('a render crash in dev pushes a frame with the offending file + a source excerpt', async () => {
   const appDir = makeApp({
     'app/page.js': 'export default function P() {\n  throw new Error("kaboom render");\n}\n',
@@ -52,7 +62,8 @@ test('a render crash in dev pushes a frame with the offending file + a source ex
 
 test('a non-erasable-TS module in dev pushes a frame with the file + the no-erasable hint', async () => {
   const appDir = makeApp({
-    'app/page.js': "import '../components/bad.ts';\nexport default function P() { return 'ok'; }\n",
+    'app/page.js': "export default function P() { return 'ok'; }\n",
+    'components/host.js': hostImporting('./bad.ts'),
     'components/bad.ts': 'export enum Color { Red, Green }\n',
   });
   const frames = [];
@@ -60,7 +71,7 @@ test('a non-erasable-TS module in dev pushes a frame with the file + the no-eras
   await app.warmup();
 
   // Fetch the offending module the way the browser would (it is import-reachable
-  // from the page, so the gate serves it and tsResponse runs the strip).
+  // from a component, so the gate serves it and tsResponse runs the strip).
   const res = await app.handle(new Request('http://x/components/bad.ts'));
   assert.equal(res.status, 500, 'the strip failure is a 500 stub');
   const tsFrame = frames.find((f) => f.kind === 'ts-strip');
@@ -165,7 +176,8 @@ test('PROD counterfactual: no frame is built and the overlay client 404s', async
 
 test('a decorator in a served .ts module is refused with the decorator and its WebJs fix', async () => {
   const appDir = makeApp({
-    'app/page.js': "import '../components/dec.ts';\nexport default function P() { return 'ok'; }\n",
+    'app/page.js': "export default function P() { return 'ok'; }\n",
+    'components/host.js': hostImporting('./dec.ts'),
     'components/dec.ts':
       "import { WebComponent, html } from '@webjsdev/core';\nexport class DecEl extends WebComponent {\n  @property({ type: Number }) count = 0;\n  render() { return html`<p @click=${() => 1}>x</p>`; }\n}\n",
   });
@@ -187,7 +199,8 @@ test('a decorator in a served .ts module is refused with the decorator and its W
 
 test('a decorator in a served .js module is refused too', async () => {
   const appDir = makeApp({
-    'app/page.js': "import '../components/dec.js';\nexport default function P() { return 'ok'; }\n",
+    'app/page.js': "export default function P() { return 'ok'; }\n",
+    'components/host.js': hostImporting('./dec.js'),
     'components/dec.js': "@customElement('dec-el')\nexport class DecEl {}\n",
   });
   const frames = [];

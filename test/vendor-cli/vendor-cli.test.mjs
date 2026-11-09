@@ -74,12 +74,24 @@ function runCli(args, cwd) {
   });
 }
 
+/**
+ * Write a registered component carrying `importLine`. A page never ships
+ * (#1686), so a bare import only a page makes is never vendored: the vendored
+ * import sits in a component the scanner picks up from source.
+ */
+async function writeComponent(dir, importLine) {
+  await mkdir(join(dir, 'components'), { recursive: true });
+  await writeFile(join(dir, 'components', 'colors.ts'),
+    `${importLine}\nimport { WebComponent } from '@webjsdev/core';\nclass Colors extends WebComponent {}\nColors.register('x-colors');\n`);
+}
+
 async function makeApp() {
   const dir = await mkdtemp(join(tmpdir(), 'webjs-vendor-cli-'));
   await symlink(join(REPO_ROOT, 'node_modules'), join(dir, 'node_modules'));
   await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
   await mkdir(join(dir, 'app'), { recursive: true });
-  await writeFile(join(dir, 'app', 'page.ts'), `import pico from 'picocolors';\nexport default () => pico.green('ok');`);
+  await writeFile(join(dir, 'app', 'page.ts'), `import '../components/colors.ts';\nexport default () => '<x-colors></x-colors>';`);
+  await writeComponent(dir, "import pico from 'picocolors';\nvoid pico;");
   return dir;
 }
 
@@ -183,7 +195,8 @@ describe('webjs vendor CLI', () => {
       await symlink(join(REPO_ROOT, 'node_modules'), join(dir, 'node_modules'));
       await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
       await mkdir(join(dir, 'app'), { recursive: true });
-      await writeFile(join(dir, 'app', 'page.ts'), `import * as THREE from 'three';\nexport default () => 'ok';`);
+      await writeFile(join(dir, 'app', 'page.ts'), `import '../components/colors.ts';\nexport default () => 'ok';`);
+      await writeComponent(dir, "import * as THREE from 'three';\nvoid THREE;");
 
       const { code, stdout, stderr } = await runCli(['vendor', 'pin'], dir);
       const out = stdout + stderr;

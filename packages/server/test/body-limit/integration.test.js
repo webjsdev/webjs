@@ -42,6 +42,14 @@ function makeApp(files) {
   return appDir;
 }
 
+/**
+ * A registered component importing the action module. Pages never ship
+ * (#1686), so the browser reaches an action's RPC stub through a component;
+ * the scanner reads the source, so the class need not run.
+ */
+const CALLER = `import { WebComponent } from ${CORE};\nimport '../modules/m/act.server.js';\n` +
+  `class Caller extends WebComponent {}\nCaller.register('x-caller');\n`;
+
 /** Build a chunked (no Content-Length) request body of `n` bytes. */
 function chunkedBody(n, chunkSize = 1024) {
   let emitted = 0;
@@ -63,6 +71,7 @@ test('action RPC endpoint: over-limit body is 413, under-limit runs', async () =
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import { echo } from '../modules/m/act.server.js';\n` +
       `export default function P() { return html\`<p>\${echo}</p>\`; }\n`,
+    'components/caller.js': CALLER,
     'modules/m/act.server.js':
       `'use server';\n` +
       `export async function echo(x) { return { got: x }; }\n`,
@@ -100,6 +109,7 @@ test('action RPC endpoint: chunked over-limit body without Content-Length is 413
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import { sink } from '../modules/m/act.server.js';\n` +
       `export default function P() { return html\`<p>\${sink}</p>\`; }\n`,
+    'components/caller.js': CALLER,
     'modules/m/act.server.js':
       `'use server';\n` +
       `export async function sink() { return { ok: true }; }\n`,

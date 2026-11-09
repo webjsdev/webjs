@@ -32,7 +32,10 @@ export const REFUSED = [
     ].join('\n'),
     rule: 'no-non-erasable-typescript',
     fix: /\.register\('my-el'\)/,
-    load: { path: '/components/deco-el.ts', match: /\.register\('my-el'\)/ },
+    // The page that renders it: a decorated class has no literal `.register`
+    // call, so it is no browser entry and its URL 404s (#1686). The page's
+    // server import fails on the decorator and the dev error names the fix.
+    load: { path: '/', match: /\.register\('my-el'\)/ },
   },
   {
     id: 'lit-element',

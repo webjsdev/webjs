@@ -150,24 +150,32 @@ test('served module source reflects each handler\'s own elision verdict (no cros
   // per-handler (state.tsCache). ON is warmed FIRST here so a shared cache
   // would be poisoned by the time OFF reads it.
   const ORIG = process.env.WEBJS_ELIDE;
-  // The OFF handler keeps the import; in PROD its relative specifier is also
-  // versioned with `?v=<hash>` (#369), so allow that optional query suffix.
-  const IMPORT = /import\s+['"][^'"]*build-stamp\.ts(?:\?v=[0-9a-f]+)?['"]/;
+  // The served module is the shipping comments-thread component, which
+  // side-effect-imports the display-only <muted-text>. A page is never served
+  // (#1686), so the importer under test is a component. The OFF handler keeps
+  // the import; in PROD its specifier is also versioned with `?v=<hash>`
+  // (#369), so allow that optional query suffix.
+  const IMPORT = /import\s+['"][^'"]*muted-text\.ts(?:\?v=[0-9a-f]+)?['"]/;
+  const URL = 'http://localhost/modules/comments/components/comments-thread.ts';
   try {
     delete process.env.WEBJS_ELIDE;
     const hOn = await createRequestHandler({ appDir: BLOG, dev: false });
     if (hOn.warmup) await hOn.warmup();
-    const onSrc = await (await hOn.handle(new Request('http://localhost/app/page.ts'))).text();
+    const onRes = await hOn.handle(new Request(URL));
+    assert.equal(onRes.status, 200, 'the shipping component is served');
+    const onSrc = await onRes.text();
 
     process.env.WEBJS_ELIDE = '0';
     const hOff = await createRequestHandler({ appDir: BLOG, dev: false });
     if (hOff.warmup) await hOff.warmup();
-    const offSrc = await (await hOff.handle(new Request('http://localhost/app/page.ts'))).text();
+    const offRes = await hOff.handle(new Request(URL));
+    assert.equal(offRes.status, 200, 'the shipping component is served');
+    const offSrc = await offRes.text();
 
-    // The page side-effect-imports the display-only <build-stamp>. ON strips
-    // that import (the module is never downloaded); OFF keeps it.
-    assert.ok(!IMPORT.test(onSrc), 'ON handler must strip the elided build-stamp import from the served page source');
-    assert.ok(IMPORT.test(offSrc), 'OFF handler must keep the build-stamp import (cross-handler cache bleed would strip it)');
+    // ON strips the elided muted-text import (the module is never
+    // downloaded); OFF keeps it.
+    assert.ok(!IMPORT.test(onSrc), 'ON handler must strip the elided muted-text import from the served source');
+    assert.ok(IMPORT.test(offSrc), 'OFF handler must keep the muted-text import (cross-handler cache bleed would strip it)');
   } finally {
     if (ORIG === undefined) delete process.env.WEBJS_ELIDE;
     else process.env.WEBJS_ELIDE = ORIG;

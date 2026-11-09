@@ -78,13 +78,43 @@ test('extractPackageName: lone @scope with no package name returns null', () => 
 //
 // The scan is rooted in the module graph (#1399), so every fixture below is a
 // real minimal app: a `package.json`, an `app/page.ts` the route table finds,
-// and whatever the page reaches from there. A loose file in a bare temp dir is
-// unreachable by construction and contributes nothing, which is the point.
+// and the component it renders. The scan roots at components and
+// `instrumentation-client`, never at a page (#1686), so a vendor import sits
+// in a component. A loose file in a bare temp dir is unreachable by
+// construction and contributes nothing, which is the point.
 
 /**
  * Write a minimal app under a fresh temp dir. Keys are app-relative paths.
  * A `package.json` is supplied unless the fixture writes its own.
  */
+/**
+ * A registered component module carrying `imports` at module scope. A page
+ * never ships (#1686), so a vendor reaches the browser only through a module
+ * the browser loads: a component, or `instrumentation-client`. The scanner
+ * reads source, so the class need not run.
+ */
+function componentSource(imports, tag = 'x-feature', body = '') {
+  const cls = tag.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+  return `import { WebComponent } from '@webjsdev/core';\n${imports}\n` +
+    `class ${cls} extends WebComponent {${body}}\n${cls}.register('${tag}');\n`;
+}
+
+/** A page rendering one component that carries `imports` (see `componentSource`). */
+function withComponent(imports, tag = 'x-feature') {
+  return {
+    'app/page.ts': `import '../components/feature.ts';\nexport default function Page() { return null; }`,
+    'components/feature.ts': componentSource(imports, tag),
+  };
+}
+
+/** The same shape, written into an already-created app dir. */
+async function writeComponentApp(dir, imports) {
+  for (const [rel, body] of Object.entries(withComponent(imports))) {
+    await mkdir(dirname(join(dir, rel)), { recursive: true });
+    await writeFile(join(dir, rel), body);
+  }
+}
+
 async function makeVendorApp(slug, files) {
   const dir = join(tmpdir(), `webjs-test-vendor-${slug}-${Date.now()}`);
   await mkdir(dir, { recursive: true });
@@ -101,15 +131,16 @@ async function makeVendorApp(slug, files) {
 
 test('scanBareImports: finds bare specifiers in source files', async () => {
   const dir = await makeVendorApp('basic', {
-    'app/page.ts': `
+    'app/page.ts': `import '../components/feature.ts';\nexport default function Page() { return null; }`,
+    'components/feature.ts': componentSource(`
       import dayjs from 'dayjs';
       import { something } from '@scope/lib';
       import './local.js';
       import '../b.ts';
       import { core } from '@webjsdev/core';
-      export default function Page() { return [dayjs, something, core]; }
-    `,
-    'app/local.js': `export const local = 1;`,
+      export const used = [dayjs, something, core];
+    `),
+    'components/local.js': `export const local = 1;`,
     'b.ts': `
       import { z } from 'zod';
       const d = await import('dynamic-pkg');
@@ -122,7 +153,7 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
 
   assert.ok(found.has('dayjs'));
   assert.ok(found.has('@scope/lib'));
-  assert.ok(found.has('zod'), 'a specifier one hop from the page is reached');
+  assert.ok(found.has('zod'), 'a specifier one hop from the component is reached');
   assert.ok(found.has('dynamic-pkg'), 'a dynamic-import specifier is reached');
   assert.ok(!found.has('pg'), 'server-only imports should be skipped');
   assert.ok(!found.has('./local.js'), 'relative imports should be excluded');
@@ -133,13 +164,13 @@ test('scanBareImports: finds bare specifiers in source files', async () => {
 
 test('scanBareImports: skips server-only @webjsdev pkgs (#713)', async () => {
   const dir = await makeVendorApp('server-only', {
-    // A page that legitimately imports a server-only framework pkg name directly
-    // (defensive: even if surfaced, it must not reach the jspm path).
-    'app/page.ts': `import dayjs from 'dayjs';
+    // A component that names a server-only framework pkg directly (defensive:
+    // even if surfaced, it must not reach the jspm path).
+    ...withComponent(`import dayjs from 'dayjs';
      import '@webjsdev/cli/bin/webjs.js';
      import '@webjsdev/server/some';
      import '@webjsdev/mcp';
-     export default function Page() { return dayjs; }`,
+     export const d = dayjs;`),
   });
 
   const found = await scanBareImports(dir);
@@ -153,14 +184,12 @@ test('scanBareImports: skips server-only @webjsdev pkgs (#713)', async () => {
 });
 
 test('scanBareImports: skips import type statements (TS erases them)', async () => {
-  const dir = await makeVendorApp('typeimport-skip', {
-    'app/page.ts': `
+  const dir = await makeVendorApp('typeimport-skip', withComponent(`
       import type { WebSocket } from 'ws';
       import type { Database as DB } from 'pg';
       import dayjs from 'dayjs';
-      export default function Page() { return dayjs; }
-    `,
-  });
+      export const d = dayjs;
+    `));
 
   const found = await scanBareImports(dir);
   assert.ok(found.has('dayjs'), 'real value imports remain');
@@ -171,16 +200,14 @@ test('scanBareImports: skips import type statements (TS erases them)', async () 
 });
 
 test('scanBareImports: preserves full specifiers including subpaths', async () => {
-  const dir = await makeVendorApp('subpath', {
-    'app/page.ts': `
+  const dir = await makeVendorApp('subpath', withComponent(`
       import dayjs from 'dayjs';
       import utc from 'dayjs/plugin/utc';
       import timezone from 'dayjs/plugin/timezone';
       import { Turbo } from '@hotwired/turbo';
       import frame from '@hotwired/turbo/elements/turbo-frame';
-      export default function Page() { return [dayjs, utc, timezone, Turbo, frame]; }
-    `,
-  });
+      export const used = [dayjs, utc, timezone, Turbo, frame];
+    `));
 
   const found = await scanBareImports(dir);
   assert.ok(found.has('dayjs'), 'root dayjs import preserved');
@@ -199,7 +226,7 @@ test('scanBareImports: preserves full specifiers including subpaths', async () =
 test('scanBareImports: an unreachable file contributes nothing, whatever it is called', async () => {
   const dir = await makeVendorApp('unreachable', {
     'app/page.ts': `import '../components/widget.ts';\nexport default function Page() { return null; }`,
-    'components/widget.ts': `import real from 'real-dep';\nexport const w = real;`,
+    'components/widget.ts': componentSource(`import real from 'real-dep';\nexport const w = real;`, 'x-widget'),
     'scripts/generate-og.mjs': `import { chromium } from 'playwright';\nexport const c = chromium;`,
     'web-test-runner.config.js': `import { x } from 'tooling-pkg';\nexport const t = x;`,
     'test/helper.ts': `import 'test-only-pkg';`,
@@ -212,7 +239,7 @@ test('scanBareImports: an unreachable file contributes nothing, whatever it is c
   });
 
   const found = await scanBareImports(dir);
-  assert.ok(found.has('real-dep'), 'a specifier a page reaches is found');
+  assert.ok(found.has('real-dep'), 'a specifier a component reaches is found');
   for (const spec of ['playwright', 'tooling-pkg', 'test-only-pkg', 'dot-dir-pkg', 'pg', 'root-mw-pkg', 'orphan-pkg']) {
     assert.ok(!found.has(spec), `${spec} is unreachable from any browser entry and must not be vendored`);
   }
@@ -224,12 +251,12 @@ test('scanBareImports: a bare specifier imported only from scripts/ never reache
   // The literal #1399 repro: website/scripts/generate-og.mjs imports playwright,
   // which jspm 401s on every cold analysis.
   const dir = await makeVendorApp('scripts-dir', {
-    'app/page.ts': `import dayjs from 'dayjs';\nexport default function Page() { return dayjs; }`,
+    ...withComponent(`import dayjs from 'dayjs';\nexport const d = dayjs;`),
     'scripts/generate-og.mjs': `import { chromium } from 'playwright';\nexport const c = chromium;`,
   });
 
   const found = await scanBareImports(dir);
-  assert.ok(found.has('dayjs'), 'the page vendor is still found');
+  assert.ok(found.has('dayjs'), 'the component vendor is still found');
   assert.ok(!found.has('playwright'), 'a build script is not a browser entry');
 
   await rm(dir, { recursive: true, force: true });
@@ -239,17 +266,15 @@ test('scanBareImports: an import written inside a template literal is not a vend
   // website/lib/samples.ts holds docs code samples in exported template
   // literals. The old comment-stripping scanner could not tell them from real
   // imports, so drizzle-orm was sent to jspm on every cold analysis.
-  const dir = await makeVendorApp('template-sample', {
-    'app/page.ts': `
+  const dir = await makeVendorApp('template-sample', withComponent(`
       import { z } from 'zod';
       export const ACTION_SAMPLE = \`
         'use server';
         import { eq } from 'drizzle-orm';
         export async function x() {}
       \`;
-      export default function Page() { return [z, ACTION_SAMPLE]; }
-    `,
-  });
+      export const used = [z, ACTION_SAMPLE];
+    `));
 
   const found = await scanBareImports(dir);
   assert.ok(found.has('zod'), 'the real import is found');
@@ -263,7 +288,9 @@ test('scanBareImports: a specifier reachable only through a dynamic import is re
   // the preload set (transitiveDeps) deliberately ignores dynamic edges: the
   // import has to resolve when it finally runs.
   const dir = await makeVendorApp('dynamic-only', {
-    'app/page.ts': `export default async function Page() { const m = await import('../chart.ts'); return m; }`,
+    'app/page.ts': `import '../components/feature.ts';\nexport default function Page() { return null; }`,
+    'components/feature.ts': componentSource('', 'x-feature',
+      `\n  async connectedCallback() { super.connectedCallback(); await import('../chart.ts'); }\n`),
     'chart.ts': `import c from 'chart-pkg';\nexport default c;`,
   });
 
@@ -278,9 +305,9 @@ test('reachedBareImports: the elision skip set prunes a specifier and the subtre
   // counter (shipping) imports zod and the same shared-pkg as badge.
   const dir = await makeVendorApp('skip', {
     'app/page.ts': `import '../components/badge.ts';\nimport '../components/counter.ts';\nexport default function Page() { return null; }`,
-    'components/badge.ts': `import dayjs from 'dayjs';\nimport sh from 'shared-pkg';\nimport { f } from './fmt.ts';\nexport const b = [dayjs, sh, f];`,
+    'components/badge.ts': componentSource(`import dayjs from 'dayjs';\nimport sh from 'shared-pkg';\nimport { f } from './fmt.ts';\nexport const b = [dayjs, sh, f];`, 'x-badge'),
     'components/fmt.ts': `import fmt from 'fmt-pkg';\nexport const f = fmt;`,
-    'components/counter.ts': `import { z } from 'zod';\nimport sh from 'shared-pkg';\nexport const c = [z, sh];`,
+    'components/counter.ts': componentSource(`import { z } from 'zod';\nimport sh from 'shared-pkg';\nexport const c = [z, sh];`, 'x-counter'),
   });
 
   const graph = await buildModuleGraph(dir);
@@ -297,6 +324,25 @@ test('reachedBareImports: the elision skip set prunes a specifier and the subtre
 
   await rm(dir, { recursive: true, force: true });
 });
+test('scanBareImports: a package imported only by a page is not vendored, one imported by a component is (#1686)', async () => {
+  // A page runs only on the server, so its bare imports never load in a
+  // browser and must not reach the importmap. The same package reached from a
+  // component does.
+  const dir = await makeVendorApp('page-only', {
+    'app/page.ts': `import md from 'markdown-pkg';\nimport '../components/feature.ts';\nexport default function Page() { return md; }`,
+    'app/layout.ts': `import 'layout-only-pkg';\nexport default function Layout({ children }) { return children; }`,
+    'components/feature.ts': componentSource(`import d from 'shared-date-pkg';\nexport const x = d;`),
+    'app/other/page.ts': `import d from 'shared-date-pkg';\nexport default function Other() { return d; }`,
+  });
+
+  const found = await scanBareImports(dir);
+  assert.ok(!found.has('markdown-pkg'), 'a page-only bare import is never vendored');
+  assert.ok(!found.has('layout-only-pkg'), 'nor a layout-only one');
+  assert.ok(found.has('shared-date-pkg'), 'a package a component imports is vendored');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 // --- getPackageVersion ---
 
 test('getPackageVersion: returns installed version for a known package', () => {
@@ -749,8 +795,7 @@ test('vendor parity #446: runtime live importmap and `vendor pin` agree for the 
   const dir = join(tmpdir(), `webjs-parity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   await mkdir(join(dir, 'app'), { recursive: true });
   await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
-  await writeFile(join(dir, 'app', 'page.ts'),
-    `import { EditorView } from '@codemirror/view';\nimport { lintGutter } from '@codemirror/lint';`);
+  await writeComponentApp(dir, `import { EditorView } from '@codemirror/view';\nimport { lintGutter } from '@codemirror/lint';`);
   await mkdir(join(dir, 'node_modules', '@codemirror', 'view'), { recursive: true });
   await mkdir(join(dir, 'node_modules', '@codemirror', 'lint'), { recursive: true });
   await writeFile(join(dir, 'node_modules', '@codemirror', 'view', 'package.json'),
@@ -864,7 +909,7 @@ async function makeTempAppWithSource(sourceFiles) {
 
 test('pinAll default: writes importmap.json with jspm.io URLs', async () => {
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     await withJspmDouble({}, async () => {
@@ -924,7 +969,7 @@ test('pinAll: a flattened transitive is pinned with a derivable bundle name (#44
   // which has no dependencies, so the live CDN never returned a transitive to
   // exercise the path with. A double can just hand one over.
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     const transitive = 'https://ga.jspm.io/npm:tiny-dep@2.3.4/double.js';
@@ -976,7 +1021,7 @@ test('pinAll: reports found-but-uninstalled specifiers instead of noBareImports 
   // pin file. No network: an uninstalled package never reaches jspm.
   clearVendorCache();
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import * as THREE from 'three';\nimport { OrbitControls } from 'three/addons/controls/OrbitControls.js';`,
+    ...withComponent(`import * as THREE from 'three';\nimport { OrbitControls } from 'three/addons/controls/OrbitControls.js';`),
   });
   try {
     // Offline: every specifier is dropped by the version gate, so installs is empty.
@@ -1019,8 +1064,7 @@ test('pinAll: refuses to write empty pin file when every install fails', async (
     JSON.stringify({ name: 'fake-pkg-xyz-no-such-version', version: '99.99.99', main: 'index.js' }));
   await writeFile(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version', 'index.js'),
     'export default 1;');
-  await writeFile(join(dir, 'app', 'page.ts'),
-    `import x from 'fake-pkg-xyz-no-such-version';`);
+  await writeComponentApp(dir, `import x from 'fake-pkg-xyz-no-such-version';`);
   try {
     // Drive the failure through the double's unresolvable list rather than by
     // relaxing anything: a refused pin is the CORRECT outcome here, and the
@@ -1058,8 +1102,7 @@ test('pinAll: warns by name when some installs fail (partial success)', async ()
   await writeFile(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version', 'package.json'),
     JSON.stringify({ name: 'fake-pkg-xyz-no-such-version', version: '99.99.99', main: 'index.js' }));
   await writeFile(join(dir, 'node_modules', 'fake-pkg-xyz-no-such-version', 'index.js'), 'export default 1;');
-  await writeFile(join(dir, 'app', 'page.ts'),
-    `import a from 'picocolors';\nimport b from 'fake-pkg-xyz-no-such-version';`);
+  await writeComponentApp(dir, `import a from 'picocolors';\nimport b from 'fake-pkg-xyz-no-such-version';`);
   /** @type {string[]} */
   const warns = [];
   const origWarn = console.warn;
@@ -1096,7 +1139,7 @@ test('pinAll: warns by name when some installs fail (partial success)', async ()
 
 test('pinAll --download: writes importmap.json with local URLs + bundle files', async () => {
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     await withJspmDouble({}, async () => {
@@ -1116,7 +1159,7 @@ test('pinAll --download: writes importmap.json with local URLs + bundle files', 
 
 test('pinAll: prune removes orphan bundle files from prior pins', async () => {
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     await mkdir(join(dir, '.webjs', 'vendor'), { recursive: true });
@@ -1132,7 +1175,7 @@ test('pinAll: prune removes orphan bundle files from prior pins', async () => {
 
 test('pinAll: mode switch from --download to default removes bundles', async () => {
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     await withJspmDouble({}, async () => {
@@ -1148,7 +1191,7 @@ test('pinAll: mode switch from --download to default removes bundles', async () 
 
 test('unpinPackage: removes entry from importmap.json (deletes file when last pin removed)', async () => {
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     await withJspmDouble({}, () => pinAll(dir));
@@ -1605,7 +1648,7 @@ test('importMapTag: integrity field omitted when empty, present when populated',
 
 test('pinAll default mode: writes integrity field alongside imports', async () => {
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     await withJspmDouble({}, async () => {
@@ -1623,7 +1666,7 @@ test('pinAll default mode: writes integrity field alongside imports', async () =
 
 test('pinAll --download: writes integrity matching the on-disk bytes', async () => {
   const dir = await makeTempAppWithSource({
-    'app/page.ts': `import pico from 'picocolors';`,
+    ...withComponent(`import pico from 'picocolors';`),
   });
   try {
     await withJspmDouble({}, async () => {
@@ -2291,7 +2334,7 @@ test('pinAll: a bundle fetch that hangs is abandoned, not waited on forever', as
   // would need production code to grow a test-only knob.
   for (const opts of [{}, { download: true }]) {
     const mode = opts.download ? '--download' : 'default';
-    const dir = await makeTempAppWithSource({ 'app/page.ts': `import pico from 'picocolors';` });
+    const dir = await makeTempAppWithSource({ ...withComponent(`import pico from 'picocolors';`), });
     const realSetTimeout = globalThis.setTimeout;
     try {
       /** @type {Array<AbortSignal | undefined>} */
@@ -2357,7 +2400,7 @@ test('the generate call gets the CLI budget from a pin and the server budget fro
     if (typeof ms === 'number' && ms >= 1000) budgets.push(ms);
     return realSetTimeout(fn, ms, ...rest);
   });
-  const dir = await makeTempAppWithSource({ 'app/page.ts': `import pico from 'picocolors';` });
+  const dir = await makeTempAppWithSource({ ...withComponent(`import pico from 'picocolors';`), });
   try {
     const mock = async (url) => (String(url).includes('api.jspm.io')
       ? jspmResponse({ picocolors: 'https://ga.jspm.io/npm:picocolors@1.1.1/index.js' })

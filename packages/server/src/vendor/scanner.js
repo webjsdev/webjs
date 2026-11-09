@@ -1,5 +1,6 @@
 import { buildModuleGraph, reachableBareSpecifiers } from '../module-graph.js';
 import { browserEntryFiles } from '../browser-entries.js';
+import { routeTableFiles } from '../route-frontier.js';
 import { scanComponents } from '../component-scanner.js';
 import { buildRouteTable } from '../router.js';
 import { foreignImport } from '../foreign-imports.js';
@@ -106,7 +107,7 @@ export async function scanBareImports(appDir) {
     // dev server surfaces the real problem.
     return new Set();
   }
-  return reachedBareImports(graph, [...browserEntryFiles(routeTable, components)], appDir);
+  return reachedBareImports(graph, [...browserEntryFiles(routeTable, components)], appDir, routeTableFiles(routeTable));
 }
 
 /**

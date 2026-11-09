@@ -57,8 +57,11 @@ try {
   assert.ok(js && /\.register\(/.test(js.fix), `[${runtime}] check flags @customElement in .js`);
 
   // 2. The dev server refuses to serve the decorated module to the browser.
+  //    A page never ships (#1686), so the browser reaches it through a
+  //    registered component that imports it.
   const serveApp = makeApp('serve', {
-    'app/page.js': "import '../components/dec.ts';\nexport default function P() { return 'ok'; }\n",
+    'app/page.js': "import '../components/host.ts';\nexport default function P() { return 'ok'; }\n",
+    'components/host.ts': "import './dec.ts';\nimport { WebComponent } from '@webjsdev/core';\nclass Host extends WebComponent {}\nHost.register('x-host');\n",
     'components/dec.ts': decorated,
   });
   const frames = [];

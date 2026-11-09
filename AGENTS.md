@@ -185,7 +185,7 @@ Plain JS with JSDoc lives in `packages/` (installed as `node_modules/@webjsdev/`
 
 These hold for the framework and every app built on it. Hit one as a runtime error? The [Troubleshooting page](https://webjs.dev/docs/troubleshooting) is keyed by symptom and maps each back to its invariant and `webjs check` rule. The numbers are cited by check-rule messages and tests, so keep them stable.
 
-1. **Server-only code goes in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`**, never in pages, layouts, or components. Without `'use server'` a `.server` file is a server-only utility whose browser import throws at load.
+1. **Server-only code never runs in a component or in anything a component imports.** Pages, layouts and boundaries run only on the server and never load in the browser, so they may import it directly, the way a Next.js server component does. Shared server code lives in `.server.{js,ts}` files, `route.ts` handlers, or `middleware.ts`. Without `'use server'` a `.server` file is a server-only utility whose browser import throws at load.
 2. **`'use server'` exports are `async` functions returning serializer-safe values.**
 3. **Custom element tag names contain a hyphen**, passed as a literal to `Class.register('tag-name')` (or `customElements.define`).
 4. **Event (`@`), property (`.`), and boolean (`?`) bindings take one expression**, quoted or unquoted.

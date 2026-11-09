@@ -89,10 +89,10 @@ test('a dropped page does not preload its SSR-only relative-helper app module (#
   // exercises the dropped-subtree gap, not a shipped page).
   assert.ok(!hrefs.some((h) => h.includes('/app/page.js')),
     'the inert page module is dropped from the boot');
-  // Precondition: fmt.js is a real, servable app module (the old over-fetch was
-  // reachable, not a phantom); the walk just must not ROOT at the dropped page.
-  assert.equal((await app.handle(new Request('http://x/app/fmt.js'))).status, 200,
-    'fmt.js is a servable app module');
+  // Since #1686 a module only a page imports is not servable at all (a page
+  // never loads in the browser), so neither its hint nor its url exists.
+  assert.equal((await app.handle(new Request('http://x/app/fmt.js'))).status, 404,
+    'fmt.js, imported only by the page, is not servable');
   // The fix: the dropped page's SSR-only relative-helper APP MODULE is not hinted.
   assert.ok(!hrefs.some((h) => h.includes('/app/fmt.js')),
     "the dropped page's SSR-only relative helper is NOT preloaded (no over-fetch)");
