@@ -34,3 +34,27 @@ so the graders themselves are tested.
 
 To add a task, give it a prompt a person would write and probes that only a
 working feature satisfies.
+
+## First-draft replay
+
+`replay.mjs` answers a different question: did the agent's code pass the
+FIRST time, on this branch? A build iterates until it passes, so a pass rate
+on the finished app hides every fix-up turn. The replay rebuilds each recorded
+build as it was first written and grades that draft against the current
+branch, with no model call, so a framework change can be measured for free.
+
+```sh
+node scripts/agent-eval/replay.mjs --corpus corpus.json          # [{ name, transcript, app }]
+node scripts/agent-eval/replay.mjs --transcript t.jsonl --app <dir>
+```
+
+The draft is the agent's own Write / Edit calls replayed onto the app's root
+(scaffold) commit, up to the first `webjs check`, typecheck or test run that
+follows the agent's last new file. After its first verification only
+first-time file writes are kept: an edit then is likely a correction prompted
+by that run. Generated files the agent did not author (the UI kit `webjs ui
+add` copies in) come from the finished app, a migration is regenerated with
+`webjs db generate`, and only the tests the agent wrote are run. It then runs
+this branch's `webjs check`, `webjs typecheck` and server tests and prints
+which drafts pass. `edit misses` counts edits whose `old_string` was not found
+in the replayed file, a sign the draft diverged from what the agent saw.
