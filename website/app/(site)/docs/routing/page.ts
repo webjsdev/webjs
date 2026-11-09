@@ -581,12 +581,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
       Aborts rendering and returns a redirect response. When you do not pass a
       status, the catching site picks the conventional one: a redirect thrown
       during a <strong>GET</strong> page or layout render (a gate, an auth
-      bounce) becomes <code>302</code> Found, the usual GET-to-GET code; a
-      redirect thrown from a <strong>server action</strong> (a POST) becomes
-      <code>307</code> Temporary Redirect, which is method-preserving so the
-      action's intent survives. Pass an explicit status to override either
-      default: positionally as <code>redirect('/x', 308)</code>, or with the
-      options form <code>redirect('/x', { status: 301 })</code>.
+      bounce) becomes <code>302</code> Found, the usual GET-to-GET code, and an
+      explicit status overrides it: positionally as <code>redirect('/x', 308)</code>,
+      or with the options form <code>redirect('/x', { status: 301 })</code>.
     </p>
     <code-block>import { redirect } from '@webjsdev/core';
 
@@ -599,11 +596,16 @@ export default async function ProtectedPage() {
   return html\`&lt;h1&gt;Welcome, \${user.name}&lt;/h1&gt;\`;
 }</code-block>
     <p>
-      Inside a server action, the same <code>redirect('/somewhere')</code>
-      defaults to <code>307</code> instead, so a POST that bounces keeps its
-      method. The Post/Redirect/Get success path (returning
-      <code>{ success: true, redirect }</code>) is separate and always uses
-      <code>303</code> See Other.
+      The other catching sites follow Next.js. In a <code>route.ts</code> handler
+      it answers <code>307</code> (see <a href="/docs/api-routes#redirect-and-not-found">API Routes</a>).
+      In a server action bound to a <code>&lt;form&gt;</code> it always answers
+      <code>303</code> See Other, so the browser follows with a GET and the
+      mutation runs exactly once (the Post/Redirect/Get success path,
+      returning <code>{ success: true, redirect }</code>, is a <code>303</code>
+      too). In a server action a component calls over RPC, the response tells
+      the generated stub where to go and the client router navigates there;
+      the <code>await action()</code> call rejects with the redirect, so code
+      after it does not run, exactly as in Next.
     </p>
 
     <h3><code>permanentRedirect(url, type?)</code></h3>

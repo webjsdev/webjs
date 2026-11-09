@@ -2,6 +2,7 @@ import { isNotFound, isRedirect, isForbidden, isUnauthorized, FORM_ACTION_FIELD 
 import { ssrPage, ssrNotFound, ssrForbidden, ssrUnauthorized } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
 import { getBodyLimits, refreshHeaderValue } from './context.js';
+import { readFlash, encodeFlash, flashSetCookie } from './action-flash.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { makeThenable } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
@@ -73,7 +74,9 @@ export const ACTION_SKEW_MESSAGE =
  * success (PRG redirect). A result is a failure when ANY of these hold:
  *   - `result.success === false` (explicit), OR
  *   - `result.fieldErrors` is present (per-field validation messages), OR
- *   - `result.error` is present AND `result.success !== true`.
+ *   - `result.error` is present AND `result.success !== true`, OR
+ *   - `result.errors` is present AND `result.success !== true` (the shape
+ *     Next.js examples return from a `useActionState` action, `{ errors }`).
  *
  * Success is the explicit `success: true`, or a bare value (or
  * undefined/null) carrying no error markers. This means an action that returns
@@ -88,6 +91,7 @@ function isFailureResult(result) {
   if (result.success === false) return true;
   if (result.fieldErrors != null) return true;
   if (result.error != null && result.success !== true) return true;
+  if (result.errors != null && result.success !== true) return true;
   return false;
 }
 
@@ -559,6 +563,13 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   }
 
   const searchParams = Object.fromEntries(url.searchParams.entries());
+  // Next.js's `useActionState` contract: an action declaring TWO parameters is
+  // called `(prevState, formData)`, prevState being what this same action
+  // returned last time (carried by the signed flash cookie; undefined on the
+  // first submission). validate, middleware and invalidates still see the
+  // single input, so only the call changes.
+  const flash = fn.length >= 2 ? await readFlash(req) : null;
+  const prevState = flash && flash.id === id ? flash.result : undefined;
   /** @type {ActionResult | undefined} */
   let result;
   let ranAction = false;
@@ -578,17 +589,17 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
           searchParams: makeThenable(searchParams),
           url,
         },
-        () => { ranAction = true; return fn(...args); },
+        () => { ranAction = true; return fn.length >= 2 ? fn(prevState, ...args) : fn(...args); },
       ));
   } catch (err) {
     if (isRedirect(err)) {
       const e = /** @type any */ (err);
-      // A thrown redirect from an action (a POST) defaults to 307 Temporary
-      // Redirect, which is method-preserving so the action's intent survives
-      // the bounce; an explicit `redirect(url, status)` overrides it. This is
-      // deliberately NOT the GET gate's 302 default (see ssr.js). PRG (303) is
-      // the SUCCESS-result path below.
-      return new Response(null, { status: e.status || 307, headers: { location: e.url } });
+      // A thrown redirect from a form action ALWAYS answers 303 See Other, as
+      // Next.js does for a server action: the browser follows with a GET, so
+      // the mutation runs once. A 307 (the old default) re-POSTed the body,
+      // identity field included, and ran the action a second time on the
+      // target page. An explicit status is ignored here for the same reason.
+      return new Response(null, { status: 303, headers: { location: e.url } });
     }
     // `route` and `params` ride along so the boundary renders inside its
     // layouts, exactly as it does on the page-render path (#1298).
@@ -662,10 +673,18 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // page's own path so a poisoned value cannot become an open redirect.
     const ownPath = (url.pathname + url.search) || '/';
     const safe = result ? sameSiteRedirect(result.redirect) : null;
-    return new Response(null, {
+    const res = new Response(null, {
       status: 303,
       headers: { location: safe || ownPath, ...invalidateHeader },
     });
+    // The result survives the redirect (Next's useActionState shows a success
+    // message after a submit): the page it lands on reads it as actionData
+    // once, and the next submission of this action gets it as prevState.
+    if (result !== undefined && result !== null) {
+      const value = await encodeFlash({ id, result, shown: false });
+      res.headers.append('set-cookie', flashSetCookie(value));
+    }
+    return res;
   }
 
   // FAILURE: re-render the SAME page with the action result available on
@@ -679,6 +698,14 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // being a redirect, is one the router can actually read the header off.
   if (invalidateHeader && page instanceof Response) {
     for (const [k, v] of Object.entries(invalidateHeader)) page.headers.set(k, v);
+  }
+  // The failure is already on screen, so it is stored as SHOWN: only the next
+  // submission's prevState reads it.
+  if (page instanceof Response) {
+    const value = await encodeFlash({ id, result, shown: true });
+    if (value) {
+      try { page.headers.append('set-cookie', flashSetCookie(value)); } catch { /* immutable: skip the carry */ }
+    }
   }
   return page;
 }

@@ -253,7 +253,7 @@ export const metadata = {
     <p>Special throw helpers are also caught:</p>
     <ul>
       <li><code>throw notFound()</code>: renders the <code>not-found.ts</code> page with a 404 status.</li>
-      <li><code>throw redirect('/login')</code>: sends a redirect. Thrown during a GET render it defaults to <code>302</code> Found; thrown from a server action (a POST) it defaults to the method-preserving <code>307</code>. Pass a status (<code>redirect(url, 308)</code> or <code>redirect(url, { status })</code>) to override.</li>
+      <li><code>throw redirect('/login')</code>: sends a redirect. Thrown during a GET render it defaults to <code>302</code> Found (pass <code>redirect(url, 308)</code> or <code>redirect(url, { status })</code> to override); from a <code>route.ts</code> handler it is <code>307</code>; from a form-bound server action it is always <code>303</code>; and from an action called over RPC the client router navigates to the target.</li>
     </ul>
     <p>In development, unhandled errors show the full stack trace in the browser. In production, only a generic "Something went wrong" message is shown, with no stack traces leaked to the client.</p>
 

@@ -19,7 +19,7 @@ import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits, refreshHeaderValue } from './context.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
-import { FORM_ACTION_ID_KEY, FORM_ACTION_FIELD } from '@webjsdev/core';
+import { FORM_ACTION_ID_KEY, FORM_ACTION_FIELD, isRedirect } from '@webjsdev/core';
 import { devImport } from './dev-import.js';
 import { formInput, isFormData } from './action-input.js';
 
@@ -322,7 +322,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // `method` is a default POST), so the first client call resolves from the
   // seed with no hydration round-trip. The browser-cache staleness check is
   // GET-only (only a GET is browser-cached).
-  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh',
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh', 'followActionRedirect as __redirect',
     // Streaming RPC (#489): an action returning a stream / async iterable sends
     // back a framed body; the stub decodes it into an async iterable the caller
     // `for await`s. The imports are small constants + one decoder factory.
@@ -343,6 +343,9 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // caught on the next read).
   lines.push(`async function __handle(res, fn, key, since) {`);
   lines.push(`  const inv = __tagHdr(res.headers.get('x-webjs-invalidate')); if (inv.length) __markStale(inv);`);
+  // redirect() in the action (Next parity): navigate there; the call's promise
+  // rejects with the redirect sentinel, which the page ignores unhandled.
+  lines.push(`  const rd = res.headers.get('x-webjs-redirect'); if (rd) return __redirect(rd);`);
   // revalidatePath() in the action: refresh the page on screen in place when
   // it was revalidated, BEFORE the caller's await resolves (Next behaviour).
   lines.push(`  const rf = res.headers.get('x-webjs-refresh'); if (rf) await __refresh(rf);`);
@@ -539,6 +542,7 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     }
     args = [v.value, ...args.slice(1)];
   }
+  let ranAction = false;
   try {
     // Run inside the request's AbortSignal scope (#492) and the per-action
     // middleware chain (#490): the chain wraps the action, can short-circuit
@@ -546,7 +550,6 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     // the action reads via actionContext(). `ranAction` distinguishes a real
     // action completion from a middleware short-circuit (the action never ran).
     const middleware = actionMiddleware(mod);
-    let ranAction = false;
     const result = await runWithActionSignal(req.signal, () =>
       runActionChain(middleware, { request: req, args, signal: req.signal }, () => { ranAction = true; return fn(...args); }));
     // Streaming result (#489): a COMPLETED action returning a ReadableStream /
@@ -586,6 +589,23 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     if (refresh) headers['x-webjs-refresh'] = refresh;
     return rpcResponse(result ?? null, { headers });
   } catch (e) {
+    // redirect() / permanentRedirect() in an action called over RPC (Next.js
+    // parity): not an error. The response tells the generated stub where to
+    // go (`x-webjs-redirect: <url>;<push|replace>`, push by default as in a
+    // Next server action), and the client router navigates there. A mutation
+    // that ran still evicts its `invalidates` tags and reports revalidatePath.
+    if (isRedirect(e)) {
+      const r = /** @type {any} */ (e);
+      /** @type {Record<string, string>} */
+      const headers = { 'x-webjs-redirect': `${String(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}` };
+      if (ranAction && method !== 'GET') {
+        const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+        if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
+      }
+      const refresh = refreshHeaderValue();
+      if (refresh) headers['x-webjs-refresh'] = refresh;
+      return rpcResponse(null, { headers: { ...headers, 'cache-control': 'no-store' } });
+    }
     if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }

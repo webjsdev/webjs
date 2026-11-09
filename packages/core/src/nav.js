@@ -59,9 +59,11 @@ export function unauthorized() {
  * each kind of redirect gets the conventional code:
  *   - thrown during a GET page/layout render (a gating redirect like an auth
  *     bounce to `/login`): 302 Found, the conventional GET-to-GET code.
- *   - thrown from a server action (a POST): 307 Temporary Redirect, which is
- *     method-preserving so the action's intent survives. (The PRG success
- *     path uses 303 separately.)
+ *   - thrown from a `route.ts` handler: 307 Temporary Redirect.
+ *   - thrown from a server action bound to a form: always 303 See Other, so
+ *     the browser follows with a GET and the action runs once (Next parity).
+ *   - thrown from a server action called over RPC: the client router
+ *     navigates to the target.
  * Pass an explicit status to override: `redirect('/x', 308)` (permanent) or the
  * options form `redirect('/x', { status: 301 })`. An explicit status wins at
  * every catching site.

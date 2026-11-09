@@ -46,10 +46,13 @@ export type Middleware = (req: Request, next: () => Promise<Response>) => Promis
  * so it is defined here (the one server-owned shared type).
  */
 export type ActionResult<T = unknown> =
-  | { success: true; data?: T; redirect?: string }
+  | { success: true; data?: T; redirect?: string; message?: string }
   | {
       success: false;
       error?: string;
+      /** Next.js's `{ errors }` spelling, read as a failure like `fieldErrors`. */
+      errors?: Record<string, string | string[]>;
+      message?: string;
       fieldErrors?: Record<string, string>;
       values?: Record<string, string>;
       status?: number;

@@ -346,6 +346,9 @@
     },
     "permanentRedirect": {
       "demo": "app/features/routing/legacy/page.ts"
+    },
+    "followActionRedirect": {
+      "exempt": "internal: RPC stub plumbing (redirect() in an action navigates)"
     }
   },
   "serverSpecifier": "@webjsdev/server",

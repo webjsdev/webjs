@@ -20,6 +20,8 @@ import {
 import { devImport } from '../dev-import.js';
 import { applySeoDefaults } from './seo.js';
 import { isControlFlowThrow } from '../action-error.js';
+import { readFlash, encodeFlash, FLASH_COOKIE } from '../action-flash.js';
+import { requestCookieStore } from '../context.js';
 
 
 /**
@@ -952,6 +954,22 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
  * @returns {Promise<Response>}
  */
 export async function ssrPage(route, params, url, opts) {
+  // A form action's result carried across its 303 (action-flash.js): shown
+  // once as actionData on the page the redirect lands on, then marked shown
+  // so a reload does not repeat it (it stays the next submission's prevState).
+  // Read BEFORE the HTML-cache lookup, since a page carrying actionData is
+  // never served from or written to the cache. A speculative prefetch never
+  // consumes it.
+  if (!opts.actionData && opts.req && opts.req.headers.get('x-webjs-prefetch') !== '1') {
+    const flash = await readFlash(opts.req);
+    if (flash && !flash.shown) {
+      opts = { ...opts, actionData: flash.result };
+      try {
+        const shown = await encodeFlash({ ...flash, shown: true });
+        if (shown) requestCookieStore().set(FLASH_COOKIE, shown, { httpOnly: true, sameSite: 'lax', maxAge: 60 });
+      } catch { /* no request scope (a direct ssrPage call): nothing to rewrite */ }
+    }
+  }
   // Server HTML response cache (ISR for no-build, #241). OPT-IN: only a page
   // that declares `export const revalidate = N` is ever cached (the page
   // module export is the single trigger). The page module is loaded ONCE up
