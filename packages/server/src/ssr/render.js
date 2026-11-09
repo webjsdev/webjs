@@ -533,6 +533,35 @@ function wrapLayoutsFor(route, boundaryFile) {
 }
 
 /**
+ * The metadata of a 404 / 403 / 401 page, resolved like a page's (#1686): the
+ * layouts that wrap the boundary, then the boundary file's own `metadata` or
+ * `generateMetadata`, so the title runs through the layouts' template and a
+ * layout's description and openGraph carry over, as in Next.js. The
+ * framework's default page (no boundary file) keeps its own `fallbackTitle`;
+ * a boundary file that names no title takes the layouts' default.
+ * @param {string | null} file
+ * @param {string} fallbackTitle
+ * @param {{ dev: boolean, route?: any, ctx?: Record<string, unknown>,
+ *   params?: Record<string, string>, url?: URL, onError?: (e: unknown) => void }} opts
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function boundaryMetadata(file, fallbackTitle, opts) {
+  const layouts = opts.route ? (file ? wrapLayoutsFor(opts.route, file) : opts.route.layouts || []) : [];
+  const metadataFiles = file ? [...layouts, file] : layouts;
+  const ctx = opts.ctx || boundaryCtx(opts.params, opts.url, undefined);
+  /** @type {Record<string, any>} */
+  let meta = {};
+  try {
+    meta = await collectMetadata(/** @type any */ ({ metadataFiles }), ctx, { dev: opts.dev, onError: opts.onError });
+  } catch {
+    // A control-flow throw from a layout's metadata cannot re-route an error
+    // page that is already the answer; the fallback title stands.
+  }
+  if (!file || meta.title === undefined) meta = { ...meta, title: file && meta.title !== undefined ? meta.title : fallbackTitle };
+  return meta;
+}
+
+/**
  * Marker for a throw that came from the LAYOUT-wrapping phase of a boundary
  * render, as opposed to the boundary's own tree (#1298). Non-enumerable, so it
  * never shows up in a serialized error, and best-effort: a frozen or primitive
@@ -768,6 +797,9 @@ async function ssrBoundaryHtml(file, heading, opts) {
   let body = `<h1>${heading}</h1>`;
   /** @type {string[]} */
   let moduleUrls = [];
+  // Whether the boundary module imported, so a broken one is reported once
+  // (by the render below) and not again by the metadata read.
+  let loaded = false;
   // No boundary FILE, but a route matched: the framework's own default page is
   // what renders, and it belongs inside the layouts just as a custom one does.
   // This is the COMMON case for 403 / 401, since most apps ship no
@@ -782,6 +814,7 @@ async function ssrBoundaryHtml(file, heading, opts) {
     const ctx = opts.ctx || boundaryCtx(opts.params, opts.url, undefined);
     try {
       const mod = await loadModule(file, opts.dev);
+      loaded = true;
       if (mod.default) {
         const tree = await mod.default(ctx);
         try {
@@ -858,7 +891,7 @@ async function ssrBoundaryHtml(file, heading, opts) {
   }
   const nonce = getNonce();
   return wrapInDocument(body, {
-    metadata: { title: heading.replace(/^\d+:\s*/, '') },
+    metadata: await boundaryMetadata(loaded ? file : null, heading.replace(/^\d+:\s*/, ''), opts),
     moduleUrls,
     dev: opts.dev,
     nonce,
@@ -879,10 +912,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   let body = '<h1>404: Not found</h1>';
   /** @type {string[]} */
   let moduleUrls = [];
-  // The boundary's own `metadata` / `generateMetadata` titles the page, as a
-  // `not-found.tsx` does in Next; "Not found" is only the fallback.
-  /** @type {Record<string, unknown>} */
-  let boundaryMeta = {};
+  let loaded = false;
   if (!notFoundFile && opts.route) {
     const wrapped = await defaultBoundaryInChain('<h1>404: Not found</h1>', opts);
     if (wrapped) { body = wrapped.body; moduleUrls = wrapped.moduleUrls; }
@@ -891,12 +921,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
     const ctx = opts.ctx || boundaryCtx(opts.params, opts.url, undefined);
     try {
       const mod = await loadModule(notFoundFile, opts.dev);
-      try {
-        const m = typeof mod.generateMetadata === 'function' ? await mod.generateMetadata(ctx) : mod.metadata;
-        if (m && typeof m === 'object') boundaryMeta = m;
-      } catch (metaErr) {
-        if (typeof opts.onError === 'function') { try { opts.onError(metaErr); } catch { /* a throwing sink must not affect the response */ } }
-      }
+      loaded = true;
       if (mod.default) {
         const tree = await mod.default(ctx);
         try {
@@ -938,7 +963,9 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   }
   const nonce = getNonce();
   return wrapInDocument(body, {
-    metadata: { title: 'Not found', ...boundaryMeta },
+    // The boundary's own `metadata` / `generateMetadata` over its layouts', as
+    // a `not-found.tsx` resolves in Next; "Not found" is only the fallback.
+    metadata: await boundaryMetadata(loaded ? notFoundFile : null, 'Not found', opts),
     moduleUrls,
     dev: opts.dev,
     nonce,

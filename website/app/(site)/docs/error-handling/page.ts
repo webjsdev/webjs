@@ -67,7 +67,7 @@ export default function ErrorPage({ error }: { error: Error &amp; { digest?: str
     <p>If <code>blog/error.ts</code> also throws, the parent <code>app/error.ts</code> catches it.</p>
 
     <h2>not-found.ts</h2>
-    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level, and the nearest one wins. As in Next.js, a 404 page (and a 403 or 401 one) carries <code>&lt;meta name="robots" content="noindex"&gt;</code> so search engines skip it, unless its metadata sets <code>robots</code> itself. As in Next.js, its own <code>metadata</code> or <code>generateMetadata</code> export titles the 404 page (<code>export const metadata = { title: 'Poll not found' }</code>); without one the title is "Not found":</p>
+    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level, and the nearest one wins. As in Next.js, a 404 page (and a 403 or 401 one) carries <code>&lt;meta name="robots" content="noindex"&gt;</code> so search engines skip it, unless its metadata sets <code>robots</code> itself. As in Next.js, its own <code>metadata</code> or <code>generateMetadata</code> export titles the 404 page (<code>export const metadata = { title: 'Poll not found' }</code>), resolved like a page's: the title runs through the layouts' <code>title.template</code> and their description carries over. Without a title of its own it takes the layouts' default, and with no <code>not-found.ts</code> at all the title is "Not found". <code>forbidden.ts</code> and <code>unauthorized.ts</code> follow the same rule:</p>
 
     <code-block>// app/not-found.ts
 import { html } from '@webjsdev/core';
