@@ -163,3 +163,62 @@ test('no-node-builtin-in-browser-module: a page, a .server file and an import ty
   }, 'no-node-builtin-in-browser-module');
   assert.deepEqual(v, []);
 });
+
+// ---------------------------------------------------------------------------
+// Server-only components (#1686): a component in a `.server` file renders on
+// the server and is never defined in the browser.
+// ---------------------------------------------------------------------------
+const SERVER_CARD = (extra = '', body = '<div class="card">${this.name}</div>') => `import { WebComponent, html } from '@webjsdev/core';
+${extra}
+export class UserCard extends WebComponent({ name: String }) {
+  render() { return html\`${body}\`; }
+}
+UserCard.register('user-card');
+`;
+const TABS = (body) => `import { WebComponent, html } from '@webjsdev/core';
+export class Tabs extends WebComponent { render() { return html\`${body}\`; } }
+Tabs.register('x-tabs');
+`;
+
+test('no-interactivity-in-server-component: an event, a signal or a client hook in a .server component is flagged', async () => {
+  for (const [label, src] of [
+    ['@click', SERVER_CARD('', '<button @click=${() => {}}>x</button>')],
+    ['signal', SERVER_CARD("import { signal } from '@webjsdev/core';")],
+    ['connectedCallback', SERVER_CARD().replace('  render()', '  connectedCallback() { super.connectedCallback(); }\n  render()')],
+  ]) {
+    const v = await hits({
+      'components/user-card.server.ts': src,
+      'app/page.ts': PAGE("import '../components/user-card.server.ts';", '<user-card name="Ada"></user-card>'),
+    }, 'no-interactivity-in-server-component');
+    assert.equal(v.length, 1, `${label} is flagged`);
+    assert.match(v[0].message, /server only/);
+  }
+});
+
+test('no-interactivity-in-server-component: a display-only .server component, or one with willUpdate, is fine', async () => {
+  const v = await hits({
+    'components/user-card.server.ts': SERVER_CARD().replace('  render()', '  willUpdate() {}\n  render()'),
+    'app/page.ts': PAGE("import '../components/user-card.server.ts';", '<user-card name="Ada"></user-card>'),
+  }, 'no-interactivity-in-server-component');
+  assert.deepEqual(v, []);
+});
+
+test('no-server-component-in-client-template: a client component rendering a server-only tag is flagged', async () => {
+  const v = await hits({
+    'components/user-card.server.ts': SERVER_CARD(),
+    'components/tabs.ts': TABS('<button @click=${() => {}}>t</button><user-card name="x"></user-card>'),
+    'app/page.ts': PAGE("import '../components/tabs.ts';\nimport '../components/user-card.server.ts';", '<x-tabs></x-tabs>'),
+  }, 'no-server-component-in-client-template');
+  assert.equal(v.length, 1);
+  assert.equal(v[0].file, join('components', 'tabs.ts'));
+  assert.match(v[0].fix, /slot/);
+});
+
+test('no-server-component-in-client-template: the page passing it in as a child (the slot composition) is fine', async () => {
+  const v = await hits({
+    'components/user-card.server.ts': SERVER_CARD(),
+    'components/tabs.ts': TABS('<button @click=${() => {}}>t</button><slot></slot>'),
+    'app/page.ts': PAGE("import '../components/tabs.ts';\nimport '../components/user-card.server.ts';", '<x-tabs><user-card name="Ada"></user-card></x-tabs>'),
+  }, 'no-server-component-in-client-template');
+  assert.deepEqual(v, []);
+});

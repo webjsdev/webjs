@@ -14,7 +14,7 @@ import { builtinModules } from 'node:module';
 import { relative } from 'node:path';
 
 import { maskComments, redactToPlaceholders } from '../js-scan.js';
-import { EVENT_BINDING_RE } from '../component-elision.js';
+import { EVENT_BINDING_RE, REACTIVE_IMPORTS, extractRenderedTags } from '../component-elision.js';
 
 /**
  * @typedef {import('./rules.js').Violation} Violation
@@ -22,6 +22,15 @@ import { EVENT_BINDING_RE } from '../component-elision.js';
  */
 
 const BUILTINS = new Set(builtinModules);
+const SERVER_FILE_RE = /\.server\.m?[jt]s$/;
+/** A registration with a literal tag: `X.register('tag')` or `customElements.define('tag', X)`. */
+const REGISTER_RE = /(?:\.register|customElements\.define)\(\s*(['"])([a-z][a-z0-9]*-[a-z0-9-]*)\1/g;
+/** Lifecycle hooks that only ever run in a browser (`willUpdate` also runs during SSR, so it is not here). */
+const CLIENT_ONLY_HOOKS = ['connectedCallback', 'disconnectedCallback', 'attributeChangedCallback', 'adoptedCallback',
+  'firstUpdated', 'updated', 'renderFallback', 'scheduleUpdate', 'performUpdate'];
+const HOOK_RE = new RegExp(`^\\s*(?:async\\s+)?(${CLIENT_ONLY_HOOKS.join('|')})\\s*\\(`, 'm');
+/** A named import of a reactive primitive from core: `import { signal } from '@webjsdev/core'`. */
+const CORE_NAMED_IMPORT_RE = /import\s*\{([^}]*)\}\s*from\s*['"]@webjsdev\/core(?:\/[a-z-]+)?['"]/g;
 /** A `'use client'` directive in a module's prologue (comments and blank lines may precede it). */
 const USE_CLIENT_RE = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*(['"])use client\1\s*;?/;
 const IMPORT_RE = /(?:^|[;\n])\s*(?:import|export)\s+(type\s+)?(?:[^'"`;]*?\s+from\s+)?['"]__STR_(\d+)__['"]/g;
@@ -55,6 +64,15 @@ const lineOf = (src, index) => src.slice(0, index).split('\n').length;
  */
 export function checkRouteModuleBoundaries(appDir, files, violations, ctx) {
   const { routeFiles, componentFiles, moduleGraph, shipped } = ctx;
+  // Tags registered by components in `*.server.*` files: rendered on the
+  // server, never defined in the browser (#1686).
+  /** @type {Map<string, string>} tag -> the file that registers it */
+  const serverTags = new Map();
+  for (const { rel, content } of files) {
+    if (!SERVER_FILE_RE.test(rel) || !/extends\s+WebComponent\b/.test(content)) continue;
+    for (const m of maskComments(content).matchAll(REGISTER_RE)) serverTags.set(m[2], rel);
+    checkServerComponent(rel, content, violations);
+  }
   for (const { abs, rel, content } of files) {
     if (routeFiles.has(abs)) {
       // --- no-use-client-in-route-module ---
@@ -93,6 +111,20 @@ export function checkRouteModuleBoundaries(appDir, files, violations, ctx) {
       }
     }
     if (!shipped.has(abs) || routeFiles.has(abs)) continue;
+    // --- no-server-component-in-client-template ---
+    if (serverTags.size) {
+      for (const tag of extractRenderedTags(content)) {
+        const owner = serverTags.get(tag);
+        if (!owner) continue;
+        violations.push({
+          rule: 'no-server-component-in-client-template',
+          file: rel,
+          message: `This module loads in the browser and renders <${tag}>, a server-only component (${owner}). It is never defined in the browser, so it renders on the server and comes back empty after a client re-render, the reason Next.js does not let a client component render a server component.`,
+          fix: `Render <${tag}> from the page and pass it into this component as a child (it lands in the component's <slot>), as Next.js passes a server component to a client one as children. Or, if it needs to run in the browser, move it out of the .server file.`,
+        });
+        break;
+      }
+    }
     // --- no-route-module-import-in-browser-module ---
     for (const dep of moduleGraph.get(abs) || []) {
       if (!routeFiles.has(dep)) continue;
@@ -119,4 +151,36 @@ export function checkRouteModuleBoundaries(appDir, files, violations, ctx) {
       break;
     }
   }
+}
+
+/**
+ * `no-interactivity-in-server-component`: a component in a `*.server.*` file
+ * renders on the server only and is never defined in the browser (#1686), so
+ * an event binding, a reactive primitive or a client-only lifecycle hook in it
+ * never runs.
+ * @param {string} rel @param {string} content @param {Violation[]} violations
+ */
+function checkServerComponent(rel, content, violations) {
+  const masked = maskComments(content);
+  /** @type {string|null} */
+  let what = null;
+  const binding = firstTagBinding(masked);
+  if (binding) what = `\`${binding.text.replace(/\s*=.*$/, '')}\` (line ${lineOf(masked, binding.index)})`;
+  if (!what) {
+    for (const m of masked.matchAll(CORE_NAMED_IMPORT_RE)) {
+      const name = m[1].split(',').map((x) => x.trim().split(/\s+as\s+/)[0].replace(/^type\s+/, '')).find((x) => REACTIVE_IMPORTS.has(x));
+      if (name) { what = `\`${name}\``; break; }
+    }
+  }
+  if (!what) {
+    const hook = HOOK_RE.exec(masked);
+    if (hook) what = `\`${hook[1]}()\``;
+  }
+  if (!what) return;
+  violations.push({
+    rule: 'no-interactivity-in-server-component',
+    file: rel,
+    message: `This component is in a \`.server\` file, so it renders on the server only and is never defined in the browser, but it uses ${what}, which only runs in a browser.`,
+    fix: 'Move the component out of the `.server` file (a component in an ordinary file always ships and runs in the browser), and keep its server data access in a `\'use server\'` action or pass the data in from the page.',
+  });
 }

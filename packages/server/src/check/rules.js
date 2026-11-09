@@ -122,6 +122,16 @@ export const RULES = [
       'Flags `<form action=${someAction}>` bound to a `\'use server\'` action whose file declares `export const method = \'GET\'` (#488). A GET action is a READ: it is CSRF-exempt and rides its arguments in the url, while a form submission is a CSRF-checked POST carrying a body, so the two contracts contradict each other and the submission is answered with a 405 at runtime. The rule reads the imported action\'s own file, so it only fires when the binding really does resolve to a GET-declared action. Fix by dropping the `method` export (an action with no `method` is a POST, which is what a form wants) or by binding a different action; if the form really is a read, use a plain `<form method="get" action="/search">` with no bound action.',
   },
   {
+    name: 'no-interactivity-in-server-component',
+    description:
+      'Flags a component in a `*.server.{ts,js}` file that uses an event binding, a reactive primitive (`signal`, `Task`, ...) or a client-only lifecycle hook (`connectedCallback`, `firstUpdated`, ...). A component in a `.server` file renders on the server only and is never defined in the browser, so that code never runs. Move it to an ordinary file, where a component always ships.',
+  },
+  {
+    name: 'no-server-component-in-client-template',
+    description:
+      'Flags a module that loads in the browser (a component or anything it imports) rendering the tag of a component defined in a `*.server.{ts,js}` file. That tag is never defined in the browser, so it renders on the server and comes back empty after a client re-render, which is why Next.js does not let a client component render a server component. Render it from the page and pass it in as a child, where it lands in the component\'s `<slot>`.',
+  },
+  {
     name: 'no-use-client-in-route-module',
     description:
       "Flags a `'use client'` directive at the top of a page, layout or boundary, the Next.js way to make a page interactive. In WebJs a route module is always a server component and the client part is a component, so the directive does nothing there. Move the interactive part into a component (`components/my-widget.ts`, Lit's APIs) and render its tag from the page. A `'use client'` in a component file is left alone, since a component already runs on the client.",

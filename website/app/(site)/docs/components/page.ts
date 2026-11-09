@@ -19,6 +19,29 @@ export default function Components() {
       <li><strong>Talk to an ancestor with a bubbling event, and to a stranger with a module-scope signal.</strong> A made-up event name on <code>document</code> is a global variable with extra steps.</li>
     </ul>
 
+    <h2 id="server-only">Server-only components</h2>
+    <p>A component runs in the browser, as in Lit: it always ships. Markup that only the server should render is written one of two ways, the same split Next.js draws between client and server components.</p>
+    <ul>
+      <li><strong>Needs the browser</strong> (state, events, lifecycle): a <code>WebComponent</code> in an ordinary file. It always ships and hydrates.</li>
+      <li><strong>Server only, as a custom element</strong>: a <code>WebComponent</code> in a <code>*.server.ts</code> file. It renders on the server and is never defined in the browser, so it costs no JavaScript and may import server code directly.</li>
+      <li><strong>Server only, as a function</strong>: a function returning <code>html</code>, called from a page or layout. It may be <code>async</code> and query the database, like a Next.js server component, and it never ships.</li>
+    </ul>
+    <code-block>// components/user-card.server.ts: renders on the server, ships nothing
+import { WebComponent, html } from '@webjsdev/core';
+import { getUser } from '#modules/users/queries.server.ts';
+
+export class UserCard extends WebComponent({ id: String }) {
+  async render() {
+    const user = await getUser(this.id);
+    return html\`&lt;div class="card"&gt;&lt;b&gt;\${user.name}&lt;/b&gt;&lt;/div&gt;\`;
+  }
+}
+UserCard.register('user-card');</code-block>
+    <p>The Next.js rules carry over. A page may render either kind. A client component may not import a server-only one (it would load a stub) or render its tag in its own template (the tag is never defined in the browser, so it comes back empty after a client re-render). Pass it in as a child instead, from the page, and it lands in the client component's <code>&lt;slot&gt;</code>, as Next.js passes a server component to a client one as <code>children</code>:</p>
+    <code-block>// app/users/[id]/page.ts
+return html\`&lt;x-tabs&gt;&lt;user-card id=\${id}&gt;&lt;/user-card&gt;&lt;/x-tabs&gt;\`;</code-block>
+    <p><code>webjs check</code> refuses the shapes that would silently do nothing: an event binding, a reactive primitive or a client-only lifecycle hook in a <code>.server</code> component (<code>no-interactivity-in-server-component</code>), and a server-only tag rendered from a client component's template (<code>no-server-component-in-client-template</code>).</p>
+
     <h2>How big should a component be?</h2>
     <p>The rules above say what must not be split apart. They do not say how much to pull in, and read alone they push one way only, since there is always more surrounding markup a component could render. The stopping rule: <strong>a component owns the markup its own behaviour reads or writes.</strong> Static markup that no handler touches, no state change re-renders, and no template hole depends on belongs to the page.</p>
     <p>This is a byte-cost rule rather than a taste one. A page never hydrates, so markup it renders is free in the browser. Markup a component renders is not: the module is fetched, <code>@webjsdev/core</code> comes with it, and on upgrade the component re-renders that subtree. Moving static markup across the boundary turns free HTML into shipped JavaScript that rebuilds what the server already sent.</p>
