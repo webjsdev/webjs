@@ -395,7 +395,7 @@ function clearInstance(inst, container) {
       const prev = /** @type any */ (p).lastTarget;
       if (prev) {
         if (typeof prev === 'function') {
-          try { prev(undefined); } catch {}
+          try { prev.call(/** @type any */ (p).refHost, undefined); } catch {}
         } else if (typeof prev === 'object') {
           try { prev.value = undefined; } catch {}
         }

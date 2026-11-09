@@ -80,6 +80,11 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  *   `attribute` names one). Useful when you want
  *   CSS attribute selectors like `my-el[mode="dark"]` to work.
  *
+ * @property {boolean} [useDefault]
+ *   Lit's `useDefault`: the property's first value is its default. That
+ *   value is not reflected, and removing the attribute restores it instead
+ *   of the converter's `null`.
+ *
  * @property {boolean} [state]
  *   When `true`, the property is *internal-only*: it is NOT exposed as an
  *   HTML attribute (excluded from `observedAttributes`) and never reflects.
@@ -624,6 +629,7 @@ class WebComponentBase extends Base {
         // attribute (attributeChangedCallback runs later) overrides it.
         this.__propValues[propName] =
           typeof d.default === 'function' ? d.default() : d.default;
+        if (d.useDefault) (this.__defaultValues ??= new Map()).set(propName, this.__propValues[propName]);
       }
     }
   }
@@ -1172,10 +1178,16 @@ class WebComponentBase extends Base {
     // precedence and every fallback are shared rather than mirrored (#1340).
     // It takes an already-decoded value, which the DOM has done here and
     // `decodeAttrEntities` does at the SSR call site (#1341).
-    const v = readAttributeValue(def, value, propName);
+    let v = readAttributeValue(def, value, propName);
+    if (v == null && def.useDefault && this.__defaultValues?.has(propName)) v = this.__defaultValues.get(propName);
 
     if (this[propName] !== v) {
-      this[propName] = v;
+      this.__attributeToProperty = propName;
+      try {
+        this[propName] = v;
+      } finally {
+        this.__attributeToProperty = undefined;
+      }
       if (this._connected) this.requestUpdate();
     }
   }
@@ -1197,12 +1209,24 @@ class WebComponentBase extends Base {
       const decl = options ?? /** @type {any} */ (this.constructor).getPropertyOptions(name);
       const hasChanged = decl.hasChanged || defaultHasChanged;
       const value = /** @type {any} */ (this)[name];
-      if (!hasChanged(value, oldValue)) return;
+      // Lit's `useDefault`: the first value written is the default, recorded
+      // and neither counted as a change nor reflected.
+      if (decl.useDefault && !(this.__defaultValues ??= new Map()).has(name)) {
+        this.__defaultValues.set(name, oldValue !== undefined ? oldValue : value);
+        if (oldValue === undefined) { this._scheduleUpdate(); return; }
+      }
+      // Writing the unreflected default back IS a change when the attribute
+      // is absent, since it now reflects (Lit's corner case).
+      const attrName = decl.useDefault && decl.reflect ? attributeNameFor(name, decl) : undefined;
+      const restoresDefault = attrName !== undefined
+        && Object.is(value, this.__defaultValues?.get(name)) && !this.hasAttribute(attrName);
+      if (!hasChanged(value, oldValue) && !restoresDefault) return;
       if (!this._changedProperties.has(name)) this._changedProperties.set(name, oldValue);
       // Reflect to the attribute if requested (_reflectAttribute skips a prop
       // with no attribute: `state: true` or `attribute: false`). Disconnected,
-      // it waits for the next update.
-      if (decl.reflect) {
+      // it waits for the next update. A value just read FROM the attribute is
+      // never written back to it.
+      if (decl.reflect && this.__attributeToProperty !== name) {
         if (this._connected) this._reflectAttribute(name, value, decl);
         else (this.__reflectPending ??= new Set()).add(name);
       }
@@ -1540,6 +1564,7 @@ class WebComponentBase extends Base {
     for (const name of Object.keys(props)) {
       const decl = props[name];
       if (!decl || !decl.reflect) continue;
+      if (decl.useDefault && this.__defaultValues?.has(name) && Object.is(this[name], this.__defaultValues.get(name))) continue;
       this._reflectAttribute(name, this[name], decl);
     }
   }

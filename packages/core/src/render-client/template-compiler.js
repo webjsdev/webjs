@@ -38,7 +38,7 @@ export const INSTANCE = Symbol.for('webjs.instance');
  *   | { kind: 'event', el: Element, name: string, handler: (EventListenerOrEventListenerObject & AddEventListenerOptions) | null, eventHost?: object, dispatcher: (e: Event) => void }
  *   | { kind: 'prop', el: Element, name: string }
  *   | { kind: 'bool', el: Element, name: string }
- *   | { kind: 'element', el: Element, lastTarget?: any }
+ *   | { kind: 'element', el: Element, lastTarget?: any, refHost?: object }
  *   | { kind: 'slot', slotEl: HTMLSlotElement, applied: boolean }
  *   | { kind: 'noop' }
  * } BoundPart

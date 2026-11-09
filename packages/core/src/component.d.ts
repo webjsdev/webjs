@@ -48,6 +48,11 @@ export interface PropertyDeclaration<T = unknown> {
    * `this.requestUpdate(name, oldValue)` itself (Lit's `noAccessor`).
    */
   noAccessor?: boolean;
+  /**
+   * Lit's `useDefault`: the first value is the default. It is not reflected,
+   * and removing the attribute restores it instead of `null`.
+   */
+  useDefault?: boolean;
   /** Custom dirty check. Return `true` to schedule an update. */
   hasChanged?: (newValue: T, oldValue: T) => boolean;
   /** Initial value, or a function called per instance for a fresh object / array. */

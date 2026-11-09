@@ -69,7 +69,7 @@ html\`&lt;div&gt;\${templateContent(tpl)}&lt;/div&gt;\`;</code-block>
   render() { return html\`&lt;input \${ref(this._input)}&gt;\`; }
   firstUpdated() { this._input.value?.focus(); }
 }</code-block>
-    <p>Pass a callback instead of a Ref object to receive the element directly: <code>\${ref((el) =&gt; this._captureEl(el))}</code>.</p>
+    <p>Pass a callback instead of a Ref object to receive the element directly: <code>\${ref((el) =&gt; this._captureEl(el))}</code>. A method passed as the callback is called with the rendering component as <code>this</code>, as in Lit, so <code>\${ref(this.captureEl)}</code> works unbound.</p>
 
     <h2>cache(value)</h2>
     <p>Retain detached DOM when toggling between sub-templates. When the inner value's template <code>strings</code> match a previously-rendered template at this position, the renderer re-attaches the stashed nodes and reconciles values instead of creating fresh DOM. Preserves input state, scroll position, and focus across "tab"-style toggles.</p>

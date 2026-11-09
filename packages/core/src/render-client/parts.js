@@ -182,7 +182,7 @@ export function bindPart(p, root) {
   if (p.kind === 'attr-mixed') return { kind: 'attr-mixed', el, name: p.name || '', statics: p.statics || [], group: p.group || [] };
   if (p.kind === 'prop') return { kind: 'prop', el, name: p.name || '' };
   if (p.kind === 'bool') return { kind: 'bool', el, name: p.name || '' };
-  if (p.kind === 'element') return { kind: 'element', el };
+  if (p.kind === 'element') return { kind: 'element', el, refHost: currentRenderHost };
   if (p.kind === 'slot') {
     const slotEl = /** @type {HTMLSlotElement} */ (el);
     // Defer fallback-strip and SLOT_FALLBACK_FRAG installation to apply
@@ -867,7 +867,7 @@ export function applyElement(part, value) {
 
   if (refChanged && prevTarget) {
     if (typeof prevTarget === 'function') {
-      try { prevTarget(undefined); } catch {}
+      try { prevTarget.call(partAny.refHost, undefined); } catch {}
     } else if (typeof prevTarget === 'object') {
       prevTarget.value = undefined;
     }
@@ -880,9 +880,9 @@ export function applyElement(part, value) {
         // Same callback now pointing at a different element: deliver
         // an `undefined` cleanup for the prior element first.
         if (!refChanged && partAny.__refElement !== undefined) {
-          try { nextTarget(undefined); } catch {}
+          try { nextTarget.call(partAny.refHost, undefined); } catch {}
         }
-        try { nextTarget(part.el); } catch {}
+        try { nextTarget.call(partAny.refHost, part.el); } catch {}
       } else if (typeof nextTarget === 'object') {
         nextTarget.value = part.el;
       }
@@ -1402,7 +1402,7 @@ export function disposeInstance(inst) {
       const prev = /** @type any */ (p).lastTarget;
       if (prev) {
         if (typeof prev === 'function') {
-          try { prev(undefined); } catch {}
+          try { prev.call(/** @type any */ (p).refHost, undefined); } catch {}
         } else if (typeof prev === 'object') {
           try { prev.value = undefined; } catch {}
         }
