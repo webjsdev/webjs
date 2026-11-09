@@ -6,6 +6,7 @@ import { isCSS, adoptStyles } from '../css.js';
 import { register, tagOf } from '../registry.js';
 import { parse as deserializeProp } from '../serialize.js';
 import { Signal } from '../signal.js';
+import { noChange } from '../sentinels.js';
 import {
   captureAuthoredChildren,
   adoptSSRAssignments,
@@ -166,6 +167,15 @@ class WebComponentBase extends Base {
   static shadow = false;
 
   /**
+   * Lit's `shadowRootOptions`: the options `createRenderRoot()` passes to
+   * `attachShadow()`, and the attributes the server writes on the Declarative
+   * Shadow DOM template (`delegatesFocus`, `clonable`, `serializable`, and a
+   * `closed` mode). Read only with `static shadow = true`.
+   * @type {ShadowRootInit}
+   */
+  static shadowRootOptions = { mode: 'open' };
+
+  /**
    * Hydration strategy for this component.
    *
    * **AI hint:** Set `static hydrate = 'visible'` to defer client-side
@@ -224,6 +234,41 @@ class WebComponentBase extends Base {
   }
 
   /**
+   * The node `render()` commits into, Lit's `renderRoot`: the element itself
+   * for a light-DOM component, its shadow root for `static shadow = true`.
+   * Undefined until the element first connects, and always undefined at SSR,
+   * which has no DOM. Query rendered children through it
+   * (`this.renderRoot.querySelector('input')`) so the same line works in
+   * either mode.
+   * @type {HTMLElement | ShadowRoot | DocumentFragment | undefined}
+   */
+  get renderRoot() {
+    return this._renderRoot;
+  }
+
+  set renderRoot(value) {
+    this._renderRoot = value;
+  }
+
+  /**
+   * True once the component has completed its first update, Lit's
+   * `hasUpdated`. It is still false inside the first `willUpdate()` and
+   * `render()`, and true from `firstUpdated()` on.
+   * @type {boolean}
+   */
+  get hasUpdated() {
+    return !!this.__firstRendered;
+  }
+
+  /**
+   * True while an update is queued or running, Lit's `isUpdatePending`.
+   * @type {boolean}
+   */
+  get isUpdatePending() {
+    return this._scheduled || this._isUpdating;
+  }
+
+  /**
    * Returns the list of attribute names the browser should observe.
    * Properties with `state: true` or `attribute: false` are excluded: they
    * do not correspond to any HTML attribute.
@@ -241,7 +286,13 @@ class WebComponentBase extends Base {
 
   constructor() {
     super();
-    this._renderRoot = null;
+    /**
+     * The node `render()` commits into: the element itself for light DOM, its
+     * shadow root for shadow DOM. Undefined until the element connects (and at
+     * SSR, where nothing is connected), as in Lit.
+     * @type {HTMLElement | ShadowRoot | DocumentFragment | undefined}
+     */
+    this._renderRoot = undefined;
     this._scheduled = false;
     this._connected = false;
 
@@ -572,26 +623,27 @@ class WebComponentBase extends Base {
     if (Ctor.shadow !== true && !this.hasAttribute('data-wj-host')) {
       this.setAttribute('data-wj-host', '');
     }
-    if (Ctor.shadow === true) {
-      const hadSSRShadow = !!this.shadowRoot;
-      if (!this.shadowRoot) {
-        /** @type any */ (this).attachShadow({ mode: 'open' });
+    // Lit's `createRenderRoot()`, called once per element. The server renders
+    // from `static shadow` alone (it has no DOM to call this against), so a
+    // root that contradicts it would hydrate against markup of the other kind:
+    // refuse that loudly instead.
+    if (this._renderRoot === undefined) {
+      const root = this.createRenderRoot();
+      const isShadowRoot = typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot;
+      if (isShadowRoot !== (Ctor.shadow === true)) {
+        const name = tagOf(Ctor) || this.tagName?.toLowerCase();
+        throw new Error(
+          isShadowRoot
+            ? `[webjs] <${name}> createRenderRoot() returned a shadow root, but the class does not declare \`static shadow = true\`. ` +
+              `WebJs renders on the server from \`static shadow\`, so add \`static shadow = true\` (with \`static shadowRootOptions\` for the ` +
+              `attachShadow options) and drop the override, or call \`super.createRenderRoot()\` from it.`
+            : `[webjs] <${name}> declares \`static shadow = true\`, but createRenderRoot() returned something other than a shadow root. ` +
+              `Return \`super.createRenderRoot()\` from the override, or remove \`static shadow = true\` to render into light DOM.`,
+        );
       }
-      this._renderRoot = this.shadowRoot;
-      const styles = Ctor.styles;
-      const list = Array.isArray(styles) ? styles : isCSS(styles) ? [styles] : [];
-      if (list.length) {
-        // If the shadow root came from Declarative Shadow DOM (SSR), it
-        // contains an inline <style> tag. Remove it before switching to
-        // adoptedStyleSheets to avoid duplicate styles.
-        if (hadSSRShadow) {
-          const ssrStyle = this.shadowRoot.querySelector('style');
-          if (ssrStyle) ssrStyle.remove();
-        }
-        adoptStyles(this._renderRoot, list);
-      }
-    } else {
-      this._renderRoot = this;
+      this._renderRoot = root;
+    }
+    if (Ctor.shadow !== true && this._renderRoot === this) {
       // Light DOM: static styles is not supported (no shadow root for
       // adoptedStyleSheets). Warn if the developer set both.
       if (Ctor.styles) {
@@ -629,7 +681,13 @@ class WebComponentBase extends Base {
       // native DOM writes on a mounted host live (appendChild, slot= flips,
       // innerHTML, HTMLSlotElement.assign), so light-DOM slots match shadow DOM
       // through the standard API.
-      if (hasSlotState(this)) {
+      if (this.render === WebComponentBase.prototype.render) {
+        // A render-less component (no `render()` override). Lit's default
+        // `render()` returns `noChange`, so its children are never touched:
+        // there is no template to project them into, so they are neither
+        // captured nor intercepted, and the commit leaves them in place.
+        this.removeAttribute('data-wj-serialized');
+      } else if (hasSlotState(this)) {
         // (a) Reconnection. Record already populated. Sweep any direct child
         //     added by a raw bypass write while the host was disconnected (no
         //     sensor was live to catch it), then re-arm the sensors below.
@@ -662,8 +720,10 @@ class WebComponentBase extends Base {
       // mounted light host drive the slot record, restoring full shadow-DOM
       // parity through the standard DOM API. Interception installs once;
       // sensors are armed on every connect and torn down on disconnect.
-      installSlotInterception(this);
-      installSlotSensors(this);
+      if (hasSlotState(this)) {
+        installSlotInterception(this);
+        installSlotSensors(this);
+      }
     }
 
     // Notify all controllers that the host is connected.
@@ -690,19 +750,109 @@ class WebComponentBase extends Base {
         this._updateResolve = resolve;
       });
     }
+    // Lit's `enableUpdating(requestedUpdate)` hook: called once the element is
+    // ready to update, before the first update is queued.
+    this.enableUpdating(true);
+    if (this._scheduled) return;
     this._scheduled = true;
-    queueMicrotask(() => {
-      this._scheduled = false;
-      try {
-        this._performRender();
-      } catch (err) {
-        console.error(`[webjs] lifecycle hook threw during initial render:`, err);
+    // The renderer's slot parts place the record content as part of the
+    // commit; native DOM writes on the host (appendChild, slot= flips,
+    // innerHTML) drive the record live through the interception + sensors
+    // installed on connect. There is no WebJs-specific slot API.
+    queueMicrotask(() => this._runScheduledUpdate('initial render'));
+  }
+
+  /**
+   * The microtask both scheduling sites queue: hand the update to
+   * `scheduleUpdate()` (Lit's override point for WHEN an update runs) and
+   * surface a throw, or the rejection of an async override, as a console
+   * error instead of bricking the element. `_performRender` already resets
+   * `_isUpdating` and settles `updateComplete` in its own `finally` blocks.
+   * @param {string} phase
+   * @private
+   */
+  _runScheduledUpdate(phase) {
+    try {
+      const r = this.scheduleUpdate();
+      if (r && typeof (/** @type {any} */ (r).then) === 'function') {
+        /** @type {Promise<unknown>} */ (r).then(undefined, (err) => {
+          console.error(`[webjs] lifecycle hook threw during ${phase}:`, err);
+        });
       }
-      // The renderer's slot parts place the record content as part of the
-      // commit; native DOM writes on the host (appendChild, slot= flips,
-      // innerHTML) drive the record live through the interception + sensors
-      // installed on connect. There is no WebJs-specific slot API.
-    });
+    } catch (err) {
+      console.error(`[webjs] lifecycle hook threw during ${phase}:`, err);
+    }
+  }
+
+  /**
+   * Lit's `scheduleUpdate()`: called from the update microtask to run the
+   * pending update. Override it to change WHEN an update runs, for example to
+   * wait for a frame, and call `super.scheduleUpdate()` (or
+   * `this.performUpdate()`) when it should run. `updateComplete` waits for it.
+   *
+   * ```js
+   * async scheduleUpdate() {
+   *   await new Promise((r) => requestAnimationFrame(r));
+   *   super.scheduleUpdate();
+   * }
+   * ```
+   *
+   * @returns {void | Promise<unknown>}
+   */
+  scheduleUpdate() {
+    return this.performUpdate();
+  }
+
+  /**
+   * Lit's `performUpdate()`: run the pending update now, synchronously. Does
+   * nothing when no update is pending, so calling it to flush a queued update
+   * early is safe.
+   * @returns {void}
+   */
+  performUpdate() {
+    if (!this._scheduled) return;
+    this._scheduled = false;
+    this._performRender();
+  }
+
+  /**
+   * Lit's `enableUpdating(requestedUpdate)` hook, called when the element
+   * connects, right before its first update is queued. The default does
+   * nothing.
+   * @param {boolean} _requestedUpdate
+   */
+  enableUpdating(_requestedUpdate) {}
+
+  /**
+   * Lit's `createRenderRoot()`: create the node `render()` commits into. The
+   * default returns the element itself for a light-DOM component, and for
+   * `static shadow = true` the shadow root, attached with
+   * `static shadowRootOptions` (default `{ mode: 'open' }`) unless the server
+   * already rendered one as Declarative Shadow DOM, with `static styles`
+   * adopted into it. Override it for Lit's `createRenderRoot() { return this; }`
+   * (already the default) or to post-process the root; a shadow root is
+   * accepted only with `static shadow = true`, because the server renders
+   * from that flag.
+   * @returns {HTMLElement | ShadowRoot | DocumentFragment}
+   */
+  createRenderRoot() {
+    const Ctor = /** @type any */ (this.constructor);
+    if (Ctor.shadow !== true) return this;
+    const existing = this.shadowRoot;
+    const root = existing ?? /** @type any */ (this).attachShadow(Ctor.shadowRootOptions ?? { mode: 'open' });
+    const styles = Ctor.styles;
+    const list = Array.isArray(styles) ? styles : isCSS(styles) ? [styles] : [];
+    if (list.length) {
+      // A shadow root that came from Declarative Shadow DOM (SSR) carries the
+      // inline <style> the server emitted. Remove it before switching to
+      // adoptedStyleSheets so the rules are not applied twice.
+      if (existing) {
+        const ssrStyle = existing.querySelector('style');
+        if (ssrStyle) ssrStyle.remove();
+      }
+      adoptStyles(root, list);
+    }
+    return root;
   }
 
   /**
@@ -827,19 +977,11 @@ class WebComponentBase extends Base {
     if (this._isUpdating) return;
     if (this._scheduled || !this._connected) return;
     this._scheduled = true;
-    queueMicrotask(() => {
-      this._scheduled = false;
-      try {
-        this._performRender();
-      } catch (err) {
-        // _performRender wraps the update phase in try/finally so this
-        // catches throws from shouldUpdate / willUpdate / hostUpdate /
-        // hostUpdated / firstUpdated / updated. The component is not
-        // left in a bad state (the finally blocks reset _isUpdating and
-        // resolve updateComplete). Surface the error for visibility.
-        console.error(`[webjs] lifecycle hook threw during update cycle:`, err);
-      }
-    });
+    // _performRender wraps the update phase in try/finally, so a throw from
+    // shouldUpdate / willUpdate / hostUpdate / hostUpdated / firstUpdated /
+    // updated leaves the component in a good state; the wrapper only
+    // surfaces it.
+    queueMicrotask(() => this._runScheduledUpdate('update cycle'));
   }
 
   /**
@@ -1390,7 +1532,7 @@ class WebComponentBase extends Base {
    *
    * ```js
    * firstUpdated(changedProperties) {
-   *   this.shadowRoot.querySelector('input')?.focus();
+   *   this.renderRoot.querySelector('input')?.focus();
    * }
    * ```
    *
@@ -1492,11 +1634,13 @@ class WebComponentBase extends Base {
   }
 
   /**
-   * Override in subclasses to return a TemplateResult.
+   * Override in subclasses to return a TemplateResult. The default returns
+   * `noChange`, as Lit's does, so a component with no `render()` leaves its
+   * children exactly as they are, on the server and in the browser.
    * @returns {unknown}
    */
   render() {
-    return '';
+    return noChange;
   }
 
   /**

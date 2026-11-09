@@ -21,7 +21,7 @@ export default function Lifecycle() {
     </ol>
 
     <h2>render()</h2>
-    <p>The template the component should produce for the current state. Returns a <code>TemplateResult</code> via the <code>html</code> tag.</p>
+    <p>The template the component should produce for the current state. Returns a <code>TemplateResult</code> via the <code>html</code> tag. The default <code>render()</code> returns <code>noChange</code>, as Lit's does, so a component that never overrides it leaves its children exactly as the page wrote them, on the server and in the browser (a behaviour-only component that wires listeners onto its children).</p>
     <code-block>render() {
   return html\`
     &lt;p&gt;\${this.filtered.length} active items&lt;/p&gt;
@@ -57,16 +57,26 @@ export default function Lifecycle() {
     <h2>firstUpdated(changedProperties)</h2>
     <p>Runs once, after the first render. Use for one-time DOM-dependent setup: focus, measurements, third-party library init on a DOM node. The <code>changedProperties</code> Map on the first render contains every reactive property that has a value, with <code>undefined</code> as the old value.</p>
     <code-block>firstUpdated() {
-  this.shadowRoot?.querySelector('input')?.focus();
-  this._chart = new Chart(this.shadowRoot.querySelector('canvas'));
+  this.renderRoot.querySelector('input')?.focus();
+  this._chart = new Chart(this.renderRoot.querySelector('canvas'));
 }</code-block>
-    <p><code>connectedCallback</code> fires <em>before</em> the first render, so shadow children don't exist there yet. <code>firstUpdated</code> is the post-render equivalent.</p>
+    <p><code>connectedCallback</code> fires <em>before</em> the first render, so rendered children don't exist there yet. <code>firstUpdated</code> is the post-render equivalent.</p>
+
+    <h2>renderRoot</h2>
+    <p><code>this.renderRoot</code> is the node <code>render()</code> commits into: the element itself for a light-DOM component, its shadow root for <code>static shadow = true</code>. Query rendered children through it, so the same line works in either mode. It is <code>undefined</code> until the element first connects, and always <code>undefined</code> at SSR, which has no DOM.</p>
 
     <h2>updateComplete (and getUpdateComplete)</h2>
     <p>A Promise that resolves after the next render commit. <code>await el.updateComplete</code> in tests or in code that needs to read the post-render DOM after triggering an update. Override <code>getUpdateComplete()</code> to chain additional async work.</p>
     <code-block>el.count = 5;
 await el.updateComplete;
 // DOM now reflects count = 5</code-block>
+
+    <h2>Update scheduling: hasUpdated, isUpdatePending, scheduleUpdate(), performUpdate()</h2>
+    <p>These are Lit's members with Lit's meaning. <code>hasUpdated</code> is <code>false</code> until the first update completes (still <code>false</code> inside the first <code>willUpdate()</code> and <code>render()</code>). <code>isUpdatePending</code> is <code>true</code> from a property change or <code>requestUpdate()</code> until the update runs. The update microtask calls <code>scheduleUpdate()</code>, whose default calls <code>performUpdate()</code>, so override <code>scheduleUpdate()</code> to change when an update runs; <code>updateComplete</code> waits for it. Call <code>performUpdate()</code> to flush a pending update synchronously; with nothing pending it does nothing. <code>enableUpdating(requestedUpdate)</code> is called on connect, just before the first update is queued.</p>
+    <code-block>async scheduleUpdate() {
+  await new Promise((r) =&gt; requestAnimationFrame(r));
+  super.scheduleUpdate();
+}</code-block>
 
     <h2>State mutation</h2>
     <p>Mutating a signal that the update cycle read (in <code>willUpdate()</code>, <code>render()</code> or <code>updated()</code>) schedules a microtask-batched re-render via the component's built-in SignalWatcher. Multiple <code>signal.set</code> calls in the same microtask coalesce into one render. Reactive properties (declared via the <code>WebComponent({ ... })</code> factory) follow the same scheduler and surface their own entries in <code>changedProperties</code>.</p>

@@ -142,7 +142,7 @@ export async function finishComponent(w, frame, children) {
         // Native <slot> stays as-is in the DSD template: the browser projects
         // the host's light children natively. The authored children stay in
         // place after the template, and the source end tag is kept.
-        return `${frame.opening}<template shadowrootmode="open">${styleString(Cls)}${inner}</template>${children}${frame.closeText}`;
+        return `${frame.opening}${dsdOpenTag(Cls)}${styleString(Cls)}${inner}</template>${children}${frame.closeText}`;
       }
       if (!NON_BLANK.test(inner)) {
         // An empty rendered template (a decorator component with no render(),
@@ -204,6 +204,26 @@ function partitionChildren(children, segments) {
   return groups;
 }
 
+/**
+ * The Declarative Shadow DOM opening tag for a shadow component, carrying
+ * Lit's `static shadowRootOptions` as the template attributes the HTML parser
+ * maps onto `attachShadow()`: the mode, `delegatesFocus`, `clonable` and
+ * `serializable`. The common case (no options) is the constant open tag.
+ * @param {any} Cls
+ * @returns {string}
+ */
+export function dsdOpenTag(Cls) {
+  const o = Cls.shadowRootOptions;
+  if (!o) return OPEN_DSD;
+  const mode = o.mode === 'closed' ? 'closed' : 'open';
+  if (mode === 'open' && !o.delegatesFocus && !o.clonable && !o.serializable) return OPEN_DSD;
+  return `<template shadowrootmode="${mode}"` +
+    (o.delegatesFocus ? ' shadowrootdelegatesfocus' : '') +
+    (o.clonable ? ' shadowrootclonable' : '') +
+    (o.serializable ? ' shadowrootserializable' : '') + '>';
+}
+const OPEN_DSD = '<template shadowrootmode="open">';
+
 function styleString(Cls) {
   const rawStyles = Cls.styles;
   const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
@@ -243,7 +263,7 @@ async function errorState(w, frame) {
   }
   let opening = frame.opening;
   if (!isShadow) opening = withHostMarker(opening);
-  if (isShadow) return `${opening}<template shadowrootmode="open">${styleString(Cls)}${errorInner}</template>`;
+  if (isShadow) return `${opening}${dsdOpenTag(Cls)}${styleString(Cls)}${errorInner}</template>`;
   return `${opening}<!--webjs-hydrate-->${errorInner}</${tag}>`;
 }
 

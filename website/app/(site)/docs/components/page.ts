@@ -384,6 +384,16 @@ Card.register('my-card');</code-block>
 
     <p><code>static styles</code> on a light-DOM component is silently ignored. There's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
 
+    <h3>shadowRootOptions, createRenderRoot() and renderRoot</h3>
+    <p>These are Lit's members with Lit's meaning. <code>static shadowRootOptions</code> holds the <code>attachShadow()</code> options (<code>delegatesFocus</code>, <code>clonable</code>, <code>serializable</code>, a <code>closed</code> mode); the server writes them onto the Declarative Shadow DOM template too (<code>shadowrootdelegatesfocus</code> and friends), so the first paint and the hydrated element agree. <code>this.renderRoot</code> is the node <code>render()</code> commits into: the shadow root here, the element itself in light DOM. It is <code>undefined</code> until the element connects and at SSR.</p>
+    <code-block>class FancyInput extends WebComponent {
+  static shadow = true;
+  static shadowRootOptions = { mode: 'open', delegatesFocus: true };
+  render() { return html\`&lt;input&gt;\`; }
+  firstUpdated() { this.renderRoot.querySelector('input')?.select(); }
+}</code-block>
+    <p><code>createRenderRoot()</code> creates that root once per element. Its default returns the element for light DOM, and for <code>static shadow = true</code> attaches the shadow root (or reuses the server-rendered one) and adopts <code>static styles</code>. Lit's <code>createRenderRoot() { return this; }</code> works and is already the default. An override may post-process <code>super.createRenderRoot()</code>, but it cannot switch modes on its own: the server renders from <code>static shadow</code> and never calls it, so a shadow root returned without <code>static shadow = true</code> (or a light root with it) throws on connect, naming the fix. Calling <code>attachShadow()</code> yourself during SSR throws the same way, since the server has no DOM.</p>
+
     <h3>Mode summary</h3>
     <p>Both modes are <strong>fully SSR'd</strong>. Shadow DOM renders via Declarative Shadow DOM (<code>&lt;template shadowrootmode="open"&gt;</code>). Light DOM renders content directly as HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker. Both hydrate on the client without flash.</p>
 
@@ -907,7 +917,7 @@ class ChatBox extends WebComponent {
 
   send(e) {
     e.preventDefault();
-    const input = this.shadowRoot.querySelector('input');
+    const input = this.renderRoot.querySelector('input');
     if (!input.value.trim() || !this._conn) return;
     this._conn.send({ text: input.value });
     input.value = '';
