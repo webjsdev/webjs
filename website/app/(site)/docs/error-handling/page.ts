@@ -27,7 +27,7 @@ export default function ErrorHandling() {
     </ul>
 
     <h2>Route-level error boundaries</h2>
-    <p>Place an <code>error.ts</code> file at any level in the <code>app/</code> directory. When a page or layout at that level (or deeper) throws, the nearest <code>error.ts</code> is rendered instead.</p>
+    <p>Place an <code>error.ts</code> file at any level in the <code>app/</code> directory. When a page or layout at that level (or deeper) throws, the nearest <code>error.ts</code> is rendered instead. So does a server action bound to a form on that page, as Next.js forwards a throwing Server Function to the nearest error boundary: with or without JavaScript the submission answers 500 with the boundary, in production with a generic message and a <code>digest</code>.</p>
 
     <p>The boundary renders <strong>inside the layouts at and above its own segment</strong>, so your site chrome stays on screen: the nav, the sidebar and the header are still there, and the user has something to navigate away with. It also means a client-router navigation into a failing page stays a soft navigation rather than reloading the document, so hydrated state elsewhere on the page survives. A layout deeper than the boundary never rendered on the way in, so it is not rendered on the way out either.</p>
 

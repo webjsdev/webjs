@@ -1049,6 +1049,9 @@ export async function ssrPage(route, params, url, opts) {
 
   try {
     if (metadataThrow) throw metadataThrow;
+    // A form action that threw (form-dispatch.js): the page answers with its
+    // nearest error boundary exactly as a failed render does (#1686).
+    if (opts.renderError !== undefined) throw opts.renderError;
     const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set(), dev: opts.dev };
     // Parse the partial-nav "have" header from the client. The server walks
     // the target route's layout chain innermost → outermost and

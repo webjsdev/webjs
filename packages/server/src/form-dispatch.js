@@ -15,7 +15,6 @@ import { runActionChain } from './action-middleware.js';
 import { runWithActionSignal } from './action-signal.js';
 import { isStreamable } from './action-stream.js';
 import { revalidateTags } from './cache-tags.js';
-import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
 
 /**
  * The form-submission dispatcher (#1155): a non-GET request to a PAGE's own url
@@ -445,6 +444,13 @@ function methodNotAllowed() {
  */
 export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   const { actionIndex, allowedOrigins = [], onError, logger } = deps;
+  // An action that throws answers with the page's nearest error.ts (else
+  // global-error, else the default 500 page), the way a failed page render does
+  // and the way Next.js answers a server action that throws (#1686): not a bare
+  // text 500. The boundary sees a sanitized error in production, and the sink
+  // hears it once, as an action error.
+  /** @param {unknown} e */
+  const errorPage = (e) => ssrPage(route, params, url, { ...ssrOpts, req, onError, renderError: e });
 
   // Not a form body at all (a stray JSON POST, a probe): the page path exists
   // and only renders. Answered before the body is touched.
@@ -511,8 +517,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // load, and swallowing the error would leave nothing in the log or the APM
     // sink. Surface it the way any other action throw is surfaced.
     if (found.reason === 'load-failed') {
-      if (typeof onError === 'function') onError(found.error);
-      return await formActionErrorResponse(found.error, ssrOpts.dev);
+      return errorPage(found.error);
     }
     if (found.reason === 'skew') {
       return ssrPage(route, params, url, {
@@ -565,8 +570,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
         // SAME error to `onError` a second time and answers a bare 500 with no
         // digest, so the one thing that makes a prod error diagnosable is lost.
         // The RPC path does exactly this (`actionErrorResponse` in actions.js).
-        if (typeof onError === 'function') onError(v.thrown);
-        return await formActionErrorResponse(v.thrown, ssrOpts.dev);
+        return errorPage(v.thrown);
       }
       // A structured failure envelope is a NORMAL result the page renders, so
       // it takes the 422 re-render path exactly as a failing action would,
@@ -659,8 +663,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // boundary as the page-render path (#848), not a generic 500.
     if (isForbidden(err)) return ssrForbidden(route, { ...ssrOpts, req, url, route, params });
     if (isUnauthorized(err)) return ssrUnauthorized(route, { ...ssrOpts, req, url, route, params });
-    if (typeof onError === 'function') onError(err);
-    return await formActionErrorResponse(err, ssrOpts.dev);
+    return errorPage(err);
   }
 
   // A streamed return (#489) has no consumer here. The RPC stub decodes frames;
@@ -672,8 +675,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
       `The action ${fnName} returned a stream, which a form submission cannot consume. `
       + 'Return an ActionResult from a form-bound action; stream from a programmatic call instead.',
     );
-    if (typeof onError === 'function') onError(err);
-    return await formActionErrorResponse(err, ssrOpts.dev);
+    return errorPage(err);
   }
 
   // Only a COMPLETED action evicts its `invalidates` tags; a middleware
@@ -742,29 +744,3 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   return page;
 }
 
-/**
- * A thrown form action becomes a 500 whose body is sanitized the same way the
- * RPC path's is (#749): dev shows the real message, prod shows a generic one
- * plus a correlation digest and logs the full error. A raw driver message or an
- * fs path is not author-controlled, so it does not reach the browser, and here
- * the browser is showing it to a person rather than parsing it.
- *
- * @param {unknown} err
- * @param {boolean} [dev]
- * @returns {Promise<Response>}
- */
-async function formActionErrorResponse(err, dev) {
-  if (dev) {
-    console.error('[webjs] form action threw:', err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return new Response(msg, { status: 500 });
-  }
-  if (isControlFlowThrow(err)) {
-    console.error('[webjs] form action threw:', err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return new Response(msg, { status: 500 });
-  }
-  const digest = await errorDigest(err);
-  console.error(`[webjs] form action threw [digest=${digest}]:`, err);
-  return new Response(`${GENERIC_ERROR_MESSAGE} (digest ${digest})`, { status: 500 });
-}
