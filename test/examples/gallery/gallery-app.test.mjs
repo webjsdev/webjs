@@ -4,9 +4,9 @@
  * modules/<name>. The scaffold no longer ships it, so these assertions read the
  * gallery in place rather than a generated app.
  *
- * The todo query assertion is a regression guard for the rc.3 relational-query
- * orderBy bug (`[desc(col)]` compiles to `no such column: d0.0`); the query must
- * use the object form `{ createdAt: 'desc' }`.
+ * The todo query assertion guards the relational-query orderBy: relations v2
+ * refuses the array form `[desc(col)]` (rc.5 throws `Unknown relational order
+ * field`), so the query must use the object form `{ createdAt: 'desc' }`.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -58,7 +58,7 @@ test('the todo example is backed by a todos table and the object-form orderBy', 
   const sources = await Promise.all(readdirSync(dir).map((f) => readFile(join(dir, f), 'utf8')));
   const all = sources.join('\n');
   assert.match(all, /orderBy:\s*\{\s*createdAt:\s*'desc'\s*\}/, 'object-form orderBy');
-  assert.doesNotMatch(all, /orderBy:\s*\[/, 'never the rc.3-broken array form');
+  assert.doesNotMatch(all, /orderBy:\s*\[/, 'never the array form relations v2 refuses');
 });
 
 test('the auth card wires a real, protected auth baseline', async () => {

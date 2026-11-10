@@ -19,7 +19,7 @@ import { getTableName, type Table } from 'drizzle-orm';
 // undefined `text` and throw at runtime.
 export { text, integer, real, blob };
 
-/** Table factory: column keys map to snake_case SQL names (casing lives here in rc.3). */
+/** Table factory: column keys map to snake_case SQL names (casing lives on the table creator in the 1.0 rc). */
 export const table = sqliteTableCreator((name) => name, 'snake_case');
 
 /** Integer autoincrement primary key (id: number). */
@@ -45,7 +45,7 @@ export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() =
 
 /**
  * Anonymous-style index: pass columns, get a table-qualified auto name (matches
- * drizzle-kit's own convention, collision-free). Works around rc.3's index()
+ * drizzle-kit's own convention, collision-free). Works around the 1.0 rc's index()
  * requiring a name arg the runtime auto-fills; replace with plain index() once
  * 1.0 stable exposes the no-arg overload.
  */
