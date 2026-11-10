@@ -11,6 +11,8 @@ import { parseField, parseFields, columnFor } from '../../packages/cli/lib/gener
 import { addImports, registerTable, addOneRelations, insertBlock, dialectOf } from '../../packages/cli/lib/generate/schema-edit.js';
 import { parseGenerateArgs, applyPlan } from '../../packages/cli/lib/generate/index.js';
 import { removeTable } from '../../packages/cli/lib/generate/destroy.js';
+import { planMigration } from '../../packages/cli/lib/generate/migration.js';
+import { planController } from '../../packages/cli/lib/generate/controller.js';
 
 test('pluralize follows the common English rules and the irregulars', () => {
   assert.equal(pluralize('post'), 'posts');
@@ -130,6 +132,45 @@ test('removeTable undoes the generator\'s schema edits', () => {
   assert.doesNotMatch(out, /export type Post\b/);
   assert.match(out, /^export const relations = defineRelations\(\{ users \}, \(r\) => \(\{\n\}\)\);/m);
   assert.equal(removeTable(SCHEMA, 'posts', 'Post'), null);
+});
+
+const ctxWith = (schema) => ({
+  appDir: '/app', schema, dialect: /** @type {'sqlite'} */ ('sqlite'), hasPages: true,
+  ui: { button: true, input: true, label: true, textarea: false, kit: true }, skipTests: false,
+});
+const POSTS = `import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
+
+export const posts = sqliteTable('posts', {
+  id: integer().primaryKey({ autoIncrement: true }),
+  title: text().notNull(),
+  views: integer(),
+});
+`;
+
+test('migration AddXToTable adds the columns to that table and names the migration as Rails does', () => {
+  const plan = planMigration(ctxWith(POSTS), { name: 'AddPublishedAtToPosts', fields: ['published_at:datetime', 'flag:boolean'] }, () => { throw new Error('not a create'); });
+  assert.equal(plan.migrationName, 'add_published_at_to_posts');
+  assert.match(plan.edits[0].content, / {2}views: integer\(\),\n {2}publishedAt: integer\(\{ mode: 'timestamp_ms' \}\),\n {2}flag: integer\(\{ mode: 'boolean' \}\)\.notNull\(\)\.default\(false\),\n\}\);/);
+  assert.throws(() => planMigration(ctxWith(POSTS), { name: 'AddTitleToPosts', fields: ['title'] }, () => ({})), /already has title/);
+  assert.throws(() => planMigration(ctxWith(POSTS), { name: 'AddXToComments', fields: ['x'] }, () => ({})), /no comments table/);
+});
+
+test('migration RemoveXFromTable drops the column lines, CreateTable is the model generator, anything else refuses', () => {
+  const plan = planMigration(ctxWith(POSTS), { name: 'RemoveViewsFromPosts', fields: ['views'] }, () => ({}));
+  assert.doesNotMatch(plan.edits[0].content, /views/);
+  assert.equal(plan.migrationName, 'remove_views_from_posts');
+  let delegated;
+  planMigration(ctxWith(POSTS), { name: 'CreateTags', fields: ['name:string!'] }, (_c, o) => { delegated = o; return {}; });
+  assert.deepEqual(delegated, { name: 'tags', fields: ['name:string!'], kind: 'model' });
+  assert.throws(() => planMigration(ctxWith(POSTS), { name: 'RenamePosts', fields: [] }, () => ({})), /AddXToTable, RemoveXFromTable or CreateTable/);
+});
+
+test('controller writes one page per action, index at the segment root, and a render test', () => {
+  const plan = planController(ctxWith(''), { name: 'Pages', actions: ['index', 'about_us'] });
+  assert.deepEqual(plan.files.map((f) => f.path), ['app/pages/page.ts', 'app/pages/about-us/page.ts', 'test/pages/pages.test.ts']);
+  assert.match(plan.files[1].content, /export default function PagesAboutUsPage\(\)/);
+  assert.match(plan.files[2].content, /for \(const path of \['\/pages', '\/pages\/about-us'\]\)/);
+  assert.throws(() => planController({ ...ctxWith(''), hasPages: false }, { name: 'pages', actions: [] }), /no root layout/);
 });
 
 test('parseGenerateArgs reads the generator, the name, the fields and the Rails flags', () => {

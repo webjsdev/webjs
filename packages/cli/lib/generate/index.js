@@ -22,10 +22,12 @@ import { createRequire } from 'node:module';
 import { dialectOf } from './schema-edit.js';
 import { planScaffold } from './scaffold.js';
 import { planAuthentication } from './authentication.js';
+import { planMigration } from './migration.js';
+import { planController } from './controller.js';
 
 const CLI_BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'webjs.js');
 
-export const GENERATORS = ['scaffold', 'resource', 'model', 'authentication'];
+export const GENERATORS = ['scaffold', 'resource', 'model', 'migration', 'controller', 'authentication'];
 
 /**
  * @typedef {object} Plan
@@ -119,7 +121,11 @@ export function planGenerate(appDir, args) {
     skipTests: args.skipTests,
   };
   if (args.generator === 'authentication') return planAuthentication(ctx);
-  if (!args.name) throw new Error(`Name the resource, for example \`webjs generate ${args.generator} post title:string body:text\`.`);
+  if (!args.name) throw new Error(`Name it, for example \`webjs generate ${args.generator} ${args.generator === 'migration' ? 'AddTitleToPosts title:string' : args.generator === 'controller' ? 'pages home about' : 'post title:string body:text'}\`.`);
+  if (args.generator === 'controller') return planController(ctx, { name: args.name, actions: args.fields });
+  if (args.generator === 'migration') {
+    return planMigration(ctx, { name: args.name, fields: args.fields }, (c, o) => planScaffold(c, /** @type {any} */ (o)));
+  }
   return planScaffold(ctx, {
     name: args.name,
     plural: args.plural,

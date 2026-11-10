@@ -65,7 +65,9 @@ export function runDestroy(argv, opts = {}) {
   try {
     args = parseGenerateArgs(argv);
     if (args.generator === 'authentication') throw new Error('Remove the authentication files by hand: it edits the users table that other code may use.');
-    plan = planGenerate(appDir, { ...args, fields: [], skipTests: false });
+    if (args.generator === 'migration') throw new Error('Undo a column change by editing db/schema.server.ts back and running `webjs db generate`.');
+    // A controller's paths depend on its actions; every other generator's only on the name.
+    plan = planGenerate(appDir, { ...args, fields: args.generator === 'controller' ? args.fields : [], skipTests: false });
   } catch (e) {
     error(`Destroy failed. ${/** @type {Error} */ (e).message}`);
     return 1;

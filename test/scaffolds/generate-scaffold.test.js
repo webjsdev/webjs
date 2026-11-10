@@ -11,7 +11,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, symlinkSync, existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync, existsSync, readFileSync, readdirSync, appendFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -180,6 +180,34 @@ test('authentication adds a password hash to users, and its pages, middleware an
     assert.equal(migrate.status, 0, out(migrate));
     const status = cli('status', '--boot', '/login', '/signup');
     assert.equal(status.status, 0, out(status));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('migration edits a table with Rails-named migrations, and controller pages render', { timeout: 300_000 }, async () => {
+  const { cwd, app, cli } = await makeApp({});
+  try {
+    assert.equal(cli('g', 'scaffold', 'post', 'title:string!').status, 0);
+    const add = cli('g', 'migration', 'AddPublishedAtToPosts', 'published_at:datetime', 'views:integer');
+    assert.equal(add.status, 0, out(add));
+    const remove = cli('g', 'migration', 'RemoveViewsFromPosts', 'views');
+    assert.equal(remove.status, 0, out(remove));
+    const migrations = readdirSync(join(app, 'db', 'migrations')).join(' ');
+    assert.match(migrations, /_create_posts/);
+    assert.match(migrations, /_add_published_at_to_posts/);
+    assert.match(migrations, /_remove_views_from_posts/);
+    const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schema, /publishedAt: integer\(\{ mode: 'timestamp_ms' \}\),/);
+    assert.doesNotMatch(schema, /views:/);
+
+    const pages = cli('g', 'controller', 'pages', 'home', 'about');
+    assert.equal(pages.status, 0, out(pages));
+    const tc = cli('typecheck');
+    assert.equal(tc.status, 0, out(tc));
+    const tests = cli('test', '--server');
+    assert.equal(tests.status, 0, out(tests));
+    assert.match(tests.stdout, /\/pages\/about renders/);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
