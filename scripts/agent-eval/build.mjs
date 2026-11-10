@@ -269,19 +269,21 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     process.exit(0);
   }
   const specName = arg('spec');
-  if (!specName) { console.error('usage: build.mjs --spec <roomly|pollster|trackr|inbox> [--runs N] [--jobs N] [--model haiku] [--framework <checkout>] [--label after] [--out <dir>]'); process.exit(2); }
+  if (!specName) { console.error('usage: build.mjs --spec <roomly|pollster|trackr|inbox> [--runs N] [--jobs N] [--model haiku] [--framework <checkout>] [--label after] [--out <dir>] [--port-base 8900]'); process.exit(2); }
   const spec = readFileSync(join(HERE, 'specs', `${specName}.md`), 'utf8');
   const runs = Number(arg('runs', '1'));
   const jobs = Number(arg('jobs', '3'));
   const out = resolve(arg('out', join('/var/tmp', 'webjs-builds')));
   assertNoAncestorInstructions(out);
   const opts = { spec, specName, out, framework: resolve(arg('framework', REPO)), model: arg('model', 'haiku'), label: arg('label', 'after'), timeoutS: Number(arg('timeout', '5400')) };
+  // A distinct --port-base per concurrent invocation keeps two arms' dev servers apart.
+  const portBase = Number(arg('port-base', '8900'));
   const results = [];
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(jobs, runs) }, async (_, w) => {
     while (next < runs) {
       const index = ++next;
-      results.push(await oneBuild({ ...opts, index, port: 8900 + index * 10 + w }));
+      results.push(await oneBuild({ ...opts, index, port: portBase + index * 10 + w }));
     }
   }));
   results.sort((a, b) => a.name.localeCompare(b.name));
