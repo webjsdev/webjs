@@ -73,9 +73,11 @@ export function loadEnvFiles(appDir, mode, env = process.env) {
     const active = new Set();
     /** @param {string} key @returns {string | undefined} undefined when unset */
     const resolve = (key) => {
-      if (env[key] !== undefined) return env[key];
-      if (!(key in parsed)) return undefined;
-      if (key in done) return done[key];
+      // Own keys only: ${toString} or $constructor names a variable, never an
+      // Object.prototype member, which would be a function here.
+      if (Object.hasOwn(env, key) && env[key] !== undefined) return env[key];
+      if (!Object.hasOwn(parsed, key)) return undefined;
+      if (Object.hasOwn(done, key)) return done[key];
       if (active.has(key)) return ''; // a cycle expands to empty rather than looping
       active.add(key);
       const out = literal.has(key) ? parsed[key] : expandValue(parsed[key], resolve);

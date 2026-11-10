@@ -8,7 +8,7 @@ import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { makeThenable, searchParamsRecord } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
 import { originalAction } from './action-seed.js';
-import { declaredParamCount } from './action-params.js';
+import { declaredParamCount, declaredParamDefaults } from './action-params.js';
 import { verifyOrigin } from './csrf.js';
 import { actionMethod, actionConfigFn, actionMiddleware, resolveTags, RESERVED_CONFIG } from './action-config.js';
 import { runValidate } from './actions.js';
@@ -593,8 +593,13 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // The count is the DECLARED one (#1686): `fn.length` stops at the first
   // default, so `(prevState = initial, formData)` would read as 0, and that
   // default is how an action supplies the first submission's state.
-  const arity = declaredParamCount(originalAction(fn)) - bound.length;
-  const flash = arity >= 2 ? await readFlash(req) : null;
+  // The form data's slot is the parameter after prevState, and it has no
+  // default in that shape: `(input, opts = {})` is an ordinary action whose
+  // optional second parameter must not turn its input into a prevState.
+  const original = originalAction(fn);
+  const defaults = declaredParamDefaults(original);
+  const withPrevState = declaredParamCount(original) - bound.length >= 2 && !(defaults && defaults[bound.length + 1]);
+  const flash = withPrevState ? await readFlash(req) : null;
   const prevState = flash && flash.id === id ? flash.result : undefined;
   /** @type {ActionResult | undefined} */
   let result;
@@ -632,7 +637,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
           searchParams: makeThenable(searchParams),
           url,
         },
-        () => { ranAction = true; return arity >= 2 ? fn(...bound, prevState, ...args) : fn(...bound, ...args); },
+        () => { ranAction = true; return withPrevState ? fn(...bound, prevState, ...args) : fn(...bound, ...args); },
       ));
   } catch (err) {
     if (isRedirect(err)) {

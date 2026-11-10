@@ -82,6 +82,16 @@ export function resolveMiddlewareExport(mod, file) {
  * @param {RouteHas[]} [has]
  * @param {RouteHas[]} [missing]
  */
+/** `has` / `missing` value patterns, compiled once each (they come from the config, not the request). */
+const hasPatterns = new Map();
+
+/** @param {string} source */
+function hasPattern(source) {
+  let re = hasPatterns.get(source);
+  if (!re) { re = new RegExp(`^${source}$`); hasPatterns.set(source, re); }
+  return re;
+}
+
 export function matchHas(req, url, has = [], missing = []) {
   /** @type {Map<string, string> | null} */
   let cookies = null;
@@ -98,7 +108,7 @@ export function matchHas(req, url, has = [], missing = []) {
     }
     if (value == null || value === '') return false;
     if (!item.value) return true;
-    return new RegExp(`^${item.value}$`).test(value);
+    return hasPattern(item.value).test(value);
   };
   return has.every(holds) && !missing.some(holds);
 }
@@ -123,6 +133,14 @@ export function compileMatcher(matcher, file) {
     let pattern;
     try { pattern = new URLPattern({ pathname: e.source }); } catch (err) {
       throw new Error(`[webjs] ${file}: config.matcher "${e.source}" is not a valid path pattern (${/** @type {Error} */ (err).message}).`);
+    }
+    // Compile the has / missing patterns now, so a bad one fails at load.
+    for (const item of [...(e.has || []), ...(e.missing || [])]) {
+      if (item && item.value) {
+        try { hasPattern(String(item.value)); } catch (err) {
+          throw new Error(`[webjs] ${file}: config.matcher has/missing value ${JSON.stringify(item.value)} is not a valid pattern: ${/** @type any */ (err).message}`);
+        }
+      }
     }
     return { pattern, has: e.has, missing: e.missing };
   });

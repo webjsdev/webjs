@@ -13,14 +13,16 @@
  * already displayed it: a result is shown ONCE as `actionData`, then kept
  * only as the next `prevState`.
  *
- * Key: `WEBJS_SECRET`, else `AUTH_SECRET`, else a random per-process key (so
- * a flash still works on one instance; a multi-instance deploy sets a secret).
+ * Key: `WEBJS_SECRET`, else `AUTH_SECRET`, else `SESSION_SECRET`, else (outside
+ * production) the persisted dev secret, else a random per-process key (so a
+ * flash still works on one instance; a multi-instance deploy sets a secret).
  *
  * @module action-flash
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { stringify, parse } from '@webjsdev/core';
 import { shared } from './process-shared.js';
+import { devSecret } from './dev-secret.js';
 
 export const FLASH_COOKIE = '__webjs_flash';
 const MAX_BYTES = 2048;
@@ -29,14 +31,16 @@ const MAX_AGE_SECONDS = 60;
 const _key = shared('action-flash-key', () => ({ random: randomBytes(32).toString('hex'), warned: false }));
 
 function key() {
-  const secret = process.env.WEBJS_SECRET || process.env.AUTH_SECRET;
+  // Any secret the app already set signs it, and outside production the
+  // persisted dev secret does, so a flash survives a dev server restart too.
+  const secret = process.env.WEBJS_SECRET || process.env.AUTH_SECRET || process.env.SESSION_SECRET || devSecret('WEBJS_SECRET');
   if (secret) return secret;
   // A per-process key verifies only on the instance that signed it, so behind
   // a load balancer a flash whose 303 lands elsewhere is silently dropped. Say
   // so once in production rather than let it look like a missing feature.
   if (process.env.NODE_ENV === 'production' && !_key.warned) {
     _key.warned = true;
-    console.warn('[webjs] neither WEBJS_SECRET nor AUTH_SECRET is set, so form action results (actionData after a redirect, prevState) are signed with a per-process key and are lost when the redirect lands on another instance. Set WEBJS_SECRET.');
+    console.warn('[webjs] none of WEBJS_SECRET, AUTH_SECRET or SESSION_SECRET is set, so form action results (actionData after a redirect, prevState) are signed with a per-process key and are lost when the redirect lands on another instance. Set WEBJS_SECRET.');
   }
   return _key.random;
 }

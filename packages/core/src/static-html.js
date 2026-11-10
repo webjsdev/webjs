@@ -87,6 +87,12 @@ export function literal(strings, ...values) {
 
 /** @type {Map<string, string[]>} */
 const stringsCache = new Map();
+/**
+ * How many distinct static shapes are kept. A component passing request-derived
+ * text through `unsafeStatic` makes a new shape per value, and on the server the
+ * cache lives as long as the process, so the oldest shape is dropped past this.
+ */
+const STRINGS_CACHE_MAX = 1000;
 
 /**
  * Wrap a template tag so it accepts static values, lit's `withStatic`.
@@ -125,6 +131,7 @@ export function withStatic(coreTag) {
       /** @type {any} */ (staticStrings).raw = staticStrings;
       cached = staticStrings;
       stringsCache.set(key, cached);
+      if (stringsCache.size > STRINGS_CACHE_MAX) stringsCache.delete(stringsCache.keys().next().value);
     }
     return coreTag(cached, ...dynamicValues);
   };

@@ -255,7 +255,7 @@ export function Google(opts = {}) {
     clientId: opts.clientId || process.env.AUTH_GOOGLE_ID,
     clientSecret: opts.clientSecret || process.env.AUTH_GOOGLE_SECRET,
     scope: ['openid', 'email', 'profile'],
-    profile: (p) => ({ id: String(p.sub), name: p.name, email: p.email, image: p.picture }),
+    profile: (p) => ({ id: p.sub == null ? undefined : String(p.sub), name: p.name, email: p.email, image: p.picture }),
   };
 }
 
@@ -273,7 +273,7 @@ export function GitHub(opts = {}) {
     clientId: opts.clientId || process.env.AUTH_GITHUB_ID,
     clientSecret: opts.clientSecret || process.env.AUTH_GITHUB_SECRET,
     scope: ['read:user', 'user:email'],
-    profile: (p) => ({ id: String(p.id), name: p.name || p.login, email: p.email, image: p.avatar_url }),
+    profile: (p) => ({ id: p.id == null ? undefined : String(p.id), name: p.name || p.login, email: p.email, image: p.avatar_url }),
   };
 }
 
@@ -397,6 +397,9 @@ export function createAuth(config) {
       const payload = await decodeJwt(raw, secret, cookieName(AUTH_COOKIE, secure()));
       if (!payload) return null;
       let token = cb.jwt ? await cb.jwt({ token: payload, user: undefined }) : payload;
+      // Returning null (or anything but an object) from the jwt callback ends
+      // the session, as in Auth.js.
+      if (!token || typeof token !== 'object') return null;
       const exp = typeof token.exp === 'number' ? token.exp : Math.floor(Date.now() / 1000) + maxAge;
       let session = { user: { id: token.sub, name: token.name, email: token.email, image: token.image, ...token }, expires: new Date(exp * 1000).toISOString() };
       delete session.user.iat; delete session.user.exp; delete session.user.sub;
@@ -446,12 +449,13 @@ export function createAuth(config) {
   async function writeJwtSession(user, account, profile) {
     let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
     if (cb.jwt) token = await cb.jwt({ token, user, account, profile, trigger: 'signIn' });
+    // Anything but an object from the jwt callback denies the sign-in: no
+    // cookie is written, and the caller answers with AccessDenied.
+    if (!token || typeof token !== 'object') return null;
     // The session's lifetime is the cookie's, as Auth.js's encode() sets it,
     // whatever object the jwt callback returned.
-    if (token && typeof token === 'object') {
-      const now = Math.floor(Date.now() / 1000);
-      token = { ...token, iat: typeof token.iat === 'number' ? token.iat : now, exp: typeof token.exp === 'number' ? token.exp : now + maxAge };
-    }
+    const now = Math.floor(Date.now() / 1000);
+    token = { ...token, iat: typeof token.iat === 'number' ? token.iat : now, exp: typeof token.exp === 'number' ? token.exp : now + maxAge };
     return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret, cookieName(AUTH_COOKIE, secure())), maxAgeMs, secure());
   }
 
@@ -567,6 +571,7 @@ export function createAuth(config) {
       const refused = await signInRefusal(user, account);
       if (refused) return refused;
       const cookie = await writeSession(user, account);
+      if (!cookie) return new Response(null, { status: 302, headers: { location: withQuery(pages.error || '/', 'error', 'AccessDenied') } });
       // `opts.redirectTo` is the app's own server-side choice and is trusted.
       // `data.redirectTo` usually arrives from a submitted form, so it goes
       // through the same local-path check the OAuth flow uses (#1495).
@@ -686,24 +691,34 @@ export function createAuth(config) {
 
     // Auth.js's account: the provider's token response, plus who it is for.
     // `accessToken` stays alongside `access_token` for the earlier shape.
-    const account = { ...tokens, provider: provider.id, type: 'oauth', providerAccountId: String(user.id ?? ''), accessToken };
-    const refused = await signInRefusal(user, account, [
+    const flowCookies = [
       clearCookie(cookieName(STATE_COOKIE, secure()), secure()),
       clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()),
-    ]);
+    ];
+    /** A refused OAuth sign-in: the error page with its code, the flow's cookies cleared. */
+    const oauthError = (code) => {
+      const h = new Headers({ location: withQuery(pages.error || pages.signIn || `${basePath}/signin`, 'error', code) });
+      for (const c of flowCookies) h.append('set-cookie', c);
+      return new Response(null, { status: 302, headers: h });
+    };
+    // The account is keyed by the profile's id, so a profile without one is
+    // refused rather than linked under an empty id every such user would share.
+    if (user?.id == null || String(user.id) === '') return oauthError('OAuthProfileParseError');
+    const account = { ...tokens, provider: provider.id, type: 'oauth', providerAccountId: String(user.id), accessToken };
+    const refused = await signInRefusal(user, account, flowCookies);
     if (refused) return refused;
 
     let sessionUser = user;
     if (authAdapter) {
       const resolved = await adapterUserFor(req, user, account, provider);
-      if (typeof resolved === 'string') {
-        return new Response(null, { status: 302, headers: { location: withQuery(pages.error || pages.signIn || `${basePath}/signin`, 'error', resolved) } });
-      }
+      if (typeof resolved === 'string') return oauthError(resolved);
       sessionUser = resolved;
     }
+    const sessionCookie = await writeSession(sessionUser, account, rawProfile);
+    if (!sessionCookie) return oauthError('AccessDenied');
     const hdrs = new Headers();
     hdrs.set('location', (await readRedirectCookie(req)) || '/');
-    hdrs.append('set-cookie', await writeSession(sessionUser, account, rawProfile));
+    hdrs.append('set-cookie', sessionCookie);
     hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
     hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
     return new Response(null, { status: 302, headers: hdrs });

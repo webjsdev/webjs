@@ -80,7 +80,58 @@ function skipQuoted(src, start) {
  * @param {string} list
  * @returns {number}
  */
+/**
+ * Whether the function's declared parameters each carry a default, in order
+ * (rest parameter excluded), or null when the source cannot be read (a native
+ * or bound function). `(input, opts = {})` is `[false, true]`.
+ * @param {Function} fn
+ * @returns {boolean[] | null}
+ */
+export function declaredParamDefaults(fn) {
+  let src;
+  try {
+    src = Function.prototype.toString.call(fn);
+  } catch {
+    return null;
+  }
+  if (/\{\s*\[native code\]\s*\}\s*$/.test(src)) return null;
+  if (/^\s*(?:async\s+)?[A-Za-z_$][\w$]*\s*=>/.test(src)) return [false];
+  const open = src.indexOf('(');
+  if (open < 0) return null;
+  const list = paramListAt(src, open);
+  if (list === null) return null;
+  return splitParams(list).map(hasTopLevelDefault);
+}
+
+/**
+ * Whether a parameter's source has a default: an `=` at depth 0 that is not
+ * part of `==`, `=>`, `<=`, `>=` or `!=` (a destructuring pattern's own
+ * defaults sit inside its brackets).
+ * @param {string} param
+ */
+function hasTopLevelDefault(param) {
+  let depth = 0;
+  for (let i = 0; i < param.length; i++) {
+    const c = param[i];
+    if (c === '"' || c === "'" || c === '`') { i = skipQuoted(param, i); continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    else if (c === '=' && depth === 0 && param[i + 1] !== '=' && param[i + 1] !== '>' && !'=!<>'.includes(param[i - 1] || '')) return true;
+  }
+  return false;
+}
+
 function countParams(list) {
+  return splitParams(list).length;
+}
+
+/**
+ * The declared parameters' source texts, top-level commas only, the rest
+ * parameter dropped.
+ * @param {string} list
+ * @returns {string[]}
+ */
+function splitParams(list) {
   /** @type {string[]} */
   const parts = [];
   let depth = 0;
@@ -101,5 +152,5 @@ function countParams(list) {
     cur += c;
   }
   parts.push(cur);
-  return parts.map((p) => p.trim()).filter((p) => p && !p.startsWith('...')).length;
+  return parts.map((p) => p.trim()).filter((p) => p && !p.startsWith('...'));
 }
