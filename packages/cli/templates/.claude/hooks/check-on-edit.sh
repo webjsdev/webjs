@@ -9,7 +9,9 @@
 # Silent when the file is clean, is not app source, or the app has no local
 # `webjs` bin (it never installs anything). It reports only the edited file, so
 # a pre-existing violation elsewhere does not repeat on every edit. The check
-# takes about a second on a scaffolded app.
+# takes about a second on a scaffolded app. For a TypeScript file it also runs
+# `webjs typecheck` and returns that file's type errors the same way (a few
+# seconds; WEBJS_NO_TYPECHECK_ON_EDIT=1 skips just that part).
 #
 # Set WEBJS_NO_CHECK_ON_EDIT=1 to skip.
 

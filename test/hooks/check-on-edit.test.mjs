@@ -131,3 +131,43 @@ test('agrees with the REAL `webjs check` on the violation file shape', () => {
     assert.match(fb.reason, /tag-name-has-hyphen/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+/** An app whose stub bin answers `check` cleanly and `typecheck` with tsc lines. */
+function makeTypecheckApp(tscOutput) {
+  const dir = makeApp({ withBin: false });
+  writeFileSync(join(dir, 'tsconfig.json'), '{}');
+  mkdirSync(join(dir, 'node_modules', '.bin'), { recursive: true });
+  const bin = join(dir, 'node_modules', '.bin', 'webjs');
+  const check = JSON.stringify(JSON.stringify({ violations: [], summary: { count: 0 } }));
+  writeFileSync(bin, `#!/usr/bin/env node
+if (process.argv[2] === 'typecheck') { process.stdout.write(${JSON.stringify(tscOutput)}); process.exit(2); }
+process.stdout.write(${check});
+`);
+  chmodSync(bin, 0o755);
+  return dir;
+}
+
+test('returns the edited TypeScript file\'s type errors, not other files\' or a missing module (#1686)', () => {
+  const dir = makeTypecheckApp([
+    "modules/inbox/actions.server.ts(24,22): error TS2322: Type 'ActionResult' is not assignable to type 'ActionResult<Message>'.",
+    "modules/inbox/actions.server.ts(3,20): error TS2307: Cannot find module '#modules/inbox/queries.server.ts'.",
+    "components/thread.ts(9,1): error TS2339: Property 'x' does not exist on type 'Y'.",
+  ].join('\n'));
+  try {
+    mkdirSync(join(dir, 'modules', 'inbox'), { recursive: true });
+    const { out } = runHook(dir, join(dir, 'modules/inbox/actions.server.ts'));
+    const fb = JSON.parse(out);
+    assert.equal(fb.decision, 'block');
+    assert.match(fb.reason, /TypeScript found 1 error in modules\/inbox\/actions\.server\.ts/);
+    assert.match(fb.reason, /line 24: TS2322/);
+    assert.doesNotMatch(fb.reason, /TS2307|components\/thread\.ts/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('WEBJS_NO_TYPECHECK_ON_EDIT=1 skips only the type errors', () => {
+  const dir = makeTypecheckApp("components/counter.ts(1,1): error TS2322: Type 'string' is not assignable to type 'number'.");
+  try {
+    assert.equal(runHook(dir, join(dir, 'components/counter.ts'), { WEBJS_NO_TYPECHECK_ON_EDIT: '1' }).out, '');
+    assert.match(JSON.parse(runHook(dir, join(dir, 'components/counter.ts')).out).reason, /TS2322/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

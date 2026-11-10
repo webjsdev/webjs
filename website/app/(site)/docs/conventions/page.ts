@@ -132,7 +132,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</code-block>
       <tbody>
         <tr><td><code>AGENTS.md</code></td><td>All agents (Cursor, opencode, Antigravity, Copilot coding agent read it natively)</td><td>Framework API, conventions, recipes (the source of truth)</td></tr>
         <tr><td><code>CLAUDE.md</code></td><td>Claude Code</td><td>Thin bridge pointing at AGENTS.md</td></tr>
-        <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>Hooks: the branch guard, the server-import guard, the tests gate, and a check-on-edit loop that runs <code>webjs check</code> on every edited file</td></tr>
+        <tr><td><code>.claude/settings.json</code></td><td>Claude Code</td><td>Hooks: the branch guard, the server-import guard, the tests gate, and a check-on-edit loop that runs <code>webjs check</code> and, for TypeScript, <code>webjs typecheck</code> on every edited file</td></tr>
         <tr><td><code>.github/pull_request_template.md</code></td><td>All (via GitHub)</td><td>PR checklist: tests, docs, convention check</td></tr>
         <tr><td><code>.editorconfig</code></td><td>All editors</td><td>Consistent indent/encoding/line endings</td></tr>
       </tbody>

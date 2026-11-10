@@ -208,7 +208,10 @@ templates/               Verbatim files copied into every new app.
                          is the PostToolUse feedback loop: after an edit to
                          app source it runs the app's own `webjs check --json`
                          (never npx) and returns only the edited file's
-                         violations as decision: block feedback. Test:
+                         violations as decision: block feedback, plus, for a
+                         TypeScript file, that file's `webjs typecheck` errors
+                         (a missing module skipped; WEBJS_NO_TYPECHECK_ON_EDIT=1
+                         skips just this part). Test:
                          test/hooks/check-on-edit.test.mjs. Both templates
                          ship the same AGENTS.md; there is no playbook, no
                          rule directory and no gallery in a generated app.
