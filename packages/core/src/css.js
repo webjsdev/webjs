@@ -16,15 +16,36 @@
  * `@webjsdev/core` resolves to a bundle while a subpath resolves to source, so
  * two copies of this class can meet in one page.
  */
+
+/** Held by `css` and `unsafeCSS` only, Lit's `constructionToken`. */
+const constructionToken = Symbol();
+
+/**
+ * The shared sheet per hole-free `css` template, keyed by its strings array.
+ * @type {WeakMap<readonly string[], CSSStyleSheet>}
+ */
+const sheetCache = new WeakMap();
+
 export class CSSResult {
-  /** @param {string} cssText */
-  constructor(cssText) {
+  /**
+   * Not constructable from outside this module, as in Lit: `css` and
+   * `unsafeCSS` are the only ways to make one, so arbitrary text cannot pass
+   * for a checked `css` result without going through `unsafeCSS` by name.
+   * @param {string} cssText
+   * @param {readonly string[] | undefined} strings the `css` template, keying the shared sheet
+   * @param {symbol} safeToken
+   */
+  constructor(cssText, strings, safeToken) {
+    if (safeToken !== constructionToken) {
+      throw new Error('[webjs] CSSResult is not constructable. Use `css` or `unsafeCSS` instead.');
+    }
     /** @type {true} */
     this._$webjsCss = true;
     /** @type {string} */
     this.cssText = cssText;
     /** @type {CSSStyleSheet | undefined} */
     this._styleSheet = undefined;
+    this._strings = strings;
   }
 
   /** The style text, also readable as `cssText` (Lit's name). */
@@ -32,11 +53,21 @@ export class CSSResult {
     return this.cssText;
   }
 
-  /** A constructed stylesheet for `adoptedStyleSheets`, or undefined where there is none (the server). */
+  /**
+   * A constructed stylesheet for `adoptedStyleSheets`, or undefined where
+   * there is none (the server). A `css` template with no holes always yields
+   * the same text, so every result from it shares one sheet, as in Lit.
+   */
   get styleSheet() {
     if (this._styleSheet === undefined && typeof CSSStyleSheet !== 'undefined') {
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync(this.cssText);
+      const strings = this._strings;
+      const cacheable = strings !== undefined && strings.length === 1;
+      let sheet = cacheable ? sheetCache.get(strings) : undefined;
+      if (sheet === undefined) {
+        sheet = new CSSStyleSheet();
+        sheet.replaceSync(this.cssText);
+        if (cacheable) sheetCache.set(strings, sheet);
+      }
       this._styleSheet = sheet;
     }
     return this._styleSheet;
@@ -62,7 +93,7 @@ export function css(strings, ...values) {
   for (let i = 1; i < strings.length; i++) {
     text += cssValue(values[i - 1]) + strings[i];
   }
-  return new CSSResult(text);
+  return new CSSResult(text, strings, constructionToken);
 }
 
 /** @param {unknown} value */
@@ -92,7 +123,7 @@ function describe(value) {
  * @returns {CSSResult}
  */
 export function unsafeCSS(value) {
-  return new CSSResult(typeof value === 'string' ? value : String(value));
+  return new CSSResult(typeof value === 'string' ? value : String(value), undefined, constructionToken);
 }
 
 /** @param {unknown} x @returns {x is CSSResult} */

@@ -355,6 +355,10 @@ function resolveDirectiveChain(part, holder, key, value, commit, releaseTop, pie
         // A container `render()` disconnected (lit's `RootPart.setConnected`)
         // starts the directives it creates disconnected, as lit does.
         if (currentRenderRoot?.[ROOT_DISCONNECTED]) inst.isConnected = false;
+        // So does a component rendering while it is out of the document: its
+        // directives start disconnected and are reconnected with it.
+        const owner = part.__eventHost ?? currentRenderHost;
+        if (owner && owner.isConnected === false && typeof owner.addController === 'function') inst.isConnected = false;
         inst._$webjsCommit = (v) => {
           if (own.released) return;
           try {
@@ -1270,7 +1274,10 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
         updateInstance(inst, /** @type any */ (value).values, reconcileFormActionsCb);
         return;
       }
-      releaseInstanceDirectives(inst);
+      // A full teardown, as `clear()` does: a ref on an element of the
+      // outgoing template is unset (its callback gets `undefined`), the way
+      // Lit's ref directive is on disconnection, before the new one binds.
+      disposeInstance(inst);
       removeBetween(inst.startNode, inst.endNode);
       part.child = undefined;
     } else {

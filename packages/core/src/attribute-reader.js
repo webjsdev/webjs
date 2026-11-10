@@ -155,7 +155,7 @@ const WARNED_FALSE = new WeakSet();
 function warnFalseBoolean(def, propName) {
   if (WARNED_FALSE.has(def)) return;
   WARNED_FALSE.add(def);
-  const name = propName ? `\`${propName}\`` : 'A Boolean property';
+  const name = propName ? `\`${String(propName)}\`` : 'A Boolean property';
   console.warn(
     `[webjs] ${name} received the attribute value "false", which is TRUE: a Boolean property is on whenever its ` +
       `attribute is present, as in HTML and Lit. To turn it off, leave the attribute out, or bind it with ` +
@@ -183,6 +183,8 @@ function hyphenate(s) {
 export function attributeNameFor(propName, decl) {
   if (!isAttributeBacked(decl)) return undefined;
   if (typeof decl.attribute === 'string') return decl.attribute;
+  // A symbol-keyed property has no default attribute name, as in Lit.
+  if (typeof propName !== 'string') return undefined;
   return propName.toLowerCase();
 }
 
@@ -376,11 +378,12 @@ const BACKED_PROPS = new WeakMap();
 function buildAttributeBackedProps(Cls) {
   const props = declaredProperties(Cls);
   const out = [];
-  for (const [k, decl] of Object.entries(props)) {
-    const d = normalizeDecl(decl);
+  // Symbol keys too: one reaches an attribute through its `attribute` option.
+  for (const k of Reflect.ownKeys(props)) {
+    const d = normalizeDecl(props[k]);
     const primary = attributeNameFor(k, d);
     if (primary === undefined) continue;
-    const kebab = hyphenate(k);
+    const kebab = typeof k === 'string' ? hyphenate(k) : primary;
     const alias = typeof d.attribute !== 'string' && kebab !== primary ? kebab : undefined;
     out.push({ propName: k, def: d, primary, alias });
   }
