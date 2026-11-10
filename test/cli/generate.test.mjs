@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { resourceNames, pluralize } from '../../packages/cli/lib/generate/names.js';
 import { parseField, parseFields, columnFor } from '../../packages/cli/lib/generate/fields.js';
 import { addImports, registerTable, addOneRelations, insertBlock, dialectOf } from '../../packages/cli/lib/generate/schema-edit.js';
-import { parseGenerateArgs, applyPlan } from '../../packages/cli/lib/generate/index.js';
+import { parseGenerateArgs, applyPlan, migrationStamp, waitForNextMigrationSecond } from '../../packages/cli/lib/generate/index.js';
 import { removeTable } from '../../packages/cli/lib/generate/destroy.js';
 import { planMigration } from '../../packages/cli/lib/generate/migration.js';
 import { planController } from '../../packages/cli/lib/generate/controller.js';
@@ -171,6 +171,18 @@ test('controller writes one page per action, index at the segment root, and a re
   assert.match(plan.files[1].content, /export default function PagesAboutUsPage\(\)/);
   assert.match(plan.files[2].content, /for \(const path of \['\/pages', '\/pages\/about-us'\]\)/);
   assert.throws(() => planController({ ...ctxWith(''), hasPages: false }, { name: 'pages', actions: [] }), /no root layout/);
+});
+
+test('a migration generated in the same second as the last one still sorts after it', () => {
+  // The migrator applies folders in name order and the stamp has one-second
+  // resolution, so without the wait add_x_to_posts sorted before create_posts.
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-gen-stamp-'));
+  const planted = migrationStamp(new Date());
+  mkdirSync(join(dir, 'db', 'migrations', `${planted}_create_posts`), { recursive: true });
+  waitForNextMigrationSecond(dir);
+  assert.ok(migrationStamp(new Date()) > planted, 'the next stamp is a later second');
+  assert.equal(migrationStamp(new Date(Date.UTC(2026, 0, 2, 3, 4, 5))), '20260102030405');
+  waitForNextMigrationSecond(join(dir, 'missing'));
 });
 
 test('parseGenerateArgs reads the generator, the name, the fields and the Rails flags', () => {

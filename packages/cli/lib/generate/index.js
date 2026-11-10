@@ -14,7 +14,7 @@
  * that differs unless `--force` is given, prints every path the way Rails
  * does, then runs this CLI's own `db generate` so the migration exists.
  */
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -223,6 +223,38 @@ export function runGenerate(argv, opts = {}) {
 }
 
 /**
+ * The `YYYYMMDDHHmmss` UTC stamp drizzle-kit prefixes a migration folder with.
+ * @param {Date} date
+ */
+export function migrationStamp(date) {
+  return date.toISOString().replace(/\D/g, '').slice(0, 14);
+}
+
+/**
+ * Wait until a new migration's stamp sorts after every existing one. The
+ * migrator applies folders in name order and the stamp has one-second
+ * resolution, so two generators run within a second (`create_posts`, then
+ * `add_published_at_to_posts`) would share a stamp and apply alphabetically:
+ * the ALTER before the CREATE. Waits a second at most, and not at all when the
+ * last migration is older than this second.
+ * @param {string} appDir
+ */
+export function waitForNextMigrationSecond(appDir) {
+  let latest = '';
+  try {
+    for (const entry of readdirSync(join(appDir, 'db', 'migrations'))) {
+      const m = /^(\d{14})_/.exec(entry);
+      if (m && m[1] > latest) latest = m[1];
+    }
+  } catch {
+    return;
+  }
+  const deadline = Date.now() + 2000;
+  const sleeper = new Int32Array(new SharedArrayBuffer(4));
+  while (migrationStamp(new Date()) <= latest && Date.now() < deadline) Atomics.wait(sleeper, 0, 0, 50);
+}
+
+/**
  * Run this CLI's own `db generate` with the current runtime (no npx), as
  * `webjs test` prepares its database. The migration is applied on the next
  * `webjs dev`, `webjs start` or `webjs test`.
@@ -233,6 +265,7 @@ export function runGenerate(argv, opts = {}) {
  * @returns {number} the exit code
  */
 export function runDbGenerate(appDir, name, log, error) {
+  waitForNextMigrationSecond(appDir);
   log(`${'migration'.padStart(12)}  webjs db generate --name=${name}`);
   const r = spawnSync(process.execPath, [CLI_BIN, 'db', 'generate', `--name=${name}`], {
     cwd: appDir,

@@ -47,6 +47,16 @@ async function makeApp(opts) {
 /** @param {import('node:child_process').SpawnSyncReturns<string>} r */
 const out = (r) => r.stdout + r.stderr;
 
+/**
+ * Assert a generated test ran. `node --test` names each passing test;
+ * `bun test`, which `webjs test` runs when this file runs under the Bun matrix,
+ * names the files it ran instead.
+ * @param {import('node:child_process').SpawnSyncReturns<string>} r
+ * @param {RegExp} name
+ * @param {string} file
+ */
+const ran = (r, name, file) => assert.match(out(r), process.versions.bun ? new RegExp(file.replace(/[./]/g, '\\$&') + ':') : name);
+
 test('scaffold, references and resource generate an app that checks, typechecks and passes its tests', { timeout: 300_000 }, async () => {
   const { cwd, app, cli } = await makeApp({});
   try {
@@ -74,8 +84,8 @@ test('scaffold, references and resource generate an app that checks, typechecks 
     assert.equal(tc.status, 0, out(tc));
     const tests = cli('test', '--server');
     assert.equal(tests.status, 0, out(tests));
-    assert.match(tests.stdout, /create, show, edit and delete a post through its forms/);
-    assert.match(tests.stdout, /create, read, update and delete a product over JSON/);
+    ran(tests, /create, show, edit and delete a post through its forms/, 'test/posts/posts.test.ts');
+    ran(tests, /create, read, update and delete a product over JSON/, 'test/products/products.test.ts');
 
     // Every generated page that takes no parameter renders (status --boot runs
     // no before-steps, so the dev database is migrated first).
@@ -114,7 +124,7 @@ test('scaffold in the api template writes JSON route handlers and they pass thei
     assert.equal(tc.status, 0, out(tc));
     const tests = cli('test', '--server');
     assert.equal(tests.status, 0, out(tests));
-    assert.match(tests.stdout, /create, read, update and delete a widget over JSON/);
+    ran(tests, /create, read, update and delete a widget over JSON/, 'test/widgets/widgets.test.ts');
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
@@ -174,7 +184,7 @@ test('authentication adds a password hash to users, and its pages, middleware an
     assert.equal(tc.status, 0, out(tc));
     const tests = cli('test', '--server');
     assert.equal(tests.status, 0, out(tests));
-    assert.match(tests.stdout, /sign up, see the dashboard, log out, then log in again/);
+    ran(tests, /sign up, see the dashboard, log out, then log in again/, 'test/auth/auth.test.ts');
 
     const migrate = cli('db', 'migrate');
     assert.equal(migrate.status, 0, out(migrate));
@@ -207,7 +217,7 @@ test('migration edits a table with Rails-named migrations, and controller pages 
     assert.equal(tc.status, 0, out(tc));
     const tests = cli('test', '--server');
     assert.equal(tests.status, 0, out(tests));
-    assert.match(tests.stdout, /\/pages\/about renders/);
+    ran(tests, /\/pages\/about renders/, 'test/pages/pages.test.ts');
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
