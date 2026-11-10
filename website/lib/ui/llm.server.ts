@@ -575,7 +575,7 @@ export async function renderExamplesSection(origin: string): Promise<string[]> {
     '',
     'Working WebJs apps with their source open. Read one before writing the same thing yourself.',
     '',
-    `- [WebJs feature gallery](${GALLERY_URL}): one runnable, densely commented demo per framework feature, the same demos a new app is scaffolded with. Source: ${tree('gallery')}`,
+    `- [WebJs feature gallery](${GALLERY_URL}): one runnable, densely commented demo per framework feature. Source: ${tree('gallery')}`,
   ];
   for (const f of await galleryNav()) {
     lines.push(`- [${f.title}](${GALLERY_URL}${f.href}): ${f.blurb} Source: ${tree(`gallery/app${f.href}`)}`);

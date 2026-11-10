@@ -104,8 +104,8 @@ const ARRIVES = [
     body: 'A palette and a type scale ship as design tokens rather than values scattered through components, so every screen the app grows shares them and restyling the whole thing means editing the tokens, not hunting through the markup.',
   },
   {
-    title: 'Agent skills',
-    body: 'A scaffolded app ships a skill its coding agent reads on demand, covering the design system, the modules architecture, and the rest of the conventions. One source, understood by Claude Code, Cursor, Copilot, and opencode alike, so the agent looks up how this app is meant to be built instead of importing habits from another framework.',
+    title: 'One brief for every agent',
+    body: 'A scaffolded app ships one AGENTS.md: the short WebJs brief, which names only what differs from Next.js routing and Lit components, plus a section the agent keeps current about the app itself. Claude Code, Cursor, Copilot, and opencode read the same file, and npx webjs source lists what the framework already provides, so the agent reuses a feature instead of rebuilding it.',
   },
 ];
 

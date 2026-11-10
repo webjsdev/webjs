@@ -79,10 +79,10 @@ export const metadata = {
 //   compiled away     and the action beside it never ships at all
 //   browser is the    the standard is kept and the ergonomics are kept too
 //   framework
-//   the app has a     the demos teach, the clear removes them, the shape
+//   the app has a     the brief and one example feature teach, the shape
 //   shape             stays. pays off the hero's first half
-//   framework         and when the demos and the skill run out, the framework
-//   source            itself is readable, in this app's own node_modules
+//   framework         and when the brief and the example run out, the
+//   source            framework itself is readable, in this app's node_modules
 //   works without     the backend template is the option nobody expects, and
 //   a UI too          it is what converts a reader who thinks this is UI-only.
 //                     NOT "Start where you are": that collided with the CTA
@@ -107,9 +107,9 @@ export const metadata = {
 // deleted for restating whole sections. It does NOT cover a line that stops a
 // fast scroller forming a wrong impression from the section they landed on.
 // "It works without a UI too" therefore repeats two things on purpose: that the app
-// arrives with demos AND that one command clears them, and that the defaults
-// are swappable. Someone who lands there cold and reads only "you get a working
-// app full of demos" bounces, and the fix for that is not upstream prose they
+// arrives with one example feature that is small and meant to be deleted, and
+// that the defaults are swappable. Someone who lands there cold and reads only
+// "you get a working app" may expect a pile of demos and bounce, and the fix for that is not upstream prose they
 // did not read. Cut an echo when missing it costs the reader nothing. Keep it
 // when missing it costs them the wrong idea.
 //
@@ -895,18 +895,20 @@ export default function LandingPage() {
         <div class="max-w-3xl mx-auto mb-12 text-center">
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">The app has a shape before your agent starts</h2>
           <p class="text-fg-muted text-base leading-[1.6] m-0">
-            A scaffolded app arrives small: a layout, a home page, a database
-            and a 47-line AGENTS.md. Your agent already writes Next.js routes and Lit
-            components, and the brief names only what differs, so it starts on
-            your feature with its context still free.
-            Every feature also has a runnable demo at gallery.webjs.dev.
+            A scaffolded app arrives small: a layout, a home page, a database,
+            one example feature to copy and then delete, and a 65-line AGENTS.md.
+            Your agent already writes Next.js routes and Lit components, and the
+            brief names only what differs, so it starts on your feature with its
+            context still free. When it needs something WebJs already provides,
+            <code>npx webjs source</code> lists it, and every feature has a
+            runnable demo at gallery.webjs.dev.
           </p>
         </div>
         <!-- THREE artifacts: what a scaffolded app arrives with, where a
              feature's code goes, and how the UI is built. The first window is
-             COPIED FROM A REAL SCAFFOLDED APP (ls app/ and wc -l AGENTS.md), so
-             regenerate one and re-check it before editing. The 47 goes stale
-             quietly when the brief changes.
+             COPIED FROM A REAL SCAFFOLDED APP (ls app/, wc -l AGENTS.md, and the
+             files under modules/users/), so regenerate one and re-check it
+             before editing. The 65 goes stale quietly when AGENTS.md changes.
 
              (No backticks in here, per invariant 9: a backtick inside an html
              template body closes the literal at JS-parse time, comment or not.
@@ -923,7 +925,7 @@ icon.svg   layout.ts
 page.ts    manifest.webmanifest
 
 <span class="text-accent">$</span> wc -l my-app/AGENTS.md
-47 my-app/AGENTS.md
+65 my-app/AGENTS.md
 <span class="text-fg-subtle"># the brief: what differs from</span>
 <span class="text-fg-subtle"># Next.js routing and Lit.</span></code></pre>
             </figure>
@@ -932,16 +934,15 @@ page.ts    manifest.webmanifest
             <p class="text-sm font-medium leading-[1.4] text-fg-subtle mb-2.5 ml-1">Where the code goes</p>
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>modules/</span></figcaption>
-              <pre class="scroll-thin m-0 p-4 overflow-x-auto font-mono text-sm leading-[1.7] [tab-size:2] flex-1" role="region" tabindex="0" aria-label="The modules architecture a scaffolded app ships with"><code>modules/auth/
-  actions/signup.server.ts
-  queries/current-user.server.ts
+              <pre class="scroll-thin m-0 p-4 overflow-x-auto font-mono text-sm leading-[1.7] [tab-size:2] flex-1" role="region" tabindex="0" aria-label="The modules architecture a scaffolded app ships with"><code>modules/users/
+  actions/add-user.server.ts
+  actions/clear-users.server.ts
+  queries/list-users.server.ts
+  components/user-list.ts
   types.ts
-modules/forms/
-  actions/send-message.server.ts
-db/schema.server.ts
-<span class="text-fg-subtle"># one feature, one folder. reads in</span>
-<span class="text-fg-subtle"># queries, writes in actions, one</span>
-<span class="text-fg-subtle"># function per file.</span></code></pre>
+<span class="text-fg-subtle"># the example feature a new app</span>
+<span class="text-fg-subtle"># ships: reads in queries, writes in</span>
+<span class="text-fg-subtle"># actions, one function per file.</span></code></pre>
             </figure>
           </div>
           <div class="flex flex-col min-w-0">
@@ -969,7 +970,7 @@ db/schema.server.ts
          "What you write is what runs", where it chains off the no-build
          decision instead, and that reads well until you notice the lede would
          be naming
-         a ladder (demos, then skill, then source) the reader has not climbed
+         a ladder (brief, then example, then source) the reader has not climbed
          yet. The trigger decides the slot.
 
          This is the readable half of the deleted "Light enough for AI" section,
@@ -1059,7 +1060,7 @@ db/schema.server.ts
       <div class="max-w-6xl mx-auto px-6">
         <div class="max-w-3xl mx-auto mb-12 text-center">
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">It works without a UI too</h2>
-          <p class="text-fg-muted text-base leading-[1.6] m-0">Two starting points, one command each. One is full-stack, the other is routes and modules with no UI at all. Either gives you a working app with live feature demos rather than an empty directory, and one command takes the demos out whenever you want to start clean.</p>
+          <p class="text-fg-muted text-base leading-[1.6] m-0">Two starting points, one command each. One is full-stack, the other is routes and modules with no UI at all. Either gives you a working app with one example feature wired end to end rather than an empty directory, small enough to read in a minute and to delete once your own features are in.</p>
         </div>
         <div class="grid gap-4 grid-cols-1 max-w-2xl mx-auto wide:grid-cols-2 wide:max-w-3xl">
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
@@ -1125,7 +1126,7 @@ middleware.ts</pre>
       //
       // The one phrase carrying weight was "from the app folder", buried as an
       // aside. It is what the two sections above just earned: the conventions
-      // live in a skill inside the app, and the framework source lives in its
+      // live in AGENTS.md inside the app, and the framework source lives in its
       // node_modules, so launching the agent THERE is what puts either in
       // reach. That is now the second sentence rather than a detail about
       // which directory you happen to be in.
@@ -1155,7 +1156,7 @@ middleware.ts</pre>
       // lines in the first place. So measure the ELEMENT, not a copy of it: an
       // earlier pass measured a clone whose class list had been rewritten and
       // read 57px here, 31px off.
-      lede: 'Run the command below, then start your agent in the new app folder. The conventions, demos, and framework source are already there.',
+      lede: 'Run the command below, then start your agent in the new app folder. The conventions, a demo, and framework source are already there.',
       primary: { href: DOCS_START_PATH, label: 'Get started' },
       // NOT a second docs link. This slot used to point at DOCS_PATH while the
       // primary pointed at DOCS_START_PATH, and /docs is a 308 to

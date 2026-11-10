@@ -75,7 +75,7 @@ older, unrelated Java framework also used the name WebJS.
 > - Any product UI (todo, blog, notes, dashboard, marketplace, social, e-commerce, a SaaS with accounts…) → **default** (`webjs create <name>`)
 > - Backend-only HTTP/JSON API, no UI → **`--template api`**
 >
-> **The scaffold is minimal, grown in place.** It ships a root layout, a starting home page, a theme toggle, database wiring, and one starter test. The framework context is a short brief in `AGENTS.md`: WebJs follows Next.js App Router routing and Lit's component APIs, so the brief lists only what differs, and `webjs check` refuses the rest with the fix. Build the app the user asked for on top of the scaffold. Runnable demos of every feature live at [gallery.webjs.dev](https://gallery.webjs.dev) (source in `gallery/`).
+> **The scaffold is minimal, grown in place.** It ships a root layout, a starting home page, a theme toggle, database wiring, a starter test, and one example feature module (`modules/users/`) to copy and then delete. The framework context is a short brief in `AGENTS.md`, which also carries a section the agent keeps current about the app: WebJs follows Next.js App Router routing and Lit's component APIs, so the brief lists only what differs, and `webjs check` refuses the rest with the fix. Build the app the user asked for on top of the scaffold; `npx webjs source` lists what WebJs already provides. Runnable demos of every feature live at [gallery.webjs.dev](https://gallery.webjs.dev) (source in `gallery/`).
 >
 > Full rules: [`AGENTS.md` → How AI agents must scaffold](./AGENTS.md#how-ai-agents-must-scaffold).
 > Full framework docs (every API, every recipe): **https://webjs.dev/docs**.
