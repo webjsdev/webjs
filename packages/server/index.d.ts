@@ -1300,6 +1300,12 @@ export interface AuthConfig {
   adapter?: AuthAdapter | { load?: Function; save?: Function; destroy?: Function };
   pages?: { signIn?: string; signOut?: string; error?: string };
   /**
+   * Auth.js's `useSecureCookies`: force the Secure flag and the `__Host-`
+   * cookie names on or off. Unset, they follow the auth URL's protocol
+   * (`AUTH_URL`'s when set, else the request's), never `NODE_ENV`.
+   */
+  useSecureCookies?: boolean;
+  /**
    * Where the auth routes are mounted, as Auth.js's `basePath`. Defaults to
    * the path of `AUTH_URL` when it has one, else `/api/auth`. `AUTH_URL` (or
    * `NEXTAUTH_URL`) also sets the origin OAuth callback URLs use.

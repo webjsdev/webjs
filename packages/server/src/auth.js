@@ -289,6 +289,8 @@ export function GitHub(opts = {}) {
  * @property {{ session?: Function, jwt?: Function, signIn?: Function, redirect?: Function }} [callbacks]
  * @property {{ load?: Function, save?: Function, destroy?: Function }} [adapter]
  * @property {{ signIn?: string, signOut?: string, error?: string }} [pages]
+ * @property {boolean} [useSecureCookies] Auth.js's: force secure cookies on or
+ *   off; unset, the auth URL's protocol decides (never NODE_ENV)
  */
 
 /**
@@ -346,7 +348,20 @@ export function createAuth(config) {
   const basePath = '/' + String(rawBase || '/api/auth').replace(/^\/+|\/+$/g, '');
   /** @param {Request | null | undefined} req */
   const authBase = (req) => `${authOrigin || (req ? new URL(req.url).origin : 'http://localhost:8080')}${basePath}`;
-  const secure = () => process.env.NODE_ENV === 'production';
+  // Secure cookies (the Secure flag and the __Secure- / __Host- names) follow
+  // Auth.js's rule (core/src/lib/init.ts): `useSecureCookies` when set, else
+  // whether the auth URL is https, AUTH_URL's when set, else the request's.
+  // Not NODE_ENV: `npm start` over plain http (a LAN address, a staging host)
+  // would set cookies the browser drops, and sign-in would loop. A request
+  // and every cookie it reads or writes share one answer, and so do the two
+  // legs of an OAuth round trip, which share a protocol.
+  /** @param {Request | null | undefined} req */
+  const secure = (req) => {
+    if (typeof config.useSecureCookies === 'boolean') return config.useSecureCookies;
+    if (authOrigin) return authOrigin.startsWith('https:');
+    if (req) { try { return new URL(req.url).protocol === 'https:'; } catch { /* unparsable: not secure */ } }
+    return false;
+  };
 
   /** @type {Map<string, ProviderConfig>} */
   const providers = new Map();
@@ -391,14 +406,14 @@ export function createAuth(config) {
     // page cacheable so a logged-in body could be served to the next visitor.
     markDynamicAccess();
     const cookies = parseCookies(req.headers.get('cookie') || '');
-    const raw = cookies[cookieName(AUTH_COOKIE, secure())];
+    const raw = cookies[cookieName(AUTH_COOKIE, secure(req))];
     if (!raw) return null;
 
     // A credentials sign-in always writes the encrypted JWT, as in Auth.js, so
     // under the database strategy that cookie is read as one too: Auth.js
     // itself cannot read it back there, and the sign-in silently fails.
     if (strategy === 'jwt' || isJwe(raw)) {
-      const payload = await decodeJwt(raw, secret, cookieName(AUTH_COOKIE, secure()));
+      const payload = await decodeJwt(raw, secret, cookieName(AUTH_COOKIE, secure(req)));
       if (!payload) return null;
       let token = cb.jwt ? await cb.jwt({ token: payload, user: undefined }) : payload;
       // Returning null (or anything but an object) from the jwt callback ends
@@ -407,7 +422,7 @@ export function createAuth(config) {
         // The cookie goes too, so later requests do not decrypt it and run the
         // callback again until it expires. Best effort: a read outside a
         // request, or after the headers were sent, cannot set a cookie.
-        try { if (getRequest()) queueSetCookie(clearCookie(cookieName(AUTH_COOKIE, secure()), secure())); } catch {}
+        try { if (getRequest()) queueSetCookie(clearCookie(cookieName(AUTH_COOKIE, secure(req)), secure(req))); } catch {}
         return null;
       }
       const exp = typeof token.exp === 'number' ? token.exp : Math.floor(Date.now() / 1000) + maxAge;
@@ -416,7 +431,7 @@ export function createAuth(config) {
       return cb.session ? cb.session({ session, token, user: undefined }) : session;
     }
 
-    if (authAdapter) return readAdapterSession(raw);
+    if (authAdapter) return readAdapterSession(raw, req);
     const sid = await unsign(raw, secret);
     if (!sid || !dbStore) return null;
     const data = await dbStore.load(sid);
@@ -429,8 +444,8 @@ export function createAuth(config) {
   // account (for OAuth, the provider's token response: access_token,
   // refresh_token, expires_at, ...) and the raw profile, with trigger
   // 'signIn', so `if (account) token.accessToken = account.access_token` works.
-  async function writeSession(user, account, profile) {
-    if (strategy === 'jwt') return writeJwtSession(user, account, profile);
+  async function writeSession(user, account, profile, req = getRequest()) {
+    if (strategy === 'jwt') return writeJwtSession(user, account, profile, req);
     if (authAdapter) {
       // Under the database strategy a credentials sign-in gets a database
       // session too, so it can be revoked. Auth.js writes a JWT here that its
@@ -440,23 +455,23 @@ export function createAuth(config) {
       try {
         const sessionToken = crypto.randomUUID();
         await authAdapter.createSession({ sessionToken, userId: user.id, expires: new Date(Date.now() + maxAgeMs) });
-        return setCookie(cookieName(AUTH_COOKIE, secure()), sessionToken, maxAgeMs, secure());
+        return setCookie(cookieName(AUTH_COOKIE, secure(req)), sessionToken, maxAgeMs, secure(req));
       } catch (e) {
         if (account?.type !== 'credentials') throw e;
         console.warn('[webjs] createAuth: the adapter refused a session for a credentials user, so a JWT session is used instead:', /** @type any */ (e)?.message || e);
-        return writeJwtSession(user, account, profile);
+        return writeJwtSession(user, account, profile, req);
       }
     }
     const sid = randomId();
     await dbStore.save(sid, user, maxAgeMs);
-    return setCookie(cookieName(AUTH_COOKIE, secure()), await sign(sid, secret), maxAgeMs, secure());
+    return setCookie(cookieName(AUTH_COOKIE, secure(req)), await sign(sid, secret), maxAgeMs, secure(req));
   }
 
   /**
    * The encrypted JWT session cookie, with the jwt callback run at sign-in.
    * @param {any} user @param {any} account @param {any} profile
    */
-  async function writeJwtSession(user, account, profile) {
+  async function writeJwtSession(user, account, profile, req = getRequest()) {
     let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
     if (cb.jwt) token = await cb.jwt({ token, user, account, profile, trigger: 'signIn' });
     // Anything but an object from the jwt callback denies the sign-in: no
@@ -466,7 +481,7 @@ export function createAuth(config) {
     // whatever object the jwt callback returned.
     const now = Math.floor(Date.now() / 1000);
     token = { ...token, iat: typeof token.iat === 'number' ? token.iat : now, exp: typeof token.exp === 'number' ? token.exp : now + maxAge };
-    return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret, cookieName(AUTH_COOKIE, secure())), maxAgeMs, secure());
+    return setCookie(cookieName(AUTH_COOKIE, secure(req)), await encodeJwt(token, secret, cookieName(AUTH_COOKIE, secure(req))), maxAgeMs, secure(req));
   }
 
   /**
@@ -476,7 +491,7 @@ export function createAuth(config) {
    * cookie re-set. The `session` callback receives `{ session, user }`.
    * @param {string} sessionToken
    */
-  async function readAdapterSession(sessionToken) {
+  async function readAdapterSession(sessionToken, req = getRequest()) {
     const found = await authAdapter.getSessionAndUser(sessionToken);
     if (!found) return null;
     const { session: row, user } = found;
@@ -489,7 +504,7 @@ export function createAuth(config) {
     if (expires - maxAgeMs + updateAge * 1000 <= Date.now()) {
       until = Date.now() + maxAgeMs;
       await authAdapter.updateSession?.({ sessionToken, expires: new Date(until) });
-      try { if (getRequest()) queueSetCookie(setCookie(cookieName(AUTH_COOKIE, secure()), sessionToken, maxAgeMs, secure())); } catch { /* headers already sent: the row is extended, the cookie catches up next time */ }
+      try { if (getRequest()) queueSetCookie(setCookie(cookieName(AUTH_COOKIE, secure(req)), sessionToken, maxAgeMs, secure(req))); } catch { /* headers already sent: the row is extended, the cookie catches up next time */ }
     }
     const session = { user: { id: user.id, name: user.name, email: user.email, image: user.image }, expires: new Date(until).toISOString() };
     return cb.session ? cb.session({ session, user, token: undefined }) : session;
@@ -508,7 +523,7 @@ export function createAuth(config) {
    * @param {any} provider
    */
   async function adapterUserFor(req, user, account, provider) {
-    const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure())];
+    const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure(req))];
     const current = raw && !isJwe(raw) ? (await authAdapter.getSessionAndUser(raw))?.user ?? null : null;
     const { accessToken: _legacy, ...accountRow } = account;
     const linked = await authAdapter.getUserByAccount({ provider: account.provider, providerAccountId: account.providerAccountId });
@@ -614,7 +629,7 @@ export function createAuth(config) {
       const account = { provider: providerId, type: 'credentials', providerAccountId: String(user.id ?? '') };
       const refused = await signInRefusal(user, account, [], opts.req || getRequest());
       if (refused) return refused;
-      const cookie = await writeSession(user, account);
+      const cookie = await writeSession(user, account, undefined, opts.req || getRequest());
       if (!cookie) return new Response(null, { status: 302, headers: { location: withQuery(pages.error || '/', 'error', 'AccessDenied') } });
       // The app's own value and a submitted one both go through the redirect
       // callback (its default allows only this origin), as in Auth.js.
@@ -632,22 +647,23 @@ export function createAuth(config) {
 
   async function signOutFn(opts = {}) {
     const hdrs = new Headers();
+    const req = opts.req || getRequest();
     // Through the redirect callback, as every sign-in target is: the default
     // keeps this origin only, and an app allows an identity provider's
     // end-session URL by returning it from `callbacks.redirect`.
     hdrs.set('location', headerSafeLocation(await resolveRedirect(opts.redirectTo, opts.req || getRequest())));
-    hdrs.append('set-cookie', clearCookie(cookieName(AUTH_COOKIE, secure()), secure()));
+    hdrs.append('set-cookie', clearCookie(cookieName(AUTH_COOKIE, secure(req)), secure(req)));
 
     if (strategy === 'database' && dbStore) {
       const r = opts.req || getRequest();
       if (r) {
-        const raw = parseCookies(r.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure())];
+        const raw = parseCookies(r.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure(req))];
         if (raw) { const sid = await unsign(raw, secret); if (sid) await dbStore.destroy(sid); }
       }
     }
     if (authAdapter) {
       const r = opts.req || getRequest();
-      const raw = r && parseCookies(r.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure())];
+      const raw = r && parseCookies(r.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure(req))];
       if (raw && !isJwe(raw)) {
         try { await authAdapter.deleteSession(raw); } catch (e) { console.error('[webjs] signOut: deleteSession failed:', e); }
       }
@@ -670,14 +686,14 @@ export function createAuth(config) {
 
     const hdrs = new Headers();
     hdrs.set('location', url.toString());
-    hdrs.append('set-cookie', setCookie(cookieName(STATE_COOKIE, secure()), await sign(state, secret), 600_000, secure()));
+    hdrs.append('set-cookie', setCookie(cookieName(STATE_COOKIE, secure(req)), await sign(state, secret), 600_000, secure(req)));
     // The post-sign-in target rides in its own signed cookie (#1495). With no
     // valid target, any leftover cookie from an abandoned earlier attempt is
     // cleared so it cannot steer this sign-in somewhere stale.
     const target = await resolveRedirect(opts.redirectTo, req, null);
     hdrs.append('set-cookie', target
-      ? setCookie(cookieName(REDIRECT_COOKIE, secure()), await sign(target, secret), 600_000, secure())
-      : clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
+      ? setCookie(cookieName(REDIRECT_COOKIE, secure(req)), await sign(target, secret), 600_000, secure(req))
+      : clearCookie(cookieName(REDIRECT_COOKIE, secure(req)), secure(req)));
     return new Response(null, { status: 302, headers: hdrs });
   }
 
@@ -691,7 +707,7 @@ export function createAuth(config) {
    * @returns {Promise<string | null>}
    */
   async function readRedirectCookie(req) {
-    const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(REDIRECT_COOKIE, secure())];
+    const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(REDIRECT_COOKIE, secure(req))];
     if (!raw) return null;
     const value = await unsign(raw, secret);
     if (typeof value !== 'string') return null;
@@ -704,7 +720,7 @@ export function createAuth(config) {
     const state = url.searchParams.get('state');
     if (!code || !state) return new Response('Missing code or state', { status: 400 });
 
-    const rawState = parseCookies(req.headers.get('cookie') || '')[cookieName(STATE_COOKIE, secure())];
+    const rawState = parseCookies(req.headers.get('cookie') || '')[cookieName(STATE_COOKIE, secure(req))];
     if (!rawState) return new Response('Missing state cookie', { status: 403 });
     const verified = await unsign(rawState, secret);
     if (!verified || verified !== state) return new Response('Invalid state', { status: 403 });
@@ -741,8 +757,8 @@ export function createAuth(config) {
     // Auth.js's account: the provider's token response, plus who it is for.
     // `accessToken` stays alongside `access_token` for the earlier shape.
     const flowCookies = [
-      clearCookie(cookieName(STATE_COOKIE, secure()), secure()),
-      clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()),
+      clearCookie(cookieName(STATE_COOKIE, secure(req)), secure(req)),
+      clearCookie(cookieName(REDIRECT_COOKIE, secure(req)), secure(req)),
     ];
     /** A refused OAuth sign-in: the error page with its code, the flow's cookies cleared. */
     const oauthError = (code) => {
@@ -763,13 +779,13 @@ export function createAuth(config) {
       if (typeof resolved === 'string') return oauthError(resolved);
       sessionUser = resolved;
     }
-    const sessionCookie = await writeSession(sessionUser, account, rawProfile);
+    const sessionCookie = await writeSession(sessionUser, account, rawProfile, req);
     if (!sessionCookie) return oauthError('AccessDenied');
     const hdrs = new Headers();
     hdrs.set('location', headerSafeLocation((await readRedirectCookie(req)) || '/'));
     hdrs.append('set-cookie', sessionCookie);
-    hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
-    hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
+    hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure(req)), secure(req)));
+    hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure(req)), secure(req)));
     return new Response(null, { status: 302, headers: hdrs });
   }
 
