@@ -693,6 +693,28 @@ export default ({ actionData }) => html\`<form action=\${count}></form><p id="n"
   assert.equal(second.status, 303, 'prevState.n (11) + 1 = 12, a success');
 });
 
+test('an action with an optional second parameter receives the form data first (#1686 review)', async () => {
+  // (input, opts = {}) declares two parameters, but its second has a default,
+  // so it is an ordinary action: input is the form data, never a prevState.
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/p/actions/p.server.ts': `'use server';\nexport async function save(input, opts = {}) { const t = input && typeof input.get === 'function' ? input.get('title') : 'NO-INPUT'; return { success: false, error: 'echo', t }; }\n`,
+      'app/save/page.ts': `
+import { html } from ${CORE};
+import { save } from '../../modules/p/actions/p.server.ts';
+export default ({ actionData }) => html\`<form action=\${save}></form><p id="t">\${actionData?.t ?? ''}</p>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const page = await app.handle(new Request('http://x/save'));
+  const id = identityOf(await page.text());
+  const res = await app.handle(new Request('http://x/save', form({ title: 'hello', __webjs_action: id })));
+  assert.equal(res.status, 422);
+  assert.match(await res.text(), /<p id="t">hello<\/p>/, 'input is the form data');
+});
+
 test('a render that shows a flash is never shared-cacheable, even on a public page', async () => {
   const app = await createRequestHandler({
     appDir: makeApp({
