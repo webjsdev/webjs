@@ -1820,9 +1820,17 @@ Full docs: https://webjs.dev/docs`);
         // No name: with --pkg, that package's entry points (as the MCP tool
         // answers { package }); without, the feature catalogue, so an agent
         // that does not know a name yet finds it in one call (#1686).
-        console.log(pkg ? listSources({ roots, readdir }, pkg) : featureCatalog());
-        // A package that is not installed is a miss, exit 1, as for a name.
-        if (pkg && !roots.some((r) => r.pkg === pkg)) process.exit(1);
+        if (!pkg) { console.log(featureCatalog()); break; }
+        // A package that is not installed is a miss, as a name no package
+        // exports is: the message on stderr, exit 1.
+        if (!roots.some((r) => r.pkg === pkg)) {
+          console.error(listSources({ roots, readdir }, pkg));
+          process.exit(1);
+        }
+        // The next step a shell can take (the MCP tool offers its own modes).
+        console.log(listSources({ roots, readdir }, pkg, {
+          readHint: `Open a file under node_modules/@webjsdev/${pkg}/, or print one export with \`npx webjs source <Export>\`.`,
+        }));
         break;
       }
       const out = await lookupExport({ roots, readFile, readdir }, name, pkg);

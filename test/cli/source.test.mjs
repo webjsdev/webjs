@@ -41,7 +41,12 @@ test('webjs source --pkg <name> alone lists that package, as the MCP tool does f
   // A package that is not installed is a miss, as a name no package exports is.
   const typo = run('--pkg', 'sever');
   assert.equal(typo.status, 1, 'a --pkg typo exits 1');
-  assert.match(typo.stdout, /not installed\/resolvable/);
+  assert.match(typo.stderr, /not installed\/resolvable/, 'with the message on stderr');
+  assert.equal(typo.stdout, '', 'and nothing on stdout');
+  // The listing offers what a shell can do, not the MCP tool's modes.
+  const listed = run('--pkg', 'core');
+  assert.match(listed.stdout, /npx webjs source <Export>/);
+  assert.doesNotMatch(listed.stdout, /source\(\{ path \}\)/, 'no MCP-only advice');
   // A name after the flag's value is still the name.
   const named = run('--pkg', 'core', 'optimistic');
   assert.equal(named.status, 0, named.stderr);

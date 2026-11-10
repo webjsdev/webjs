@@ -135,21 +135,25 @@ export function walkSource(dir, deps) {
 }
 
 /**
- * No-args / `package` mode: list the resolved packages and their `src/`
- * top-level files (the entry points), so the agent has a map to grep or read.
+ * `package` mode: list the resolved packages and their `src/` top-level files
+ * (the entry points), so the agent has a map to grep or read. `readHint` is
+ * the next step the caller offers, since the MCP tool and the CLI read the
+ * listing with different commands.
  *
  * @param {{ roots: Array<{ pkg: string, root: string, src: string }>, readdir: Function }} deps
  * @param {string} [pkgFilter]
+ * @param {{ readHint?: string }} [opts]
  * @returns {string}
  */
-export function listSources(deps, pkgFilter) {
+export function listSources(deps, pkgFilter, opts = {}) {
+  const readHint = opts.readHint ?? 'Read with `source({ path })` or search with `source({ query })`.';
   const roots = pkgFilter ? deps.roots.filter((r) => r.pkg === pkgFilter) : deps.roots;
   if (!roots.length) {
     return pkgFilter
       ? `@webjsdev/${pkgFilter} is not installed/resolvable here. Resolvable: ${deps.roots.map((r) => r.pkg).join(', ') || '(none)'}`
       : 'No @webjsdev/* packages resolvable from here (run inside a webjs app or the monorepo).';
   }
-  const lines = ['webjs framework authored source (buildless; server-side this runs directly, and core ships a built browser dist/ that is excluded here). Read with `source({ path })` or search with `source({ query })`.', ''];
+  const lines = [`webjs framework authored source (buildless; server-side this runs directly, and core ships a built browser dist/ that is excluded here). ${readHint}`, ''];
   for (const r of roots) {
     const dirName = r.src.split(sep).pop(); // 'src' for most, 'lib' for cli
     let entries = [];
