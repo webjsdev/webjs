@@ -194,6 +194,11 @@ jobs:
       # silently vanish on the other. Asserts both directions.
       - name: SSR comment and raw-text handling on Bun
         run: bun test/bun/comment-not-an-element.mjs
+      # An unquoted attribute value holding a hole is written quoted, and a
+      # template result built from data is refused (#1686): a slicing or regex
+      # difference between V8 and JSC here would be an attribute injection.
+      - name: SSR unquoted attribute values on Bun
+        run: bun test/bun/ssr-unquoted-attr.mjs
       # The one-pass SSR renderer on Bun (#1646): the per-template tokenizer,
       # the op walker and the in-walk component expansion are string slicing
       # and regex work on the hot path, where a V8-versus-JSC difference shows

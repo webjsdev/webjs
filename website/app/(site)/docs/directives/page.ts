@@ -107,6 +107,16 @@ html\`&lt;ul&gt;\${asyncAppend(logTail(), (line, i) =&gt; html\`&lt;li&gt;\${i}:
 html\`&lt;div style=\${styleMap({ color: c, fontSize: size, '--gap': gap })}&gt;\`;
 html\`&lt;img src=\${ifDefined(src)}&gt;\`;</code-block>
 
+    <h2>Lit's template rules</h2>
+    <p>The renderer follows lit-html's own test suite, ported into WebJs. A few rules from it that code relies on:</p>
+    <ul>
+      <li>A DOM node in a child hole is inserted as that node, and an array or iterable of nodes inserts each one. An empty string renders no node.</li>
+      <li>A hole inside <code>&lt;script&gt;</code>, <code>&lt;style&gt;</code>, <code>&lt;textarea&gt;</code> or <code>&lt;title&gt;</code> renders as text, on the server and the client alike.</li>
+      <li>An unquoted attribute value may mix text and holes (<code>class=card-\${variant}</code>, <code>href=\${base}/\${slug}</code>). It is one value running to the next space or <code>&gt;</code>, and the server writes it quoted and escaped, so a value holding a space or a <code>&gt;</code> cannot add an attribute.</li>
+      <li><code>render(value, container)</code> returns Lit's root part: <code>setConnected(false)</code> disconnects the async directives that render created and <code>setConnected(true)</code> reconnects them.</li>
+      <li>A template result is only rendered when it came from <code>html</code>, <code>svg</code> or <code>mathml</code>. An object that only looks like one (JSON carrying the template shape) is refused, as Lit refuses it, so data can never be rendered as markup.</li>
+    </ul>
+
     <h2>nothing / noChange</h2>
     <p>Lit's sentinels. <code>nothing</code> renders nothing in a child position, removes an attribute (the whole attribute when it is one piece of an interpolated value), and assigns <code>undefined</code> to a property. <code>noChange</code> leaves the last committed value in place. Like Lit, a plain attribute hole renders <code>null</code> and <code>undefined</code> as an EMPTY attribute and a boolean as text, so write <code>attr=\${value ?? nothing}</code> to omit one and <code>?checked=\${on}</code> for a boolean attribute.</p>
     <code-block>html\`&lt;a href=\${url} aria-current=\${active ? 'page' : nothing}&gt;\`;
