@@ -18,7 +18,7 @@ export default session({
   storage: cookieSessionStorage(),  // or storeSessionStorage() for Redis
 });</code-block>
 
-    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly), the key used to sign session cookies. In development and tests (<code>webjs dev</code>, <code>webjs test</code>, or <code>NODE_ENV=development</code> / <code>test</code>) a missing one is generated once into the gitignored <code>.webjs/dev-secret</code>, with a warning, so a fresh clone or worktree works before anyone writes an <code>.env</code>. Anywhere else it is required, including a process with no <code>NODE_ENV</code> at all.</p>
+    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly), the key used to sign session cookies. In development and tests (<code>webjs dev</code>, <code>webjs test</code>, or <code>NODE_ENV=development</code> / <code>test</code>) a missing one is generated once into the gitignored <code>.webjs/dev-secret</code>, with a warning, so a fresh clone or worktree works before anyone writes an <code>.env</code>. Anywhere else it is required, including a process with no <code>NODE_ENV</code> at all. A process a test spawns inherits <code>NODE_ENV=test</code> from the run, as under Jest; set <code>NODE_ENV=production</code> on it when it should behave as production.</p>
 
     <h2>SessionStorage Implementations</h2>
 

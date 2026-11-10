@@ -52,13 +52,12 @@ lib/
                          gated `error`.
                          Tests: `test/cli/doctor.test.mjs`.
   node-env.js            `defaultNodeEnv(env, mode)` (#1686): the NODE_ENV
-                         `dev` (development) and `start` (production) set
-                         when none is set, so a value a shell or a spawning
-                         process chose is always kept. `webjs test` sets NO
-                         NODE_ENV (an inherited one cannot be told apart from
-                         one a test sets on purpose); `markTestRun` sets
-                         `__WEBJS_TEST_RUN`, which only the server's
-                         `devSecretApplies` reads. Tests:
+                         `dev` (development), `start` (production) and `test`
+                         (test, as Jest and Vitest) set only when none is set;
+                         a set value is always kept, as `next start` keeps one
+                         (`NODE_ENV || defaultEnv`). A process a test spawns
+                         inherits test, as under Jest; a test wanting a
+                         production server sets NODE_ENV on the child. Tests:
                          `test/cli/node-env.test.mjs`.
   port.js                Port resolution for `webjs dev` / `start` (#447).
                          Also `failFastOnPortInUse` + `PORT_IN_USE_EXIT_CODE`

@@ -776,11 +776,11 @@ async function main() {
     }
     case 'test': {
       const cwd = process.cwd();
-      // A test run sets no NODE_ENV (node --test sets none either), so a
-      // server a test boots or a child it spawns keeps its own; it marks the
-      // run instead, which lets session() / createAuth() use the generated
-      // development secret in the app's tests (node-env.js, dev-secret.js).
-      (await import('../lib/node-env.js')).markTestRun(process.env);
+      // A test run is NODE_ENV=test unless one is set, as under Jest and
+      // Vitest: .env.test loads, and session() / createAuth() may use the
+      // generated development secret. A process a test spawns inherits it,
+      // as under Jest (node-env.js).
+      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'test');
       const { existsSync } = await import('node:fs');
 
       // Two test runners:
