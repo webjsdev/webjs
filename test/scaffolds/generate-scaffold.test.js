@@ -1,0 +1,147 @@
+/**
+ * `webjs generate` in freshly scaffolded apps: each generator's output must
+ * pass `webjs check`, `webjs typecheck` and its own generated tests, and every
+ * generated page must render. The generators emit strings, so an escaping or
+ * typing mistake only shows in a generated app, which is why this drives a
+ * real one rather than inspecting the emitted text.
+ *
+ * Counterfactual: break any emitter (drop the `values` the uniqueness check
+ * reads, or a closing backtick in a page) and the typecheck or test step
+ * here goes red.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, symlinkSync, existsSync, readFileSync, appendFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { scaffoldApp } from '../../packages/cli/lib/create.js';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const CLI = join(ROOT, 'packages', 'cli', 'bin', 'webjs.js');
+
+const env = { ...process.env };
+delete env.DATABASE_URL;
+delete env.WEBJS_TEST_DB;
+// node --test inside node --test reports to this process instead of setting
+// its own exit code unless the inherited context is dropped.
+delete env.NODE_TEST_CONTEXT;
+
+/** @param {{ template?: string, db?: string }} opts */
+async function makeApp(opts) {
+  const cwd = mkdtempSync(join(tmpdir(), 'webjs-generate-'));
+  const log = console.log;
+  console.log = () => {};
+  try {
+    await scaffoldApp('demo', cwd, { template: 'full-stack', install: false, ...opts });
+  } finally {
+    console.log = log;
+  }
+  const app = join(cwd, 'demo');
+  symlinkSync(join(ROOT, 'node_modules'), join(app, 'node_modules'));
+  const cli = (/** @type {string[]} */ ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd: app, env, encoding: 'utf8' });
+  return { cwd, app, cli };
+}
+
+/** @param {import('node:child_process').SpawnSyncReturns<string>} r */
+const out = (r) => r.stdout + r.stderr;
+
+test('scaffold, references and resource generate an app that checks, typechecks and passes its tests', { timeout: 300_000 }, async () => {
+  const { cwd, app, cli } = await makeApp({});
+  try {
+    const post = cli('g', 'scaffold', 'post', 'title:string!', 'body:text', 'views:integer', 'published:boolean', 'publishedAt:datetime', 'slug:string:uniq', 'meta:json');
+    assert.equal(post.status, 0, out(post));
+    for (const f of ['app/posts/page.ts', 'app/posts/new/page.ts', 'app/posts/[id]/page.ts', 'app/posts/[id]/edit/page.ts',
+      'modules/posts/actions/create-post.server.ts', 'modules/posts/queries/list-posts.server.ts', 'test/posts/posts.test.ts', 'components/ui/textarea.ts']) {
+      assert.ok(existsSync(join(app, f)), f);
+    }
+    assert.match(out(post), /migration {2}webjs db generate --name=create_posts/);
+
+    const comment = cli('g', 'scaffold', 'comment', 'body:text!', 'post:references');
+    assert.equal(comment.status, 0, out(comment));
+    const product = cli('g', 'resource', 'product', 'name:string!', 'price:float', 'sku:string:uniq');
+    assert.equal(product.status, 0, out(product));
+    assert.ok(existsSync(join(app, 'app/api/products/[id]/route.ts')));
+    assert.ok(!existsSync(join(app, 'app/products')), 'resource writes no pages');
+
+    const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schema, /^export const relations = defineRelations\(\{ users, posts, comments, products \}, \(r\) => \(\{\n {2}comments: \{ post: r\.one\.posts\(/m);
+
+    const check = cli('check');
+    assert.equal(check.status, 0, out(check));
+    const tc = cli('typecheck');
+    assert.equal(tc.status, 0, out(tc));
+    const tests = cli('test', '--server');
+    assert.equal(tests.status, 0, out(tests));
+    assert.match(tests.stdout, /create, show, edit and delete a post through its forms/);
+    assert.match(tests.stdout, /create, read, update and delete a product over JSON/);
+
+    // Every generated page that takes no parameter renders (status --boot runs
+    // no before-steps, so the dev database is migrated first).
+    const migrate = cli('db', 'migrate');
+    assert.equal(migrate.status, 0, out(migrate));
+    const status = cli('status', '--boot', '/posts', '/posts/new', '/comments', '/comments/new');
+    assert.equal(status.status, 0, out(status));
+
+    // Re-running over an edited file refuses, names it, and writes nothing.
+    appendFileSync(join(app, 'app/posts/page.ts'), '// mine\n');
+    const again = cli('g', 'scaffold', 'post', 'title:string!');
+    assert.equal(again.status, 1);
+    assert.match(out(again), /app\/posts\/page\.ts/);
+    assert.match(readFileSync(join(app, 'app/posts/page.ts'), 'utf8'), /\/\/ mine\n$/);
+
+    // destroy removes what resource wrote, and the app still typechecks.
+    const destroyed = cli('d', 'resource', 'product');
+    assert.equal(destroyed.status, 0, out(destroyed));
+    assert.ok(!existsSync(join(app, 'app/api/products')));
+    assert.doesNotMatch(readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8'), /products/);
+    const tc2 = cli('typecheck');
+    assert.equal(tc2.status, 0, out(tc2));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('scaffold in the api template writes JSON route handlers and they pass their test', { timeout: 300_000 }, async () => {
+  const { cwd, app, cli } = await makeApp({ template: 'api' });
+  try {
+    const r = cli('g', 'scaffold', 'widget', 'name:string!', 'qty:integer');
+    assert.equal(r.status, 0, out(r));
+    assert.ok(existsSync(join(app, 'app/api/widgets/route.ts')));
+    assert.ok(!existsSync(join(app, 'app/widgets')), 'no pages without a root layout');
+    const tc = cli('typecheck');
+    assert.equal(tc.status, 0, out(tc));
+    const tests = cli('test', '--server');
+    assert.equal(tests.status, 0, out(tests));
+    assert.match(tests.stdout, /create, read, update and delete a widget over JSON/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('scaffold on Postgres writes pg columns that check and typecheck', { timeout: 300_000 }, async () => {
+  const { cwd, app, cli } = await makeApp({ db: 'postgres' });
+  try {
+    const r = cli('g', 'scaffold', 'post', 'title:string!', 'published:boolean', 'publishedAt:datetime', 'meta:json', 'author:references', '--plural', 'posts');
+    // author:references needs an authors table, which this app does not have.
+    assert.equal(r.status, 1);
+    assert.match(out(r), /needs a authors table/);
+    const ok = cli('g', 'scaffold', 'post', 'title:string!', 'published:boolean', 'publishedAt:datetime', 'meta:json', 'user:references');
+    assert.equal(ok.status, 0, out(ok));
+    const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schema, /pgTable\('posts', \{\n {2}id: serial\(\)\.primaryKey\(\),/);
+    assert.match(schema, /published: boolean\(\)\.notNull\(\)\.default\(false\)/);
+    assert.match(schema, /meta: jsonb\(\)\.\$type<unknown>\(\)/);
+    assert.ok(existsSync(join(app, 'db', 'migrations')), 'drizzle-kit generate needs no database');
+    const check = cli('check');
+    assert.equal(check.status, 0, out(check));
+    // The repo installs no pg driver, so only the scaffold's own connection
+    // module may fail to resolve it; every generated file must be clean.
+    const tc = cli('typecheck');
+    const errors = out(tc).split('\n').filter((l) => /error TS/.test(l) && !l.startsWith('db/connection.server.ts'));
+    assert.deepEqual(errors, []);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
