@@ -310,10 +310,10 @@ export function createAuth(config) {
   // Auth.js reads AUTH_SECRET when `secret` is left out, so an app can write
   // createAuth({ providers }) or pass process.env.AUTH_SECRET (string | undefined)
   // without a cast.
-  // Outside production a missing secret falls back to a generated one kept in
-  // .webjs/dev-secret (dev-secret.js), so a fresh clone or worktree works.
+  // In development and tests a missing secret falls back to a generated one
+  // kept in .webjs/dev-secret (dev-secret.js), so a fresh clone or worktree works.
   const secret = config.secret || process.env.AUTH_SECRET || devSecret('AUTH_SECRET');
-  if (!secret) throw new Error('createAuth() needs a secret to sign its session in production: set AUTH_SECRET in .env (webjs create writes one), or pass createAuth({ secret }).');
+  if (!secret) throw new Error('createAuth() needs a secret to sign its session: set AUTH_SECRET in .env (webjs create writes one), or pass createAuth({ secret }). Only a development or test process (NODE_ENV=development or test) gets a generated one.');
 
   // An Auth.js database adapter (`DrizzleAdapter(db)` and the rest) switches
   // the default strategy to "database", as in Auth.js (#1686). WebJs's own

@@ -39,19 +39,36 @@ test('in production, createAuth() without a secret says to set AUTH_SECRET in .e
   });
 });
 
-test('outside production a missing secret is generated once into .webjs/dev-secret and reused (#1686)', () => {
+test('with NODE_ENV unset (an embedded host, node server.js) a missing secret still throws', () => {
+  // The generated secret is opt-in: a production process that simply forgot
+  // NODE_ENV must not sign its cookies with a key from disk.
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-dev-secret-'));
+  try {
+    withEnv({ SESSION_SECRET: undefined, AUTH_SECRET: undefined, NODE_ENV: undefined }, dir, () => {
+      assert.throws(() => session(), /SESSION_SECRET in \.env/);
+      assert.throws(() => createAuth({ providers: [] }), /AUTH_SECRET in \.env/);
+    });
+    assert.equal(devSecret('X', { dir, env: {}, devProcess: false }), undefined, 'no NODE_ENV, no dev handler: no secret');
+    assert.ok(devSecret('X', { dir, env: {}, devProcess: true }), 'a dev request handler opts the process in');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('in development and tests a missing secret is generated once into .webjs/dev-secret and reused (#1686)', () => {
   // A fresh clone or a worktree has no .env, and every page behind session()
   // or createAuth() used to answer 500 until someone wrote one.
   const dir = mkdtempSync(join(tmpdir(), 'webjs-dev-secret-'));
   try {
-    withEnv({ SESSION_SECRET: undefined, AUTH_SECRET: undefined, NODE_ENV: undefined }, dir, () => {
+    withEnv({ SESSION_SECRET: undefined, AUTH_SECRET: undefined, NODE_ENV: 'development' }, dir, () => {
       assert.doesNotThrow(() => session());
       assert.doesNotThrow(() => createAuth({ providers: [] }));
       const stored = readFileSync(join(dir, '.webjs', 'dev-secret'), 'utf8').trim();
       assert.match(stored, /^[0-9a-f]{64}$/, 'a 32-byte hex secret is persisted');
       assert.equal(devSecret('SESSION_SECRET'), stored, 'a restart reads the same secret back');
     });
-    assert.equal(devSecret('X', { dir, env: { NODE_ENV: 'production' } }), undefined, 'never in production');
+    assert.ok(devSecret('X', { dir, env: { NODE_ENV: 'test' }, devProcess: false }), 'a test process gets it too');
+    assert.equal(devSecret('X', { dir, env: { NODE_ENV: 'production' }, devProcess: true }), undefined, 'never in production');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

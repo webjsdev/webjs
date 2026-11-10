@@ -776,6 +776,11 @@ async function main() {
     }
     case 'test': {
       const cwd = process.cwd();
+      // A test run is NODE_ENV=test unless the shell says otherwise (Jest and
+      // Vitest do the same): .env.test loads, and session() / createAuth()
+      // may use the generated development secret, which a process with no
+      // NODE_ENV never does.
+      if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test';
       const { existsSync } = await import('node:fs');
 
       // Two test runners:

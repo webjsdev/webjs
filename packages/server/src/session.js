@@ -328,14 +328,14 @@ const sessionMap = shared('session-map', () => new WeakMap());
  * }} [opts]
  */
 export function session(opts = {}) {
-  // Outside production a missing secret falls back to a generated one kept in
-  // .webjs/dev-secret (dev-secret.js), so a fresh clone or worktree works.
+  // In development and tests a missing secret falls back to a generated one
+  // kept in .webjs/dev-secret (dev-secret.js), so a fresh clone or worktree works.
   const secret = opts.secret || process.env.SESSION_SECRET || devSecret('SESSION_SECRET');
   if (!secret) {
     throw new Error(
-      'session() needs a secret to sign its cookie in production: set SESSION_SECRET in .env (webjs create writes one; '
+      'session() needs a secret to sign its cookie: set SESSION_SECRET in .env (webjs create writes one; '
       + 'generate another with node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))") '
-      + 'or pass session({ secret }).',
+      + 'or pass session({ secret }). Only a development or test process (NODE_ENV=development or test) gets a generated one.',
     );
   }
 
