@@ -143,6 +143,10 @@ jobs:
       # machines, which are independent and must be kept in step by hand.
       - name: WebJs form-action guard parity on Bun
         run: bun test/bun/form-action-guard.mjs
+      # Rails-style generators (#1692): the generator, the db generate it
+      # spawns with the current runtime, and the generated tests under bun test.
+      - name: WebJs generate on Bun
+        run: bun test/bun/generate.mjs
       # live() in an attribute hole (#1443): the SSR unwrap must produce
       # byte-identical attribute emission on Bun, across both server machines.
       # The bug class this guards was a server/client disagreement (a falsy
