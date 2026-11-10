@@ -101,6 +101,7 @@ createAuth({
   &lt;button&gt;Sign in with GitHub&lt;/button&gt;
 &lt;/form&gt;</code-block>
     <p>A link works too (<code>/api/auth/signin/github?redirectTo=/dashboard/x</code>), and so does <code>signIn('github', undefined, { redirectTo })</code> from an action. A <code>redirectTo</code> that comes from a request must be a same-origin local path: one leading <code>/</code>, not followed by <code>/</code> or <code>\</code>. An absolute URL or a protocol-relative <code>//host</code> is dropped rather than repaired, and the sign-in lands on <code>/</code>, so the field can never be used as an open redirect. A denied sign-in still goes to <code>pages.error</code>.</p>
+    <p>As in Auth.js, a server-side <code>signIn()</code> or <code>signOut()</code> with no <code>redirectTo</code> returns to the page it was called from (the <code>Referer</code>, same-origin only), else <code>/</code>. From a sign-in form that is the sign-in page itself, so pass <code>redirectTo</code> to land elsewhere. The routes also read Auth.js's field name, <code>callbackUrl</code>, and a sign-out lands on <code>redirectTo</code> or <code>/</code>; <code>pages.signOut</code> is the sign-out page a <code>GET /api/auth/signout</code> shows, not where it lands.</p>
 
     <h2>Showing a failed sign-in</h2>
     <p>A failed credentials sign-in redirects to <code>&#36;{pages.error}?error=CredentialsSignin</code>, falling back to the home page when <code>pages.error</code> is unset (which silently swallows the failure). Point the error page at your login route, then read the code and render a message:</p>
@@ -194,7 +195,6 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
     <h2>Differences from Auth.js</h2>
     <ul>
       <li id="diff-jwt">The JWT session is a signed (HS256) token, not an encrypted (JWE) one, so keep secrets out of the session; the cookie names are the ones above.</li>
-      <li id="diff-signin-default"><code>signIn()</code> with no <code>redirectTo</code> lands on <code>/</code>; Auth.js falls back to the Referer, which from a login form is the login page itself. Pass <code>redirectTo</code> to land elsewhere.</li>
       <li id="diff-adapter"><code>adapter</code> is the session store used by the <code>database</code> strategy (<code>load</code>, <code>save</code>, <code>destroy</code>), not an Auth.js database adapter: <code>@auth/*-adapter</code> packages are not supported, and users live in your own tables.</li>
       <li id="diff-auth-url">There is no <code>AUTH_URL</code> or <code>basePath</code> option; the handler is mounted where the <code>route.ts</code> file is, and callback URLs come from the request.</li>
     </ul>

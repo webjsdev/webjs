@@ -95,6 +95,26 @@ function safeRedirectPath(value) {
   return value;
 }
 
+/**
+ * The page a server-side `signIn()` / `signOut()` was called from, as a local
+ * path (Auth.js v5: `redirectTo ?? headers.get("Referer") ?? "/"`, #1686). A
+ * Referer from another origin is ignored, as Auth.js's default `redirect`
+ * callback keeps only same-origin targets.
+ * @param {Request | null | undefined} req
+ * @returns {string | null}
+ */
+function refererPath(req) {
+  const ref = req && req.headers.get('referer');
+  if (!ref) return null;
+  try {
+    const u = new URL(ref);
+    if (u.origin !== new URL(req.url).origin) return null;
+    return safeRedirectPath(u.pathname + u.search + u.hash);
+  } catch {
+    return null;
+  }
+}
+
 // -- Cookie helpers ---------------------------------------------------------
 
 /** @param {string} header @returns {Record<string,string>} */
@@ -414,7 +434,7 @@ export function createAuth(config) {
 
   async function signOutFn(opts = {}) {
     const hdrs = new Headers();
-    hdrs.set('location', opts.redirectTo || pages.signOut || '/');
+    hdrs.set('location', safeRedirectPath(opts.redirectTo) || '/');
     hdrs.append('set-cookie', clearCookie(cookieName(AUTH_COOKIE, secure()), secure()));
 
     if (strategy === 'database' && dbStore) {
@@ -590,6 +610,32 @@ export function createAuth(config) {
     return new Response('Not found', { status: 404 });
   }
 
+  /**
+   * The bounded JSON or form body an auth POST carries, or a 413 Response.
+   * Auth.js names the post-auth target `callbackUrl`; it is read as
+   * `redirectTo` when that is not given (#1686).
+   * @param {Request} req
+   * @returns {Promise<Record<string, unknown> | Response>}
+   */
+  async function readAuthBody(req) {
+    const limits = getBodyLimits();
+    const limit = limits ? limits.json : DEFAULT_MAX_BODY_BYTES;
+    /** @type {Record<string, unknown>} */
+    let body = {};
+    const ct = req.headers.get('content-type') || '';
+    if (ct.includes('json')) {
+      const { tooLarge, text } = await readTextBounded(req, limit);
+      if (tooLarge) return payloadTooLarge();
+      try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
+    } else if (ct.includes('form')) {
+      const { tooLarge, formData } = await readFormDataBounded(req, limit);
+      if (tooLarge) return payloadTooLarge();
+      for (const [k, v] of formData.entries()) body[k] = v;
+    }
+    if (body.redirectTo == null && typeof body.callbackUrl === 'string') body.redirectTo = body.callbackUrl;
+    return body;
+  }
+
   async function POST(req) {
     const seg = parseSegments(req);
     // Sign-in and sign-out change who the visitor is, so a cross-site form
@@ -606,27 +652,21 @@ export function createAuth(config) {
       // fixed-shape JSON / form data, so the JSON / RPC limit applies. An
       // over-limit body is a 413 before any parse, and is never buffered
       // whole (see body-limit.js).
-      const limits = getBodyLimits();
-      const limit = limits ? limits.json : DEFAULT_MAX_BODY_BYTES;
-      /** @type {Record<string, unknown>} */
-      let body = {};
-      const ct = req.headers.get('content-type') || '';
-      if (ct.includes('json')) {
-        const { tooLarge, text } = await readTextBounded(req, limit);
-        if (tooLarge) return payloadTooLarge();
-        body = text ? JSON.parse(text) : {};
-      } else if (ct.includes('form')) {
-        const { tooLarge, formData } = await readFormDataBounded(req, limit);
-        if (tooLarge) return payloadTooLarge();
-        for (const [k, v] of formData.entries()) body[k] = v;
-      }
+      const body = await readAuthBody(req);
+      if (body instanceof Response) return body;
       if (provider.type === 'credentials') return signInFn('credentials', body, { req });
       if (provider.type === 'oauth') {
         const redirectTo = body.redirectTo ?? new URL(req.url).searchParams.get('redirectTo');
         return oauthRedirect(provider, { req, redirectTo });
       }
     }
-    if (seg[0] === 'signout') return signOutFn({ req });
+    if (seg[0] === 'signout') {
+      // The form's own target, as Auth.js's sign-out route honours its
+      // submitted callbackUrl (#1686); otherwise "/".
+      const body = await readAuthBody(req);
+      if (body instanceof Response) return body;
+      return signOutFn({ req, redirectTo: /** @type {any} */ (body.redirectTo) });
+    }
     return new Response('Not found', { status: 404 });
   }
 
@@ -645,6 +685,11 @@ export function createAuth(config) {
 
   async function signIn(providerId, data, opts = {}) {
     const fields = data instanceof FormData ? formFields(data) : (data || {});
+    // No target given: back to the page signIn was called from, as Auth.js.
+    if (!opts.redirectTo && !fields.redirectTo) {
+      const back = refererPath(opts.req || getRequest());
+      if (back) opts = { ...opts, redirectTo: back };
+    }
     const noRedirect = opts.redirect === false || fields.redirect === false || fields.redirect === 'false';
     if (!getRequest()) return signInFn(providerId, fields, opts);
     const res = await signInFn(providerId, fields, opts);
@@ -658,6 +703,10 @@ export function createAuth(config) {
   }
 
   async function signOut(opts = {}) {
+    if (!opts.redirectTo) {
+      const back = refererPath(opts.req || getRequest());
+      if (back) opts = { ...opts, redirectTo: back };
+    }
     if (!getRequest()) return signOutFn(opts);
     const res = await signOutFn(opts);
     for (const c of res.headers.getSetCookie()) queueSetCookie(c);
