@@ -189,11 +189,9 @@ suite('lit-html (lit port): directives', () => {
       render(makeTemplate(checkPart()), container);
     });
 
-    // TODO real divergence: the array branches below run nothing in WebJs. An
-    // array item is not a part of its own, so a custom directive there renders
-    // statelessly through `render()` (no `update()`), and an item that is a
-    // nested array or a built-in directive (`repeat`, `until`, `keyed`) is
-    // written as text ("1,2", "[object Object]") where lit renders it.
+    // Each array item that is a directive or a nested array is a child part
+    // of its own, as in lit, so the array branches below run `update()` with
+    // the logical parent too (directives-in-arrays.test.js covers the output).
     test(`part's parentNode is the logical DOM parent`, async () => {
       let resolve;
       let reject;

@@ -463,21 +463,6 @@ export function releaseInstanceDirectives(inst) {
   for (const p of inst.bound) releasePartDirectives(p);
 }
 
-/**
- * Resolve a directive result with a throwaway instance through `render()`,
- * the SSR rule, for a position that has no part to keep an instance on.
- * @param {unknown} value
- * @returns {unknown}
- */
-function resolveStatelessDirective(value) {
-  for (let depth = 0; isDirectiveResult(value); depth++) {
-    if (depth > 100) throw new Error('[webjs] a custom directive kept returning directives (more than 100 levels deep).');
-    const d = /** @type {any} */ (value);
-    value = new d.ctor({ type: PartType.CHILD }).render(...d.values);
-  }
-  return value;
-}
-
 /** Whether a value only WRAPS another one the part renders (so its directive record must survive). */
 function isWrapperDirective(value) {
   return isKeyed(value) || isGuard(value) || isCache(value) || isLive(value);
@@ -1233,12 +1218,6 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
       && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
     value = Array.from(/** @type {Iterable<unknown>} */ (value));
   }
-  if (Array.isArray(value) && value.some(isDirectiveResult)) {
-    // An array item has no part of its own to keep a directive instance on,
-    // so a custom directive there renders statelessly, through `render()`,
-    // exactly as SSR resolves it.
-    value = value.map((v) => resolveStatelessDirective(v));
-  }
   if (Array.isArray(value)) {
     if (part.child && /** @type any */ (part.child).kind === 'array') {
       reconcileArray(part, value, reconcileFormActionsCb);
@@ -1742,11 +1721,12 @@ function teardownRepeat(state) {
  * node, and an `empty` slot (a nullish / boolean element) renders nothing
  * but still holds the position so index-based reconciliation stays aligned.
  * A `node` is a DOM node the array held, rendered as itself.
- * @typedef {{ type: 'tpl', inst: TemplateInstance } | { type: 'text', node: Text } | { type: 'node', node: ChildNode } | { type: 'empty' }} ArrayItem
+ * @typedef {{ type: 'tpl', inst: TemplateInstance } | { type: 'text', node: Text } | { type: 'node', node: ChildNode } | { type: 'empty' } | { type: 'part', start: Comment, sub: any }} ArrayItem
  */
 
 /** @param {ArrayItem} item @returns {ChildNode | null} */
 function arrayItemFirstNode(item) {
+  if (item.type === 'part') return item.start;
   if (item.type === 'tpl') return item.inst.startNode;
   if (item.type === 'text' || item.type === 'node') return item.node;
   return null;
@@ -1754,7 +1734,10 @@ function arrayItemFirstNode(item) {
 
 /** @param {ArrayItem} item */
 function removeArrayItem(item) {
-  if (item.type === 'tpl') {
+  if (item.type === 'part') {
+    teardownChild(item.sub);
+    removeBetween(item.start, item.sub.marker);
+  } else if (item.type === 'tpl') {
     disposeInstance(item.inst);
     removeBetween(item.inst.startNode, item.inst.endNode);
   } else if (item.type === 'text' || item.type === 'node') {
@@ -1773,6 +1756,18 @@ function buildArrayItem(v, reconcileFormActionsCb) {
   // #1443: unwrap live() per ITEM. applyPart unwraps the hole's own value, so
   // an array child arrives unwrapped at the top and its ITEMS do not.
   if (isLive(v)) v = /** @type any */ (v).value;
+  if (isPartItem(v)) {
+    // A directive or a nested array gets a child part of its own between two
+    // comments, as each item is in Lit, so it renders and keeps its directive
+    // state exactly as it would in a hole. It is filled once its comments are
+    // in the document (`fill`), because a part commits relative to its parent.
+    const start = document.createComment('');
+    const marker = document.createComment('');
+    const frag = document.createDocumentFragment();
+    frag.append(start, marker);
+    const sub = { kind: 'child', marker, __eventHost: currentRenderHost };
+    return { item: { type: 'part', start, sub }, frag, fill: () => applyChild(/** @type any */ (sub), v, reconcileFormActionsCb) };
+  }
   if (isTemplate(v)) {
     const { inst, frag } = buildDetached(/** @type any */ (v), reconcileFormActionsCb);
     return { item: { type: 'tpl', inst }, frag };
@@ -1797,13 +1792,27 @@ function applyArrayFresh(marker, state, value, reconcileFormActionsCb) {
   const bulk = document.createDocumentFragment();
   /** @type {ArrayItem[]} */
   const items = [];
+  /** @type {Array<() => void>} */
+  const fills = [];
   for (const v of value) {
-    const { item, frag } = buildArrayItem(v, reconcileFormActionsCb);
+    const { item, frag, fill } = buildArrayItem(v, reconcileFormActionsCb);
     if (frag) bulk.appendChild(frag);
+    if (fill) fills.push(fill);
     items.push(item);
   }
   parent.insertBefore(bulk, marker);
   state.items = items;
+  for (const fill of fills) fill();
+}
+
+/**
+ * Whether an array item renders through a child part of its own: a directive
+ * result or a nested array / iterable, anything that is not a template, a node
+ * or a primitive (which the item types below handle without one).
+ * @param {unknown} v
+ */
+function isPartItem(v) {
+  return v !== null && typeof v === 'object' && !isTemplate(v) && !isDomNode(v);
 }
 
 /**
@@ -1837,7 +1846,14 @@ function reconcileArray(part, value, reconcileFormActionsCb) {
       const raw = value[i];
       const v = isLive(raw) ? /** @type any */ (raw).value : raw;
       const o = old[i];
-      if (isTemplate(v)) {
+      if (isPartItem(v)) {
+        if (o && o.type === 'part') {
+          applyChild(o.sub, v, reconcileFormActionsCb);
+          next.push(o);
+          consumed = i + 1;
+          continue;
+        }
+      } else if (isTemplate(v)) {
         const tr = /** @type any */ (v);
         if (o && o.type === 'tpl' && o.inst.strings === tr.strings) {
           updateInstance(o.inst, tr.values, reconcileFormActionsCb);
@@ -1880,9 +1896,10 @@ function reconcileArray(part, value, reconcileFormActionsCb) {
       // The push sits BEFORE the removal, which is a pure reordering on the
       // success path and means a slot that has already been built and
       // inserted is never untracked at any throw point.
-      const { item, frag } = buildArrayItem(v, reconcileFormActionsCb);
+      const { item, frag, fill } = buildArrayItem(v, reconcileFormActionsCb);
       if (frag) parent.insertBefore(frag, nextArrayAnchor(old, i, marker));
       next.push(item);
+      if (fill) fill();
       if (o) removeArrayItem(o);
       consumed = i + 1;
     }
