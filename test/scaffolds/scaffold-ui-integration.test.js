@@ -38,8 +38,11 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
     // The kit's Button, which the theme toggle uses, and nothing else.
-    assert.deepEqual(readdirSync(join(appDir, 'components', 'ui')), ['button.ts'], 'components/ui holds only the kit Button');
-    assert.deepEqual(readdirSync(join(appDir, 'modules')), [], 'modules/ ships empty (no demo modules)');
+    // The kit components the shell uses (the toggle's Button, the home form's
+    // Input and Label), and nothing else.
+    assert.deepEqual(readdirSync(join(appDir, 'components', 'ui')).sort(), ['button.ts', 'input.ts', 'label.ts'], 'components/ui holds the kit components the shell uses');
+    // One example module, the modules/<feature>/ convention AGENTS.md names.
+    assert.deepEqual(readdirSync(join(appDir, 'modules')), ['users'], 'modules/ ships the one example module');
 
     // The scaffold and `webjsui init` must emit the SAME components.json, so
     // that initialising a bare app and scaffolding a new one land on one
@@ -237,8 +240,9 @@ test('webjs ui add --overwrite in a fresh app keeps the shell working', async ()
     for (const file of shell) {
       const src = await readFile(file, 'utf8');
       for (const m of src.matchAll(/from '#components\/ui\/([\w-]+)\.ts'/g)) {
-        assert.equal(m[1], 'button', `${file} imports only the kit Button from components/ui/`);
-        assert.match(await readFile(join(appDir, 'components', 'ui', 'button.ts'), 'utf8'), /export function buttonClass\(/, 'which still exports buttonClass after the overwrite');
+        const helper = { button: 'buttonClass', input: 'inputClass', label: 'labelClass' }[m[1]];
+        assert.ok(helper, `${file} imports only the kit components the scaffold installs (got ${m[1]})`);
+        assert.match(await readFile(join(appDir, 'components', 'ui', `${m[1]}.ts`), 'utf8'), new RegExp(`export function ${helper}\\(`), `${m[1]}.ts still exports ${helper} after the overwrite`);
       }
     }
   } finally {

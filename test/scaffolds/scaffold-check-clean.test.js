@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { checkConventions } from '@webjsdev/server/check';
@@ -43,6 +44,10 @@ for (const template of ['full-stack', 'api']) {
         // The brief tells agents to run `webjs status` after each edit, so a
         // fresh app must report clean there too. A component that fails during
         // SSR answers 200 while the dev status records it.
+        // The home page reads the example module's users table, so the
+        // database is set up first, as `npm run dev` / `npm start` do.
+        const push = spawnSync(process.execPath, [join(ROOT, 'packages', 'cli', 'bin', 'webjs.js'), 'db', 'push', '--force'], { cwd: appDir, encoding: 'utf8' });
+        assert.equal(push.status, 0, `the schema pushes: ${push.stderr || push.stdout}`);
         const h = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {}, debug() {} } });
         await h.warmup?.();
         const home = await h.handle(new Request('http://localhost/'));

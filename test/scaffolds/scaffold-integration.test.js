@@ -218,7 +218,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // The home page is a minimal starting point that imports nothing from a
     // gallery, and the navbar links the docs and the source.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.doesNotMatch(pageSrc, /#modules\//, 'the home imports no demo module');
+    // The home is a thin route over the example module (modules/users/).
+    assert.match(pageSrc, /from '#modules\/users\/actions\/add-user\.server\.ts'/, 'the home binds the example module\'s action');
+    assert.match(pageSrc, /from '#modules\/users\/queries\/list-users\.server\.ts'/, 'and reads its query');
+    assert.match(pageSrc, /<form action=\$\{addUser\}/, 'as a bound form');
+    assert.ok(existsSync(join(appDir, 'test', 'users', 'add-user.test.ts')), 'the module ships its own test');
     assert.match(pageSrc, /Edit app\/page\.ts/, 'the home points at the file to edit');
     assert.match(layoutSrc, /webjs\.dev\/docs/, 'the navbar links the docs');
     assert.match(layoutSrc, /github\.com\/webjsdev\/webjs/, 'the navbar links the source');

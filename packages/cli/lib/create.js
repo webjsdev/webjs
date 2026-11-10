@@ -1281,9 +1281,10 @@ export type ActionResult<T> =
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
     // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
-    // The theme toggle is the kit's Button, installed by the kit's own `add`
-    // (local-first, no network), exactly as `npx webjs ui add button` would.
-    addUiComponents(appDir, ['button']);
+    // The kit components the shell uses (the theme toggle's Button, the home
+    // page form's Input and Label), installed by the kit's own `add`
+    // (local-first, no network), exactly as `npx webjs ui add <name>` would.
+    addUiComponents(appDir, ['button', 'input', 'label']);
 
     // Pages style with Tailwind on the kit's tokens. The app is pre-initialised
     // for `webjs ui add <name>` via writeUiBootstrap above and ships one kit
@@ -1471,15 +1472,99 @@ export default function RootLayout({ children }: LayoutProps) {
 }
 `);
 
-  // Home page: a neutral starting point, written by the generator so the app
-  // boots with no demo to delete. Reshape it into the app's real landing page.
-  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
+  // The example module: modules/<feature>/ holds a feature's server actions,
+  // queries, components, utils and types, and the routes in app/ stay thin.
+  // One tiny feature over the schema's users table: an action the home page
+  // binds as a form, a server-only query it reads, the types, and a test.
+  await mkdir(join(appDir, 'modules', 'users', 'actions'), { recursive: true });
+  await mkdir(join(appDir, 'modules', 'users', 'queries'), { recursive: true });
+  await writeFile(join(appDir, 'modules', 'users', 'types.ts'), `// The users feature's types, derived from the schema rather than written by hand.
+export type { User } from '#db/schema.server.ts';
+`);
+  await writeFile(join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts'), `import { desc } from 'drizzle-orm';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
+import type { User } from '../types.ts';
+
+// A query: server-only code (a .server.ts file with no 'use server'), called
+// from a page, which runs on the server. Without 'use server' it is never
+// callable from the browser. One function per file.
+export async function listUsers(limit = 5): Promise<User[]> {
+  return db.select().from(users).orderBy(desc(users.createdAt)).limit(limit);
+}
+`);
+  await writeFile(join(appDir, 'modules', 'users', 'actions', 'add-user.server.ts'), `'use server';
+
+import { revalidatePath } from '@webjsdev/server';
+import type { ActionResult } from '@webjsdev/server';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
+import type { User } from '../types.ts';
+
+// A server action, bound by the home page as <form action=\${addUser}>, so it
+// works with JavaScript off. A failure re-renders the page with this result on
+// actionData; a success redirects back and revalidatePath('/') refreshes it.
+// One function per file.
+export async function addUser(formData: FormData): Promise<ActionResult<User>> {
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    return { success: false, fieldErrors: { email: 'Enter a valid email address.' }, status: 422 };
+  }
+  try {
+    const [user] = await db.insert(users).values({ email }).returning();
+    revalidatePath('/');
+    return { success: true, data: user };
+  } catch {
+    return { success: false, fieldErrors: { email: 'That email is already added.' }, status: 422 };
+  }
+}
+`);
+  await mkdir(join(appDir, 'test', 'users'), { recursive: true });
+  await writeFile(join(appDir, 'test', 'users', 'add-user.test.ts'), `// The example module's test: the action against the test database, which
+// \`webjs test\` prepares from db/schema.server.ts.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { addUser } from '#modules/users/actions/add-user.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
+
+const form = (email: string) => {
+  const fd = new FormData();
+  fd.set('email', email);
+  return fd;
+};
+
+test('addUser refuses an invalid email', async () => {
+  const result = await addUser(form('not-an-email'));
+  assert.equal(result.success, false);
+  assert.ok(result.fieldErrors?.email);
+});
+
+test('addUser adds a user, which listUsers then returns', async () => {
+  const email = \`ada-\${Date.now()}@example.com\`;
+  const result = await addUser(form(email));
+  assert.equal(result.success, true);
+  assert.ok((await listUsers()).some((u) => u.email === email));
+});
+`);
+
+  // Home page: the logo, then the example module at work (a form bound to its
+  // action, a list from its query). Reshape it into the app's real landing page.
+  await writeFile(join(appDir, 'app', 'page.ts'), `import { html, nothing } from '@webjsdev/core';
+import type { PageProps } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { labelClass } from '#components/ui/label.ts';
+import { addUser } from '#modules/users/actions/add-user.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
 
 export const metadata = {
   title: '${displayName}',
 };
 
-export default function Home() {
+// A thin route: the data and the mutation live in modules/users/.
+export default async function Home({ actionData }: PageProps) {
+  const latest = await listUsers();
+  const error = actionData?.fieldErrors?.email;
   return html\`
     <section class="py-16 flex flex-col items-center text-center gap-4">
       <!-- The WebJs logo, one file per theme (public/brand/), as the heading. -->
@@ -1488,6 +1573,22 @@ export default function Home() {
         <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-15 w-auto dark:block">
       </h1>
       <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
+    </section>
+    <!-- The example module (modules/users/): replace it with your own features. -->
+    <section class="mx-auto max-w-sm grid gap-4">
+      <h2 class="text-lg font-semibold m-0">Users</h2>
+      <form action=\${addUser} class="grid gap-3">
+        <div class="grid gap-2">
+          <label class=\${labelClass()} for="email">Email</label>
+          <input class=\${inputClass()} id="email" name="email" type="email" required
+            aria-invalid=\${error ? 'true' : nothing} aria-describedby=\${error ? 'email-error' : nothing}>
+          \${error ? html\`<p id="email-error" role="alert" class="text-sm text-destructive m-0">\${error}</p>\` : nothing}
+        </div>
+        <button class=\${buttonClass()} type="submit">Add user</button>
+      </form>
+      <ul class="grid gap-1 m-0 p-0 list-none text-sm text-muted-foreground">
+        \${latest.map((user) => html\`<li>\${user.email}</li>\`)}
+      </ul>
     </section>
   \`;
 }
