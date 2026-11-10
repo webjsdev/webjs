@@ -139,7 +139,7 @@ test('instrumentation-client.js is imported FIRST in the client boot script', as
   await app.warmup?.();
   const resp = await app.handle(new Request('http://x/'));
   const body = await resp.text();
-  const boot = body.match(/<script type="module"[^>]*>([\s\S]*?)<\/script>/);
+  const boot = body.match(/<script type="module"(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/);
   assert.ok(boot, 'a module boot script is present');
   const firstImport = boot[1].trim().split('\n')[0];
   assert.match(firstImport, /instrumentation-client/, 'instrumentation-client is the FIRST import');

@@ -28,9 +28,9 @@
  */
 
 /**
- * The three verdicts, STRONGEST FIRST. The index in this array IS the strength
- * order, which is what `strongerVerdict` compares and what lets a batch of
- * changes collapse to the strongest verdict it contains rather than the last.
+ * The verdicts, STRONGEST FIRST. The index in this array IS the strength order,
+ * which is what `mergeVerdicts` compares and what lets a batch of changes
+ * collapse to the strongest verdict it contains rather than the last.
  *
  * - `reload`: a component module, anything transitively reaching one, or any
  *   path the server cannot place. The browser does `location.reload()`.
@@ -39,21 +39,40 @@
  * - `page`: a page module and nothing else. The browser re-renders the current
  *   URL and morphs the deepest shared boundary, preserving scroll AND the
  *   hydrated state of components outside the changed region.
+ * - `component`: browser modules the tab re-imports and patches onto the live
+ *   component classes (#1689), listed in the verdict's `modules`. A tab with no
+ *   hot-swap support applies it as a full reload.
+ * - `css`: a stylesheet and nothing else (#1689). The tab re-requests its
+ *   stylesheets and swaps them in. A tab with no support reloads.
  *
- * @type {readonly ['reload', 'shell', 'page']}
+ * @type {readonly ['reload', 'shell', 'page', 'component', 'css']}
  */
-export const RELOAD_VERDICTS = /** @type {const} */ (['reload', 'shell', 'page']);
+export const RELOAD_VERDICTS = /** @type {const} */ (['reload', 'shell', 'page', 'component', 'css']);
 
 /**
- * @typedef {{ v: 'page' | 'shell' | 'reload', by: string, why: string }} ReloadVerdict
+ * A live-reload verdict. `modules` lists the versioned browser URLs a
+ * `component` verdict asks the tab to re-import, and `css` says a stylesheet
+ * changed too, so the tab refreshes its sheets on top of whatever else it does.
+ *
+ * @typedef {{
+ *   v: 'reload' | 'shell' | 'page' | 'component' | 'css',
+ *   by: string,
+ *   why: string,
+ *   modules?: string[],
+ *   css?: true,
+ * }} ReloadVerdict
  */
 
 /**
- * The stronger of two verdicts, treating `null` / `undefined` as weakest and an
- * unrecognised one as `reload` (fail safe, never fail open).
+ * Merge two verdicts into the one a batch applies, treating `null` /
+ * `undefined` as nothing and an unrecognised name as `reload` (fail safe, never
+ * fail open). `v`, `by` and `why` come from the stronger verdict (the first on
+ * a tie). `modules` is the sorted union of both and `css` is set when either
+ * sets it, because a weaker change in the batch still needs its own work done
+ * alongside the stronger one.
  *
  * Used twice for the same reason. The watcher can see several files change
- * inside one 80ms debounce window, and the browser relay coalesces a burst of
+ * inside one debounce window, and the browser relay coalesces a burst of
  * signals into ONE emitted reload (#1397). In both places a batch mixing a page
  * edit and a component edit is a COMPONENT edit, so taking the last verdict
  * would leave the old component class running against fresh markup.
@@ -62,10 +81,16 @@ export const RELOAD_VERDICTS = /** @type {const} */ (['reload', 'shell', 'page']
  * @param {ReloadVerdict | null | undefined} b
  * @returns {ReloadVerdict | null}
  */
-export function strongerVerdict(a, b) {
+export function mergeVerdicts(a, b) {
   if (!a) return b || null;
   if (!b) return a;
-  return verdictRank(a.v) <= verdictRank(b.v) ? a : b;
+  const top = verdictRank(a.v) <= verdictRank(b.v) ? a : b;
+  /** @type {ReloadVerdict} */
+  const out = { v: top.v, by: top.by, why: top.why };
+  const modules = [...new Set([...(a.modules || []), ...(b.modules || [])])].sort();
+  if (modules.length) out.modules = modules;
+  if (a.css || b.css) out.css = true;
+  return out;
 }
 
 /**
@@ -95,7 +120,7 @@ function verdictRank(v) {
  *    gap. Reading currency here would therefore turn the feature off for every
  *    edit after the first in a burst. Classifying against the previous build's
  *    graph is the intended behaviour, and it is conservative in the right
- *    direction: a file the stale graph has never seen falls to rung 6 and
+ *    direction: a file the stale graph has never seen falls to rung 7 and
  *    reloads.
  * 2. The path is outside `appDir`. The watcher only fires for `appDir` plus the
  *    opt-in `webjs.dev.watch` roots (#894), and a file outside `appDir` is
@@ -103,25 +128,33 @@ function verdictRank(v) {
  *    change what any layout renders, so it takes the whole-body `shell` swap.
  * 3. The path is in the SHIPPED closure. This is the transitive answer and the
  *    one that matters: the browser holds this module, so the page must reload.
- * 4. The path is a page module. Morphable.
- * 5. The path is somewhere else in the module graph (a layout, a server-only
+ *    A CSS module script (`import s from './x.css' with { type: 'css' }`) is in
+ *    the closure too, so it stops here and never reaches rung 4.
+ * 4. The path is a stylesheet (`.css`) the browser does not hold as a module
+ *    (#1689): a `public/` sheet, an `@import`ed partial, a
+ *    `webjs.dev.regenerate` input such as Tailwind's. The tab re-requests every
+ *    same-origin stylesheet and swaps them in place, with no reload and no
+ *    re-render. Every sheet rather than the changed one, which is what makes a
+ *    partial and a regenerate output come out right, since neither is the file
+ *    the page links.
+ * 5. The path is a page module. Morphable.
+ * 6. The path is somewhere else in the module graph (a layout, a server-only
  *    util, a `.server.*` file reachable only from a page). Server-only by
  *    elimination, so `shell`.
- * 6. Anything else. A brand-new file, a deleted file, and every `public/` asset
- *    land here. `public/` is not in the module graph at all, so the server
- *    cannot tell what the file IS or what depends on it, and most of what lives
- *    there (an image, a font, a service worker, a hand-written script) is
- *    something no amount of re-rendering picks up. The refresh does re-request
- *    the page's stylesheets, so a `public/` CSS edit alone would now survive a
- *    morph, but that is one knowable case inside a rung whose whole point is
- *    that the file is unknowable.
+ * 7. Anything else. A brand-new file, a deleted file, and every other `public/`
+ *    asset land here. `public/` is not in the module graph at all, so the
+ *    server cannot tell what the file IS or what depends on it, and most of
+ *    what lives there (an image, a font, a service worker, a hand-written
+ *    script) is something no amount of re-rendering picks up. A stylesheet is
+ *    the one kind it can name from the path alone, which is why rung 4 takes
+ *    it out first.
  *
  * Note what step 3 sweeps in deliberately. A `'use server'` action file
  * imported by a SHIPPING component is inside the closure (the graph keeps a
  * `.server.*` node and stops at it), so editing it reloads. That is correct
  * rather than merely conservative, because adding an export to that file
  * changes the generated RPC stub the browser holds. The same action imported
- * only by a page falls to step 5 and gets `shell`.
+ * only by a page falls to step 6 and gets `shell`.
  *
  * @param {string} abs  absolute path of the changed file
  * @param {object} ctx
@@ -140,6 +173,7 @@ export function classifyChangedPath(abs, ctx) {
   if (!ctx.analysisReady) return { v: 'reload', by, why: 'analysis-cold' };
   if (!isUnder(abs, ctx.appDir, sep)) return { v: 'shell', by, why: 'extra-watch-root' };
   if (ctx.shippedFiles && ctx.shippedFiles.has(abs)) return { v: 'reload', by, why: 'ships-to-browser' };
+  if (abs.endsWith('.css')) return { v: 'css', by, why: 'stylesheet', css: true };
   if (ctx.pageFiles && ctx.pageFiles.has(abs)) return { v: 'page', by, why: 'page-module' };
   if (ctx.graphFiles && ctx.graphFiles.has(abs)) return { v: 'shell', by, why: 'server-only-module' };
   return { v: 'reload', by, why: 'unknown-path' };

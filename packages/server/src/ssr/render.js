@@ -9,6 +9,7 @@ import { seedingEnabled, collectSeeds, buildSeedScript, SEED_DROP_BLOCK } from '
 import {
   readRevalidate,
   readHtmlCache,
+  htmlCacheGeneration,
   HTML_CACHE_MARKER,
 } from '../html-cache.js';
 import { requestedFrameId, extractFrameSubtree } from '../frame-render.js';
@@ -1051,6 +1052,11 @@ export async function ssrPage(route, params, url, opts) {
   // no double behaviour) for the form-action re-render (actionData / a non-200
   // status) and for a partial-nav request (X-Webjs-Have), whose bytes depend
   // on the request and must not be shared under the full-URL key.
+  // The cache generation this render starts under (#1689). A dev rebuild, or
+  // a `revalidateAll()`, during the render makes its body describe the source
+  // before the bump, so the funnel must not store it under the bumped key.
+  // Read before the first await, so the whole render counts.
+  const cacheGeneration = htmlCacheGeneration();
   const cacheEligible =
     !opts.actionData &&
     !opts.status &&
@@ -1389,7 +1395,7 @@ export async function ssrPage(route, params, url, opts) {
     // and strips this internal marker. The CSP guard is decided here (the SSR
     // side knows whether a nonce was stamped into the body).
     if (revalidateSeconds !== null && !opts.cspEnabled) {
-      res.headers.set(HTML_CACHE_MARKER, String(revalidateSeconds));
+      res.headers.set(HTML_CACHE_MARKER, `${revalidateSeconds}:${cacheGeneration}`);
     }
     return res;
   } catch (err) {

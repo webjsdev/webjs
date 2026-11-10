@@ -119,6 +119,8 @@ test('registry is shared across module instances via globalThis (dual-instance b
     const copyB = join(dir, 'registry-b.js');
     copyFileSync(src, copyA);
     copyFileSync(src, copyB);
+    // The registry imports its sibling dev hot-swap seam (#1689).
+    copyFileSync(new URL('../../src/hot.js', import.meta.url), join(dir, 'hot.js'));
 
     const a = await import(pathToFileURL(copyA).href);
     const b = await import(pathToFileURL(copyB).href);

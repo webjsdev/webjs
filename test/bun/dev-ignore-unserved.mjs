@@ -2,8 +2,9 @@
  * Cross-runtime check that `webjs dev` does not reload the page for files it
  * does not serve. `npm run dev > dev.log` in the app root used to turn every
  * log line into a live-reload, wiping streamed and live UI mid-session. A
- * gitignored `dev.log`, a `coverage/` file and another `.gitignore`d path are
- * written while the reload stream is open and must produce no reload frame;
+ * gitignored `dev.log`, a `coverage/` file, another `.gitignore`d path and an
+ * editor's temp files (#1689) are written while the reload stream is open and
+ * must produce no reload frame;
  * then a real page edit must (so the stream is proven live). Run under both:
  *
  *   node test/bun/dev-ignore-unserved.mjs
@@ -61,6 +62,8 @@ let child;
 try {
   mkdirSync(join(dir, 'app'), { recursive: true });
   writeFileSync(join(dir, 'app/page.ts'), "import { html } from '@webjsdev/core';\nexport default () => html`<h1>ok</h1>`;\n");
+  mkdirSync(join(dir, 'app/2024'), { recursive: true });
+  writeFileSync(join(dir, 'app/2024/page.ts'), "import { html } from '@webjsdev/core';\nexport default () => html`<h1>2024</h1>`;\n");
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'ignore-unserved', type: 'module', imports: { '#*': './*' } }));
   writeFileSync(join(dir, '.gitignore'), 'node_modules/\n*.log\nuploads/\n');
   mkdirSync(join(dir, 'node_modules/@webjsdev'), { recursive: true });
@@ -89,7 +92,13 @@ try {
   writeFileSync(join(dir, 'coverage/lcov.info'), 'x');
   mkdirSync(join(dir, 'uploads'), { recursive: true });
   writeFileSync(join(dir, 'uploads/a.bin'), 'x');
-  assert.equal(await quiet, false, `a write to dev.log, coverage/ or a gitignored dir reloaded the page on ${runtime}\n--- server log ---\n${log}`);
+  // An editor's temp files beside a real source file (#1689): vim's write
+  // probe, an emacs lock, a JetBrains safe write, a generic temp file. The two
+  // renamed-over kinds name a file that does not exist: one that does is
+  // reported as that file, since Bun's fs.watch names only the temp file when
+  // it is renamed over it (test/bun/dev-watch-replaced.mjs).
+  for (const f of ['app/4913', 'app/.#page.ts', 'app/new.ts___jb_tmp___', 'app/x.tmp']) writeFileSync(join(dir, f), 'x');
+  assert.equal(await quiet, false, `a write to dev.log, coverage/, a gitignored dir or an editor temp file reloaded the page on ${runtime}\n--- server log ---\n${log}`);
 
   // A tracked root file still reloads, so the silence above is not a dead
   // stream or a deaf root watcher. (Not an app/ edit: on Node that restarts the
@@ -98,6 +107,13 @@ try {
   await sleep(300);
   writeFileSync(join(dir, 'NOTES.md'), '# tracked\n');
   assert.ok(await fired, `a tracked root file did not reload on ${runtime}\n--- server log ---\n${log}`);
+
+  // vim's all-digit probe is a FILE: a directory named by digits is a route
+  // segment, so an edit under it still reaches the reload (#1689 review).
+  const digitDir = reloadFired(10_000);
+  await sleep(300);
+  writeFileSync(join(dir, 'app/2024/page.ts'), "import { html } from '@webjsdev/core';\nexport default () => html`<h1>2024 edited</h1>`;\n");
+  assert.ok(await digitDir, `an edit under app/2024/ did not reload on ${runtime}\n--- server log ---\n${log}`);
 
   console.log(`OK  webjs dev ignores dev.log, coverage/ and gitignored paths, and still reloads a tracked file on ${runtime}`);
 } finally {

@@ -88,6 +88,32 @@ export function dismissDevOverlay() {
   __wjPendingSeq = -1;
 }
 
+/**
+ * Take the overlay down after a component hot swap only when the swap settled
+ * what it describes (#1689). A component swap re-renders nothing on the
+ * server, so nothing would re-raise a frame it wrongly dismissed: a `render`
+ * error on this page, or a `ts-strip` failure in some other module, would
+ * vanish while it still stands. So the overlay goes only for a `rebuild`
+ * frame (the rebuild that produced this swap succeeded) or a frame whose
+ * `file` is one the swap re-imported or was edited for, `paths` holding those
+ * as app-root paths (`/components/x.ts`).
+ *
+ * @param {string[]} paths
+ * @returns {boolean} whether it dismissed
+ */
+export function dismissDevOverlayCoveredBy(paths) {
+  const f = __wjFrame;
+  if (!f) return false;
+  let hit = f.kind === 'rebuild';
+  const file = String(f.file || '').replace(/\\/g, '/');
+  for (let i = 0; !hit && file && i < paths.length; i++) {
+    const p = paths[i];
+    hit = !!p && file.length >= p.length && file.slice(file.length - p.length) === p;
+  }
+  if (hit) dismissDevOverlay();
+  return hit;
+}
+
 /** Append a styled text row to `parent`. */
 function __wjRow(parent, css, text) {
   const d = document.createElement('div');

@@ -1,3 +1,5 @@
+import { hotStrings } from './hot.js';
+
 /**
  * Tagged template literal producing a {@link TemplateResult}.
  *
@@ -11,7 +13,7 @@
  * @returns {TemplateResult}
  */
 export function html(strings, ...values) {
-  return { _$webjs: 'template', strings: trusted(strings), values };
+  return { _$webjs: 'template', strings: hotStrings(trusted(strings), 0), values };
 }
 
 /**
@@ -48,7 +50,7 @@ function trusted(strings) {
  * @returns {TemplateResult}
  */
 export function svg(strings, ...values) {
-  return { _$webjs: 'template', strings: trusted(strings), values, svg: true };
+  return { _$webjs: 'template', strings: hotStrings(trusted(strings), 1), values, svg: true };
 }
 
 /**
@@ -62,7 +64,7 @@ export function svg(strings, ...values) {
  * @returns {TemplateResult}
  */
 export function mathml(strings, ...values) {
-  return { _$webjs: 'template', strings: trusted(strings), values, mathml: true };
+  return { _$webjs: 'template', strings: hotStrings(trusted(strings), 2), values, mathml: true };
 }
 
 /**

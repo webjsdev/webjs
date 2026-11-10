@@ -52,7 +52,7 @@ export default function Architecture() {
     <h3>@webjsdev/cli</h3>
     <p>The <code>webjs</code> command-line tool:</p>
     <ul>
-      <li><code>webjs dev</code>: dev server with file watching + live reload via SSE</li>
+      <li><code>webjs dev</code>: dev server with file watching and hot reload via SSE (in-place page refresh, component hot swap)</li>
       <li><code>webjs start</code>: production server, speaks plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2). No build step: serves source directly.</li>
       <li><code>webjs db generate/migrate/studio</code>: Drizzle Kit wrappers (drizzle-kit)</li>
     </ul>

@@ -1103,6 +1103,13 @@ export function wrapHead(opts) {
   // conditional line makes the CSP-off document one newline shorter than the
   // CSP-on one, and the framework guarantees the two render identically
   // apart from the nonce itself.
+  //
+  // The dev reload client goes BEFORE the boot script (#1689): module scripts
+  // run in document order, and it installs the hot client (the template
+  // interner core's `html()` reads) that has to exist before the first
+  // component module evaluates. It sits on the boot's own line and the blank
+  // line after the boot is where it used to be, so a production document,
+  // which has no reload client, is unchanged.
   const title = m.title || 'webjs app';
 
   return `<!doctype html>
@@ -1116,8 +1123,8 @@ ${metaTags.join('\n')}
 ${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}${embedScriptTag({ dev: opts.dev, nonce: opts.nonce })}${clientRouterEnabled() ? '' : `\n<script${n}>window.__WEBJS_CLIENT_ROUTER__=false;</script>`}
 ${importMapTag({ nonce: opts.nonce })}
 ${linkTags.join('\n')}
-${scriptTags.length ? scriptTags.join('\n') + '\n' : ''}${boot}
-${reload}
+${reload}${scriptTags.length ? scriptTags.join('\n') + '\n' : ''}${boot}
+
 ${suspenseBoot}
 </head>
 <body>

@@ -17,6 +17,8 @@
  * @typedef {{ cls: typeof import('./component.js').WebComponent, moduleUrl: string | null, lazy: boolean, tag: string }} RegistryEntry
  */
 
+import { hotReplacer } from './hot.js';
+
 /* ------------------------------------------------------------------
  * Shared registry on globalThis.
  *
@@ -106,7 +108,11 @@ function registerInternal(tag, cls) {
 if (isBrowser) {
   const native = customElements.define.bind(customElements);
   /** @type {any} */ (customElements).define = function (tag, cls, options) {
-    if (!customElements.get(tag)) native(tag, cls, options);
+    const prev = customElements.get(tag);
+    if (!prev) native(tag, cls, options);
+    // A re-define of a known tag under the dev hot client (#1689) patches the
+    // registered class in place, so the registry keeps the class the browser uses.
+    else if (prev !== cls) { const replace = hotReplacer(); if (replace) cls = replace(tag, prev, cls); }
     registerInternal(tag, cls);
   };
 }

@@ -154,7 +154,9 @@ export function enableClientRouter() {
   // never calls this, and a page that ships no component never loads
   // @webjsdev/core at all, so both no-router cases resolve to a full reload
   // without either side assuming anything about the other.
-  /** @type any */ (globalThis).__webjsRefreshPage = refreshPage;
+  // It publishes the OUTCOME form (`refreshOutcome`), so the client can tell
+  // a refresh that applied from one that kept the page under a dev error.
+  /** @type any */ (globalThis).__webjsRefreshPage = refreshOutcome;
   // Both `click` and `submit` are BUBBLE phase, not capture. A component's
   // per-element `@click` / `@submit` handler (render-client.js) runs in the
   // at-target phase, BEFORE a document-level bubble listener. So onClick /
@@ -446,7 +448,24 @@ export function revalidate(url) {
  *   caller should fall back to a full load.
  */
 export async function refreshPage(mode) {
-  if (!enabled || typeof location === 'undefined') return false;
+  return (await refreshOutcome(mode)) !== 'failed';
+}
+
+/**
+ * What `refreshPage` did, for the dev live-reload client (#1689), which reads
+ * it through `globalThis.__webjsRefreshPage`: `'applied'` swapped the new
+ * render in, `'settled'` found the page already resolved (a hard navigation,
+ * a snapshot restore, or a newer navigation that owns it), `'dev-error'` kept
+ * the last good page because the dev server answered with a render error, and
+ * `'failed'` applied nothing, so the caller falls back to a full load. The dev
+ * client logs an in-place update only for `'applied'`, so the console never
+ * reports success for an edit that broke the page.
+ *
+ * @param {'page' | 'shell'} [mode]
+ * @returns {Promise<'applied' | 'settled' | 'dev-error' | 'failed'>}
+ */
+async function refreshOutcome(mode) {
+  if (!enabled || typeof location === 'undefined') return 'failed';
   // Every cached copy predates the change, so drop both caches before fetching.
   revalidate();
   // And the refusal memos (#1407), which `revalidate` deliberately leaves alone
@@ -481,10 +500,15 @@ export async function refreshPage(mode) {
     // superseded this one and owns the page now, and reloading would yank the
     // reader out of it; Turbo drops a refresh that lands mid-navigation for the
     // same reason.
-    if (!res || res.aborted) return true;
-    return res.applied;
+    //
+    // And a `devError` is not one (#1689): the dev server rendered an error for
+    // this page and the overlay shows it. The page stays as it was under the
+    // overlay, and the edit that fixes it refreshes in place.
+    if (!res || res.aborted) return 'settled';
+    if (res.devError) return 'dev-error';
+    return res.applied ? 'applied' : 'failed';
   } catch (_) {
-    return false;
+    return 'failed';
   }
 }
 

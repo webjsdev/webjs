@@ -28,6 +28,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { relative, isAbsolute } from 'node:path';
 import { serverRuntime } from './listener-core.js';
+import { rewriteAppSource } from './dev/bun-app-source.js';
 import {
   annotateSourceLocations,
   isSourceLocationCandidate,
@@ -128,7 +129,9 @@ export function registerSourceLocationHook(appDir) {
           try {
             contents = transformForSsr(abs, src) ?? src;
           } catch { /* fail open: the raw module */ }
-          return { contents, loader };
+          // The same alias rewrite and module versions the app-source plugin
+          // applies (#1689), which this plugin wins over while it is on.
+          return { contents: rewriteAppSource(contents, abs), loader };
         });
       },
     });

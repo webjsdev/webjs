@@ -18,8 +18,10 @@
  *   1. In-place refresh (a page edit with the server in-process, which is what
  *      `bun --hot` gives every Bun user): the DOM swap must wait for the
  *      rebuilt stylesheet.
- *   2. Full reload (a restart under the Node supervisor): the stylesheet is
- *      render-blocking, so the browser holds the old page until it loads.
+ *   2. The supervised Node `webjs dev`, which since #1689 applies a page edit
+ *      in place too (the module resolve hook), so it takes the same refresh
+ *      path. Before that it restarted, and the full reload was flash-free
+ *      because a head stylesheet is render-blocking.
  *
  * Run: WEBJS_E2E=1 node --test test/e2e/dev-css-flash.test.mjs
  * The dev server runs on Node; `WEBJS_E2E_RUNTIME=bun` runs it on Bun instead.
@@ -106,13 +108,13 @@ describe('E2E: a dev edit never paints a new class without its rule (#1535)', {
   });
   after(async () => { if (browser) await browser.close(); });
 
-  // Node: in-process is the refresh path, the supervisor restarts (a reload).
+  // Node: in-process and supervised are both the refresh path (#1689).
   // Bun: `bun --hot` under the supervisor IS the refresh path, and an
   // in-process Bun server cannot pick up an edit at all (its module cache
   // ignores the cache-bust), so it is not a mode there.
   const MODES = process.env.WEBJS_E2E_RUNTIME === 'bun'
     ? [{ name: 'bun --hot in-place refresh', inProcess: false, reloads: false }]
-    : [{ name: 'in-place refresh', inProcess: true, reloads: false }, { name: 'full reload after a restart', inProcess: false, reloads: true }];
+    : [{ name: 'in-place refresh', inProcess: true, reloads: false }, { name: 'supervised in-place refresh', inProcess: false, reloads: false }];
   for (const mode of MODES) {
     test(`${mode.name}: the new markup waits for the rebuilt stylesheet`, async () => {
       const dir = stageApp();

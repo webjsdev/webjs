@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { buildEpoch, bumpBuildEpoch } from '../../src/build-epoch.js';
 import { setBasePath, setCoreInstall, setImportAliasEntries, setVendorEntries } from '../../src/importmap.js';
-import { setAssetRoots, setServeFingerprint, clearAssetHashCache } from '../../src/asset-hash.js';
+import { setAssetRoots, setServeFingerprint, clearAssetHashCache, setDevModuleVersions } from '../../src/asset-hash.js';
 import { setMetadataIconRoutes } from '../../src/ssr/head.js';
 
 const CORE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../core');
@@ -72,6 +72,10 @@ test('build epoch: the asset-hash roots, fingerprint, and cache clear bump it', 
     await bumps('setAssetRoots', () => setAssetRoots({ appDir, coreDir, enabled: true }));
     await bumps('clearAssetHashCache', () => clearAssetHashCache());
     await bumps('setServeFingerprint (changed)', () => setServeFingerprint('fp-' + Date.now()));
+    // The dev module versions feed every url the memoized importmap and boot
+    // hints carry (#1689).
+    await bumps('setDevModuleVersions', () => setDevModuleVersions(() => 0));
+    await bumps('setDevModuleVersions (clear)', () => setDevModuleVersions(null));
     // An UNCHANGED fingerprint moves no hash, so it must NOT bump: the memos
     // over those hashes are still valid and a bump would discard them for
     // nothing on every rebuild whose verdict did not move.

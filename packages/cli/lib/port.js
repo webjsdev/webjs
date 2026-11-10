@@ -15,6 +15,7 @@
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseEnv } from 'node:util';
 import { loadEnvFiles } from './env-files.js';
 
 /**
@@ -34,6 +35,38 @@ export function loadAppEnv(appDir) {
   const nodeEnv = process.env.NODE_ENV;
   const mode = nodeEnv === 'test' ? 'test' : nodeEnv === 'production' ? 'production' : 'development';
   return loadEnvFiles(appDir, mode);
+}
+
+/**
+ * The environment the user's shell set, for the `webjs dev` child (#1689).
+ *
+ * The dev child is started from the shell's env rather than the CLI's own, so a
+ * child restarted for a `.env` edit loads the EDITED file (a loaded variable is
+ * never overridden). Node gives the CLI exactly the shell's env until
+ * `loadAppEnv` runs, but Bun loads the app's `.env` files into `process.env`
+ * before any code runs (the CLI parent is not started with `--no-env-file`), so
+ * on Bun the snapshot already holds the values from before the edit and the
+ * restarted child kept them. So on Bun each key whose value is exactly what
+ * `.env`, `.env.<NODE_ENV>` or `.env.local` (Bun's own auto-load set) sets is
+ * dropped, and the child, which runs with `--no-env-file`, reads the files
+ * fresh through `loadAppEnv` in Next's order. A shell variable
+ * that happens to equal the file's value is dropped too, which changes
+ * nothing, since the file supplies the same value.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} appDir
+ * @param {boolean} [isBun]
+ * @returns {Record<string, string | undefined>}
+ */
+export function shellEnvOf(env, appDir, isBun = !!process.versions.bun) {
+  const out = { ...env };
+  if (!isBun) return out;
+  for (const file of ['.env', `.env.${env.NODE_ENV || 'development'}`, '.env.local']) {
+    let parsed;
+    try { parsed = parseEnv(readFileSync(join(appDir, file), 'utf8')); } catch { continue; }
+    for (const [k, v] of Object.entries(parsed)) if (out[k] === v) delete out[k];
+  }
+  return out;
 }
 
 /**

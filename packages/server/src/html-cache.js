@@ -391,8 +391,15 @@ export async function commitHtmlCache(req, res, url) {
   const marker = res.headers.get(HTML_CACHE_MARKER);
   if (!marker) return res;
   res.headers.delete(HTML_CACHE_MARKER);
-  const revalidateSeconds = Number(marker);
+  // `<seconds>:<generation>`, the generation the render STARTED under (#1689).
+  // A render that straddled a `revalidateAll()` (every dev rebuild ends with
+  // one) produced bytes from before the eviction, and writing them now would
+  // file them under the new generation's key, where every later request would
+  // be served the pre-edit page for the whole window. Skip the write instead.
+  const [secondsPart, generationPart] = marker.split(':');
+  const revalidateSeconds = Number(secondsPart);
   if (!Number.isFinite(revalidateSeconds) || revalidateSeconds <= 0) return res;
+  if (generationPart !== undefined && Number(generationPart) !== _generation.n) return res;
   // Per-user leak defense (#241). The page set `revalidate` (asserting "same
   // for everyone"), but if the render actually read per-user request state
   // (cookies() / headers() / getSession()), its body varies by visitor and

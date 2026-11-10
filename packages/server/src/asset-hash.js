@@ -91,6 +91,28 @@ let _coreDir = '';
 let _serveFp = '';
 
 /**
+ * The dev browser module versions (#1689), or null outside dev. When set,
+ * `withAssetHash` appends `?t=<n>` to a same-origin url whose file has a
+ * version above 0 instead of returning it unchanged, so the boot script, the
+ * modulepreload hints and the lazy-loader map name a bumped module by the same
+ * url its importers' rewritten specifiers do (`dev/specifier-versions.js`).
+ * One module, one url per document: two urls would be two module instances.
+ * @type {((abs: string) => number) | null}
+ */
+let _devVersionOf = null;
+
+/**
+ * Install (or clear, with null) the dev browser module version lookup.
+ * `dev/handler.js` passes `state.browserVersions.versionOf` in dev only.
+ * @param {((abs: string) => number) | null} fn
+ * @returns {void}
+ */
+export function setDevModuleVersions(fn) {
+  _devVersionOf = typeof fn === 'function' ? fn : null;
+  bumpBuildEpoch();
+}
+
+/**
  * Memoized per-file content hash. Keyed by absolute path. Cleared on the
  * fs.watch rebuild so a changed file re-hashes.
  *
@@ -309,7 +331,7 @@ function resolveUrlToFile(url) {
  * @returns {string}
  */
 export function withAssetHash(url, basePath = '') {
-  if (!_enabled) return url;
+  if (!_enabled && !_devVersionOf) return url;
   if (typeof url !== 'string' || url[0] !== '/' || url[1] === '/') return url;
   // Resolve against the file system using the base-path-stripped url, so a
   // sub-path-deployed `<basePath>/app/foo.js` maps to `<appDir>/app/foo.js`.
@@ -321,6 +343,11 @@ export function withAssetHash(url, basePath = '') {
   }
   const abs = resolveUrlToFile(forResolve);
   if (!abs) return url;
+  if (!_enabled) {
+    // Dev: no content hash, only the module's browser version when it moved.
+    const n = /** @type {(abs: string) => number} */ (_devVersionOf)(abs);
+    return n > 0 ? `${url}${url.includes('?') ? '&' : '?'}t=${n}` : url;
+  }
   const hash = assetHashFor(abs);
   if (!hash) return url;
   // The freshly-emitted url never already carries a query, but stay robust:

@@ -54,7 +54,7 @@ import { _swapCommit, applySwap } from './swap.js';
  *   top on a forward navigation (#1436), from `data-preserve-scroll` on the
  *   link or form, or from `navigate(url, { scroll: false })`. It suppresses only
  *   the scroll-to-top writes, never the hash-anchor scroll.
- * @returns {Promise<{ ok: boolean, status: number | null, aborted: boolean, applied: boolean }>}
+ * @returns {Promise<{ ok: boolean, status: number | null, aborted: boolean, applied: boolean, devError?: boolean }>}
  *   The fetch outcome, so a caller (the form-submission busy/event lifecycle)
  *   can report whether the submission settled as a success, an error, or an
  *   abort. `ok` mirrors `response.ok` for an HTTP response (a 422 validation
@@ -73,6 +73,10 @@ import { _swapCommit, applySwap } from './swap.js';
  *   degradation to a hard navigation from an importmap mismatch or a poisoned
  *   boundary scan). A caller deciding whether to fall back to a full page load
  *   wants `applied`; one reporting the submission's success wants `ok`.
+ *
+ *   `devError` is set for a `refresh` answered with `X-Webjs-Dev-Error: 1`
+ *   (#1689): the dev render failed, nothing was applied, and the page on
+ *   screen is meant to stay as it is under the dev overlay.
  */
 /**
  * Whether two urls name the same document (origin, path and query; the hash
@@ -228,6 +232,16 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
     const resp = await fetch(href, init);
     respStatus = resp.status;
     respOk = resp.ok;
+    // A dev render that reported an error (#1689). The server marks it, and
+    // the dev overlay is already up describing it. A refresh leaves the page
+    // that last rendered on screen under the overlay, as Next does, so the
+    // edit that fixes the error refreshes it in place; applying the error page
+    // would share no boundary with it and hard-navigate, and so would the fix.
+    // Only `webjs dev` sends the header.
+    if (refresh && resp.headers.get('x-webjs-dev-error') === '1') {
+      try { await resp.body?.cancel(); } catch (_) { /* already consumed */ }
+      return { ok: false, status: respStatus, aborted: false, applied: false, devError: true };
+    }
     // `fetch` follows a 303 transparently and its headers are then unreadable,
     // so this lands on a non-redirect response: the 422 failure re-render, or
     // any form response that answers in place.
