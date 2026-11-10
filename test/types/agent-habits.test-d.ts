@@ -111,6 +111,12 @@ export class ThreadHabit extends WebComponent({ messages: Array, meta: Object, i
   }
 }
 
+// connectWS()'s connection held in a typed field, and Lit's directive types,
+// as inbox eval builds wrote them (#1686).
+import type { WSConnection, ConnectOptions } from '@webjsdev/core';
+import type { ClassMapDirective, StyleMapDirective, RepeatDirective } from '@webjsdev/core/directives';
+export type HabitTypes = [WSConnection | null, ConnectOptions, ClassMapDirective, StyleMapDirective, RepeatDirective<number>];
+
 // Route props the Next.js 15 way and the Next.js 14 way, and the route-handler
 // context written inline as Next documents it. (Plan workstream 3, #1686.)
 export async function routePropHabits(

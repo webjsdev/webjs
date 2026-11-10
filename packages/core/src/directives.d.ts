@@ -1,5 +1,6 @@
 import type { nothing, noChange } from './sentinels.js';
 export { repeat, isRepeat } from './repeat.js';
+export type { RepeatDirective } from './repeat.js';
 
 export interface UnsafeHTMLDirective {
   _$webjs: 'unsafe-html';
@@ -133,3 +134,4 @@ export function range(end: number): Generator<number, void, unknown>;
 export function range(start: number, end: number, step?: number): Generator<number, void, unknown>;
 
 export { classMap, styleMap, ifDefined } from './attribute-directives.js';
+export type { ClassMapDirective, StyleMapDirective } from './attribute-directives.js';
