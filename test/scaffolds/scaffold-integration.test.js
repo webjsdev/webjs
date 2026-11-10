@@ -832,6 +832,8 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /npx w[e]bjs check/, 'names the check loop');
     assert.match(fs, /use Lit's APIs over raw DOM calls/, 'steers components to Lit APIs over raw DOM');
     assert.match(fs, /document\.getElementById/, 'naming the raw DOM calls to avoid');
+    assert.match(fs, /Style with Tailwind utilities on the kit's design tokens/, 'steers styling to Tailwind on the kit tokens');
+    assert.match(fs, /npx webjs ui init --preset/, 'and theming to a kit preset');
     assert.ok(fs.split('\n').length < 60, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);

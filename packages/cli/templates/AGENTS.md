@@ -44,6 +44,11 @@ For UI, add shadcn's components from the WebJs UI kit (class helpers such as
 them: `npx webjs ui add button dialog` copies each into `components/ui/`, and
 `npx webjs ui list` shows what exists.
 
+Style with Tailwind utilities on the kit's design tokens (`bg-background`,
+`text-muted-foreground`, `border-border`, `rounded-lg`; the theme lives in
+`styles/globals.css`), never hard-coded colours or hand-written CSS. Change the
+whole look with a theme: `npx webjs ui init --preset <code>` from webjs.dev/ui/create.
+
 `npx webjs help` lists every CLI command (`routes`, `doctor`, `db`, `ui`,
 `typecheck`, ...). The `webjs` MCP server in `.claude.json` (`npx @webjsdev/mcp`)
 answers the same questions as tools: `list_routes`, `list_actions`,
