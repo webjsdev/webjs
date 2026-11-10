@@ -150,30 +150,26 @@ export function appRelativePath(pathname, mount) {
 }
 
 /**
- * Carry an unshown flash across a redirect of the page it is bound to (#1686).
- * A success redirect names a path, and a redirects rule, middleware or the
- * trailing-slash policy can send that path on (`/posts` to `/en/posts`); the
- * flash then has to follow, or no page would ever show it and it would turn
- * up stale on a later visit. When `res` redirects the request the flash is
- * bound to, to another same-origin path, the flash is re-set bound to that
- * path. Mutates `res.headers`; a no-op for anything else.
+ * Retire an unshown flash when the page it is bound to answers a redirect
+ * instead of rendering (#1686). The result belongs to the page the success
+ * redirect named; when that page sends the visitor on (a sign-in check, a
+ * redirects rule, middleware), nothing shows it, as a redirect after an action
+ * discards its state in Next.js. Following the redirect instead would put the
+ * result on whatever page the chain ends on, a sign-in page included. The
+ * flash is marked shown, so it stays the next submission's `prevState` (as a
+ * 422's does) and is never displayed later. A speculative prefetch leaves it
+ * alone. Mutates `res.headers`; a no-op for anything else.
  * @param {Request} req
  * @param {Response} res
  * @param {string} mount the app's `webjs.basePath` ('' when none)
  */
-export async function carryFlashAcrossRedirect(req, res, mount) {
+export async function retireFlashOnRedirect(req, res, mount) {
   if (res.status < 300 || res.status >= 400) return;
-  const location = res.headers.get('location');
-  if (!location) return;
+  if (req.headers.get('x-webjs-prefetch') === '1') return;
   const flash = await readFlash(req);
   if (!flash || flash.shown || !flash.path) return;
   const from = new URL(req.url);
   if (trimSlash(appRelativePath(from.pathname, mount)) !== trimSlash(flash.path)) return;
-  let to;
-  try { to = new URL(location, from); } catch { return; }
-  if (to.origin !== from.origin) return;
-  const path = appRelativePath(to.pathname, mount);
-  if (trimSlash(path) === trimSlash(flash.path)) return;
-  const value = await encodeFlash({ ...flash, path });
+  const value = await encodeFlash({ ...flash, shown: true });
   if (value) res.headers.append('set-cookie', flashSetCookie(value));
 }

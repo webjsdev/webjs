@@ -88,3 +88,42 @@ test('under a basePath mount a redirect written with the mount still shows on it
   const landing = await app.handle(new Request('http://x/app/done', { headers: { cookie: nextCookie('', done) } }));
   assert.equal(messageOf(await landing.text()), 'DONE_MSG');
 });
+
+test("a flash whose page redirects to sign-in is not shown on the sign-in page", async () => {
+  // The review's case: the action succeeds and names /dashboard, which sends a
+  // signed-out visitor to /login. The login page must not get the result.
+  const appDir = makeApp({
+    'modules/x/actions/act.server.ts': `'use server';\nexport async function act() { return { success: true, message: 'SAVED_MSG', redirect: '/dashboard' }; }\n`,
+    'app/f/page.ts': showsMessage(`import { act } from '../../modules/x/actions/act.server.ts';`),
+    'app/dashboard/page.ts': `import { html, redirect } from ${CORE};\nexport default () => { redirect('/login'); return html\`\`; };\n`,
+    'app/login/page.ts': plainPage,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger: quiet });
+  const html = await (await app.handle(new Request('http://x/f'))).text();
+  const done = await app.handle(post('/f', { __webjs_action: identityOf(html) }));
+  let cookie = nextCookie('', done);
+  // A prefetch of the target leaves the flash alone.
+  const prefetch = await app.handle(new Request('http://x/dashboard', { headers: { cookie, 'x-webjs-prefetch': '1' } }));
+  assert.ok(prefetch.status >= 300 && prefetch.status < 400);
+  assert.equal(prefetch.headers.getSetCookie().length, 0, 'a prefetch does not retire it');
+  const hop = await app.handle(new Request('http://x/dashboard', { headers: { cookie } }));
+  assert.ok(hop.status >= 300 && hop.status < 400, 'the dashboard redirects');
+  cookie = nextCookie(cookie, hop);
+  const login = await app.handle(new Request('http://x/login', { headers: { cookie } }));
+  assert.equal(messageOf(await login.text()), 'none', "the login page never shows another action's result");
+});
+
+test('a flash is still shown on the page its redirect names, and stays off other pages', async () => {
+  // What every earlier round protects.
+  const appDir = makeApp({
+    'modules/x/actions/act.server.ts': `'use server';\nexport async function act() { return { success: true, message: 'SAVED_MSG', redirect: '/done' }; }\n`,
+    'app/f/page.ts': showsMessage(`import { act } from '../../modules/x/actions/act.server.ts';`),
+    'app/done/page.ts': plainPage,
+    'app/other/page.ts': plainPage,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger: quiet });
+  const html = await (await app.handle(new Request('http://x/f'))).text();
+  const cookie = nextCookie('', await app.handle(post('/f', { __webjs_action: identityOf(html) })));
+  assert.equal(messageOf(await (await app.handle(new Request('http://x/other', { headers: { cookie } }))).text()), 'none');
+  assert.equal(messageOf(await (await app.handle(new Request('http://x/done', { headers: { cookie } }))).text()), 'SAVED_MSG');
+});

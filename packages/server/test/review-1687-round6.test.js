@@ -128,7 +128,7 @@ function nextCookie(prev, res) {
   return [...jar.values()].join('; ');
 }
 
-test('a flash follows a redirects rule that sends its target on, and stays off other pages', async () => {
+test('a flash whose page redirects on is retired there, never shown on the page the chain ends on', async () => {
   const { app, id } = await formApp(
     `export async function act() { return { success: true, message: 'SAVED_MSG', redirect: '/posts' }; }`,
     {
@@ -142,12 +142,16 @@ test('a flash follows a redirects rule that sends its target on, and stays off o
   let cookie = nextCookie('', done);
   // What the path binding protects: another page leaves it.
   assert.match(await (await app.handle(new Request('http://x/other', { headers: { cookie } }))).text(), /<p id="r">none<\/p>/);
-  // The redirect target is itself redirected on.
+  // The redirect target is itself redirected on: as in Next.js, a redirect
+  // after the action discards its result, so the chain's end shows nothing.
   const hop = await app.handle(new Request('http://x/posts', { headers: { cookie } }));
   assert.equal(hop.status, 307);
   cookie = nextCookie(cookie, hop);
   const landing = await app.handle(new Request('http://x/en/posts', { headers: { cookie } }));
-  assert.match(await landing.text(), /<p id="r">SAVED_MSG<\/p>/, 'the page the chain ends on shows it');
+  assert.match(await landing.text(), /<p id="r">none<\/p>/, 'not shown where the chain ends');
+  // And it does not turn up later on the page it was bound to.
+  const later = await app.handle(new Request('http://x/en/posts', { headers: { cookie } }));
+  assert.match(await later.text(), /<p id="r">none<\/p>/);
 });
 
 test('a flash bound to a redirect written with the basePath mount prefix is shown there', async () => {

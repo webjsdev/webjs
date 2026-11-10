@@ -96,7 +96,7 @@ import {
   handleCore, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
 import { devImport, clearProdImportCache } from '../dev-import.js';
-import { carryFlashAcrossRedirect } from '../action-flash.js';
+import { retireFlashOnRedirect } from '../action-flash.js';
 
 /**
  * A short content digest of a single file's bytes for the app-source deploy
@@ -1565,11 +1565,11 @@ export async function createRequestHandler(opts) {
       // is the developer saying "this dev server is framed by these origins".
       if (embedOriginsValue.length) allowEmbedFraming(merged.headers, embedOriginsValue);
 
-      // A form action's flash follows a redirect of the page it is bound to
-      // (a redirects rule, middleware, the trailing-slash policy), so the page
-      // the chain ends on shows it (action-flash.js). Best-effort.
+      // A form action's flash is retired when the page it is bound to
+      // redirects instead of rendering, so no other page ever shows it
+      // (action-flash.js). Best-effort.
       if (req.method === 'GET' && merged.status >= 300 && merged.status < 400) {
-        try { await carryFlashAcrossRedirect(req, merged, basePathValue); } catch { /* ignore */ }
+        try { await retireFlashOnRedirect(req, merged, basePathValue); } catch { /* ignore */ }
       }
 
       // Server HTML cache write (#241): if the SSR marked this response as a
