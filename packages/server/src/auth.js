@@ -14,6 +14,7 @@ import { redirect } from '@webjsdev/core';
 import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 import { devSecret } from './dev-secret.js';
 import { encryptSession, decryptSession } from './jwe.js';
+import { basePath as appBasePath } from './importmap.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -767,10 +768,20 @@ export function createAuth(config) {
 
   // -- Route handlers (mount at app/api/auth/[...path]/route.js) ------------
 
+  // The request's path has lost the app's `webjs.basePath` mount prefix at
+  // ingress, while a base path taken from AUTH_URL is the public one and may
+  // still carry it, so both spellings are tried. A base only matches at a
+  // segment boundary: /api/authx/signin is not under /api/auth.
   function parseSegments(req) {
     const path = new URL(req.url).pathname;
-    const rest = path.startsWith(basePath) ? path.slice(basePath.length) : path.replace(/^\/api\/auth\/?/, '');
-    return rest.split('/').filter(Boolean);
+    const mount = appBasePath();
+    const bases = [basePath];
+    if (mount && basePath.startsWith(mount + '/')) bases.push(basePath.slice(mount.length));
+    if (!bases.includes('/api/auth')) bases.push('/api/auth');
+    for (const b of bases) {
+      if (path === b || path.startsWith(b + '/')) return path.slice(b.length).split('/').filter(Boolean);
+    }
+    return [];
   }
 
   async function GET(req) {

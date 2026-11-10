@@ -150,3 +150,28 @@ test("signOut honours the app's own absolute redirectTo; the sign-out route stil
   }));
   assert.equal(routed.headers.get('location'), '/', 'a submitted absolute target is still dropped');
 });
+
+test('the auth routes match their base path at a segment boundary, and under a webjs.basePath mount', async () => {
+  const auth = createAuth({ secret: SECRET, providers: [Credentials({ authorize: async () => null })] });
+  const ok = await auth.handlers.GET(new Request('https://app.example/api/auth/session'));
+  assert.match(ok.headers.get('content-type') || '', /json/, '/api/auth/session is the session route');
+  // A prefix match read /api/authsession as /api/auth + session.
+  const near = await auth.handlers.GET(new Request('https://app.example/api/authsession'));
+  assert.doesNotMatch(near.headers.get('content-type') || '', /json/, '/api/authsession is not');
+
+  const prev = process.env.AUTH_URL;
+  // A non-default auth path under a mount: no /api/auth fallback can rescue it.
+  process.env.AUTH_URL = 'https://app.example/app/custom-auth';
+  await setBasePath('/app');
+  try {
+    const mounted = createAuth({ secret: SECRET, providers: [Credentials({ authorize: async () => null })] });
+    // The ingress strip has removed /app from the path the handler sees.
+    const res = await mounted.handlers.GET(new Request('https://app.example/custom-auth/session'));
+    assert.match(res.headers.get('content-type') || '', /json/, 'the stripped path still reaches the session route');
+    const providers = await (await mounted.handlers.GET(new Request('https://app.example/custom-auth/providers'))).json();
+    assert.equal(providers.credentials.signinUrl, '/app/custom-auth/signin/credentials', 'emitted URLs keep the public prefix');
+  } finally {
+    await setBasePath('');
+    if (prev === undefined) delete process.env.AUTH_URL; else process.env.AUTH_URL = prev;
+  }
+});
