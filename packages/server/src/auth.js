@@ -294,6 +294,24 @@ export function createAuth(config) {
   const maxAgeMs = maxAge * 1000;
   const cb = config.callbacks || {};
   const pages = config.pages || {};
+  // Where the auth routes live and the origin their callback URLs use, as in
+  // Auth.js v5 (#1686): `AUTH_URL` (or the older `NEXTAUTH_URL`) gives the
+  // origin, and its path is the base path unless `basePath` is set; without it
+  // the request's own origin is used. The default base path is /api/auth.
+  const envAuthUrl = process.env.AUTH_URL || process.env.NEXTAUTH_URL || '';
+  /** @type {string | null} */
+  let authOrigin = null;
+  let rawBase = /** @type {any} */ (config).basePath;
+  if (envAuthUrl) {
+    try {
+      const u = new URL(envAuthUrl);
+      authOrigin = u.origin;
+      if (!rawBase && u.pathname !== '/') rawBase = u.pathname;
+    } catch { /* an unparsable AUTH_URL leaves the request origin in charge */ }
+  }
+  const basePath = '/' + String(rawBase || '/api/auth').replace(/^\/+|\/+$/g, '');
+  /** @param {Request | null | undefined} req */
+  const authBase = (req) => `${authOrigin || (req ? new URL(req.url).origin : 'http://localhost:8080')}${basePath}`;
   const secure = () => process.env.NODE_ENV === 'production';
 
   /** @type {Map<string, ProviderConfig>} */
@@ -383,7 +401,7 @@ export function createAuth(config) {
     if (verdict instanceof Response) return verdict;
     if (verdict) return null;
     const url = new URL(req.url);
-    const target = new URL(pages.signIn || '/api/auth/signin', url.origin);
+    const target = new URL(pages.signIn || `${basePath}/signin`, url.origin);
     target.searchParams.set('callbackUrl', url.pathname + url.search);
     return Response.redirect(target.toString(), 302);
   }
@@ -451,12 +469,11 @@ export function createAuth(config) {
 
   async function oauthRedirect(provider, opts) {
     const req = opts.req || getRequest();
-    const origin = req ? new URL(req.url).origin : 'http://localhost:8080';
     const state = randomId();
 
     const url = new URL(provider.authorizationUrl);
     url.searchParams.set('client_id', provider.clientId);
-    url.searchParams.set('redirect_uri', `${origin}/api/auth/callback/${provider.id}`);
+    url.searchParams.set('redirect_uri', `${authBase(req)}/callback/${provider.id}`);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('scope', (provider.scope || []).join(' '));
     url.searchParams.set('state', state);
@@ -500,7 +517,7 @@ export function createAuth(config) {
     if (!verified || verified !== state) return new Response('Invalid state', { status: 403 });
 
     // Exchange code for token
-    const callbackUrl = `${url.origin}/api/auth/callback/${provider.id}`;
+    const callbackUrl = `${authBase(req)}/callback/${provider.id}`;
     const tokenRes = await fetch(provider.tokenUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
@@ -558,7 +575,7 @@ export function createAuth(config) {
 
   function signOutPage() {
     return htmlPage('Sign out', '<h1>Sign out</h1><p>Are you sure you want to sign out?</p>'
-      + '<form method="post" action="/api/auth/signout"><button type="submit">Sign out</button></form>');
+      + `<form method="post" action="${basePath}/signout"><button type="submit">Sign out</button></form>`);
   }
 
   /** @param {string | null} callbackUrl */
@@ -571,7 +588,7 @@ export function createAuth(config) {
     const back = safeRedirectPath(callbackUrl) || '/';
     const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
     const buttons = [...providers.values()].filter((p) => p.type === 'oauth').map((p) =>
-      `<form method="post" action="/api/auth/signin/${esc(p.id)}"><input type="hidden" name="redirectTo" value="${esc(back)}">`
+      `<form method="post" action="${basePath}/signin/${esc(p.id)}"><input type="hidden" name="redirectTo" value="${esc(back)}">`
       + `<button type="submit">Sign in with ${esc(p.name)}</button></form>`).join('');
     return htmlPage('Sign in', `<h1>Sign in</h1>${buttons || '<p>Set <code>pages.signIn</code> to your sign-in page.</p>'}`);
   }
@@ -579,7 +596,9 @@ export function createAuth(config) {
   // -- Route handlers (mount at app/api/auth/[...path]/route.js) ------------
 
   function parseSegments(req) {
-    return new URL(req.url).pathname.replace(/^\/api\/auth\/?/, '').split('/').filter(Boolean);
+    const path = new URL(req.url).pathname;
+    const rest = path.startsWith(basePath) ? path.slice(basePath.length) : path.replace(/^\/api\/auth\/?/, '');
+    return rest.split('/').filter(Boolean);
   }
 
   async function GET(req) {
@@ -604,7 +623,7 @@ export function createAuth(config) {
     if (seg[0] === 'signin' && !seg[1]) return signInPage(new URL(req.url).searchParams.get('callbackUrl'));
     if (seg[0] === 'providers') {
       const list = {};
-      for (const [id, p] of providers) list[id] = { id: p.id, name: p.name, type: p.type, signinUrl: `/api/auth/signin/${id}` };
+      for (const [id, p] of providers) list[id] = { id: p.id, name: p.name, type: p.type, signinUrl: `${basePath}/signin/${id}` };
       return new Response(JSON.stringify(list), { headers: { 'content-type': 'application/json' } });
     }
     return new Response('Not found', { status: 404 });

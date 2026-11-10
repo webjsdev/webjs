@@ -196,7 +196,6 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
     <ul>
       <li id="diff-jwt">The JWT session is a signed (HS256) token, not an encrypted (JWE) one, so keep secrets out of the session; the cookie names are the ones above.</li>
       <li id="diff-adapter"><code>adapter</code> is the session store used by the <code>database</code> strategy (<code>load</code>, <code>save</code>, <code>destroy</code>), not an Auth.js database adapter: <code>@auth/*-adapter</code> packages are not supported, and users live in your own tables.</li>
-      <li id="diff-auth-url">There is no <code>AUTH_URL</code> or <code>basePath</code> option; the handler is mounted where the <code>route.ts</code> file is, and callback URLs come from the request.</li>
     </ul>
 
     <h2>Environment variables</h2>
@@ -204,7 +203,9 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
 AUTH_GOOGLE_ID=your-google-oauth-client-id
 AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
 AUTH_GITHUB_ID=your-github-oauth-client-id
-AUTH_GITHUB_SECRET=your-github-oauth-client-secret</code-block>
+AUTH_GITHUB_SECRET=your-github-oauth-client-secret
+AUTH_URL=https://app.example.com/api/auth   # optional, behind a proxy</code-block>
+    <p>As in Auth.js, <code>AUTH_URL</code> (or <code>NEXTAUTH_URL</code>) sets the public origin OAuth callback URLs use, so a provider gets a callback on your real domain when the app runs behind a proxy, and its path is the base path the routes are mounted at. Without it the request's origin and <code>/api/auth</code> are used. <code>basePath</code> in <code>createAuth</code> sets the mount point directly.</p>
     <p>Generate a secret: <code>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code>. <code>webjs create</code> writes one into <code>.env</code> for you. As in Auth.js, <code>createAuth</code> reads <code>AUTH_SECRET</code> itself when <code>secret</code> is left out, and <code>secret: process.env.AUTH_SECRET</code> type-checks as is. Outside production a missing secret is generated once into the gitignored <code>.webjs/dev-secret</code> with a warning (a fresh clone has no <code>.env</code>); in production it is required and <code>createAuth</code> throws without one.</p>
   `;
 }

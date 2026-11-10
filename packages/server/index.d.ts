@@ -1220,6 +1220,12 @@ export interface AuthConfig {
   };
   adapter?: { load?: Function; save?: Function; destroy?: Function };
   pages?: { signIn?: string; signOut?: string; error?: string };
+  /**
+   * Where the auth routes are mounted, as Auth.js's `basePath`. Defaults to
+   * the path of `AUTH_URL` when it has one, else `/api/auth`. `AUTH_URL` (or
+   * `NEXTAUTH_URL`) also sets the origin OAuth callback URLs use.
+   */
+  basePath?: string;
 }
 
 /**
