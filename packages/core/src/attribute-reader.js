@@ -281,19 +281,28 @@ export function observedAttributeNames(Cls) {
 export function declaredProperties(Cls) {
   if (!Cls || typeof Cls !== 'function') return (Cls && Cls.properties) || {};
   const hit = DECLARED.get(Cls);
-  if (hit) return hit;
+  if (hit && hit.gen === generation) return hit.merged;
   const parent = Object.getPrototypeOf(Cls);
   const inherited = parent && parent !== Function.prototype ? declaredProperties(parent) : {};
   const own = Object.hasOwn(Cls, 'properties') ? Cls.properties : undefined;
   const created = CREATED.get(Cls);
   let merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
   if (created) merged = { ...merged, ...created };
-  DECLARED.set(Cls, merged);
+  DECLARED.set(Cls, { gen: generation, merged });
   return merged;
 }
 
-/** @type {WeakMap<Function, Record<string, any>>} */
+/** @type {WeakMap<Function, { gen: number, merged: Record<string, any> }>} */
 const DECLARED = new WeakMap();
+
+/**
+ * Bumped whenever a class's declarations change after they were read
+ * (`createProperty`). Each memo here records the generation it was built in
+ * and is rebuilt when that moved, because a memo holds its superclasses'
+ * declarations merged in, so a change to a parent has to reach every subclass
+ * already read, and a WeakMap cannot enumerate them.
+ */
+let generation = 0;
 
 /**
  * Properties added to a class through Lit's `static createProperty(name,
@@ -336,6 +345,8 @@ export function addCreatedProperty(Cls, name, decl) {
 export function invalidateClass(Cls) {
   DECLARED.delete(Cls);
   BACKED_PROPS.delete(Cls);
+  // Its subclasses' memos merged its old declarations in.
+  generation++;
 }
 
 /**
@@ -364,15 +375,15 @@ function attributeBackedProps(Cls) {
   // once per class), so the first walk is the only one.
   if (Cls && typeof Cls === 'function') {
     const hit = BACKED_PROPS.get(Cls);
-    if (hit) return hit;
+    if (hit && hit.gen === generation) return hit.built;
     const built = buildAttributeBackedProps(Cls);
-    BACKED_PROPS.set(Cls, built);
+    BACKED_PROPS.set(Cls, { gen: generation, built });
     return built;
   }
   return buildAttributeBackedProps(Cls);
 }
 
-/** @type {WeakMap<Function, { propName: string, def: any, primary: string, alias: string | undefined }[]>} */
+/** @type {WeakMap<Function, { gen: number, built: { propName: string, def: any, primary: string, alias: string | undefined }[] }>} */
 const BACKED_PROPS = new WeakMap();
 
 function buildAttributeBackedProps(Cls) {
