@@ -323,7 +323,7 @@ const HELP = {
     ],
     notesTitle: 'Exit status',
     notes: [
-      '0 for the catalogue or when at least one declaration printed; 1 on a miss (the message names the packages that were searched).',
+      '0 for the catalogue, a package listing, or when at least one declaration printed; 1 on a miss, a name no package exports or a --pkg that is not installed (the message names the packages that were searched).',
       'The read-only MCP `source` tool returns the same text: { export: "<Export>" } for a name, { package: "<name>" } for --pkg alone, and the catalogue for no arguments.',
     ],
     examples: ['webjs source', 'webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
@@ -1821,6 +1821,8 @@ Full docs: https://webjs.dev/docs`);
         // answers { package }); without, the feature catalogue, so an agent
         // that does not know a name yet finds it in one call (#1686).
         console.log(pkg ? listSources({ roots, readdir }, pkg) : featureCatalog());
+        // A package that is not installed is a miss, exit 1, as for a name.
+        if (pkg && !roots.some((r) => r.pkg === pkg)) process.exit(1);
         break;
       }
       const out = await lookupExport({ roots, readFile, readdir }, name, pkg);
