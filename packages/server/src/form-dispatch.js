@@ -444,6 +444,38 @@ function methodNotAllowed() {
  * }} deps
  * @returns {Promise<Response>}
  */
+/**
+ * The `issues` array a schema library's validation error carries (zod, valibot,
+ * Standard Schema), or null for any other throw.
+ * @param {unknown} e
+ * @returns {Array<{ path?: unknown[], message?: string }> | null}
+ */
+function schemaIssues(e) {
+  const issues = e && typeof e === 'object' ? /** @type {any} */ (e).issues : undefined;
+  return Array.isArray(issues) && issues.length > 0 ? issues : null;
+}
+
+/**
+ * A failure result from a schema error's issues: the first message per field
+ * as `fieldErrors` (a nested path joined with dots), and a form-level `error`
+ * for an issue with no path.
+ * @param {unknown} e
+ */
+function issuesResult(e) {
+  /** @type {Record<string, string>} */
+  const fieldErrors = {};
+  let error;
+  for (const issue of schemaIssues(e) || []) {
+    const path = Array.isArray(issue.path)
+      ? issue.path.map((p) => (p && typeof p === 'object' && 'key' in p ? /** @type {any} */ (p).key : p)).join('.')
+      : '';
+    const message = typeof issue.message === 'string' ? issue.message : 'Invalid value.';
+    if (path) { if (!(path in fieldErrors)) fieldErrors[path] = message; }
+    else if (!error) error = message;
+  }
+  return { success: false, fieldErrors, ...(error ? { error } : {}), status: 422 };
+}
+
 export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   const { actionIndex, allowedOrigins = [], onError, logger } = deps;
   // An action that throws answers with the page's nearest error.ts (else
@@ -566,8 +598,15 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   if (typeof validate === 'function') {
     const v = await runValidate(validate, args[0]);
     if (!v.ok) {
+      if (v.thrown !== undefined && schemaIssues(v.thrown)) {
+        // A schema library's validation error (zod's `.parse`, valibot,
+        // Standard Schema: a throw carrying `issues`) is invalid INPUT, the
+        // throw-to-reject contract runValidate documents, so it re-renders the
+        // form at 422 with the issues as fieldErrors, not the 500 error page.
+        return ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(issuesResult(v.thrown), formData), status: 422 });
+      }
       if (v.thrown !== undefined) {
-        // A THROWN validator is answered here rather than rethrown. Letting it
+        // Any other throw is a crash. A THROWN validator is answered here rather than rethrown. Letting it
         // escape reaches the handler's last-resort catch, which reports the
         // SAME error to `onError` a second time and answers a bare 500 with no
         // digest, so the one thing that makes a prod error diagnosable is lost.

@@ -308,7 +308,7 @@ const CreatePostSchema = z.object({
 
 export const POST = route(createPost, { validate: CreatePostSchema.parse });</code-block>
 
-    <p>When a thrown validator fails over HTTP, the response is <code>400 { "error": "...", "issues": [...] }</code>. If the thrown error has an <code>issues</code> property (as zod and valibot errors do), it is passed through for structured client-side handling. A structured envelope failure is a <code>422</code>.</p>
+    <p>When a thrown validator fails over HTTP, the response is <code>400 { "error": "...", "issues": [...] }</code>. If the thrown error has an <code>issues</code> property (as zod and valibot errors do), it is passed through for structured client-side handling. A structured envelope failure is a <code>422</code>. On a bound form, a thrown error with <code>issues</code> is invalid input, so the page re-renders at <code>422</code> exactly as for an envelope failure: <code>actionData.fieldErrors</code> holds the first message per field (a nested path joined with dots), <code>actionData.error</code> a message with no path, and the submitted values come back. Any other throw from a validator is a crash and renders the page's error boundary.</p>
 
     <h3>CORS for a REST Endpoint</h3>
     <p>If your endpoint will be called from a different origin (e.g. a mobile app or a partner's frontend), wrap the <code>route.ts</code> handler in the <code>cors()</code> middleware from <code>@webjsdev/server</code>, or apply <code>cors()</code> in <code>middleware.ts</code> for the path. See the <a href="/docs/middleware">middleware</a> docs.</p>

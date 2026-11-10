@@ -98,3 +98,36 @@ export default ({ actionData }) => html\`<p>\${actionData?.message ?? 'none'}</p
   const target = await app.handle(new Request('http://x/a', { headers: { cookie } }));
   assert.match(await target.text(), /SAVED_MSG/, 'the page the redirect named shows it');
 });
+
+test('a schema validator that throws issues re-renders the form at 422; any other throw is still an error', async () => {
+  const appDir = makeApp({
+    'modules/x/actions/join.server.ts': `'use server';
+export function validate(input) {
+  if (input.email === 'crash') throw new Error('VALIDATOR_CRASH');
+  const e = new Error('[{"path":["email"]}]');
+  e.issues = [{ path: ['email'], message: 'EMAIL_ISSUE' }, { path: ['email'], message: 'second' }, { path: [], message: 'FORM_ISSUE' }];
+  throw e;
+}
+export async function join() { return { success: true }; }
+`,
+    'app/j/page.ts': `
+import { html } from ${CORE};
+import { join } from '../../modules/x/actions/join.server.ts';
+export default ({ actionData }) => html\`<p id="f">\${actionData?.fieldErrors?.email ?? ''}</p><p id="e">\${actionData?.error ?? ''}</p><form action=\${join}><input name="email"></form>\`;
+`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger: quiet, onError: () => {} });
+  const id = identityOf(await (await app.handle(new Request('http://x/j'))).text());
+
+  const invalid = await app.handle(post('/j', { __webjs_action: id, email: 'nope' }));
+  assert.equal(invalid.status, 422, 'invalid input re-renders the form');
+  const body = await invalid.text();
+  assert.match(body, /<p id="f">EMAIL_ISSUE<\/p>/, 'the first issue per field becomes its fieldError');
+  assert.match(body, /<p id="e">FORM_ISSUE<\/p>/, 'a path-less issue becomes the form error');
+
+  const quietErr = console.error;
+  console.error = () => {};
+  let crash;
+  try { crash = await app.handle(post('/j', { __webjs_action: id, email: 'crash' })); } finally { console.error = quietErr; }
+  assert.equal(crash.status, 500, 'a validator that crashes still renders the error page');
+});
