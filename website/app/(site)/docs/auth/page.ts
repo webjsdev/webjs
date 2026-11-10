@@ -182,7 +182,7 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
     <p>As in Auth.js, an OAuth provider can be listed uncalled, <code>providers: [GitHub]</code>, when its credentials come from the environment variables above.</p>
 
     <h2>Session strategies</h2>
-    <p><strong>JWT (default):</strong> Session data signed in a cookie. Stateless and scales horizontally without Redis. Cannot be revoked before expiry.</p>
+    <p><strong>JWT (default):</strong> Session data encrypted in a cookie, exactly as Auth.js encrypts it (a JWE, <code>dir</code> + <code>A256CBC-HS512</code>, the key derived from the secret and the cookie name), so the browser holding it cannot read what is inside. Stateless and scales horizontally without Redis. Cannot be revoked before expiry.</p>
     <p><strong>Database:</strong> Session ID in cookie, data in cache store. Can revoke sessions instantly. Requires Redis or similar for horizontal scaling.</p>
     <code-block>createAuth({
   session: { strategy: 'database' },  // default: 'jwt'
@@ -194,7 +194,6 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
 
     <h2>Differences from Auth.js</h2>
     <ul>
-      <li id="diff-jwt">The JWT session is a signed (HS256) token, not an encrypted (JWE) one, so keep secrets out of the session; the cookie names are the ones above.</li>
       <li id="diff-adapter"><code>adapter</code> is the session store used by the <code>database</code> strategy (<code>load</code>, <code>save</code>, <code>destroy</code>), not an Auth.js database adapter: <code>@auth/*-adapter</code> packages are not supported, and users live in your own tables.</li>
     </ul>
 

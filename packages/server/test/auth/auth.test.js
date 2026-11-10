@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createAuth, Credentials } from '../../src/auth.js';
+import { createAuth, Credentials, encodeJwt } from '../../src/auth.js';
 
 const SECRET = 'test-secret-at-least-32-chars-long!!';
 
@@ -127,32 +127,16 @@ test('auth() returns null for a malformed (non-base64) cookie: does not throw', 
 });
 
 test('auth() returns null for an expired JWT', async () => {
-  // Build a session with exp in the past. Easiest: sign in, then forge a
-  // new cookie using the same header/signature structure with exp=1.
-  const { signIn, auth } = createAuth({
+  // The session is encrypted (#1686), so an expired one is minted the way
+  // writeSession mints a live one, with the session cookie's name as salt.
+  const { auth } = createAuth({
     secret: SECRET,
-    providers: [
-      Credentials({ authorize: async () => ({ id: 'e', email: 'e@x.com' }) }),
-    ],
+    providers: [Credentials({ authorize: async () => ({ id: 'e', email: 'e@x.com' }) })],
   });
-  const signInResp = await signIn('credentials', {});
-  const cookie = signInResp.headers.get('set-cookie') || '';
-  const raw = cookie.match(/webjs\.auth=([^;]+)/)[1];
-  const [h, p, s] = raw.split('.');
-  // Decode payload, overwrite exp, re-encode (signature will no longer
-  // match, which is fine: verify() returns false and we get null; this
-  // also exercises the expiration branch when the signature DOES match
-  // via the natural exp-expired case above would require a signing key
-  // hack. Verifying null on bad signature is sufficient for the branch.)
-  const decoded = JSON.parse(Buffer.from(p.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
-  decoded.exp = 1;
-  const newP = Buffer.from(JSON.stringify(decoded))
-    .toString('base64')
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const req = new Request('http://localhost/', {
-    headers: { cookie: `webjs.auth=${h}.${newP}.${s}` },
-  });
-  assert.equal(await auth(req), null);
+  const expired = await encodeJwt({ sub: 'e', email: 'e@x.com', exp: Math.floor(Date.now() / 1000) - 60 }, SECRET, 'webjs.auth');
+  const live = await encodeJwt({ sub: 'e', email: 'e@x.com', exp: Math.floor(Date.now() / 1000) + 60 }, SECRET, 'webjs.auth');
+  assert.equal(await auth(new Request('http://localhost/', { headers: { cookie: `webjs.auth=${expired}` } })), null);
+  assert.equal((await auth(new Request('http://localhost/', { headers: { cookie: `webjs.auth=${live}` } })))?.user?.email, 'e@x.com', 'the same shape unexpired is a session');
 });
 
 test('auth() returns null for a JWT missing parts (not 3 segments)', async () => {

@@ -13,6 +13,7 @@ import { verifyOrigin } from './csrf.js';
 import { redirect } from '@webjsdev/core';
 import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 import { devSecret } from './dev-secret.js';
+import { encryptSession, decryptSession } from './jwe.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -164,29 +165,29 @@ function clearCookie(name, secure = false) {
 
 // -- JWT --------------------------------------------------------------------
 
-/** @param {Record<string,unknown>} payload @param {string} secret */
-export async function encodeJwt(payload, secret) {
-  const h = b64url(enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
-  const p = b64url(enc.encode(JSON.stringify(payload)));
-  const unsigned = `${h}.${p}`;
-  const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret), enc.encode(unsigned));
-  return `${unsigned}.${b64url(sig)}`;
+/**
+ * Encrypt a session payload as Auth.js does (#1686): a JWE (`dir`,
+ * `A256CBC-HS512`) keyed by HKDF over the secret with the session cookie's
+ * name as salt, so the browser holding the cookie cannot read what is in it.
+ * It used to be a signed (HS256) JWT, readable as base64. See `jwe.js`.
+ * @param {Record<string,unknown>} payload
+ * @param {string | string[]} secret
+ * @param {string} [salt] the session cookie's name
+ */
+export async function encodeJwt(payload, secret, salt = AUTH_COOKIE) {
+  return encryptSession(payload, secret, salt);
 }
 
-/** @param {string} token @param {string} secret @returns {Promise<Record<string,unknown>|null>} */
-export async function decodeJwt(token, secret) {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  // `unb64url` → `atob` throws InvalidCharacterError on non-base64 input.
-  // Any failure here (bad base64, bad HMAC verify) means the cookie is
-  // garbage; treat it as "no session" rather than crashing the request.
-  try {
-    const ok = await crypto.subtle.verify('HMAC', await hmacKey(secret), unb64url(parts[2]), enc.encode(`${parts[0]}.${parts[1]}`));
-    if (!ok) return null;
-    const payload = JSON.parse(dec.decode(unb64url(parts[1])));
-    if (payload.exp && Date.now() / 1000 > payload.exp) return null;
-    return payload;
-  } catch { return null; }
+/**
+ * Decrypt a session token, or null when it is malformed, tampered with,
+ * expired, or made with another secret or salt. A garbage cookie never throws.
+ * @param {string} token
+ * @param {string | string[]} secret
+ * @param {string} [salt]
+ * @returns {Promise<Record<string,unknown>|null>}
+ */
+export async function decodeJwt(token, secret, salt = AUTH_COOKIE) {
+  return decryptSession(token, secret, salt);
 }
 
 // -- Providers --------------------------------------------------------------
@@ -355,7 +356,7 @@ export function createAuth(config) {
     if (!raw) return null;
 
     if (strategy === 'jwt') {
-      const payload = await decodeJwt(raw, secret);
+      const payload = await decodeJwt(raw, secret, cookieName(AUTH_COOKIE, secure()));
       if (!payload) return null;
       let token = cb.jwt ? await cb.jwt({ token: payload, user: undefined }) : payload;
       let session = { user: { id: token.sub, name: token.name, email: token.email, image: token.image, ...token }, expires: new Date(token.exp * 1000).toISOString() };
@@ -379,7 +380,7 @@ export function createAuth(config) {
     if (strategy === 'jwt') {
       let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
       if (cb.jwt) token = await cb.jwt({ token, user, account, profile, trigger: 'signIn' });
-      return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret), maxAgeMs, secure());
+      return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret, cookieName(AUTH_COOKIE, secure())), maxAgeMs, secure());
     }
     const sid = randomId();
     await dbStore.save(sid, user, maxAgeMs);
