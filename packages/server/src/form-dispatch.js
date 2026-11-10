@@ -726,7 +726,9 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // once, and the next submission of this action gets it as prevState.
     // A success with nothing to carry still replaces an earlier flash, so the
     // next submission's prevState is never a stale failure.
-    const value = result !== undefined && result !== null ? await encodeFlash({ id, result, shown: false }) : null;
+    // Bound to the page the redirect lands on, so no other page shows it.
+    const path = new URL(safe || ownPath, url).pathname;
+    const value = result !== undefined && result !== null ? await encodeFlash({ id, result, shown: false, path }) : null;
     res.headers.append('set-cookie', flashSetCookie(value));
     return res;
   }

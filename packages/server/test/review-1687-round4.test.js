@@ -66,3 +66,35 @@ export default () => html\`<form action=\${boom}><button>go</button></form>\`;
   assert.equal(res.status, 500, 'the throw answers with the error page, not the cached page');
   assert.ok(seen.some((e) => e instanceof Error && e.message === 'ACTION_BOOM'), 'and onError hears it');
 });
+
+test('an action result is shown only on the page its redirect lands on, and a frame load leaves it', async () => {
+  const appDir = makeApp({
+    'modules/x/actions/save.server.ts': `'use server';\nexport async function save() { return { success: true, message: 'SAVED_MSG' }; }\n`,
+    'app/a/page.ts': `
+import { html } from ${CORE};
+import { save } from '../../modules/x/actions/save.server.ts';
+export default ({ actionData }) => html\`<p>\${actionData?.message ?? 'none'}</p><form action=\${save}><button>go</button></form>\`;
+`,
+    'app/other/page.ts': `
+import { html } from ${CORE};
+export default ({ actionData }) => html\`<p>\${actionData?.message ?? 'none'}</p>\`;
+`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger: quiet });
+  const html = await (await app.handle(new Request('http://x/a'))).text();
+  const done = await app.handle(post('/a', { __webjs_action: identityOf(html) }));
+  assert.equal(done.status, 303);
+  const cookie = cookieOf(done);
+
+  const other = await app.handle(new Request('http://x/other', { headers: { cookie } }));
+  const otherHtml = await other.text();
+  assert.doesNotMatch(otherHtml, /SAVED_MSG/, 'another page never shows it');
+  assert.equal(other.headers.getSetCookie().length, 0, 'and leaves it unconsumed');
+
+  const frame = await app.handle(new Request('http://x/a', { headers: { cookie, 'x-webjs-frame': 'f' } }));
+  await frame.text();
+  assert.equal(frame.headers.getSetCookie().length, 0, 'a frame load of the target leaves it too');
+
+  const target = await app.handle(new Request('http://x/a', { headers: { cookie } }));
+  assert.match(await target.text(), /SAVED_MSG/, 'the page the redirect named shows it');
+});

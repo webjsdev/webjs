@@ -1021,6 +1021,19 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
  * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('../module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown>, cspEnabled?: boolean }} opts
  * @returns {Promise<Response>}
  */
+/**
+ * Whether a flash belongs to the page at `url`: the path its success redirect
+ * named, compared without a trailing slash. A flash with no recorded path (a
+ * cookie from before the path was recorded) is shown as before.
+ * @param {{ path?: string }} flash
+ * @param {URL} url
+ */
+function flashTargets(flash, url) {
+  if (!flash.path) return true;
+  const norm = (/** @type {string} */ p) => (p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p);
+  return norm(flash.path) === norm(url.pathname);
+}
+
 export async function ssrPage(route, params, url, opts) {
   // A form action's result carried across its 303 (action-flash.js): shown
   // once as actionData on the page the redirect lands on, then marked shown
@@ -1030,10 +1043,15 @@ export async function ssrPage(route, params, url, opts) {
   // consumes it.
   // Set when this render shows a flash: its body then carries one visitor's
   // action result, so the response must never reach a shared cache (below).
+  // Shown only on the page the success redirect named (flash.path), never on
+  // an error render, and never on a <webjs-frame> load, which would consume it
+  // before the page itself renders. Another page or tab rendered inside the
+  // 60 seconds leaves it for the right one.
   let showsFlash = false;
-  if (!opts.actionData && opts.req && opts.req.headers.get('x-webjs-prefetch') !== '1') {
+  if (!opts.actionData && opts.renderError === undefined && opts.req
+      && opts.req.headers.get('x-webjs-prefetch') !== '1' && !opts.req.headers.get('x-webjs-frame')) {
     const flash = await readFlash(opts.req);
-    if (flash && !flash.shown) {
+    if (flash && !flash.shown && flashTargets(flash, url)) {
       showsFlash = true;
       opts = { ...opts, actionData: flash.result };
       try {

@@ -60,7 +60,8 @@ function sign(s) {
 }
 
 /**
- * @typedef {{ id: string, result: unknown, shown: boolean }} Flash
+ * `path` is the page the success redirect lands on: only that page shows it.
+ * @typedef {{ id: string, result: unknown, shown: boolean, path?: string }} Flash
  */
 
 /**
@@ -76,7 +77,7 @@ export async function encodeFlash(flash) {
   }
   let body;
   try {
-    body = Buffer.from(JSON.stringify({ a: flash.id, s: flash.shown ? 1 : 0, r: await stringify(result ?? null) })).toString('base64url');
+    body = Buffer.from(JSON.stringify({ a: flash.id, s: flash.shown ? 1 : 0, ...(flash.path ? { p: flash.path } : {}), r: await stringify(result ?? null) })).toString('base64url');
   } catch {
     return null; // unserializable result: nothing to carry
   }
@@ -100,7 +101,7 @@ export async function decodeFlash(value) {
   try {
     const o = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (!o || typeof o.a !== 'string' || typeof o.r !== 'string') return null;
-    return { id: o.a, shown: o.s === 1, result: parse(o.r) };
+    return { id: o.a, shown: o.s === 1, ...(typeof o.p === 'string' ? { path: o.p } : {}), result: parse(o.r) };
   } catch {
     return null;
   }
