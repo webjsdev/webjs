@@ -1235,6 +1235,12 @@ export type ActionResult<T> =
       const swSrc = join(TEMPLATES, 'public', swFile);
       if (existsSync(swSrc)) await cp(swSrc, join(publicDir, swFile));
     }
+    // The WebJs logo the header shows, one file per theme (the webjs.dev
+    // lockup: an inverted file would flip the paper along with the ink).
+    await mkdir(join(publicDir, 'brand'), { recursive: true });
+    for (const logo of ['webjs-lockup-on-light.svg', 'webjs-lockup-on-dark.svg']) {
+      await cp(join(TEMPLATES, 'public', 'brand', logo), join(publicDir, 'brand', logo));
+    }
     // The app icon and web app manifest: `app/icon.svg` (a neutral PLACEHOLDER
     // the agent replaces with the app's own icon; `webjs doctor` warns while it
     // is still there) and `app/manifest.webmanifest` (the app's name). The
@@ -1443,9 +1449,10 @@ export default function RootLayout({ children }: LayoutProps) {
          Its height is the --header-h token, so keep it one row: nothing measures
          it, which is what keeps the offset right after a client-router swap. -->
     <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
-      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
-        <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
-        ${displayName}
+      <!-- The WebJs logo, one file per theme (public/brand/). Swap in your own. -->
+      <a href="/" class="inline-flex items-center no-underline" aria-label="${displayName} home">
+        <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="84" height="22" class="block h-[22px] w-auto dark:hidden">
+        <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="84" height="22" class="hidden h-[22px] w-auto dark:block">
       </a>
       <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">Docs</a>

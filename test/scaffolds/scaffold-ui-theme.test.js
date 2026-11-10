@@ -58,3 +58,25 @@ test('a fresh app\'s theme is the webjs.dev/ui palette, radius and type', async 
     await rm(cwd, { recursive: true, force: true });
   }
 });
+
+test('a fresh app\'s header shows the WebJs logo, the same files webjs.dev serves', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'webjs-ui-logo-'));
+  try {
+    await scaffoldApp('my-app', cwd, { template: 'full-stack' });
+    const appDir = join(cwd, 'my-app');
+    const layout = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
+    const header = layout.slice(layout.indexOf('<header'), layout.indexOf('</header>'));
+    assert.match(header, /<img src="\/brand\/webjs-lockup-on-light\.svg" alt="WebJs"[^>]*dark:hidden/, 'the light logo, hidden in dark');
+    assert.match(header, /<img src="\/brand\/webjs-lockup-on-dark\.svg" alt="WebJs"[^>]*hidden[^>]*dark:block/, 'the dark logo, shown in dark');
+    assert.doesNotMatch(header, />\s*My App\s*</, 'no app-name text in its place');
+    for (const file of ['webjs-lockup-on-light.svg', 'webjs-lockup-on-dark.svg']) {
+      assert.equal(
+        readFileSync(join(appDir, 'public', 'brand', file), 'utf8'),
+        readFileSync(join(REPO, 'website', 'public', 'brand', file), 'utf8'),
+        `${file} is the site's file`,
+      );
+    }
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
