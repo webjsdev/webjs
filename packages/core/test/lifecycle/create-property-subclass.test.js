@@ -43,3 +43,42 @@ test('createProperty on a class whose subclass has an instance is refused, as on
   new Own();
   assert.throws(() => Own.createProperty('x'), /ran after an instance of the class was constructed/, 'the existing rule still holds');
 });
+
+test("createProperty rebuilds only its own class chain's memos; other classes keep theirs", () => {
+  // A single global counter used to invalidate every class's memos on each
+  // createProperty, including the ones finalize() makes per own property when
+  // a class overrides createProperty.
+  class Other extends WebComponent {
+    static properties = { o: { type: String } };
+  }
+  class Parent extends WebComponent {
+    static properties = { a: { type: String } };
+  }
+  class Child extends Parent {}
+  const otherMap = declaredProperties(Other);
+  const otherElementProperties = Other.elementProperties;
+  const childMap = declaredProperties(Child);
+  Parent.createProperty('late', { type: Number });
+  assert.equal(declaredProperties(Other), otherMap, 'an unrelated class keeps the very same map');
+  assert.equal(Other.elementProperties, otherElementProperties, 'and the same elementProperties');
+  assert.notEqual(declaredProperties(Child), childMap, 'the changed chain gets a new map');
+  assert.ok('late' in declaredProperties(Child));
+});
+
+test('a class that overrides createProperty finalizes before a subclass instance marks it', () => {
+  // Lit's finalize() creates each own `static properties` entry through
+  // createProperty; WebJs does too when a class overrides it. The parent is
+  // finalized first, so constructing a subclass instance never trips the
+  // "subclass already has an instance" refusal.
+  const created = [];
+  class Parent extends WebComponent {
+    static properties = { a: { type: String } };
+    static createProperty(name, options) { created.push(name); super.createProperty(name, options); }
+  }
+  class Child extends Parent {
+    static properties = { b: { type: Number } };
+  }
+  assert.doesNotThrow(() => new Child());
+  assert.ok(created.includes('a'), "the parent's own property went through its createProperty");
+  assert.deepEqual(Object.keys(declaredProperties(Child)).sort(), ['a', 'b']);
+});

@@ -1,7 +1,7 @@
 import { render as clientRender } from '../render-client.js';
 import {
   readAttributeValue, resolveAttributeProperty, observedAttributeNames, declaredProperties,
-  normalizeDecl, addCreatedProperty, attributeNameFor, propertiesGeneration,
+  normalizeDecl, addCreatedProperty, attributeNameFor, declarationsEpoch,
 } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
@@ -132,10 +132,11 @@ const _accessorPlans = new WeakMap();
 const FINALIZED = new WeakSet();
 
 /**
- * Per class, the memoized `elementProperties` Map, with the declarations
- * generation it was built in: a `createProperty` on a superclass moves the
- * generation, so a subclass's map read earlier is rebuilt.
- * @type {WeakMap<Function, { gen: number, map: Map<string, any> }>}
+ * Per class, the memoized `elementProperties` Map: valid while no class's
+ * declarations changed (`declarationsEpoch`), and after a change while the
+ * `declaredProperties` map it was built from is the same object, which it
+ * stays unless this class or a superclass changed (a `createProperty`).
+ * @type {WeakMap<Function, { epoch: number, merged: Record<string, any>, map: Map<string, any> }>}
  */
 const ELEMENT_PROPERTIES = new WeakMap();
 
@@ -410,13 +411,14 @@ class WebComponentBase extends Base {
    * @type {Map<string, PropertyDeclaration>}
    */
   static get elementProperties() {
-    const gen = propertiesGeneration();
+    const epoch = declarationsEpoch();
     const hit = ELEMENT_PROPERTIES.get(this);
-    if (hit && hit.gen === gen) return hit.map;
+    if (hit && hit.epoch === epoch) return hit.map;
+    const merged = declaredProperties(this);
+    if (hit && hit.merged === merged) { hit.epoch = epoch; return hit.map; }
     const map = new Map();
-    const props = declaredProperties(this);
-    for (const name of Reflect.ownKeys(props)) map.set(name, normalizeDecl(props[name]));
-    ELEMENT_PROPERTIES.set(this, { gen: propertiesGeneration(), map });
+    for (const name of Reflect.ownKeys(merged)) map.set(name, normalizeDecl(merged[name]));
+    ELEMENT_PROPERTIES.set(this, { epoch, merged, map });
     return map;
   }
 

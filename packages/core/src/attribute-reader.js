@@ -273,7 +273,17 @@ export function observedAttributeNames(Cls) {
  *
  * Memoized per class: the accessors (`installAccessors`), the attribute list
  * (`attributeBackedProps`) and reflection all read this one map, so they
- * cannot disagree about which props exist.
+ * cannot disagree about which props exist. The map is the same OBJECT for as
+ * long as the class's declarations, and its superclasses', are unchanged, so
+ * a memo derived from it is keyed on that identity.
+ *
+ * A memo holds its superclasses' declarations merged in, so `createProperty`
+ * on a parent has to reach every subclass already read, which a WeakMap
+ * cannot enumerate. So each memo records its parent's map and its own class's
+ * version, and stays valid while both are unchanged: a change rebuilds exactly
+ * the changed class and the classes below it. Checking that walks the chain,
+ * so it runs only after some class changed (`epoch` moved); until then a read
+ * is one lookup.
  *
  * @param {any} Cls  the component class
  * @returns {Record<string, any>}
@@ -281,36 +291,43 @@ export function observedAttributeNames(Cls) {
 export function declaredProperties(Cls) {
   if (!Cls || typeof Cls !== 'function') return (Cls && Cls.properties) || {};
   const hit = DECLARED.get(Cls);
-  if (hit && hit.gen === generation) return hit.merged;
+  if (hit && hit.epoch === epoch) return hit.merged;
   const parent = Object.getPrototypeOf(Cls);
-  const inherited = parent && parent !== Function.prototype ? declaredProperties(parent) : {};
+  const inherited = parent && parent !== Function.prototype ? declaredProperties(parent) : ROOT;
+  const version = VERSION.get(Cls) ?? 0;
+  if (hit && hit.inherited === inherited && hit.version === version) {
+    // Unaffected by whatever changed: keep the same map, valid at this epoch.
+    hit.epoch = epoch;
+    return hit.merged;
+  }
   const own = Object.hasOwn(Cls, 'properties') ? Cls.properties : undefined;
   const created = CREATED.get(Cls);
   let merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
   if (created) merged = { ...merged, ...created };
-  DECLARED.set(Cls, { gen: generation, merged });
+  DECLARED.set(Cls, { epoch, inherited, version, merged });
   return merged;
 }
 
-/** @type {WeakMap<Function, { gen: number, merged: Record<string, any> }>} */
+/** @type {WeakMap<Function, { epoch: number, inherited: Record<string, any>, version: number, merged: Record<string, any> }>} */
 const DECLARED = new WeakMap();
 
-/**
- * Bumped whenever a class's declarations change after they were read
- * (`createProperty`). Each memo here records the generation it was built in
- * and is rebuilt when that moved, because a memo holds its superclasses'
- * declarations merged in, so a change to a parent has to reach every subclass
- * already read, and a WeakMap cannot enumerate them.
- */
-let generation = 0;
+/** The declarations above every class: none. Shared, so a root-level memo can be compared by identity. */
+const ROOT = Object.freeze({});
+
+/** Per class, how many times its own declarations changed (`createProperty`). @type {WeakMap<Function, number>} */
+const VERSION = new WeakMap();
+
+/** Moves whenever any class's declarations change, so a memo knows to re-check its chain. */
+let epoch = 0;
 
 /**
- * The current declarations generation, for a memo outside this module that
- * derives from `declaredProperties` (lifecycle.js's `elementProperties`).
+ * The current declarations epoch, for a memo outside this module derived from
+ * `declaredProperties` (lifecycle.js's `elementProperties`): while it has not
+ * moved, no class's declarations changed and a memo needs no re-check.
  * @returns {number}
  */
-export function propertiesGeneration() {
-  return generation;
+export function declarationsEpoch() {
+  return epoch;
 }
 
 /**
@@ -352,10 +369,11 @@ export function addCreatedProperty(Cls, name, decl) {
  * @param {Function} Cls
  */
 export function invalidateClass(Cls) {
-  DECLARED.delete(Cls);
-  BACKED_PROPS.delete(Cls);
-  // Its subclasses' memos merged its old declarations in.
-  generation++;
+  // This class's memo is rebuilt, which gives it a new map, and every
+  // subclass's memo then sees a parent map it was not built from. Classes on
+  // other chains re-check once and keep their maps.
+  VERSION.set(Cls, (VERSION.get(Cls) ?? 0) + 1);
+  epoch++;
 }
 
 /**
@@ -383,16 +401,21 @@ function attributeBackedProps(Cls) {
   // declarations are fixed once it is defined (`declaredProperties` reads them
   // once per class), so the first walk is the only one.
   if (Cls && typeof Cls === 'function') {
+    // Valid while no declarations changed anywhere (one lookup); after a
+    // change, while the class's declarations map is the same object, which it
+    // stays unless this class or a superclass changed.
     const hit = BACKED_PROPS.get(Cls);
-    if (hit && hit.gen === generation) return hit.built;
+    if (hit && hit.epoch === epoch) return hit.built;
+    const merged = declaredProperties(Cls);
+    if (hit && hit.merged === merged) { hit.epoch = epoch; return hit.built; }
     const built = buildAttributeBackedProps(Cls);
-    BACKED_PROPS.set(Cls, { gen: generation, built });
+    BACKED_PROPS.set(Cls, { epoch, merged, built });
     return built;
   }
   return buildAttributeBackedProps(Cls);
 }
 
-/** @type {WeakMap<Function, { gen: number, built: { propName: string, def: any, primary: string, alias: string | undefined }[] }>} */
+/** @type {WeakMap<Function, { epoch: number, merged: Record<string, any>, built: { propName: string, def: any, primary: string, alias: string | undefined }[] }>} */
 const BACKED_PROPS = new WeakMap();
 
 function buildAttributeBackedProps(Cls) {
