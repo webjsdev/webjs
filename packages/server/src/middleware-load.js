@@ -73,15 +73,6 @@ export function resolveMiddlewareExport(mod, file) {
  * @typedef {string | { source: string, has?: RouteHas[], missing?: RouteHas[] }} MatcherEntry
  */
 
-/**
- * A port of Next's `matchHas` (prepare-destination.ts): each `has` condition
- * must hold and no `missing` one may. A condition with no `value` checks
- * presence; a `value` is a regex anchored to the whole value.
- * @param {Request} req
- * @param {URL} url
- * @param {RouteHas[]} [has]
- * @param {RouteHas[]} [missing]
- */
 /** `has` / `missing` value patterns, compiled once each (they come from the config, not the request). */
 const hasPatterns = new Map();
 
@@ -92,6 +83,15 @@ function hasPattern(source) {
   return re;
 }
 
+/**
+ * A port of Next's `matchHas` (prepare-destination.ts): each `has` condition
+ * must hold and no `missing` one may. A condition with no `value` checks
+ * presence; a `value` is a regex anchored to the whole value.
+ * @param {Request} req
+ * @param {URL} url
+ * @param {RouteHas[]} [has]
+ * @param {RouteHas[]} [missing]
+ */
 export function matchHas(req, url, has = [], missing = []) {
   /** @type {Map<string, string> | null} */
   let cookies = null;

@@ -399,7 +399,13 @@ export function createAuth(config) {
       let token = cb.jwt ? await cb.jwt({ token: payload, user: undefined }) : payload;
       // Returning null (or anything but an object) from the jwt callback ends
       // the session, as in Auth.js.
-      if (!token || typeof token !== 'object') return null;
+      if (!token || typeof token !== 'object') {
+        // The cookie goes too, so later requests do not decrypt it and run the
+        // callback again until it expires. Best effort: a read outside a
+        // request, or after the headers were sent, cannot set a cookie.
+        try { if (getRequest()) queueSetCookie(clearCookie(cookieName(AUTH_COOKIE, secure()), secure())); } catch {}
+        return null;
+      }
       const exp = typeof token.exp === 'number' ? token.exp : Math.floor(Date.now() / 1000) + maxAge;
       let session = { user: { id: token.sub, name: token.name, email: token.email, image: token.image, ...token }, expires: new Date(exp * 1000).toISOString() };
       delete session.user.iat; delete session.user.exp; delete session.user.sub;

@@ -85,14 +85,14 @@ export function literal(strings, ...values) {
   return { _$webjsStatic: text, r: STATIC };
 }
 
-/** @type {Map<string, string[]>} */
-const stringsCache = new Map();
 /**
- * How many distinct static shapes are kept. A component passing request-derived
- * text through `unsafeStatic` makes a new shape per value, and on the server the
- * cache lives as long as the process, so the oldest shape is dropped past this.
+ * One strings array per static shape, kept for the life of the process as Lit
+ * keeps it: the renderers key their template caches on its identity, so a
+ * shape still in use must never get a new array. Only literal statics belong
+ * here; `unsafeStatic` over request data makes a new shape per value.
+ * @type {Map<string, string[]>}
  */
-const STRINGS_CACHE_MAX = 1000;
+const stringsCache = new Map();
 
 /**
  * Wrap a template tag so it accepts static values, lit's `withStatic`.
@@ -131,7 +131,6 @@ export function withStatic(coreTag) {
       /** @type {any} */ (staticStrings).raw = staticStrings;
       cached = staticStrings;
       stringsCache.set(key, cached);
-      if (stringsCache.size > STRINGS_CACHE_MAX) stringsCache.delete(stringsCache.keys().next().value);
     }
     return coreTag(cached, ...dynamicValues);
   };

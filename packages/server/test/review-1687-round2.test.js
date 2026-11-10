@@ -115,12 +115,13 @@ test('the flash is signed with SESSION_SECRET when that is the only secret set',
   }
 });
 
-test('static-html keeps a bounded number of shapes, and a repeated shape keeps its identity', () => {
+test('static-html keeps a shape\'s strings identity however many shapes there are, as Lit does (third review)', () => {
+  // A capped cache evicted shapes still in use, so their DOM was rebuilt.
   const shape = (v) => staticHtml`<p class=${unsafeStatic(v)}>x</p>`.strings;
   const first = shape('keep');
   assert.equal(shape('keep'), first, 'same shape, same strings');
   for (let i = 0; i < 1100; i++) shape(`v${i}`);
-  assert.notEqual(shape('keep'), first, 'the oldest shape was evicted');
+  assert.equal(shape('keep'), first, 'still the same strings after 1100 other shapes');
 });
 
 test('a bad has/missing pattern fails when the matcher compiles, and a good one still matches', () => {

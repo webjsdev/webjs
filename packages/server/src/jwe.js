@@ -43,10 +43,10 @@ function concat(...parts) {
   return out;
 }
 
-/** 64 bytes for A256CBC-HS512, as Auth.js derives them. */
 /** Derived keys by secret and salt: the secret and cookie name never change, so HKDF runs once. */
 const derived = new Map();
 
+/** 64 bytes for A256CBC-HS512, as Auth.js derives them (memoized per secret and salt). */
 function deriveKey(secret, salt) {
   const id = `${salt}\u0000${secret}`;
   let key = derived.get(id);
@@ -68,10 +68,10 @@ async function deriveKeyUncached(secret, salt) {
   return new Uint8Array(bits);
 }
 
-/** RFC 7638 thumbprint of the key as an `oct` JWK, SHA-512 as jose picks for a 64-byte key. */
 /** Thumbprints by derived key, so a token's `kid` check costs no hash after the first. */
 const thumbprints = new WeakMap();
 
+/** RFC 7638 thumbprint of the key as an `oct` JWK, SHA-512 as jose picks for a 64-byte key (memoized per key). */
 async function thumbprint(key) {
   let t = thumbprints.get(key);
   if (!t) { t = thumbprintUncached(key); thumbprints.set(key, t); }

@@ -76,11 +76,6 @@ function skipQuoted(src, start) {
 }
 
 /**
- * Top-level parameters in a parameter list, a rest parameter not counted.
- * @param {string} list
- * @returns {number}
- */
-/**
  * Whether the function's declared parameters each carry a default, in order
  * (rest parameter excluded), or null when the source cannot be read (a native
  * or bound function). `(input, opts = {})` is `[false, true]`.
@@ -121,6 +116,11 @@ function hasTopLevelDefault(param) {
   return false;
 }
 
+/**
+ * Top-level parameters in a parameter list, a rest parameter not counted.
+ * @param {string} list
+ * @returns {number}
+ */
 function countParams(list) {
   return splitParams(list).length;
 }

@@ -404,21 +404,33 @@ export const ROOT_DISCONNECTED = Symbol('webjs.rootDisconnected');
  */
 export function setInstanceDirectivesConnected(inst, connected) {
   if (!inst || !inst.bound) return;
+  for (const p of inst.bound) setPartDirectivesConnected(p, connected);
+}
+
+/**
+ * Connect or disconnect the directives one part holds, and those in what it
+ * rendered, an array item that is a child part of its own included.
+ * @param {any} p
+ * @param {boolean} connected
+ */
+function setPartDirectivesConnected(p, connected) {
   /** @param {any} rec */
   const flip = (rec) => {
     for (let r = rec; r; r = r.child) {
       if (typeof r.inst._$webjsSetConnected === 'function') r.inst._$webjsSetConnected(connected);
     }
   };
-  for (const p of inst.bound) {
-    flip(p.__directive);
-    if (p.__pieceDirectives) for (const k of Object.keys(p.__pieceDirectives)) flip(p.__pieceDirectives[k]);
-    const c = p.kind === 'child' ? p.child : null;
-    if (!c) continue;
-    if (c.kind === 'repeat') for (const i of c.map.values()) setInstanceDirectivesConnected(i, connected);
-    else if (c.kind === 'array') for (const it of c.items) { if (it.type === 'tpl') setInstanceDirectivesConnected(it.inst, connected); }
-    else if ('strings' in c) setInstanceDirectivesConnected(c, connected);
-  }
+  flip(p.__directive);
+  if (p.__pieceDirectives) for (const k of Object.keys(p.__pieceDirectives)) flip(p.__pieceDirectives[k]);
+  const c = p.kind === 'child' ? p.child : null;
+  if (!c) return;
+  if (c.kind === 'repeat') for (const i of c.map.values()) setInstanceDirectivesConnected(i, connected);
+  else if (c.kind === 'array') {
+    for (const it of c.items) {
+      if (it.type === 'tpl') setInstanceDirectivesConnected(it.inst, connected);
+      else if (it.type === 'part') setPartDirectivesConnected(it.sub, connected);
+    }
+  } else if ('strings' in c) setInstanceDirectivesConnected(c, connected);
 }
 
 /**
@@ -449,7 +461,13 @@ function releasePartDirectives(p) {
 function releaseRegionDirectives(c) {
   if (!c) return;
   if (c.kind === 'repeat') { for (const inst of c.map.values()) releaseInstanceDirectives(inst); return; }
-  if (c.kind === 'array') { for (const item of c.items) if (item.type === 'tpl') releaseInstanceDirectives(item.inst); return; }
+  if (c.kind === 'array') {
+    for (const item of c.items) {
+      if (item.type === 'tpl') releaseInstanceDirectives(item.inst);
+      else if (item.type === 'part') releasePartDirectives(item.sub);
+    }
+    return;
+  }
   if ('strings' in c) releaseInstanceDirectives(c);
 }
 
@@ -1735,6 +1753,8 @@ function arrayItemFirstNode(item) {
 /** @param {ArrayItem} item */
 function removeArrayItem(item) {
   if (item.type === 'part') {
+    // Its directive and any signal subscription go with it, as a hole's do.
+    releasePartDirectives(item.sub);
     teardownChild(item.sub);
     removeBetween(item.start, item.sub.marker);
   } else if (item.type === 'tpl') {
