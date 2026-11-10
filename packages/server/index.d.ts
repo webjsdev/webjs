@@ -1203,10 +1203,31 @@ export type ResolvedAuthUser = keyof AuthUser extends never
   : AuthUser;
 
 /** Auth configuration for `createAuth`. */
+/**
+ * The Auth.js adapter methods `createAuth` calls, the shape `@auth/*-adapter`
+ * packages implement (`@auth/core/adapters`).
+ */
+export interface AuthAdapter {
+  createUser(user: Record<string, any>): Promise<any> | any;
+  getUser?(id: string): Promise<any> | any;
+  getUserByEmail(email: string): Promise<any> | any;
+  getUserByAccount(account: { provider: string; providerAccountId: string }): Promise<any> | any;
+  updateUser?(user: Record<string, any>): Promise<any> | any;
+  linkAccount(account: Record<string, any>): Promise<any> | any;
+  createSession(session: { sessionToken: string; userId: string; expires: Date }): Promise<any> | any;
+  getSessionAndUser(sessionToken: string): Promise<{ session: { sessionToken: string; userId: string; expires: Date }; user: any } | null> | { session: any; user: any } | null;
+  updateSession?(session: { sessionToken: string; expires?: Date }): Promise<any> | any;
+  deleteSession(sessionToken: string): Promise<any> | any;
+}
 export interface AuthConfig {
   /** A provider config, or the provider function uncalled (`providers: [GitHub]`), as Auth.js accepts. */
   providers: Array<ProviderConfig | (() => ProviderConfig)>;
-  session?: { strategy?: 'jwt' | 'database'; maxAge?: number };
+  /**
+   * `strategy` defaults to `'database'` when an Auth.js adapter is given, else
+   * `'jwt'`. `updateAge` (seconds, default a day) is how often a database
+   * session's expiry is pushed forward, as in Auth.js.
+   */
+  session?: { strategy?: 'jwt' | 'database'; maxAge?: number; updateAge?: number };
   /** Signs the session. Defaults to `process.env.AUTH_SECRET`, as in Auth.js. */
   secret?: string | undefined;
   callbacks?: {
@@ -1218,7 +1239,11 @@ export interface AuthConfig {
     /** Run by `auth` as middleware: true continues, false redirects to sign in, a Response is sent as is. */
     authorized?: (params: { auth: { user: Record<string, unknown> } | null; request: Request }) => boolean | Response | Promise<boolean | Response>;
   };
-  adapter?: { load?: Function; save?: Function; destroy?: Function };
+  /**
+   * An Auth.js database adapter (`DrizzleAdapter(db)` from `@auth/drizzle-adapter`,
+   * and the rest), or WebJs's own session store for the database strategy.
+   */
+  adapter?: AuthAdapter | { load?: Function; save?: Function; destroy?: Function };
   pages?: { signIn?: string; signOut?: string; error?: string };
   /**
    * Where the auth routes are mounted, as Auth.js's `basePath`. Defaults to

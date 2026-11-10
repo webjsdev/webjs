@@ -116,6 +116,20 @@ function refererPath(req) {
   }
 }
 
+/**
+ * Whether `adapter` is an Auth.js database adapter (`@auth/drizzle-adapter`
+ * and the rest), rather than WebJs's own session store.
+ * @param {unknown} adapter
+ */
+function isAuthAdapter(adapter) {
+  return !!adapter && typeof (/** @type any */ (adapter)).getSessionAndUser === 'function';
+}
+
+/** Whether a cookie value is the encrypted session JWT (a compact JWE). @param {string} v */
+function isJwe(v) {
+  return String(v).split('.').length === 5;
+}
+
 // -- Cookie helpers ---------------------------------------------------------
 
 /** @param {string} header @returns {Record<string,string>} */
@@ -290,7 +304,13 @@ export function createAuth(config) {
   const secret = config.secret || process.env.AUTH_SECRET || devSecret('AUTH_SECRET');
   if (!secret) throw new Error('createAuth() needs a secret to sign its session in production: set AUTH_SECRET in .env (webjs create writes one), or pass createAuth({ secret }).');
 
-  const strategy = config.session?.strategy || 'jwt';
+  // An Auth.js database adapter (`DrizzleAdapter(db)` and the rest) switches
+  // the default strategy to "database", as in Auth.js (#1686). WebJs's own
+  // session store ({ load, save, destroy }) is the other `adapter` shape.
+  const authAdapter = isAuthAdapter(config.adapter) ? /** @type {any} */ (config.adapter) : null;
+  const strategy = config.session?.strategy || (authAdapter ? 'database' : 'jwt');
+  /** Seconds between database session extensions, Auth.js's `updateAge`. */
+  const updateAge = /** @type {any} */ (config.session)?.updateAge ?? 24 * 60 * 60;
   const maxAge = config.session?.maxAge || DEFAULT_MAX_AGE;
   const maxAgeMs = maxAge * 1000;
   const cb = config.callbacks || {};
@@ -339,7 +359,7 @@ export function createAuth(config) {
     return new Response(null, { status: 302, headers: hdrs });
   }
 
-  const dbStore = strategy === 'database' ? (config.adapter || defaultAdapter()) : null;
+  const dbStore = strategy === 'database' && !authAdapter ? (config.adapter || defaultAdapter()) : null;
 
   // -- Session read/write ---------------------------------------------------
 
@@ -355,7 +375,10 @@ export function createAuth(config) {
     const raw = cookies[cookieName(AUTH_COOKIE, secure())];
     if (!raw) return null;
 
-    if (strategy === 'jwt') {
+    // A credentials sign-in always writes the encrypted JWT, as in Auth.js, so
+    // under the database strategy that cookie is read as one too: Auth.js
+    // itself cannot read it back there, and the sign-in silently fails.
+    if (strategy === 'jwt' || isJwe(raw)) {
       const payload = await decodeJwt(raw, secret, cookieName(AUTH_COOKIE, secure()));
       if (!payload) return null;
       let token = cb.jwt ? await cb.jwt({ token: payload, user: undefined }) : payload;
@@ -364,6 +387,7 @@ export function createAuth(config) {
       return cb.session ? cb.session({ session, token, user: undefined }) : session;
     }
 
+    if (authAdapter) return readAdapterSession(raw);
     const sid = await unsign(raw, secret);
     if (!sid || !dbStore) return null;
     const data = await dbStore.load(sid);
@@ -377,14 +401,99 @@ export function createAuth(config) {
   // refresh_token, expires_at, ...) and the raw profile, with trigger
   // 'signIn', so `if (account) token.accessToken = account.access_token` works.
   async function writeSession(user, account, profile) {
-    if (strategy === 'jwt') {
-      let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
-      if (cb.jwt) token = await cb.jwt({ token, user, account, profile, trigger: 'signIn' });
-      return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret, cookieName(AUTH_COOKIE, secure())), maxAgeMs, secure());
+    if (strategy === 'jwt') return writeJwtSession(user, account, profile);
+    if (authAdapter) {
+      // Under the database strategy a credentials sign-in gets a database
+      // session too, so it can be revoked. Auth.js writes a JWT here that its
+      // own database read cannot find, so the sign-in silently fails; WebJs
+      // keeps it working, and falls back to the encrypted JWT only when the
+      // adapter refuses the session (a user not in its users table).
+      try {
+        const sessionToken = crypto.randomUUID();
+        await authAdapter.createSession({ sessionToken, userId: user.id, expires: new Date(Date.now() + maxAgeMs) });
+        return setCookie(cookieName(AUTH_COOKIE, secure()), sessionToken, maxAgeMs, secure());
+      } catch (e) {
+        if (account?.type !== 'credentials') throw e;
+        console.warn('[webjs] createAuth: the adapter refused a session for a credentials user, so a JWT session is used instead:', /** @type any */ (e)?.message || e);
+        return writeJwtSession(user, account, profile);
+      }
     }
     const sid = randomId();
     await dbStore.save(sid, user, maxAgeMs);
     return setCookie(cookieName(AUTH_COOKIE, secure()), await sign(sid, secret), maxAgeMs, secure());
+  }
+
+  /**
+   * The encrypted JWT session cookie, with the jwt callback run at sign-in.
+   * @param {any} user @param {any} account @param {any} profile
+   */
+  async function writeJwtSession(user, account, profile) {
+    let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
+    if (cb.jwt) token = await cb.jwt({ token, user, account, profile, trigger: 'signIn' });
+    return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret, cookieName(AUTH_COOKIE, secure())), maxAgeMs, secure());
+  }
+
+  /**
+   * A database session through an Auth.js adapter, as Auth.js reads one
+   * (`core/src/lib/actions/session.ts`): an unknown token is no session, an
+   * expired one is deleted, and one past its `updateAge` is extended and its
+   * cookie re-set. The `session` callback receives `{ session, user }`.
+   * @param {string} sessionToken
+   */
+  async function readAdapterSession(sessionToken) {
+    const found = await authAdapter.getSessionAndUser(sessionToken);
+    if (!found) return null;
+    const { session: row, user } = found;
+    const expires = new Date(row.expires).getTime();
+    if (expires < Date.now()) {
+      await authAdapter.deleteSession?.(sessionToken);
+      return null;
+    }
+    let until = expires;
+    if (expires - maxAgeMs + updateAge * 1000 <= Date.now()) {
+      until = Date.now() + maxAgeMs;
+      await authAdapter.updateSession?.({ sessionToken, expires: new Date(until) });
+      try { if (getRequest()) queueSetCookie(setCookie(cookieName(AUTH_COOKIE, secure()), sessionToken, maxAgeMs, secure())); } catch { /* headers already sent: the row is extended, the cookie catches up next time */ }
+    }
+    const session = { user: { id: user.id, name: user.name, email: user.email, image: user.image }, expires: new Date(until).toISOString() };
+    return cb.session ? cb.session({ session, user, token: undefined }) : session;
+  }
+
+  /**
+   * Who an OAuth sign-in is, through an Auth.js adapter, as Auth.js decides it
+   * (`core/src/lib/actions/callback/handle-login.ts`): a linked account is
+   * its user; otherwise the account is linked to the signed-in user, or to a
+   * new user, and an email another user already has is refused unless the
+   * provider allows dangerous email linking. Returns the user, or the
+   * `OAuthAccountNotLinked` error code.
+   * @param {Request} req
+   * @param {any} user the provider's profile, normalised
+   * @param {any} account
+   * @param {any} provider
+   */
+  async function adapterUserFor(req, user, account, provider) {
+    const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure())];
+    const current = raw && !isJwe(raw) ? (await authAdapter.getSessionAndUser(raw))?.user ?? null : null;
+    const { accessToken: _legacy, ...accountRow } = account;
+    const linked = await authAdapter.getUserByAccount({ provider: account.provider, providerAccountId: account.providerAccountId });
+    if (linked) {
+      if (current && current.id !== linked.id) return 'OAuthAccountNotLinked';
+      return linked;
+    }
+    if (current) {
+      await authAdapter.linkAccount({ ...accountRow, userId: current.id });
+      return current;
+    }
+    const email = typeof user.email === 'string' ? user.email.toLowerCase() : user.email;
+    const byEmail = email ? await authAdapter.getUserByEmail(email) : null;
+    if (byEmail) {
+      if (!provider.allowDangerousEmailAccountLinking) return 'OAuthAccountNotLinked';
+      await authAdapter.linkAccount({ ...accountRow, userId: byEmail.id });
+      return byEmail;
+    }
+    const created = await authAdapter.createUser({ ...user, id: crypto.randomUUID(), email, emailVerified: null });
+    await authAdapter.linkAccount({ ...accountRow, userId: created.id });
+    return created;
   }
 
   // -- auth() ---------------------------------------------------------------
@@ -461,6 +570,13 @@ export function createAuth(config) {
       if (r) {
         const raw = parseCookies(r.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure())];
         if (raw) { const sid = await unsign(raw, secret); if (sid) await dbStore.destroy(sid); }
+      }
+    }
+    if (authAdapter) {
+      const r = opts.req || getRequest();
+      const raw = r && parseCookies(r.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure())];
+      if (raw && !isJwe(raw)) {
+        try { await authAdapter.deleteSession(raw); } catch (e) { console.error('[webjs] signOut: deleteSession failed:', e); }
       }
     }
     return new Response(null, { status: 302, headers: hdrs });
@@ -555,9 +671,17 @@ export function createAuth(config) {
     ]);
     if (refused) return refused;
 
+    let sessionUser = user;
+    if (authAdapter) {
+      const resolved = await adapterUserFor(req, user, account, provider);
+      if (typeof resolved === 'string') {
+        return new Response(null, { status: 302, headers: { location: `${pages.error || pages.signIn || `${basePath}/signin`}?error=${resolved}` } });
+      }
+      sessionUser = resolved;
+    }
     const hdrs = new Headers();
     hdrs.set('location', (await readRedirectCookie(req)) || '/');
-    hdrs.append('set-cookie', await writeSession(user, account, rawProfile));
+    hdrs.append('set-cookie', await writeSession(sessionUser, account, rawProfile));
     hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
     hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
     return new Response(null, { status: 302, headers: hdrs });

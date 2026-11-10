@@ -7,7 +7,6 @@
     { "reference": "next", "behaviour": "NEXT_PUBLIC_ environment variables reach the browser", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-public-env" },
     { "reference": "next", "behaviour": "NextResponse.cookies.set() sets a response cookie in middleware", "category": "not-applicable", "doc": "migrating-from-nextjs", "id": "diff-middleware-response-cookies" },
     { "reference": "next", "behaviour": "after(), updateTag(), unstable_rethrow()", "category": "not-applicable", "doc": "migrating-from-nextjs", "id": "diff-not-provided-apis" },
-    { "reference": "lit", "behaviour": "shadow DOM by default, decorators, a rejected updateComplete on a render error", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-lit-model" },
-    { "reference": "authjs", "behaviour": "an @auth/*-adapter database adapter switches to database sessions", "category": "not-applicable", "doc": "auth", "id": "diff-adapter" }
+    { "reference": "lit", "behaviour": "shadow DOM by default, decorators, a rejected updateComplete on a render error", "category": "by-design", "doc": "migrating-from-nextjs", "id": "diff-lit-model" }
   ]
 }

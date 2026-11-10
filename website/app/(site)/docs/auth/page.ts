@@ -183,6 +183,7 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
 
     <h2>Session strategies</h2>
     <p><strong>JWT (default):</strong> Session data encrypted in a cookie, exactly as Auth.js encrypts it (a JWE, <code>dir</code> + <code>A256CBC-HS512</code>, the key derived from the secret and the cookie name), so the browser holding it cannot read what is inside. Stateless and scales horizontally without Redis. Cannot be revoked before expiry.</p>
+    <p><strong>Database with an Auth.js adapter:</strong> pass one, as in Auth.js (<code>adapter: DrizzleAdapter(db)</code> from <code>@auth/drizzle-adapter</code>, or any <code>@auth/*-adapter</code>), and sessions become database rows: the strategy defaults to <code>database</code>, the cookie holds the session token, an OAuth sign-in creates the user and links the account (an email another user already has is refused with <code>OAuthAccountNotLinked</code> unless the provider sets <code>allowDangerousEmailAccountLinking</code>), a session is extended once <code>session.updateAge</code> has passed, and sign-out deletes it. A credentials sign-in gets a database session too, so it can be revoked (Auth.js needs <code>strategy: 'jwt'</code> there).</p>
     <p><strong>Database:</strong> Session ID in cookie, data in cache store. Can revoke sessions instantly. Requires Redis or similar for horizontal scaling.</p>
     <code-block>createAuth({
   session: { strategy: 'database' },  // default: 'jwt'
@@ -194,7 +195,6 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
 
     <h2>Differences from Auth.js</h2>
     <ul>
-      <li id="diff-adapter"><code>adapter</code> is the session store used by the <code>database</code> strategy (<code>load</code>, <code>save</code>, <code>destroy</code>), not an Auth.js database adapter: <code>@auth/*-adapter</code> packages are not supported, and users live in your own tables.</li>
     </ul>
 
     <h2>Environment variables</h2>
