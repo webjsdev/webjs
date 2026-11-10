@@ -88,7 +88,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     // The values are plain CSS in the compiled stylesheet, so the light theme
     // paints with JS off; the dark one is the .dark class, the kit's (and a
     // preset's) switch, which the layout's inline script sets before paint.
-    assert.match(globalsCss, /:root \{[\s\S]*?--primary: #[0-9a-f]{6};/i, 'the palette VALUES are plain CSS in the theme');
+    assert.match(globalsCss, /:root \{[\s\S]*?--primary: oklch\([^)]*\);/, 'the palette VALUES are plain CSS in the theme');
     assert.match(layout, /classList\.toggle\('dark'/, 'and the layout keeps .dark in step with the choice');
   } finally {
     await rm(cwd, { recursive: true, force: true });
@@ -254,15 +254,15 @@ test('the theme lives where init writes it, so a preset repaints a fresh app', a
     assert.doesNotMatch(inputCss, /--font-sans\s*:/, 'input.css leaves the body font to the theme');
     const theme = await readFile(join(appDir, 'styles', 'globals.css'), 'utf8');
     const block = theme.slice(theme.indexOf('/* @webjsdev/ui theme */'), theme.indexOf('/* @webjsdev/ui theme end */'));
-    assert.match(block, /:root \{[\s\S]*?--primary: #1e2226;/, 'the gallery palette is inside the theme block');
-    assert.match(block, /\.dark \{[\s\S]*?--primary: #dee2e6;/, 'with its dark half on .dark');
-    assert.match(block, /@theme inline \{[\s\S]*?--font-sans: 'JetBrains Mono'/, 'and its font where a preset writes one');
+    assert.match(block, /:root \{[\s\S]*?--primary: oklch\(0% 0 0\);/, 'the webjs.dev/ui palette is inside the theme block');
+    assert.match(block, /\.dark \{[\s\S]*?--primary: oklch\(0\.922 0 0\);/, 'with its dark half on .dark');
+    assert.match(block, /@theme inline \{[\s\S]*?--font-sans: 'Geist'/, 'and its font where a preset writes one');
     assert.match(theme.slice(theme.indexOf('/* @webjsdev/ui theme end */')), /--border-strong/, 'the app\'s extra tokens follow the block');
 
     // lyra, zinc, blue, Lora, large radius, from /ui/create.
     await init.parseAsync(['--cwd', appDir, '--preset', 'b1ZhhFKyG', '--css', 'styles/globals.css', '--yes'], { from: 'user' });
     const after = await readFile(join(appDir, 'styles', 'globals.css'), 'utf8');
-    assert.doesNotMatch(after, /--primary: #1e2226;/, 'the gallery palette is replaced');
+    assert.doesNotMatch(after, /--primary: oklch\(0% 0 0\);/, 'the scaffold palette is replaced');
     assert.match(after, /--primary: oklch\(0\.488 0\.243 264\.376\)/, 'by the preset\'s');
     assert.match(after, /--font-sans: 'Lora', serif;/, 'and its body font is the page\'s default family');
     assert.match(after, /--border-strong/, 'the app\'s own tokens are kept');

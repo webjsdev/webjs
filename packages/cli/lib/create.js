@@ -176,40 +176,57 @@ async function writeUiBootstrap(appDir) {
  * @param {string} css the kit's themes/index.css
  */
 function scaffoldTheme(css) {
+  // The webjs.dev/ui palette (shadcn's site tokens, the `.ui-site` block in
+  // website/public/ui-input.css), light then dark, so a fresh app looks like
+  // the kit's own site. test/scaffolds/scaffold-ui-theme.test.js holds the
+  // two equal.
   const pairs = {
-    background: ['#ffffff', '#1e2226'],
-    foreground: ['#191c20', '#dee2e6'],
-    card: ['#f7f8fa', '#313539'],
-    'card-foreground': ['#191c20', '#dee2e6'],
-    popover: ['#ffffff', '#313539'],
-    'popover-foreground': ['#191c20', '#dee2e6'],
-    primary: ['#1e2226', '#dee2e6'],
-    'primary-foreground': ['#ffffff', '#1e2226'],
-    secondary: ['#eef0f2', '#363a3e'],
-    'secondary-foreground': ['#191c20', '#dee2e6'],
-    muted: ['#eef0f2', '#313539'],
-    'muted-foreground': ['#565c64', '#94989c'],
-    accent: ['#e9ebef', '#363a3e'],
-    'accent-foreground': ['#191c20', '#f7fbff'],
-    border: ['#e2e5e9', '#3d434b'],
-    input: ['#e2e5e9', '#34393e'],
-    ring: ['#8b9198', '#6b7075'],
+    background: ['oklch(1 0 0)', 'oklch(0.145 0 0)'],
+    foreground: ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    card: ['oklch(1 0 0)', 'oklch(0.205 0 0)'],
+    'card-foreground': ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    popover: ['oklch(1 0 0)', 'oklch(0.205 0 0)'],
+    'popover-foreground': ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    primary: ['oklch(0% 0 0)', 'oklch(0.922 0 0)'],
+    'primary-foreground': ['oklch(0.985 0 0)', 'oklch(0.205 0 0)'],
+    secondary: ['oklch(0.97 0 0)', 'oklch(0.269 0 0)'],
+    'secondary-foreground': ['oklch(0.205 0 0)', 'oklch(0.985 0 0)'],
+    muted: ['oklch(0.97 0 0)', 'oklch(0.269 0 0)'],
+    'muted-foreground': ['oklch(0.556 0 0)', 'oklch(0.708 0 0)'],
+    accent: ['oklch(0.97 0 0)', 'oklch(0.371 0 0)'],
+    'accent-foreground': ['oklch(0.205 0 0)', 'oklch(0.985 0 0)'],
+    destructive: ['oklch(0.577 0.245 27.325)', 'oklch(0.704 0.191 22.216)'],
+    'destructive-foreground': ['oklch(0.97 0.01 17)', 'oklch(0.58 0.22 27)'],
+    border: ['oklch(0.922 0 0)', 'oklch(1 0 0 / 10%)'],
+    input: ['oklch(0.922 0 0)', 'oklch(1 0 0 / 15%)'],
+    ring: ['oklch(0.708 0 0)', 'oklch(0.556 0 0)'],
+    sidebar: ['oklch(0.985 0 0)', 'oklch(0.205 0 0)'],
+    'sidebar-foreground': ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    'sidebar-primary': ['oklch(0.205 0 0)', 'oklch(0.488 0.243 264.376)'],
+    'sidebar-primary-foreground': ['oklch(0.985 0 0)', 'oklch(0.985 0 0)'],
+    'sidebar-accent': ['oklch(0.97 0 0)', 'oklch(0.269 0 0)'],
+    'sidebar-accent-foreground': ['oklch(0.205 0 0)', 'oklch(0.985 0 0)'],
+    'sidebar-border': ['oklch(0.922 0 0)', 'oklch(1 0 0 / 10%)'],
+    'sidebar-ring': ['oklch(0.708 0 0)', 'oklch(0.439 0 0)'],
   };
-  const mono = "'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
+  // The site's type: Geist for text and headings, Geist Mono for code.
+  const sans = "'Geist', ui-sans-serif, system-ui, sans-serif";
+  const mono = "'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
   let out = setThemeVars(css, ':root', Object.fromEntries(Object.entries(pairs).map(([k, v]) => [k, v[0]])));
   out = setThemeVars(out, '.dark', Object.fromEntries(Object.entries(pairs).map(([k, v]) => [k, v[1]])));
-  out = setThemeVars(out, '@theme inline', { 'font-sans': mono, 'font-mono': mono });
+  out = setThemeVars(out, ':root', { radius: '0.625rem' });
+  out = setThemeVars(out, '@theme inline', { 'font-sans': sans, 'font-mono': mono });
   return out.replace(/\s*$/, '\n') + `
 /* The app's own tokens, outside the theme block, so a preset leaves them in
    place. public/input.css maps them into utilities. */
 :root {
-  --border-strong: #ccd1d7;
+  --border-strong: oklch(0.87 0 0);
   /* A translucent tint of the primary, so it follows every theme and preset. */
   --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
-  --font-display: 'Bricolage Grotesque', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Geist', ui-sans-serif, system-ui, sans-serif;
 }
 .dark {
-  --border-strong: #454b51;
+  --border-strong: oklch(1 0 0 / 20%);
 }
 `;
 }
@@ -1361,13 +1378,13 @@ export default function RootLayout({ children }: LayoutProps) {
       })();
     </script>
     <meta name="color-scheme" content="light">
-    <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
-         Bricolage Grotesque for the display wordmark. Swap these for your own
-         fonts (and update --font-sans in styles/globals.css, or apply a preset
-         with webjs ui init --preset, which prints the faces to load). -->
+    <!-- Geist for text and headings and Geist Mono for code, the webjs.dev/ui
+         type. Swap these for your own fonts (and update --font-sans in
+         styles/globals.css, or apply a preset with webjs ui init --preset,
+         which prints the faces to load). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@400;500;700&display=swap">
     <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
          public/tailwind.css by css:build (run automatically by the dev and start
          tasks; in dev it is also recompiled on request when a source changes, so

@@ -143,9 +143,9 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
 
-    // Re-skinned shell: a JetBrains Mono type system on a cool neutral-grey
-    // surface palette (not the old orange brand), a floating top navbar, and a
-    // main that fills the viewport minus the navbar.
+    // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
+    // Geist), with a floating top navbar and a main that fills the viewport
+    // minus the navbar.
     assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
       'layout main fills the viewport minus the navbar');
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
@@ -170,12 +170,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(layoutSrc, /:root \{[^}]*color-scheme: light;/, 'color-scheme defaults to light');
     assert.match(layoutSrc, /:root\.dark \{ color-scheme: dark; \}/, 'and turns dark with the tokens');
     assert.doesNotMatch(layoutSrc, /color-scheme: light dark|content="light dark"/, 'never following the OS on its own');
-    assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
+    assert.match(layoutSrc, /family=Geist:/, 'layout loads Geist');
+    assert.match(layoutSrc, /family=Geist\+Mono/, 'and Geist Mono');
     // The palette lives in the theme block of styles/globals.css (light on
     // :root, dark on .dark), where a preset replaces it, never in the layout.
     const themeSrc = readFileSync(join(appDir, 'styles', 'globals.css'), 'utf8');
-    assert.match(themeSrc, /:root \{[\s\S]*?--primary: #1e2226;/, 'the theme ships the cool neutral-grey palette');
-    assert.match(themeSrc, /\.dark \{[\s\S]*?--primary: #dee2e6;/, 'with its dark half on .dark');
+    assert.match(themeSrc, /:root \{[\s\S]*?--primary: oklch\(0% 0 0\);/, 'the theme ships the webjs.dev/ui palette');
+    assert.match(themeSrc, /\.dark \{[\s\S]*?--primary: oklch\(0\.922 0 0\);/, 'with its dark half on .dark');
     assert.doesNotMatch(layoutSrc, /--primary\s*:/, 'and the layout overrides none of it');
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
