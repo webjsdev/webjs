@@ -36,6 +36,9 @@ human docs are at https://webjs.dev/docs.
 Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
 or an in-memory array.
 
+In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
+not `document.getElementById`, `document.querySelector` or `addEventListener`.
+
 For UI, add shadcn's components from the WebJs UI kit (class helpers such as
 `buttonClass()`, and `<ui-*>` elements where state matters) rather than writing
 them: `npx webjs ui add button dialog` copies each into `components/ui/`, and
