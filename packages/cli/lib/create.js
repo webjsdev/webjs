@@ -1551,12 +1551,29 @@ export async function addUser(formData: FormData): Promise<ActionResult<User>> {
   }
 }
 `);
+  await writeFile(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), `'use server';
+
+import { revalidatePath } from '@webjsdev/server';
+import type { ActionResult } from '@webjsdev/server';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
+
+// A server action with no input, bound by the home page's Clear list button
+// as <form action=\${clearUsers}>. One function per file.
+export async function clearUsers(): Promise<ActionResult> {
+  await db.delete(users);
+  revalidatePath('/');
+  return { success: true };
+}
+`);
   await mkdir(join(appDir, 'test', 'users'), { recursive: true });
-  await writeFile(join(appDir, 'test', 'users', 'add-user.test.ts'), `// The example module's test: the action against the test database, which
-// \`webjs test\` prepares from db/schema.server.ts.
+  await writeFile(join(appDir, 'test', 'users', 'users.test.ts'), `// The example module's test: its actions against the test database, which
+// \`webjs test\` prepares from db/schema.server.ts. Tests in one file run in
+// order, so the clear test runs last.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addUser } from '#modules/users/actions/add-user.server.ts';
+import { clearUsers } from '#modules/users/actions/clear-users.server.ts';
 import { listUsers } from '#modules/users/queries/list-users.server.ts';
 
 const form = (email: string) => {
@@ -1577,6 +1594,13 @@ test('addUser adds a user, which listUsers then returns', async () => {
   assert.equal(result.success, true);
   assert.ok((await listUsers()).some((u) => u.email === email));
 });
+
+test('clearUsers empties the list', async () => {
+  await addUser(form(\`grace-\${Date.now()}@example.com\`));
+  const result = await clearUsers();
+  assert.equal(result.success, true);
+  assert.deepEqual(await listUsers(), []);
+});
 `);
 
   // Home page: the logo, then the example module at work (a form bound to its
@@ -1587,6 +1611,7 @@ import { buttonClass } from '#components/ui/button.ts';
 import { inputClass } from '#components/ui/input.ts';
 import { labelClass } from '#components/ui/label.ts';
 import { addUser } from '#modules/users/actions/add-user.server.ts';
+import { clearUsers } from '#modules/users/actions/clear-users.server.ts';
 import { listUsers } from '#modules/users/queries/list-users.server.ts';
 import '#modules/users/components/user-list.ts';
 
@@ -1619,6 +1644,10 @@ export default async function Home({ actionData }: PageProps) {
         <button class=\${buttonClass()} type="submit">Add user</button>
       </form>
       <user-list .users=\${latest}></user-list>
+      \${latest.length > 0 ? html\`
+        <form action=\${clearUsers}>
+          <button class=\${buttonClass({ variant: 'outline' })} type="submit">Clear list</button>
+        </form>\` : nothing}
     </section>
   \`;
 }
