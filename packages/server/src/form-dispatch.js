@@ -5,6 +5,7 @@ import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from '
 import { getBodyLimits, refreshHeaderValue } from './context.js';
 import { readFlash, encodeFlash, flashSetCookie, appRelativePath } from './action-flash.js';
 import { basePath as appBasePath } from './importmap.js';
+import { withBasePath } from './base-path.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { makeThenable, searchParamsRecord } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
@@ -730,12 +731,19 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // page's own path so a poisoned value cannot become an open redirect.
     const ownPath = (url.pathname + url.search) || '/';
     const safe = result ? sameSiteRedirect(result.redirect) : null;
+    // The PUBLIC target the browser goes to. The action's own `redirect` is
+    // written as the browser sees it (with the `webjs.basePath` mount, as an
+    // author's links are), while the page's own path comes from the request,
+    // which lost the mount at ingress, so it gets the mount back. Without it a
+    // mounted app's success redirect left the app (`Location: /f`).
+    const mount = appBasePath();
+    const target = safe || withBasePath(ownPath, mount);
     const res = new Response(null, {
       status: 303,
       // Header-safe, as every thrown redirect() is: a non-Latin-1 target
       // would otherwise throw while the Response is built and turn a
       // successful write into a 500.
-      headers: { location: headerSafeLocation(safe || ownPath), ...invalidateHeader },
+      headers: { location: headerSafeLocation(target), ...invalidateHeader },
     });
     // The result survives the redirect (Next's useActionState shows a success
     // message after a submit): the page it lands on reads it as actionData
@@ -743,8 +751,9 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // A success with nothing to carry still replaces an earlier flash, so the
     // next submission's prevState is never a stale failure.
     // Bound to the page the redirect lands on, so no other page shows it,
-    // app-root-relative (the mount prefix dropped) as the render compares it.
-    const path = appRelativePath(new URL(safe || ownPath, url).pathname, appBasePath());
+    // app-root-relative as the render compares it: the mount stripped ONCE
+    // from the public target.
+    const path = appRelativePath(new URL(target, url).pathname, mount);
     const value = result !== undefined && result !== null ? await encodeFlash({ id, result, shown: false, path }) : null;
     res.headers.append('set-cookie', flashSetCookie(value));
     return res;
