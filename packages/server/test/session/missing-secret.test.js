@@ -48,8 +48,7 @@ test('with NODE_ENV unset (an embedded host, node server.js) a missing secret st
       assert.throws(() => session(), /SESSION_SECRET in \.env/);
       assert.throws(() => createAuth({ providers: [] }), /AUTH_SECRET in \.env/);
     });
-    assert.equal(devSecret('X', { dir, env: {}, devProcess: false }), undefined, 'no NODE_ENV, no dev handler: no secret');
-    assert.ok(devSecret('X', { dir, env: {}, devProcess: true }), 'a dev request handler opts the process in');
+    assert.equal(devSecret('X', { dir, env: {} }), undefined, 'no NODE_ENV: no secret');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -67,8 +66,8 @@ test('in development and tests a missing secret is generated once into .webjs/de
       assert.match(stored, /^[0-9a-f]{64}$/, 'a 32-byte hex secret is persisted');
       assert.equal(devSecret('SESSION_SECRET'), stored, 'a restart reads the same secret back');
     });
-    assert.ok(devSecret('X', { dir, env: { NODE_ENV: 'test' }, devProcess: false }), 'a test process gets it too');
-    assert.equal(devSecret('X', { dir, env: { NODE_ENV: 'production' }, devProcess: true }), undefined, 'never in production');
+    assert.ok(devSecret('X', { dir, env: { NODE_ENV: 'test' } }), 'a test process gets it too');
+    assert.equal(devSecret('X', { dir, env: { NODE_ENV: 'production' } }), undefined, 'never in production');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -87,5 +86,24 @@ test('createAuth() reads AUTH_SECRET when no secret is passed, as Auth.js does',
   } finally {
     if (saved === undefined) delete process.env.AUTH_SECRET;
     else process.env.AUTH_SECRET = saved;
+  }
+});
+
+test('a dev request handler earlier in the process opts nothing in (NODE_ENV alone decides)', async () => {
+  // A latch set by createRequestHandler({ dev: true }) would also have covered
+  // a production handler created later in the same process with NODE_ENV unset.
+  const { createRequestHandler } = await import('../../src/dev.js');
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-dev-secret-latch-'));
+  try {
+    mkdirSync(join(dir, 'app'), { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'latch', type: 'module' }));
+    await createRequestHandler({ appDir: dir, dev: true, logger: { info() {}, warn() {}, error() {}, debug() {} } });
+    withEnv({ SESSION_SECRET: undefined, AUTH_SECRET: undefined, NODE_ENV: undefined }, dir, () => {
+      assert.throws(() => session(), /SESSION_SECRET in \.env/, 'session() still throws');
+      assert.throws(() => createAuth({ providers: [] }), /AUTH_SECRET in \.env/, 'and so does createAuth()');
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

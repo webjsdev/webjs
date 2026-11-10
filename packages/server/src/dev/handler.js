@@ -96,7 +96,6 @@ import {
   handleCore, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
 import { devImport, clearProdImportCache } from '../dev-import.js';
-import { markDevProcess } from '../dev-secret.js';
 
 /**
  * A short content digest of a single file's bytes for the app-source deploy
@@ -178,9 +177,6 @@ export async function createRequestHandler(opts) {
   // no-op (opt-in). Coerced + defaulted values are written back to process.env.
   await applyEnvValidation(appDir, { dev: !!opts.dev });
   const dev = !!opts.dev;
-  // A development handler lets session() and createAuth() fall back to the
-  // generated .webjs/dev-secret; nothing else does (dev-secret.js).
-  if (dev) markDevProcess();
   const logger = opts.logger || defaultLogger({ dev });
   // Boot-time `webjs` config validation (#1300). The published JSON Schema used
   // to reach users only through the scaffold's .vscode `$ref`, so a typo'd key

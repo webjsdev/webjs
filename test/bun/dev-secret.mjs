@@ -26,7 +26,8 @@ const prevCwd = process.cwd();
 const saved = { SESSION_SECRET: process.env.SESSION_SECRET, NODE_ENV: process.env.NODE_ENV };
 try {
   delete process.env.SESSION_SECRET;
-  delete process.env.NODE_ENV;
+  // `webjs dev` sets this when it is unset; NODE_ENV alone opts a process in.
+  process.env.NODE_ENV = 'development';
   w('package.json', JSON.stringify({ name: 'dev-secret', type: 'module' }));
   w('middleware.js', `import { session } from ${SERVER};\nexport default session();\n`);
   w('app/api/visit/route.js',
