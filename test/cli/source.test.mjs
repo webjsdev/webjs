@@ -25,6 +25,14 @@ test('webjs source <Export> prints the declaration and its doc, not the file', (
   assert.ok(r.stdout.split('\n').length < 40, `one declaration, not the file (${r.stdout.split('\n').length} lines)`);
 });
 
+test('a bare webjs source lists what WebJs provides, by need', () => {
+  const r = run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^What WebJs provides, by need\./, 'the catalogue, not a usage error');
+  assert.match(r.stdout, /^  Auth: createAuth, /m, 'auth is one line');
+  assert.match(r.stdout, /^  Rate limits and CORS: rateLimit, /m, 'and so is each feature the brief does not name');
+});
+
 test('webjs source --pkg narrows the search; a miss exits 1 and names the searched packages', () => {
   const ok = run('optimistic', '--pkg', 'core');
   assert.equal(ok.status, 0, ok.stderr);
@@ -38,8 +46,3 @@ test('webjs source --pkg narrows the search; a miss exits 1 and names the search
   assert.match(none.stdout, /searched @webjsdev\/\* packages \(core, server/);
 });
 
-test('webjs source with no name prints usage and exits 1', () => {
-  const r = run();
-  assert.equal(r.status, 1);
-  assert.match(r.stderr, /usage: webjs source <Export>/);
-});

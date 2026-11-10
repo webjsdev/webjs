@@ -316,17 +316,17 @@ const HELP = {
     examples: ['webjs mcp'],
   },
   source: {
-    usage: 'webjs source <Export> [--pkg <name>]',
-    summary: 'Print one framework export\'s signature plus the doc comment above it, read from the installed @webjsdev/* packages (the typed declarations first, the authored JSDoc when none carries a doc; every overload). The cheap way to check a contract before opening the source file.',
+    usage: 'webjs source [<Export>] [--pkg <name>]',
+    summary: 'With no name, list what WebJs provides by need (auth, sessions, caching, rate limits, uploads, realtime, SEO, test helpers). With a name, print that export\'s signature plus the doc comment above it, read from the installed @webjsdev/* packages (the typed declarations first, the authored JSDoc when none carries a doc; every overload). The cheap way to find a feature and check its contract before opening the source file.',
     options: [
       { flag: '--pkg <name>', description: 'Search one package only: core, server, cli, ui or intellisense.' },
     ],
     notesTitle: 'Exit status',
     notes: [
-      '0 when at least one declaration printed; 1 on a miss (the message names the packages that were searched).',
-      'The read-only MCP `source` tool returns the same text for { export: "<Export>" }.',
+      '0 for the catalogue or when at least one declaration printed; 1 on a miss (the message names the packages that were searched).',
+      'The read-only MCP `source` tool returns the same text for { export: "<Export>" }, and the catalogue for no arguments.',
     ],
-    examples: ['webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
+    examples: ['webjs source', 'webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
   },
   status: {
     usage: 'webjs status [path...] [--port N] [--boot] [--json] [--timeout <seconds>]',
@@ -1805,8 +1805,11 @@ Full docs: https://webjs.dev/docs`);
       const pkgAt = rest.indexOf('--pkg');
       const pkg = pkgAt >= 0 ? rest[pkgAt + 1] : undefined;
       if (!name) {
-        console.error('usage: webjs source <Export> [--pkg core|server|cli|ui|intellisense]');
-        process.exit(1);
+        // No name: the feature catalogue, so an agent that does not know a
+        // name yet finds it in one call (#1686).
+        const { featureCatalog } = await import('@webjsdev/mcp');
+        console.log(featureCatalog());
+        break;
       }
       const { lookupExport, resolveFrameworkRoots, listDir } = await import('@webjsdev/mcp');
       const { existsSync } = await import('node:fs');

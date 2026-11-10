@@ -86,6 +86,15 @@ src/
                          nothing is retried once with its first letter's case
                          swapped, so a convention (`generateMetadata`) finds its
                          type (`GenerateMetadata`).
+  catalog.js             FEATURE_CATALOG + featureCatalog(): what WebJs provides,
+                         grouped by need (auth, sessions, caching, rate limits,
+                         uploads, realtime, SEO, tests, the core component and
+                         state APIs), the text a no-args `source` call and a
+                         bare `webjs source` print (#1686). Curated, since the
+                         export lists mix app-facing API with plumbing;
+                         test/catalog.test.mjs holds every name to be a real
+                         export of its section's module AND to resolve through
+                         lookupExport, the agent's follow-up call.
   check-report.js        projectCheck(violations) -> { violations, summary }.
                          The shared shape returned by BOTH the MCP `check` tool
                          and `webjs check --json` (the CLI imports it from
@@ -117,7 +126,7 @@ src/
 
 ## Tests
 
-`test/mcp.test.mjs`, `test/mcp-source.test.mjs`,
+`test/mcp.test.mjs`, `test/mcp-source.test.mjs`, `test/catalog.test.mjs`,
 `test/check-report.test.mjs`. `runMcpServer` is driven in-process with injected
 deps, so no real server boots. Run `npm test` from the repo root.
 

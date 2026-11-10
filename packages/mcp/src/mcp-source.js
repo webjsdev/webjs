@@ -28,6 +28,7 @@
 import { createRequire } from 'node:module';
 import { join, resolve, sep, relative } from 'node:path';
 import { readdirSync, statSync } from 'node:fs';
+import { featureCatalog } from './catalog.js';
 
 /** The published framework packages whose source an agent may want to read. */
 export const FRAMEWORK_PACKAGES = ['core', 'server', 'cli', 'intellisense', 'ui'];
@@ -458,8 +459,9 @@ async function lookupMember(deps, roots, n) {
 
 /**
  * The `source` tool entry point. Dispatches on the args: `export` looks up one
- * export's signature and doc, `path` reads a file, `query` greps, otherwise
- * (or with `package`) lists the packages. PURE given `deps`
+ * export's signature and doc, `path` reads a file, `query` greps, `package`
+ * lists that package's entry points, and no args prints the feature catalogue
+ * (what WebJs provides, by need). PURE given `deps`
  * (`{ roots, readFile, readdir }`).
  *
  * @param {object} deps
@@ -471,5 +473,6 @@ export async function runSourceTool(deps, args) {
   if (a.export) return lookupExport(deps, a.export, a.package);
   if (a.path) return readSource(deps, a.path);
   if (a.query) return grepSources(deps, a.query);
-  return listSources(deps, a.package);
+  if (a.package) return listSources(deps, a.package);
+  return featureCatalog();
 }

@@ -869,7 +869,8 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /`CLAUDE\.md` imports this file, so notes go here\./, 'which says app notes live in AGENTS.md, not CLAUDE.md');
     // The brief plus the scaffold's rules plus the This app stub: still short,
     // since every line is read on every turn.
-    assert.ok(fs.split('\n').length < 66, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
+    assert.match(fs, /run `npx webjs source`, which lists what WebJs provides for each need\./, 'names the feature catalogue');
+    assert.ok(fs.split('\n').length < 68, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);
     }

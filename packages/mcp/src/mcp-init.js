@@ -105,6 +105,8 @@ export async function staleWarning(deps) {
 const TOOL_MAP = [
   '## The tools on this server',
   '',
+  '- Before hand-writing auth, sessions, caching, rate limits, uploads, realtime',
+  '  or SEO, call `source` with no arguments: it lists what WebJs provides.',
   '- For an exact contract, call `source` with `export` set to one export name',
   '  (its signature plus doc comment), `path` to read a framework file, or',
   '  `query` to grep the `@webjsdev/*` source.',

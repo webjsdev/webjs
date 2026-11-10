@@ -28,6 +28,7 @@ import { resolveFrameworkRoots, runSourceTool, listDir } from './mcp-source.js';
 // The export lookup behind the `source` tool's `export` arg, re-exported for
 // `webjs source <Export>` in the CLI (#1623), which shells the same text.
 export { lookupExport, resolveFrameworkRoots, listDir } from './mcp-source.js';
+export { featureCatalog, FEATURE_CATALOG } from './catalog.js';
 import { projectRoutes } from './routes-report.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -119,7 +120,7 @@ const SOURCE_SCHEMA = {
     },
     package: {
       type: 'string',
-      description: 'Limit a no-args listing to one package (core, server, cli, intellisense, ui).',
+      description: 'List one package\'s source entry points (core, server, cli, intellisense, ui).',
     },
   },
   required: [],
@@ -141,7 +142,7 @@ const TOOL_DEFS = [
   {
     name: 'source',
     description:
-      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `export` for the signature plus doc comment of ONE export (the cheap way to check a contract: `export: "createAuth"`), `path` to read a file (e.g. server/src/ssr/head.js; the bare server/src/ssr.js is a barrel that re-exports from the sibling directory), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use it for any exact contract the brief does not state. Read-only.',
+      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `export` for the signature plus doc comment of ONE export (the cheap way to check a contract: `export: "createAuth"`), `path` to read a file (e.g. server/src/ssr/head.js; the bare server/src/ssr.js is a barrel that re-exports from the sibling directory), `query` to grep the @webjsdev/* src trees, `package` to list one package\'s entry points, or NO ARGS for the feature catalogue: what WebJs provides by need (auth, sessions, caching, rate limits, uploads, realtime, SEO, test helpers), each name one `export` call away from its signature and example. Call it before hand-writing any of those. Read-only.',
     inputSchema: SOURCE_SCHEMA,
   },
   {

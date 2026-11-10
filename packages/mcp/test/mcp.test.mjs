@@ -330,11 +330,19 @@ test('mcp: a falsy id (0) and a string id are echoed, not dropped', async () => 
 
 test('mcp: tools/call source reads/greps/lists the framework source (driven against the monorepo)', async () => {
   // Drive with cwd = the repo so @webjsdev/* resolves to the workspace packages.
-  // no-args -> the package listing
+  // no-args -> the feature catalogue (#1686)
   let { frames } = await driveMcp(REPO, [
     { jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'source', arguments: {} } },
   ]);
   let text = frames[0].result.content[0].text;
+  assert.match(text, /^What WebJs provides, by need\./, 'returns the feature catalogue');
+  assert.match(text, /^  Auth: createAuth, /m, 'one line per need');
+
+  // package -> that package's source listing
+  ({ frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'source', arguments: { package: 'server' } } },
+  ]));
+  text = frames[0].result.content[0].text;
   assert.match(text, /@webjsdev\/server\/src:/, 'lists the server source dir');
   assert.match(text, /buildless|authored source/i, 'frames it as the real authored source');
 
