@@ -216,6 +216,33 @@ lib/
                          `workspaces` key is not part of it, it only enriches the
                          message with the member directories that ARE apps.
                          Tests: `test/cli/check-target.test.mjs`.
+  generate/              `webjs generate` / `webjs g` and `webjs destroy` / `webjs d`
+                         (#1692), Rails' generators with Rails' grammar.
+                         `index.js` parses args (`--force`, `--pretend`,
+                         `--skip-tests`, `--skip-migration`, `--plural`), builds
+                         a PLAN (files, edits, notes, `uiAdd`) through a
+                         generator, applies it (a differing existing file
+                         refuses the whole plan unless `--force`), then runs
+                         this CLI's own `db generate --name=<...>`.
+                         `names.js` inflects the resource name (validated, since
+                         it is written into code; tiny pluralizer, `--plural`
+                         override). `fields.js` parses `name:type!:uniq` and
+                         maps each kind onto plain Drizzle per dialect.
+                         `schema-edit.js` inserts into the user's own
+                         `db/schema.server.ts` at real anchors only (the
+                         `export const ... = defineRelations(` line, never an
+                         example in a comment), printing a note when one is
+                         missing. `scaffold.js` writes the model, queries,
+                         validation (`read<X>Input`, FormData or JSON) and
+                         actions; `scaffold-pages.js` the four pages and the
+                         shared fields helper (Rails' `_form`), with the UI kit
+                         helpers when present (`webjs ui add textarea` when a
+                         text field needs it); `scaffold-api.js` the JSON route
+                         handlers (`resource`, or `scaffold` in an app with no
+                         root layout); `scaffold-test.js` the test, through
+                         `submitForm` / `testRequest`. `destroy.js` removes the
+                         same paths and the table, then writes the drop
+                         migration. Tests: `test/cli/generate.test.mjs`.
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Drizzle db layer,

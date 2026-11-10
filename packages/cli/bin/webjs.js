@@ -12,7 +12,9 @@ import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const [cmd, ...rest] = process.argv.slice(2);
+const [rawCmd, ...rest] = process.argv.slice(2);
+// Rails' short aliases: `webjs g` for generate, `webjs d` for destroy.
+const cmd = rawCmd === 'g' ? 'generate' : rawCmd === 'd' ? 'destroy' : rawCmd;
 
 // A `--help`/`-h` or `--version`/`-v` request (top-level or after a subcommand)
 // must not be gated by the Node-version preflight, so it works on an old Node.
@@ -105,6 +107,11 @@ const USAGE = `webjs commands:
                                                   also auto-detected when run via "bun create webjs".
                                                   Auto-runs the detected package manager's install in the new dir
                                                   unless --no-install is passed.
+  webjs generate <generator> [name] [field:type...]  Write a working, tested slice of the app in one command, as Rails does (alias: webjs g).
+                                                  scaffold (table + migration, queries, actions, four pages, a test), resource (the same
+                                                  with JSON route handlers, no pages), model (table + migration), authentication.
+                                                  Fields are Rails': title:string! (not null) slug:string:uniq user:references
+  webjs destroy <generator> [name]                Remove what the same generate command wrote (alias: webjs d)
   webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
   webjs db migrate                                Apply pending migrations (drizzle-kit migrate)
   webjs db push                                   Push the schema straight to the dev DB (drizzle-kit push)
@@ -283,6 +290,40 @@ const HELP = {
       'webjs create my-api --template api --db postgres',
       'webjs create my-app --runtime bun',
     ],
+  },
+  generate: {
+    usage: 'webjs generate <scaffold|resource|model|authentication> [name] [field[:type][!][:uniq|:index]...]',
+    summary: 'Write a working, tested slice of the app, the way Rails generators do (alias `webjs g`). scaffold: the table and its migration, list/get queries, create/update/delete actions, index/new/show/edit pages with forms bound to the actions (they work with JavaScript off), and a test. resource: the same with JSON route handlers under app/api/ instead of pages (also what scaffold writes in an app with no pages). model: the table and its migration. authentication: a password hash on users, Auth.js credentials sign-in through createAuth, sign-up and log-in pages, a protected /dashboard and a test. Generate, then edit the result.',
+    options: [
+      { flag: '-f, --force', description: 'Overwrite files that already exist and differ (without it nothing is written and the files are named).' },
+      { flag: '-p, --pretend', description: 'Print what would be written, and write nothing.' },
+      { flag: '--skip-tests', description: 'Write no test file.' },
+      { flag: '--skip-migration', description: 'Edit db/schema.server.ts but do not run `webjs db generate`.' },
+      { flag: '--plural <word>', description: 'The plural when the built-in rules get it wrong (person/people is built in).' },
+    ],
+    notesTitle: 'Fields',
+    notes: [
+      'name[:type][!][:uniq|:index], the Rails grammar. type: string (the default), text, integer, float, decimal, boolean, datetime, date, json, references.',
+      '! makes the column not null (title:string!), :uniq adds a unique constraint, :index a plain index.',
+      'user:references adds a userId foreign key to users and a user relation in defineRelations.',
+      'Every table gets id, createdAt and updatedAt. The migration is applied on the next `webjs dev`, `webjs start` or `webjs test`.',
+    ],
+    examples: [
+      'webjs g scaffold post title:string! body:text published:boolean',
+      'webjs g scaffold comment body:text! post:references',
+      'webjs g resource product name:string! price:float sku:string:uniq',
+      'webjs g model tag name:string!:uniq',
+      'webjs g authentication',
+    ],
+  },
+  destroy: {
+    usage: 'webjs destroy <scaffold|resource|model|authentication> [name]',
+    summary: 'Remove what `webjs generate` wrote for the same arguments (alias `webjs d`), as `rails destroy` does: the generated files, and the table it added to db/schema.server.ts, then `webjs db generate` writes the migration that drops it. As in Rails, the files go whether or not they were edited since, so commit first.',
+    options: [
+      { flag: '-p, --pretend', description: 'Print what would be removed, and remove nothing.' },
+      { flag: '--skip-migration', description: 'Do not run `webjs db generate` after editing the schema.' },
+    ],
+    examples: ['webjs d scaffold post', 'webjs destroy model tag'],
   },
   db: {
     usage: 'webjs db <generate|migrate|push|studio|seed|verb> [args...]',
@@ -1800,6 +1841,18 @@ Full docs: https://webjs.dev/docs`);
         `  --from PROVIDER     CDN to resolve through. One of: ${[...SUPPORTED_PROVIDERS].join(', ')}. Default: jspm.`);
       process.exit(1);
     }
+    case 'generate': {
+      const { runGenerate } = await import('../lib/generate/index.js');
+      process.exitCode = runGenerate(rest);
+      break;
+    }
+
+    case 'destroy': {
+      const { runDestroy } = await import('../lib/generate/destroy.js');
+      process.exitCode = runDestroy(rest);
+      break;
+    }
+
     case 'source': {
       // One export's signature plus its doc comment from the installed
       // @webjsdev/* packages (#1623): the same lookup the MCP `source` tool
