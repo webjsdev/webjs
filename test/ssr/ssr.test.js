@@ -223,8 +223,10 @@ test('buildDocumentParts: keeps user shell attrs; splices framework tags into us
     streaming: false,
   });
   // Open tag attributes from user.
-  assert.match(prefix, /<html lang="es" data-theme="dark">/);
-  assert.match(prefix, /<body class="bg-dark">/);
+  // The attributes are kept and listed, so the client router can keep them in
+  // step with the server after a soft navigation (#1686).
+  assert.match(prefix, /<html lang="es" data-theme="dark" data-wj-html="lang data-theme">/);
+  assert.match(prefix, /<body class="bg-dark" data-wj-body="class">/);
   // Framework tags injected into <head>.
   assert.match(prefix, /<title>X<\/title>/);
   assert.match(prefix, /<meta name="description" content="d">/);
@@ -275,8 +277,8 @@ test('buildDocumentParts: user shell is detected directly (no wrapper to peek pa
     streaming: false,
   });
   // User shell attributes preserved.
-  assert.match(prefix, /<html lang="es" data-theme="dark">/);
-  assert.match(prefix, /<body class="bg-test">/);
+  assert.match(prefix, /<html lang="es" data-theme="dark" data-wj-html="lang data-theme">/);
+  assert.match(prefix, /<body class="bg-test" data-wj-body="class">/);
   // User body content preserved.
   assert.match(streamBody, /<main>page<\/main>/);
 });

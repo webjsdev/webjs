@@ -61,6 +61,9 @@ form.addEventListener('webjs:submit-end', (e) =&gt; {
 /* form[aria-busy="true"] button[type="submit"] { opacity: .5; pointer-events: none; } */</code-block>
     <p>Progressive enhancement is unaffected. With JS off the form is a normal POST. The events and <code>aria-busy</code> are a client-only enhancement. To skip the wait rather than style it, see <a href="/docs/optimistic-ui">Optimistic UI</a>.</p>
 
+    <h2>The root layout's &lt;html&gt; and &lt;body&gt; attributes follow the server</h2>
+    <p>A swap replaces content inside <code>&lt;body&gt;</code>, but the attributes the root layout renders on <code>&lt;html&gt;</code> and <code>&lt;body&gt;</code> are brought up to date too, as when Next.js re-renders the root layout. So <code>&lt;html class=\${theme}&gt;</code> read from a cookie shows the new theme as soon as the action or navigation lands, with no reload and no <code>data-no-router</code>. Only attributes the server rendered change (the server lists them in <code>data-wj-html</code> and <code>data-wj-body</code>), so one a script sets in the browser, such as a theme bootstrap writing <code>data-theme</code> from <code>localStorage</code>, is left alone.</p>
+
     <h2>Non-2xx HTML responses render in place</h2>
     <p>Any response with a <code>text/html</code> body is applied to the DOM regardless of status code. This makes the standard server-rendered validation pattern work end-to-end:</p>
     <ul>
