@@ -237,7 +237,8 @@ lib/
                          `test/runtime-rewrite/`.
 templates/               Verbatim files copied into every new app.
                          {{APP_NAME}} placeholder is substituted at
-                         copy time. The AGENTS.md (the brief alone) /
+                         copy time. The AGENTS.md (the brief, the scaffold rules, and
+                         a "This app" section the agent fills in) /
                          CLAUDE.md / .editorconfig / .env.example /
                          .claude.json / .claude/hooks/ all live here. .claude/hooks/check-on-edit.{sh,mjs}
                          is the PostToolUse feedback loop: after an edit to

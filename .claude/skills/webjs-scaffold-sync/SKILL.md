@@ -19,7 +19,8 @@ The model: **a scaffolded app is minimal, and agents rely on muscle memory.**
 `webjs create` emits a root layout, a starting home page, a theme toggle, the
 Drizzle db wiring and one starter test (the `api` template: health and users
 endpoints over typed server actions). Its only agent doc is `AGENTS.md`, which is
-the brief and nothing else, plus a three-line `CLAUDE.md` bridge. There is no
+the brief, a few scaffold rules and a "This app" section the agent fills in,
+plus a short `CLAUDE.md` bridge that imports it. There is no
 gallery, no playbook, no rule directory and no skill in a generated app, by
 design: every token an agent spends reading framework docs is one it does not
 spend on the app.

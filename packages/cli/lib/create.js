@@ -1779,10 +1779,11 @@ ThemeToggle.register('theme-toggle');
   }
   console.log(`For AI agents, read this before editing:
   • Read AGENTS.md. Its brief is the whole difference from Next.js routing
-    and Lit components; run 'npx webjs check' after each edit.
-  • This scaffold is a minimal starting point. Its one example feature
-    (modules/users/, test/users/ and the home page's form) shows the module
-    shape: read it, then delete it and rewrite app/page.ts before building.
+    and Lit components; run 'npx webjs check' after each edit. Fill in its
+    "This app" section as you build, and keep it current.
+  • This scaffold is a minimal starting point. Its one example feature,
+    modules/users/, shows the module shape: read it, then delete it, its test
+    and whatever uses it before building.
     Add routes under app/, components under components/, and features under
     modules/<feature>/, and keep server-only code behind .server.ts.
   • Use the wired-up database (Drizzle): define real models in

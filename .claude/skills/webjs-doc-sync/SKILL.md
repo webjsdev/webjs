@@ -60,7 +60,7 @@ applies, then update or consciously skip each.
    auto-generated from conventional PR titles, so NEVER hand-write it; the blog is
    manual.
 5. **The scaffold templates: `packages/cli/templates/`.** Every new app ships
-   these. The scaffold's only agent doc is `AGENTS.md`, the brief alone, read
+   these. The scaffold's only agent doc is `AGENTS.md` (the brief, a few scaffold rules, a "This app" section), read
    by every tool (plus the thin `CLAUDE.md` bridge). A change
    to how apps are AUTHORED lands on the docs site. When the change is to what
    `webjs create` GENERATES (a template, the generated layout/home/theme/schema,

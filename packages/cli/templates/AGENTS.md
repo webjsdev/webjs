@@ -36,8 +36,8 @@ human docs are at https://webjs.dev/docs.
 Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
 or an in-memory array. Put each feature in `modules/<feature>/` (`actions/` with
 one `'use server'` action per `*.server.ts`, `queries/`, `components/`, `types.ts`)
-and keep routes thin. `modules/users/`, `test/users/` and the home page's form show
-that shape: read them, then delete them before you build the app.
+and keep routes thin. `modules/users/` is an example of that shape: read it, then
+delete it, its test and whatever uses it before you build the app.
 
 In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
 not `document.getElementById`, `document.querySelector` or `addEventListener`.
@@ -52,7 +52,12 @@ Style with Tailwind utilities on the kit's design tokens (`bg-background`,
 `styles/globals.css`), never hard-coded colours or hand-written CSS. Change the
 whole look with a theme: `npx webjs ui init --preset <code>` from webjs.dev/ui/create.
 
-`npx webjs help` lists every CLI command (`routes`, `doctor`, `db`, `ui`,
-`typecheck`, ...). The `webjs` MCP server in `.claude.json` (`npx @webjsdev/mcp`)
-answers the same questions as tools: `list_routes`, `list_actions`,
-`list_components`, `check`, `source` and `ui`.
+`npx webjs help` lists every CLI command. The `webjs` MCP server in `.claude.json`
+(`npx @webjsdev/mcp`) answers the same questions as tools: `list_routes`,
+`list_actions`, `list_components`, `check`, `source` and `ui`.
+
+## This app
+
+Replace this paragraph with what the app does, its features (one line per
+`modules/<feature>/`), its data model and any rule specific to it, and keep it
+current as the app grows. `CLAUDE.md` imports this file, so notes go here.

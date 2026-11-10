@@ -1467,8 +1467,8 @@ Only two scaffolds exist:
                 HTTP/JSON API with no UI.
 
 The scaffold is a starting point. Delete the example module
-(modules/users/, test/users/) and replace the example page and schema with
-the actual app the user requested. Use Drizzle +
+(modules/users/, its test and whatever uses it) and replace the example page
+and schema with the actual app the user requested. Use Drizzle +
 SQLite for persistence (already wired up). Never store app data in JSON
 files.
 
