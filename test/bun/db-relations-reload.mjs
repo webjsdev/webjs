@@ -46,7 +46,7 @@ let src = await readFile(schemaB, 'utf8');
 assert.match(src, /defineRelations\(\{ users \}/, 'the scaffold schema has the expected relations line');
 src = src.replace(
   /export const relations = defineRelations\(\{ users \}/,
-  "export const notes = table('notes', { id: pk(), body: text() });\n"
+  "export const notes = sqliteTable('notes', { id: integer().primaryKey({ autoIncrement: true }), body: text() });\n"
     + 'export const relations = defineRelations({ users, notes }',
 );
 await writeFile(schemaB, src);
