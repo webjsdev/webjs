@@ -222,6 +222,10 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(pageSrc, /from '#modules\/users\/actions\/add-user\.server\.ts'/, 'the home binds the example module\'s action');
     assert.match(pageSrc, /from '#modules\/users\/queries\/list-users\.server\.ts'/, 'and reads its query');
     assert.match(pageSrc, /<form action=\$\{addUser\}/, 'as a bound form');
+    assert.match(pageSrc, /<user-list \.users=\$\{latest\}><\/user-list>/, 'and renders the users with the module\'s component');
+    const listSrc = readFileSync(join(appDir, 'modules', 'users', 'components', 'user-list.ts'), 'utf8');
+    assert.match(listSrc, /static properties = \{ users: \{ type: Array \} \};/, 'a Lit-style reactive property');
+    assert.match(listSrc, /UserList\.register\('user-list'\)/, 'registered under its tag');
     assert.ok(existsSync(join(appDir, 'test', 'users', 'add-user.test.ts')), 'the module ships its own test');
     assert.match(pageSrc, /Edit app\/page\.ts/, 'the home points at the file to edit');
     assert.match(layoutSrc, /webjs\.dev\/docs/, 'the navbar links the docs');

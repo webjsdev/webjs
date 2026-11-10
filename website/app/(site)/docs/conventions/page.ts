@@ -149,8 +149,8 @@ cd my-app && npm run dev</code-block>
     <p>This generates:</p>
     <ul>
       <li><code>app/</code> with root layout + page</li>
-      <li>an empty <code>modules/</code> for feature-scoped code</li>
-      <li><code>components/</code> with a theme toggle component</li>
+      <li><code>modules/users/</code>, one example feature module (a <code>'use server'</code> action in <code>actions/</code>, a query in <code>queries/</code>, a component in <code>components/</code>, <code>types.ts</code>) that the home page uses, to copy for your own features and then delete</li>
+      <li><code>components/</code> with a theme toggle component and the UI kit's Button, Input and Label in <code>components/ui/</code></li>
       <li><code>db/schema.server.ts</code>: the Drizzle schema, SQLite by default, example <code>User</code> model. <code>db/connection.server.ts</code> exports the <code>db</code> connection.</li>
       <li><code>test/&lt;feature&gt;/</code> with example tests, and <code>browser/</code> and <code>e2e/</code> subfolders</li>
       <li><code>AGENTS.md</code>: the WebJs brief, what differs from Next.js routing and Lit components</li>

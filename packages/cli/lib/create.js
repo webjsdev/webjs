@@ -1475,9 +1475,41 @@ export default function RootLayout({ children }: LayoutProps) {
   // The example module: modules/<feature>/ holds a feature's server actions,
   // queries, components, utils and types, and the routes in app/ stay thin.
   // One tiny feature over the schema's users table: an action the home page
-  // binds as a form, a server-only query it reads, the types, and a test.
+  // binds as a form, a server-only query it reads, a component that renders
+  // the result, the types, and a test.
   await mkdir(join(appDir, 'modules', 'users', 'actions'), { recursive: true });
   await mkdir(join(appDir, 'modules', 'users', 'queries'), { recursive: true });
+  await mkdir(join(appDir, 'modules', 'users', 'components'), { recursive: true });
+  await writeFile(join(appDir, 'modules', 'users', 'components', 'user-list.ts'), `import { WebComponent, html } from '@webjsdev/core';
+import type { User } from '../types.ts';
+
+/**
+ * The users feature's component, written as in Lit. The page passes the users
+ * in as a property (.users=\${users}); a component never queries the database
+ * itself, since it also runs in the browser.
+ */
+export class UserList extends WebComponent {
+  static properties = { users: { type: Array } };
+  declare users: User[];
+
+  constructor() {
+    super();
+    this.users = [];
+  }
+
+  render() {
+    if (this.users.length === 0) {
+      return html\`<p class="text-sm text-muted-foreground m-0">No users yet. Add the first one above.</p>\`;
+    }
+    return html\`
+      <ul class="grid gap-1 m-0 p-0 list-none text-sm text-muted-foreground">
+        \${this.users.map((user) => html\`<li>\${user.email}</li>\`)}
+      </ul>
+    \`;
+  }
+}
+UserList.register('user-list');
+`);
   await writeFile(join(appDir, 'modules', 'users', 'types.ts'), `// The users feature's types, derived from the schema rather than written by hand.
 export type { User } from '#db/schema.server.ts';
 `);
@@ -1548,7 +1580,7 @@ test('addUser adds a user, which listUsers then returns', async () => {
 `);
 
   // Home page: the logo, then the example module at work (a form bound to its
-  // action, a list from its query). Reshape it into the app's real landing page.
+  // action, its component rendering what its query returns). Reshape it into the app's real landing page.
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html, nothing } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
@@ -1556,6 +1588,7 @@ import { inputClass } from '#components/ui/input.ts';
 import { labelClass } from '#components/ui/label.ts';
 import { addUser } from '#modules/users/actions/add-user.server.ts';
 import { listUsers } from '#modules/users/queries/list-users.server.ts';
+import '#modules/users/components/user-list.ts';
 
 export const metadata = {
   title: '${displayName}',
@@ -1586,9 +1619,7 @@ export default async function Home({ actionData }: PageProps) {
         </div>
         <button class=\${buttonClass()} type="submit">Add user</button>
       </form>
-      <ul class="grid gap-1 m-0 p-0 list-none text-sm text-muted-foreground">
-        \${latest.map((user) => html\`<li>\${user.email}</li>\`)}
-      </ul>
+      <user-list .users=\${latest}></user-list>
     </section>
   \`;
 }
