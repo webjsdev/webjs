@@ -9,8 +9,9 @@
  * current directory (the app root for `webjs dev` and `webjs test`), which the
  * scaffold's `.gitignore` already excludes, so sessions survive a restart.
  *
- * It is OPT-IN, and `NODE_ENV` alone decides: only `NODE_ENV=development` or
- * `NODE_ENV=test` gets one (`webjs dev` and `webjs test` set them when unset).
+ * It is OPT-IN, decided from the environment ({@link devSecretApplies}): only
+ * `NODE_ENV=development` or `NODE_ENV=test` gets one (`webjs dev` sets the
+ * first when unset), or a `webjs test` run with no `NODE_ENV`.
  * Anything else, a production `NODE_ENV` or none at all (an embedded host, a
  * container running `node server.js`), gets undefined and the caller throws,
  * so a production cookie is never signed with a key from disk because an env
@@ -27,12 +28,16 @@ const warned = new Set();
 
 /**
  * Whether this process may use the generated development secret, decided
- * from the environment on every call: `NODE_ENV=development` or `test`.
+ * from the environment on every call: `NODE_ENV=development` or `test`, or a
+ * `webjs test` run (`__WEBJS_TEST_RUN`, set by the CLI) with no `NODE_ENV`.
+ * A `webjs start` a test spawns sets `NODE_ENV=production`, so it never
+ * qualifies however the run was marked.
  * @param {Record<string, string | undefined>} [env]
  * @returns {boolean}
  */
 export function devSecretApplies(env = process.env) {
-  return env.NODE_ENV === 'development' || env.NODE_ENV === 'test';
+  if (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') return true;
+  return !env.NODE_ENV && env.__WEBJS_TEST_RUN === '1';
 }
 
 /**

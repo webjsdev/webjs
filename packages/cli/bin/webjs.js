@@ -632,7 +632,6 @@ async function main() {
     case 'start': {
       // Next's convention: `start` is production unless NODE_ENV says
       // otherwise, so `.env.production` loads and the app sees production.
-      // A test default inherited from an enclosing `webjs test` is replaced.
       (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'production');
       const { startServer } = await import('@webjsdev/server');
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
@@ -777,12 +776,11 @@ async function main() {
     }
     case 'test': {
       const cwd = process.cwd();
-      // A test run is NODE_ENV=test unless the shell says otherwise (Jest and
-      // Vitest do the same): .env.test loads, and session() / createAuth()
-      // may use the generated development secret, which a process with no
-      // NODE_ENV never does. It is marked as this run's default, so a
-      // `webjs start` a test boots still runs as production (node-env.js).
-      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'test');
+      // A test run sets no NODE_ENV (node --test sets none either), so a
+      // server a test boots or a child it spawns keeps its own; it marks the
+      // run instead, which lets session() / createAuth() use the generated
+      // development secret in the app's tests (node-env.js, dev-secret.js).
+      (await import('../lib/node-env.js')).markTestRun(process.env);
       const { existsSync } = await import('node:fs');
 
       // Two test runners:

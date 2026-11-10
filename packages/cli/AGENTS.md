@@ -52,13 +52,14 @@ lib/
                          gated `error`.
                          Tests: `test/cli/doctor.test.mjs`.
   node-env.js            `defaultNodeEnv(env, mode)` (#1686): the NODE_ENV
-                         `dev` (development), `start` (production) and `test`
-                         (test) set when the shell set none. `test` marks its
-                         default (`TEST_DEFAULT_MARKER`) so a `webjs start` or
-                         `webjs dev` a test spawns replaces it with its own
-                         instead of running a server as test; an explicit
-                         shell NODE_ENV=test carries no marker and is kept.
-                         Tests: `test/cli/node-env.test.mjs`.
+                         `dev` (development) and `start` (production) set
+                         when none is set, so a value a shell or a spawning
+                         process chose is always kept. `webjs test` sets NO
+                         NODE_ENV (an inherited one cannot be told apart from
+                         one a test sets on purpose); `markTestRun` sets
+                         `__WEBJS_TEST_RUN`, which only the server's
+                         `devSecretApplies` reads. Tests:
+                         `test/cli/node-env.test.mjs`.
   port.js                Port resolution for `webjs dev` / `start` (#447).
                          Also `failFastOnPortInUse` + `PORT_IN_USE_EXIT_CODE`
                          (98, #1527): a server start that fails on a taken port
