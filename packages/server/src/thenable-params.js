@@ -53,10 +53,16 @@ export function searchParamsRecord(params) {
   /** @type {Record<string, string | string[]>} */
   const out = {};
   for (const [k, v] of params) {
+    // Own keys only, and defined rather than assigned: `?constructor=x` must
+    // not read Object.prototype's member, and `?__proto__=x` must be a key,
+    // never the record's prototype.
+    if (!Object.hasOwn(out, k)) {
+      Object.defineProperty(out, k, { value: v, writable: true, enumerable: true, configurable: true });
+      continue;
+    }
     const prev = out[k];
-    if (prev === undefined) out[k] = v;
-    else if (Array.isArray(prev)) prev.push(v);
-    else out[k] = [prev, v];
+    if (Array.isArray(prev)) prev.push(v);
+    else out[k] = [/** @type {string} */ (prev), v];
   }
   return out;
 }

@@ -76,6 +76,17 @@ function randomId() {
 }
 
 /**
+ * `path` with `key=value` added to its query, joining one it already has.
+ * @param {string} path @param {string} key @param {string} value
+ */
+function withQuery(path, key, value) {
+  const hash = path.indexOf('#');
+  const base = hash < 0 ? path : path.slice(0, hash);
+  const frag = hash < 0 ? '' : path.slice(hash);
+  return `${base}${base.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}${frag}`;
+}
+
+/**
  * Accept a post-sign-in target only when it is a same-origin local path: one
  * leading `/`, the next character neither `/` nor `\` (both make a
  * protocol-relative URL a browser follows off-site), and no control
@@ -354,7 +365,11 @@ export function createAuth(config) {
     const ok = await cb.signIn({ user, account });
     if (ok && typeof ok !== 'string') return null;
     const hdrs = new Headers();
-    hdrs.set('location', typeof ok === 'string' ? (safeRedirectPath(ok) || ok) : (pages.error || '/?error=AccessDenied'));
+    // A returned string is where to send the user instead, used only when it
+    // is a local path (anything else is refused like a false), so the callback
+    // cannot become an open redirect.
+    const denied = withQuery(pages.error || '/', 'error', 'AccessDenied');
+    hdrs.set('location', (typeof ok === 'string' && safeRedirectPath(ok)) || denied);
     for (const c of extraCookies) hdrs.append('set-cookie', c);
     return new Response(null, { status: 302, headers: hdrs });
   }
@@ -382,7 +397,8 @@ export function createAuth(config) {
       const payload = await decodeJwt(raw, secret, cookieName(AUTH_COOKIE, secure()));
       if (!payload) return null;
       let token = cb.jwt ? await cb.jwt({ token: payload, user: undefined }) : payload;
-      let session = { user: { id: token.sub, name: token.name, email: token.email, image: token.image, ...token }, expires: new Date(token.exp * 1000).toISOString() };
+      const exp = typeof token.exp === 'number' ? token.exp : Math.floor(Date.now() / 1000) + maxAge;
+      let session = { user: { id: token.sub, name: token.name, email: token.email, image: token.image, ...token }, expires: new Date(exp * 1000).toISOString() };
       delete session.user.iat; delete session.user.exp; delete session.user.sub;
       return cb.session ? cb.session({ session, token, user: undefined }) : session;
     }
@@ -430,6 +446,12 @@ export function createAuth(config) {
   async function writeJwtSession(user, account, profile) {
     let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
     if (cb.jwt) token = await cb.jwt({ token, user, account, profile, trigger: 'signIn' });
+    // The session's lifetime is the cookie's, as Auth.js's encode() sets it,
+    // whatever object the jwt callback returned.
+    if (token && typeof token === 'object') {
+      const now = Math.floor(Date.now() / 1000);
+      token = { ...token, iat: typeof token.iat === 'number' ? token.iat : now, exp: typeof token.exp === 'number' ? token.exp : now + maxAge };
+    }
     return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret, cookieName(AUTH_COOKIE, secure())), maxAgeMs, secure());
   }
 
@@ -539,7 +561,7 @@ export function createAuth(config) {
       // Auth.js passes the request as authorize's second argument.
       const user = await provider.authorize(data || {}, opts.req || getRequest() || undefined);
       if (!user) {
-        return new Response(null, { status: 302, headers: { location: `${pages.error || pages.signIn || '/'}?error=CredentialsSignin` } });
+        return new Response(null, { status: 302, headers: { location: withQuery(pages.error || pages.signIn || '/', 'error', 'CredentialsSignin') } });
       }
       const account = { provider: providerId, type: 'credentials', providerAccountId: String(user.id ?? '') };
       const refused = await signInRefusal(user, account);
@@ -675,7 +697,7 @@ export function createAuth(config) {
     if (authAdapter) {
       const resolved = await adapterUserFor(req, user, account, provider);
       if (typeof resolved === 'string') {
-        return new Response(null, { status: 302, headers: { location: `${pages.error || pages.signIn || `${basePath}/signin`}?error=${resolved}` } });
+        return new Response(null, { status: 302, headers: { location: withQuery(pages.error || pages.signIn || `${basePath}/signin`, 'error', resolved) } });
       }
       sessionUser = resolved;
     }
@@ -838,9 +860,11 @@ export function createAuth(config) {
     if (!getRequest()) return signInFn(providerId, fields, opts);
     const res = await signInFn(providerId, fields, opts);
     const location = res.headers.get('location');
-    const cookie = res.headers.get('set-cookie');
-    if (!cookie && /[?&]error=CredentialsSignin\b/.test(location || '')) throw credentialsSignin(location);
-    if (cookie) queueSetCookie(cookie);
+    // getSetCookie(): get('set-cookie') joins several cookies with commas, which
+    // breaks an Expires date and a second cookie (the OAuth state and redirect).
+    const cookies = res.headers.getSetCookie();
+    if (cookies.length === 0 && /[?&]error=CredentialsSignin\b/.test(location || '')) throw credentialsSignin(location);
+    for (const cookie of cookies) queueSetCookie(cookie);
     if (res.status !== 302 || !location) return res;
     if (noRedirect) return location;
     return redirect(location);

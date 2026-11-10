@@ -198,22 +198,25 @@ export function cookiesView(store) {
 
 /**
  * Add the store's pending `Set-Cookie` values to a response. The response is
- * re-created rather than mutated, because a `Response.redirect()` (and any
- * fetched response) has immutable headers.
+ * always re-created rather than mutated: a `Response.redirect()` (and any
+ * fetched response) has immutable headers, and a handler may return one
+ * module-level Response for every request, which would otherwise collect this
+ * visitor's session cookie and hand it to the next one.
  * @param {Response} res
  * @param {CookieStore | null | undefined} store
  * @returns {Response}
  */
 export function applyPendingCookies(res, store) {
   if (!store || !store.pending.size) return res;
-  let out = res;
+  const headers = new Headers(res.headers);
+  for (const v of store.pending.values()) headers.append('set-cookie', v);
   try {
-    for (const v of store.pending.values()) out.headers.append('set-cookie', v);
-    return out;
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
   } catch {
-    out = new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
-    for (const v of store.pending.values()) out.headers.append('set-cookie', v);
-    return out;
+    // A status a Response cannot be constructed with (outside 200 to 599)
+    // keeps the old in-place append.
+    for (const v of store.pending.values()) res.headers.append('set-cookie', v);
+    return res;
   }
 }
 

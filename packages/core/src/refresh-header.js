@@ -30,7 +30,8 @@ export function parseRefreshHeader(value) {
 
 /**
  * Whether `pathname` is covered by one refreshed entry. A `[param]` segment
- * matches any one segment and a `[...param]` / `[[...param]]` segment the rest
+ * matches any one segment, a `[...param]` segment one or more and a
+ * `[[...param]]` segment zero or more of the rest
  * (Next lets `revalidatePath` name a route pattern); a `layout` entry also
  * covers every path below it.
  * @param {{ path: string, layout: boolean }} entry
@@ -41,7 +42,8 @@ export function refreshCovers(entry, pathname) {
   const have = pathname.split('/').filter(Boolean);
   for (let i = 0; i < want.length; i++) {
     const w = want[i];
-    if (/^\[\[?\.\.\./.test(w)) return true;
+    if (/^\[\[\.\.\./.test(w)) return true;
+    if (/^\[\.\.\./.test(w)) return have.length > i;
     if (i >= have.length) return false;
     if (/^\[[^\]]+\]$/.test(w)) continue;
     if (w !== have[i]) return false;
