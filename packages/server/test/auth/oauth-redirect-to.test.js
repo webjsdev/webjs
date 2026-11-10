@@ -161,7 +161,8 @@ test('a denied sign-in still goes to pages.error and clears the redirect cookie'
     callbacks: { signIn: async () => false },
   });
   const { done } = await roundTrip(auth, postForm('/dashboard'));
-  assert.equal(done.headers.get('location'), '/auth-error');
+  // Auth.js sends a denied sign-in to its error page with ?error=AccessDenied.
+  assert.equal(done.headers.get('location'), '/auth-error?error=AccessDenied');
   assert.ok(setCookies(done).some((c) => c.startsWith('webjs.auth.redirect=;')));
 });
 
