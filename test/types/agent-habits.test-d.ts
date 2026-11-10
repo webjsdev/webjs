@@ -3,7 +3,7 @@
 // WebJs type, not on the agent's own logic. It must compile clean with no
 // casts. The rule from now on: an eval typecheck failure caused by a framework
 // type adds a block here, beside the fix that made it compile.
-import { getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler, revalidateTag } from '@webjsdev/server';
+import { createAuth, getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler, revalidateTag } from '@webjsdev/server';
 import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
 import type { GenerateMetadata, LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
@@ -59,6 +59,25 @@ export function authMiddlewareHabits(instance: AuthInstance) {
   };
   return [middleware, wrapped, config];
 }
+
+// Auth.js's session and jwt callbacks written with no annotations, as the
+// Auth.js docs write them: every parameter is typed from the config. (Inbox
+// eval build, #1686.)
+export const callbackHabits = createAuth({
+  providers: [Credentials({ authorize: async (c) => (c.email ? { id: '1', email: String(c.email) } : null) })],
+  callbacks: {
+    jwt({ token, user }) {
+      if (user) token.id = user.id;
+      return token;
+    },
+    session({ session, token }) {
+      return { ...session, user: { ...session.user, id: String(token.id ?? token.sub) } };
+    },
+    signIn({ user }) {
+      return Boolean(user.email);
+    },
+  },
+});
 
 // Route props the Next.js 15 way and the Next.js 14 way, and the route-handler
 // context written inline as Next documents it. (Plan workstream 3, #1686.)

@@ -1219,6 +1219,56 @@ export interface AuthAdapter {
   updateSession?(session: { sessionToken: string; expires?: Date }): Promise<any> | any;
   deleteSession(sessionToken: string): Promise<any> | any;
 }
+/**
+ * The token the `jwt` and `session` callbacks see, Auth.js's `JWT`: the
+ * standard claims plus whatever the `jwt` callback put on it.
+ */
+export interface AuthJWT {
+  sub?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  iat?: number;
+  exp?: number;
+  [key: string]: unknown;
+}
+
+/** The user the callbacks see, Auth.js's `User`: what `authorize` or the provider returned. */
+export interface AuthCallbackUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  [key: string]: unknown;
+}
+
+/** The session the `session` callback receives and returns, Auth.js's `Session`. */
+export interface AuthCallbackSession {
+  user: ResolvedAuthUser & { name?: string | null; email?: string | null; image?: string | null };
+  expires: string;
+  [key: string]: unknown;
+}
+
+type AuthAwaitable<T> = T | Promise<T>;
+
+/**
+ * Auth.js's callbacks, with the parameters Auth.js passes, so a callback
+ * written as Auth.js documents it (`jwt({ token, user })`,
+ * `session({ session, token })`) is typed with no annotation. Declared as
+ * methods so a callback annotated with its own narrower types still compiles.
+ */
+export interface AuthCallbacks {
+  /** At sign-in (`trigger: 'signIn'`, with `user`, `account` and `profile`) and on every session read. */
+  jwt?(params: { token: AuthJWT; user: AuthCallbackUser; account?: Record<string, any> | null; profile?: Record<string, any>; trigger?: 'signIn' | 'signUp' | 'update'; session?: any }): AuthAwaitable<AuthJWT | null>;
+  /** On every session read. `token` under the jwt strategy, `user` under the database strategy. */
+  session?(params: { session: AuthCallbackSession; token: AuthJWT; user: AuthCallbackUser }): AuthAwaitable<any>;
+  /** Return true to allow, a url string to redirect there instead, anything else to deny (Auth.js's rule). */
+  signIn?(params: { user: AuthCallbackUser; account?: Record<string, any> | null; profile?: Record<string, any>; credentials?: Record<string, any> }): AuthAwaitable<boolean | string>;
+  redirect?(params: { url: string; baseUrl: string }): AuthAwaitable<string>;
+  /** Run by `auth` as middleware: true continues, false redirects to sign in, a Response is sent as is. */
+  authorized?: (params: { auth: { user: Record<string, unknown> } | null; request: Request }) => boolean | Response | Promise<boolean | Response>;
+}
+
 export interface AuthConfig {
   /** A provider config, or the provider function uncalled (`providers: [GitHub]`), as Auth.js accepts. */
   providers: Array<ProviderConfig | (() => ProviderConfig)>;
@@ -1230,15 +1280,7 @@ export interface AuthConfig {
   session?: { strategy?: 'jwt' | 'database'; maxAge?: number; updateAge?: number };
   /** Signs the session. Defaults to `process.env.AUTH_SECRET`, as in Auth.js. */
   secret?: string | undefined;
-  callbacks?: {
-    session?: Function;
-    jwt?: Function;
-    /** Return true to allow, a url string to redirect there instead, anything else to deny (Auth.js's rule). */
-    signIn?: Function;
-    redirect?: Function;
-    /** Run by `auth` as middleware: true continues, false redirects to sign in, a Response is sent as is. */
-    authorized?: (params: { auth: { user: Record<string, unknown> } | null; request: Request }) => boolean | Response | Promise<boolean | Response>;
-  };
+  callbacks?: AuthCallbacks;
   /**
    * An Auth.js database adapter (`DrizzleAdapter(db)` from `@auth/drizzle-adapter`,
    * and the rest), or WebJs's own session store for the database strategy.
