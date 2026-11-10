@@ -175,3 +175,8 @@ test('the auth routes match their base path at a segment boundary, and under a w
     if (prev === undefined) delete process.env.AUTH_URL; else process.env.AUTH_URL = prev;
   }
 });
+
+test('a redirect target holding a lone surrogate becomes a valid Location, not a URIError', () => {
+  assert.equal(headerSafeLocation('/search?q=a\uD83D'), '/search?q=a%EF%BF%BD');
+  assert.equal(headerSafeLocation('/q?x=\uD83D\uDE00'), '/q?x=%F0%9F%98%80', 'a whole pair still encodes as itself');
+});
