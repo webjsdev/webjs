@@ -206,18 +206,18 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
-    assert.ok(existsSync(join(appDir, 'db', 'columns.server.ts')), 'db/columns.server.ts written');
     assert.ok(existsSync(join(appDir, 'db', 'connection.server.ts')), 'db/connection.server.ts written');
     assert.ok(existsSync(join(appDir, 'drizzle.config.ts')), 'drizzle.config.ts written');
-    // A JSON column helper ships so persisting structured data (a board, a tag
-    // list, a settings blob) needs no outside Drizzle knowledge. SQLite path
-    // uses text({ mode: 'json' }). The example schema demonstrates it once.
-    const colsSrc = readFileSync(join(appDir, 'db', 'columns.server.ts'), 'utf8');
-    assert.match(colsSrc, /export const json = <T>\(\) => text\(\{ mode: 'json' \}\)\.\$type<T>\(\)/,
-      'sqlite columns.server.ts exports a generic json<T>() helper');
+    // The schema is plain Drizzle, as in Drizzle's own docs (#1686): no
+    // helper module an agent must first read, and a column's type is visible
+    // where it is declared (integer({ mode: 'timestamp_ms' }) is a Date).
+    assert.ok(!existsSync(join(appDir, 'db', 'columns.server.ts')), 'no db/columns.server.ts helper module');
     const schemaSrc = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
-    assert.match(schemaSrc, /\bjson\b/, 'schema imports json');
-    assert.match(schemaSrc, /json<\{[^}]*\}>\(\)/, 'schema demonstrates json<T>() on a column (counterfactual: fails if the demo column is dropped)');
+    assert.match(schemaSrc, /from 'drizzle-orm\/sqlite-core'/, 'the schema imports Drizzle directly');
+    assert.match(schemaSrc, /sqliteTable\('users'/, 'a plain sqliteTable');
+    assert.match(schemaSrc, /text\(\{ mode: 'json' \}\)\.\$type<\{[^}]*\}>\(\)/, 'a JSON column the Drizzle way (counterfactual: fails if the demo column is dropped)');
+    assert.match(schemaSrc, /integer\(\{ mode: 'timestamp_ms' \}\)/, 'a Date column says so where it is declared');
+    assert.doesNotMatch(schemaSrc, /columns\.server/, 'no import of a helper module');
     assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
     // The INITIAL migration is authored by `webjs create` only AFTER a successful
     // install (drizzle-kit is needed). This test scaffolds with install:false, so
@@ -729,20 +729,17 @@ test('scaffoldApp: template placeholder substitution in copied files', async () 
   }
 });
 
-test('scaffoldApp --db postgres: json<T>() helper maps to jsonb, one schema both dialects', async () => {
+test('scaffoldApp --db postgres: the schema is plain Drizzle pg-core, a jsonb JSON column', async () => {
   const cwd = await tempCwd();
   const restore = muteConsole();
   try {
     await scaffoldApp('my-pg', cwd, { template: 'full-stack', db: 'postgres' });
     const appDir = join(cwd, 'my-pg');
-    const cols = readFileSync(join(appDir, 'db', 'columns.server.ts'), 'utf8');
-    // The Postgres seam uses jsonb; the schema (shared across dialects) is
-    // unchanged, so the same json<T>() call compiles on both.
-    assert.match(cols, /jsonb/, 'postgres columns.server.ts imports jsonb');
-    assert.match(cols, /export const json = <T>\(\) => jsonb\(\)\.\$type<T>\(\)/,
-      'postgres json<T>() maps to jsonb().$type<T>() (counterfactual: fails if the helper is sqlite-only)');
+    assert.ok(!existsSync(join(appDir, 'db', 'columns.server.ts')), 'no helper module on postgres either');
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
-    assert.match(schema, /json<\{[^}]*\}>\(\)/, 'the one shared schema demonstrates json<T>() on postgres too');
+    assert.match(schema, /from 'drizzle-orm\/pg-core'/, 'the postgres schema imports pg-core directly');
+    assert.match(schema, /pgTable\('users'/, 'a plain pgTable');
+    assert.match(schema, /jsonb\(\)\.\$type<\{[^}]*\}>\(\)/, 'a jsonb JSON column (counterfactual: fails if the dialect is ignored)');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });

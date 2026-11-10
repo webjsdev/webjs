@@ -67,8 +67,8 @@ export function postgresCompose(s, dbName) {
     'compose.yaml');
   out = replaceOnce(out,
     '      # SQLite on a volume for local dev. For production, scaffold with\n' +
-    '      # --db postgres (or swap db/columns.server.ts + db/connection.server.ts\n' +
-    '      # for the pg variant) and point DATABASE_URL at your managed Postgres.\n' +
+    '      # --db postgres (or swap the schema\'s sqlite-core builders and\n' +
+    '      # db/connection.server.ts for the pg variants) and point DATABASE_URL at your managed Postgres.\n' +
     '      DATABASE_URL: file:/data/dev.db\n',
     '      # The `db` service below. In production, point DATABASE_URL at your\n' +
     '      # managed Postgres instead.\n' +

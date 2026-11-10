@@ -13,8 +13,8 @@ services:
     environment:
       PORT: 8080
       # SQLite on a volume for local dev. For production, scaffold with
-      # --db postgres (or swap db/columns.server.ts + db/connection.server.ts
-      # for the pg variant) and point DATABASE_URL at your managed Postgres.
+      # --db postgres (or swap the schema's sqlite-core builders and
+      # db/connection.server.ts for the pg variants) and point DATABASE_URL at your managed Postgres.
       DATABASE_URL: file:/data/dev.db
       # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
       AUTH_SECRET: ${AUTH_SECRET:-change-me-please-at-least-32-characters!}

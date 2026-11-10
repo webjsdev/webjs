@@ -309,8 +309,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // The UI-only steps below are gated on !isApi (the api template has no UI).
 
   // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
-  // the schema/queries/actions are identical across dialects, only db/columns
-  // + db/connection + the driver dep differ.
+  // queries and actions are identical across dialects; the schema's column
+  // builders, db/connection and the driver dep differ.
   const dialect = opts.db || 'sqlite';
   const VALID_DIALECTS = ['sqlite', 'postgres'];
   if (!VALID_DIALECTS.includes(dialect)) {
@@ -826,88 +826,21 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // --- Drizzle db layer (all templates), dialect-selected (#563) ---
   //
-  // The schema, queries, and actions are identical across dialects; only
-  // db/columns.server.ts + db/connection.server.ts + drizzle.config.ts + the
-  // driver dep differ. Switching dialect (e.g. SQLite in dev, Postgres in
-  // prod) is a config + module swap, not a code rewrite. Pinned to drizzle-orm
-  // 1.0.0-rc.3 (relations v2). See research #562.
+  // Plain Drizzle, as in Drizzle's own docs, so an agent writes the schema
+  // from what it already knows (#1686: a helper module every agent first had
+  // to read cost lookups and hid types, e.g. a timestamp() that was a Date).
+  // A column's SQL name is its key, Drizzle's default; name one explicitly
+  // (\`integer('created_at')\`) when a different SQL name is wanted. Only the
+  // schema's builders, the connection and the driver differ between SQLite and
+  // Postgres. Pinned to drizzle-orm 1.0.0-rc.3 (relations v2). See research #562.
 
-  const columnsSqlite = `import { sqliteTableCreator, integer, text, real, blob, index as _index } from 'drizzle-orm/sqlite-core';
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
-import { getTableName, type Table } from 'drizzle-orm';
-
-// Raw drizzle builders, re-exported so the schema reads like drizzle.
-export { text, integer, real, blob };
-
-// Casing factory: column keys map to snake_case SQL names.
-export const table = sqliteTableCreator((name) => name, 'snake_case');
-
-export const pk = () => integer().primaryKey({ autoIncrement: true });
-export const uuidPk = () => text().primaryKey().$defaultFn(() => crypto.randomUUID());
-export const uuid = () => text();
-// Structured value (array / object) stored as JSON. Type it with json<T>() so
-// the column is narrowed on read/write instead of \`unknown\`.
-export const json = <T>() => text({ mode: 'json' }).$type<T>();
-export const bool = () => integer({ mode: 'boolean' });
-// A point in time, read and written as a JavaScript Date (createdAt and updatedAt
-// too). For a plain number of milliseconds, use integer() instead.
-export const timestamp = () => integer({ mode: 'timestamp_ms' });
-export const createdAt = () => timestamp().notNull().defaultNow();
-export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
-
-// Anonymous-style index helper (rc.3 requires a name; this derives a
-// table-qualified one, matching drizzle-kit's own convention).
-export const index = (...cols: SQLiteColumn[]) =>
-  _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [SQLiteColumn, ...SQLiteColumn[]]));
-`;
-
-  const columnsPg = `import { pgTableCreator, serial, uuid as pgUuid, integer, text, real, boolean, jsonb, timestamp as pgTimestamp, index as _index } from 'drizzle-orm/pg-core';
-import type { PgColumn } from 'drizzle-orm/pg-core';
-import { getTableName, type Table } from 'drizzle-orm';
-
-export { text, integer, real };
-
-export const table = pgTableCreator((name) => name, 'snake_case');
-
-export const pk = () => serial().primaryKey();
-export const uuidPk = () => pgUuid().primaryKey().defaultRandom();
-export const uuid = () => pgUuid();
-// Structured value (array / object) stored as JSON. Type it with json<T>() so
-// the column is narrowed on read/write instead of \`unknown\`.
-export const json = <T>() => jsonb().$type<T>();
-export const bool = () => boolean();
-// A point in time, read and written as a JavaScript Date (createdAt and updatedAt
-// too). For a plain number of milliseconds, use integer() instead.
-export const timestamp = () => pgTimestamp({ withTimezone: true });
-export const createdAt = () => timestamp().notNull().defaultNow();
-export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
-
-export const index = (...cols: PgColumn[]) =>
-  _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [PgColumn, ...PgColumn[]]));
-`;
-
-  await writeFile(join(appDir, 'db', 'columns.server.ts'), dialect === 'postgres' ? columnsPg : columnsSqlite);
-
-  // Example schema (dialect-agnostic). Replace the User model with your own.
-  await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
-import { table, pk, text, json, createdAt } from './columns.server.ts';
-
-// Example model. Feel free to delete or extend.
-export const users = table('users', {
-  id: pk(),
-  email: text().notNull().unique(),
-  name: text(),
-  // JSON column: a structured value persisted as JSON, typed via json<T>().
-  // Same helper works on SQLite and Postgres. Delete if you do not need it.
-  settings: json<{ theme?: string }>(),
-  createdAt: createdAt(),
-});
-// A foreign key belongs on the COLUMN, as in any Drizzle schema:
-//   export const posts = table('posts', {
-//     id: pk(),
+  const schemaShared = `// A foreign key belongs on the COLUMN, as in any Drizzle schema, and an index
+// in the table's third argument:
+//   export const posts = TABLE('posts', {
+//     id: ID,
 //     userId: integer().notNull().references(() => users.id),
 //     title: text().notNull(),
-//   });
+//   }, (t) => [index('posts_user_id_idx').on(t.userId)]);
 // A relation (what db.query's \`with\` follows) belongs HERE, in the one
 // defineRelations for the whole schema (Drizzle 1.0), never on a column:
 //   export const relations = defineRelations({ users, posts }, (r) => ({
@@ -918,7 +851,39 @@ export const relations = defineRelations({ users }, () => ({}));
 
 // Derived types, never hand-written.
 export type User = typeof users.$inferSelect;
-`);
+`;
+
+  const schemaSqlite = `import { defineRelations } from 'drizzle-orm';
+import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
+
+// Example model. Feel free to delete or extend.
+export const users = sqliteTable('users', {
+  id: integer().primaryKey({ autoIncrement: true }),
+  email: text().notNull().unique(),
+  name: text(),
+  // A JSON column: a structured value, typed with $type<T>().
+  settings: text({ mode: 'json' }).$type<{ theme?: string }>(),
+  // A JavaScript Date, stored as milliseconds. For a plain number use integer().
+  createdAt: integer({ mode: 'timestamp_ms' }).notNull().defaultNow(),
+});
+` + schemaShared.replace('TABLE', 'sqliteTable').replace('ID', 'integer().primaryKey({ autoIncrement: true })');
+
+  const schemaPg = `import { defineRelations } from 'drizzle-orm';
+import { pgTable, serial, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+
+// Example model. Feel free to delete or extend.
+export const users = pgTable('users', {
+  id: serial().primaryKey(),
+  email: text().notNull().unique(),
+  name: text(),
+  // A JSON column: a structured value, typed with $type<T>().
+  settings: jsonb().$type<{ theme?: string }>(),
+  // A JavaScript Date.
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+` + schemaShared.replace('TABLE', 'pgTable').replace('ID', 'serial().primaryKey()');
+
+  await writeFile(join(appDir, 'db', 'schema.server.ts'), dialect === 'postgres' ? schemaPg : schemaSqlite);
 
   const connSqlite = `import { isAbsolute, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1590,7 +1555,7 @@ ThemeToggle.register('theme-toggle');
     console.log(`  ${name}/
     app/api/{health,users}/route.ts
     modules/users/{actions,queries,types.ts}   ← routes over server actions
-    db/{schema,columns,connection}.server.ts   ← Drizzle (User model)
+    db/{schema,connection}.server.ts   ← Drizzle (User model)
     ${guide}
 `);
   } else {
@@ -1598,7 +1563,7 @@ ThemeToggle.register('theme-toggle');
     app/{layout,page}.ts          ← the starting page, grow it in place
     components/theme-toggle.ts
     public/input.css              ← Tailwind entry (compiles to public/tailwind.css)
-    db/{schema,columns,connection}.server.ts  ← Drizzle
+    db/{schema,connection}.server.ts  ← Drizzle
     ${guide}
 `);
   }

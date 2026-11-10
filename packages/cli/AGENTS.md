@@ -276,7 +276,7 @@ verbatim.
    The post-scaffold success message in `lib/create.js` prints this
    rule verbatim.
 3. **Drizzle + SQLite is wired up for ALL templates.** The `db/` folder
-   (`schema.server.ts`, `columns.server.ts`, `connection.server.ts`),
+   (`schema.server.ts` in plain Drizzle, `connection.server.ts`),
    `npm run db:generate` + `npm run db:migrate`, and the `webjs.dev.before` +
    `webjs.start.before` steps (`webjs db migrate`, run inside `webjs dev` /
    `webjs start`, #550/#725), so a `db:generate`'d migration applies on the
