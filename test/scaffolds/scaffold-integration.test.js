@@ -149,7 +149,12 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.doesNotMatch(layoutSrc, /addEventListener/, 'the pre-paint script attaches no listener');
     assert.match(toggleSrc, /connectedCallback\(\) \{[\s\S]*?matchMedia\('\(prefers-color-scheme: dark\)'\)[\s\S]*?addEventListener\('change'/, 'the toggle follows the OS from connectedCallback');
     assert.match(toggleSrc, /disconnectedCallback\(\) \{[\s\S]*?removeEventListener\('change'/, 'and stops in disconnectedCallback');
-    assert.match(toggleSrc, /<button\s+class=\$\{cn\('[^']*\bcursor-pointer\b/, 'the toggle shows the pointer cursor, as the kit\'s button does (Tailwind v4 resets buttons to the default cursor)');
+    // The toggle is the UI kit's own Button (the AGENTS.md rule), which also
+    // gives it the pointer cursor Tailwind v4's reset takes from a button.
+    assert.match(toggleSrc, /import \{ buttonClass \} from '#components\/ui\/button\.ts'/, 'the toggle uses the kit Button');
+    assert.match(toggleSrc, /class=\$\{buttonClass\(\{ variant: 'ghost', size: 'icon' \}\)\}/, 'as a ghost icon button');
+    assert.match(readFileSync(join(appDir, 'components', 'ui', 'button.ts'), 'utf8'), /\bcursor-pointer\b/, 'whose classes carry the pointer cursor');
+    assert.match(toggleSrc, /static properties = \{ theme: \{ state: true \} \};/, 'its theme is Lit reactive state');
 
     // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
     // Geist), with a floating top navbar and a main that fills the viewport
@@ -159,7 +164,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
     // #1660: the navbar is sized by --header-h and nothing measures it, so a
     // client-router swap that replaces the header cannot zero the offset.
-    assert.match(layoutSrc, /<header class="[^"]*h-\[var\(--header-h\)\]/, 'the navbar is sized by the token');
+    assert.match(layoutSrc, /<header class="[^"]*h-\(--header-h\)/, 'the navbar is sized by the token');
     const inputCssEarly = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCssEarly, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
       'pinning the navbar is a one-class edit');
@@ -260,7 +265,9 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
         else if (/\.(ts|js)$/.test(e.name)) tsFiles.push(full);
       }
     })(appDir);
-    for (const f of tsFiles) {
+    // components/ui/ is the kit's own add output (relative imports to cn(),
+    // which `webjs ui diff` compares against), so it is not the scaffold's code.
+    for (const f of tsFiles.filter((f) => !f.includes(`${join('components', 'ui')}`))) {
       const src = readFileSync(f, 'utf8');
       assert.ok(!/from '(\.\.\/){2,}/.test(src), `${f.slice(appDir.length)} must not keep a deep relative import`);
     }

@@ -95,6 +95,22 @@ function resolveUiRegistryRoot() {
 const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 
 /**
+ * Add kit components to a freshly initialised app through the kit's own CLI
+ * (`webjsui add`), so the files are byte for byte what an agent's
+ * `npx webjs ui add <name>` writes: baked for the app's style, imports
+ * rewritten to its cn() helper. Local-first, so it makes no network call.
+ * @param {string} appDir
+ * @param {string[]} names
+ */
+function addUiComponents(appDir, names) {
+  const bin = resolve(UI_REGISTRY_ROOT, '..', '..', 'bin', 'webjsui.js');
+  const r = spawnSync(process.execPath, [bin, 'add', ...names, '--cwd', appDir, '--yes', '--no-deps'], { encoding: 'utf8' });
+  if (r.status !== 0) {
+    throw new Error(`[webjs create] could not add ${names.join(', ')} from the UI kit: ${(r.stderr || r.stdout || '').trim()}`);
+  }
+}
+
+/**
  * Write `lib/utils/cn.ts` (the `cn()` helper) and `components.json` so the
  * scaffolded app is pre-initialised for `webjs ui add`. Reads the registry's
  * `lib/utils.ts` verbatim and writes it under `lib/utils/cn.ts` in the
@@ -1265,10 +1281,13 @@ export type ActionResult<T> =
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
     // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
+    // The theme toggle is the kit's Button, installed by the kit's own `add`
+    // (local-first, no network), exactly as `npx webjs ui add button` would.
+    addUiComponents(appDir, ['button']);
 
-    // Pages style with plain Tailwind (the app is pre-initialised for
-    // `webjs ui add <name>` via writeUiBootstrap above, but ships no components
-    // until you add them on demand).
+    // Pages style with Tailwind on the kit's tokens. The app is pre-initialised
+    // for `webjs ui add <name>` via writeUiBootstrap above and ships one kit
+    // component, the Button its theme toggle uses; the rest are added on demand.
 
     // The @webjsdev/ui theme (`--color-primary`, `--color-card`, the @theme maps,
     // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
@@ -1432,7 +1451,7 @@ export default function RootLayout({ children }: LayoutProps) {
          class (position: fixed, never sticky, which flickers on iOS during a nav).
          Its height is the --header-h token, so keep it one row: nothing measures
          it, which is what keeps the offset right after a client-router swap. -->
-    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-(--header-h) flex items-center justify-between gap-4">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-display font-bold tracking-tight">
         <span class="size-5.5 rounded-md bg-linear-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
         ${displayName}
@@ -1479,8 +1498,8 @@ export default function Home() {
 
   // --- Theme toggle component ---
 
-  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjsdev/core';
-import { cn } from '#lib/utils/cn.ts';
+  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 type Theme = 'system' | 'light' | 'dark';
 
@@ -1488,21 +1507,29 @@ type Theme = 'system' | 'light' | 'dark';
  * <theme-toggle> is a light-DOM component styled with Tailwind utilities.
  *
  * Light DOM is the default: no static shadow = true, no static styles. It
- * is styled only with Tailwind utilities on the kit's tokens and reacts
- * through Lit's APIs (an @click binding, a signal), never a <style> block or
- * a document query. The one DOM write is the .dark class on <html>, which
- * is the theme switch itself and no component renders.
+ * is the UI kit's ghost icon Button (components/ui/button.ts), and it reacts
+ * through Lit's APIs (reactive state, an @click binding, the connected /
+ * disconnected lifecycle), never a <style> block or a document query. The
+ * one DOM write is the .dark class on <html>, which is the theme switch
+ * itself and no component renders.
  */
 export class ThemeToggle extends WebComponent {
-  readonly #theme = signal<Theme>('system');
+  // Lit's internal reactive state (its @state()): no attribute, re-renders on change.
+  static properties = { theme: { state: true } };
+  declare theme: Theme;
   #os: MediaQueryList | null = null;
   readonly #onOsChange = () => this.#apply();
+
+  constructor() {
+    super();
+    this.theme = 'system';
+  }
 
   connectedCallback() {
     super.connectedCallback();
     let saved: string | null = null;
     try { saved = localStorage.getItem('webjs_theme'); } catch {}
-    this.#theme.set(saved === 'light' || saved === 'dark' ? saved : 'system');
+    this.theme = saved === 'light' || saved === 'dark' ? saved : 'system';
     // The head script in app/layout.ts applied the theme before paint; from
     // here the toggle keeps it current, following the OS while on "system".
     this.#os = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1515,10 +1542,9 @@ export class ThemeToggle extends WebComponent {
   }
 
   cycle() {
-    const t = this.#theme.get();
-    const next: Theme = t === 'system' ? 'light'
-      : t === 'light' ? 'dark' : 'system';
-    this.#theme.set(next);
+    const next: Theme = this.theme === 'system' ? 'light'
+      : this.theme === 'light' ? 'dark' : 'system';
+    this.theme = next;
     try {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
@@ -1528,7 +1554,7 @@ export class ThemeToggle extends WebComponent {
 
   /** The tokens in styles/globals.css and color-scheme both switch on .dark; data-theme records a saved choice. */
   #apply() {
-    const t = this.#theme.get();
+    const t = this.theme;
     const el = document.documentElement;
     if (t === 'system') delete el.dataset.theme;
     else el.dataset.theme = t;
@@ -1536,12 +1562,13 @@ export class ThemeToggle extends WebComponent {
   }
 
   render() {
-    const t = this.#theme.get();
+    const t = this.theme;
     const label = t === 'system' ? 'AUTO' : t === 'light' ? 'LIGHT' : 'DARK';
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class=\${cn('inline-flex items-center justify-center w-9 h-9 rounded-full cursor-pointer text-muted-foreground duration-150 hover:text-foreground active:scale-[0.94]')}
+        type="button"
+        class=\${buttonClass({ variant: 'ghost', size: 'icon' })}
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"

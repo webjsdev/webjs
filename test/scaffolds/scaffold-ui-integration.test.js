@@ -37,7 +37,8 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
     assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
-    assert.equal(existsSync(join(appDir, 'components', 'ui')), false, 'components/ui is left empty for webjs ui add');
+    // The kit's Button, which the theme toggle uses, and nothing else.
+    assert.deepEqual(readdirSync(join(appDir, 'components', 'ui')), ['button.ts'], 'components/ui holds only the kit Button');
     assert.deepEqual(readdirSync(join(appDir, 'modules')), [], 'modules/ ships empty (no demo modules)');
 
     // The scaffold and `webjsui init` must emit the SAME components.json, so
@@ -221,10 +222,11 @@ function tsFiles(dir) {
     e.isDirectory() ? tsFiles(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []);
 }
 
-test('webjs ui add in a fresh app replaces nothing the app imports', async () => {
+test('webjs ui add --overwrite in a fresh app keeps the shell working', async () => {
   // A fresh app's `add dialog` pulls the kit's card, input, button and badge
-  // into components/ui/. Nothing the scaffold writes may import from there,
-  // or an add with --overwrite would replace a file the shell depends on.
+  // into components/ui/, overwriting the Button the theme toggle uses. The
+  // shell imports only the kit's public helper (buttonClass), so it keeps
+  // resolving; nothing else in the shell imports from components/ui/.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
@@ -233,7 +235,11 @@ test('webjs ui add in a fresh app replaces nothing the app imports', async () =>
     await add.parseAsync(['dialog', 'card', 'input', 'button', 'badge', '--cwd', appDir, '--overwrite', '--yes', '--no-deps'], { from: 'user' });
     assert.ok(existsSync(join(appDir, 'components', 'ui', 'card.ts')), 'the kit card landed where add writes');
     for (const file of shell) {
-      assert.doesNotMatch(await readFile(file, 'utf8'), /#components\/ui\//, `${file} imports nothing from components/ui/`);
+      const src = await readFile(file, 'utf8');
+      for (const m of src.matchAll(/from '#components\/ui\/([\w-]+)\.ts'/g)) {
+        assert.equal(m[1], 'button', `${file} imports only the kit Button from components/ui/`);
+        assert.match(await readFile(join(appDir, 'components', 'ui', 'button.ts'), 'utf8'), /export function buttonClass\(/, 'which still exports buttonClass after the overwrite');
+      }
     }
   } finally {
     await rm(cwd, { recursive: true, force: true });
