@@ -86,7 +86,7 @@ suite('custom directives (client)', () => {
     const types = infos.map((i) => i.type);
     assert.deepEqual(types, [PartType.ATTRIBUTE, PartType.ATTRIBUTE, PartType.PROPERTY, PartType.BOOLEAN_ATTRIBUTE]);
     assert.equal(infos[0].name, 'title');
-    assert.equal(infos[0].tagName, 'input');
+    assert.equal(infos[0].tagName, 'INPUT');
     assert.deepEqual([...infos[1].strings], ['a ', ' c']);
   });
 

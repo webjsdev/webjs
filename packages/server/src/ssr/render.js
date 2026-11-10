@@ -516,7 +516,11 @@ async function defaultBoundaryInChain(raw, opts) {
  * @returns {{ _$webjs: 'template', strings: string[], values: unknown[] }}
  */
 function rawTemplate(raw) {
-  return { _$webjs: 'template', strings: [raw], values: [] };
+  // `raw` marks the strings as the framework's own markup, which is what the
+  // renderers require of a template result (a tagged template's strings have it).
+  const strings = [raw];
+  Object.defineProperty(strings, 'raw', { value: [raw] });
+  return { _$webjs: 'template', strings, values: [] };
 }
 
 /**

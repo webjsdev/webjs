@@ -37,6 +37,29 @@ export function setCurrentRenderRoot(root) {
 }
 
 /**
+ * Where the child part being committed renders, while a fresh template's
+ * parts still sit in their detached fragment. A directive reading
+ * `part.parentNode` in `update()` gets this, lit's "logical DOM parent", rather
+ * than the fragment the clone is built in.
+ * @type {Node | null}
+ */
+let logicalParent = null;
+
+/**
+ * The logical parent for a marker's DOM parent: itself, unless it is the
+ * detached fragment a template clone is built in (not a shadow root and not
+ * the fragment being rendered into).
+ * @param {Node | null} node
+ * @returns {Node | null}
+ */
+function logicalParentOf(node) {
+  if (node && node.nodeType === 11 && !(/** @type any */ (node)).host && node !== currentRenderRoot) {
+    return logicalParent ?? currentRenderRoot ?? node;
+  }
+  return node;
+}
+
+/**
  * Open the renderer-write window on a light-DOM host while `fn` commits into
  * it, so the host's patched slot-interception methods delegate to native and
  * a renderer commit is never mistaken for authored content. A no-op (just runs
@@ -221,7 +244,7 @@ function directivePartFacade(part, piece) {
       return {
         type: PartType.CHILD,
         options,
-        get parentNode() { return part.marker.parentNode; },
+        get parentNode() { return logicalParentOf(part.marker.parentNode); },
         get endNode() { return part.marker; },
         get startNode() {
           const c = part.child;
@@ -236,16 +259,16 @@ function directivePartFacade(part, piece) {
         options,
         element: part.el,
         name: part.name,
-        tagName: part.el.localName,
+        tagName: part.el.tagName,
         strings: part.kind === 'attr-mixed' ? part.statics : undefined,
         piece,
       };
     case 'prop':
-      return { type: PartType.PROPERTY, options, element: part.el, name: part.name, tagName: part.el.localName };
+      return { type: PartType.PROPERTY, options, element: part.el, name: part.name, tagName: part.el.tagName };
     case 'bool':
-      return { type: PartType.BOOLEAN_ATTRIBUTE, options, element: part.el, name: part.name, tagName: part.el.localName };
+      return { type: PartType.BOOLEAN_ATTRIBUTE, options, element: part.el, name: part.name, tagName: part.el.tagName };
     case 'event':
-      return { type: PartType.EVENT, options, element: part.el, name: part.name, tagName: part.el.localName };
+      return { type: PartType.EVENT, options, element: part.el, name: part.name, tagName: part.el.tagName };
     default:
       return { type: PartType.ELEMENT, options, element: part.el };
   }
@@ -329,10 +352,19 @@ function resolveDirectiveChain(part, holder, key, value, commit, releaseTop, pie
         if (currentRenderRoot) part.__commitOwner = boundaryOwnerOf(currentRenderRoot);
         if (part.kind !== 'child') part.__eventHost ??= currentRenderHost;
         const own = rec;
+        // A container `render()` disconnected (lit's `RootPart.setConnected`)
+        // starts the directives it creates disconnected, as lit does.
+        if (currentRenderRoot?.[ROOT_DISCONNECTED]) inst.isConnected = false;
         inst._$webjsCommit = (v) => {
           if (own.released) return;
           try {
-            commitOutOfBand(part, () => commit(v));
+            // A directive `setValue()` hands on resolves UNDER this one, so its
+            // instance lives as long as this directive does (lit passes the
+            // directive as the parent to `_$setValue`).
+            commitOutOfBand(part, () => {
+              const resolved = resolveDirectiveChain(part, own, 'child', v, commit, true, piece);
+              if (resolved !== noChange) commit(resolved);
+            });
           } catch (err) {
             reportOutOfBandCommitError(part, err);
           }
@@ -344,11 +376,45 @@ function resolveDirectiveChain(part, holder, key, value, commit, releaseTop, pie
     parent = rec;
     slot = 'child';
   }
-  if (parent[slot] && (depth > 0 || releaseTop)) {
+  // A directive that answers `noChange` keeps everything below it, a nested
+  // directive's instance included, as lit's `resolveDirective` returns early.
+  if (parent[slot] && value !== noChange && (depth > 0 || releaseTop)) {
     disconnectDirectiveRecord(parent[slot]);
     parent[slot] = undefined;
   }
   return value;
+}
+
+/**
+ * Set on a container whose `render()` result was disconnected through
+ * `setConnected(false)`.
+ */
+export const ROOT_DISCONNECTED = Symbol('webjs.rootDisconnected');
+
+/**
+ * Report every async directive in a rendered template instance connected or
+ * disconnected, in template order, the walk lit's `RootPart.setConnected`
+ * makes. `disconnected()` / `reconnected()` run once per transition.
+ * @param {any} inst
+ * @param {boolean} connected
+ */
+export function setInstanceDirectivesConnected(inst, connected) {
+  if (!inst || !inst.bound) return;
+  /** @param {any} rec */
+  const flip = (rec) => {
+    for (let r = rec; r; r = r.child) {
+      if (typeof r.inst._$webjsSetConnected === 'function') r.inst._$webjsSetConnected(connected);
+    }
+  };
+  for (const p of inst.bound) {
+    flip(p.__directive);
+    if (p.__pieceDirectives) for (const k of Object.keys(p.__pieceDirectives)) flip(p.__pieceDirectives[k]);
+    const c = p.kind === 'child' ? p.child : null;
+    if (!c) continue;
+    if (c.kind === 'repeat') for (const i of c.map.values()) setInstanceDirectivesConnected(i, connected);
+    else if (c.kind === 'array') for (const it of c.items) { if (it.type === 'tpl') setInstanceDirectivesConnected(it.inst, connected); }
+    else if ('strings' in c) setInstanceDirectivesConnected(c, connected);
+  }
 }
 
 /**
@@ -678,6 +744,10 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       // on the first render, which is what SSR serves), so it never stringifies
       // the sentinel itself.
       const committed = /** @type any */ (part).__pieces ??= [];
+      // A lone hole (`a="${x}"`) is a whole-value binding, as in lit, so a
+      // first-render `noChange` leaves the attribute absent rather than empty.
+      if (mp.group.length === 1 && !mp.statics[0] && !mp.statics[1] && !committed.length
+          && (allValues ? allValues[mp.group[0]] : value) === noChange) break;
       let hasLive = false;
       for (let j = 0; j < mp.group.length; j++) {
         let piece = allValues ? allValues[mp.group[j]] : value;
@@ -947,11 +1017,13 @@ export function applyChildInner(part, value, reconcileFormActionsCb) {
   // marked as renderer writes rather than authored content.
   const previousHost = currentRenderHost;
   currentRenderHost = part.__eventHost;
+  const previousLogical = logicalParent;
+  logicalParent = logicalParentOf(part.marker && part.marker.parentNode);
   try {
     return commitInto(part.marker && part.marker.parentNode, () =>
       applyChildInnerRaw(part, value, reconcileFormActionsCb),
     );
-  } finally { currentRenderHost = previousHost; }
+  } finally { currentRenderHost = previousHost; logicalParent = previousLogical; }
 }
 
 /**
@@ -1151,7 +1223,9 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   // Set) renders exactly like an array, as in lit, so it is drained into one
   // first. A string never reaches here as an iterable (it is checked by
   // `typeof`), and directive markers are plain objects with no iterator.
-  if (value !== null && typeof value === 'object' && !Array.isArray(value)
+  // A DOM node is committed as itself (below), even one that is also iterable
+  // (a `<form>`, a `<select>`), as in lit.
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && !isDomNode(value)
       && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
     value = Array.from(/** @type {Iterable<unknown>} */ (value));
   }
@@ -1172,6 +1246,10 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     applyArrayFresh(marker, /** @type any */ (arrState), value, reconcileFormActionsCb);
     return;
   }
+
+  // The same node again keeps it where it is, as lit's dirty check does, so
+  // its focus and state are not disturbed by a re-insert.
+  if (isDomNode(value) && Array.isArray(part.child) && part.child.length === 1 && part.child[0] === value) return;
 
   // Remove previously rendered nodes between marker and its next sibling we own.
   if (part.child) {
@@ -1204,7 +1282,8 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     }
   }
 
-  if (value == null || value === nothing || value === noChange) return;
+  // An empty string renders no node at all, as lit treats it like `nothing`.
+  if (value == null || value === nothing || value === noChange || value === '') return;
 
   if (isTemplate(value)) {
     const tr = /** @type any */ (value);
@@ -1233,9 +1312,22 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     return;
   }
 
-  const node = document.createTextNode(String(value));
+  // A DOM node renders as itself; anything else as text.
+  const node = isDomNode(value) ? /** @type {ChildNode} */ (value) : document.createTextNode(String(value));
   marker.parentNode?.insertBefore(node, marker);
   part.child = [node];
+}
+
+/**
+ * A DOM node a child binding renders as itself (lit's `_commitNode`). Checked
+ * by shape rather than `instanceof Node`, so a node from another realm (an
+ * iframe's document) is recognised too.
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+export function isDomNode(v) {
+  return v !== null && typeof v === 'object' && typeof (/** @type any */ (v)).nodeType === 'number'
+    && typeof (/** @type any */ (v)).cloneNode === 'function';
 }
 
 export function updateInstance(inst, values, reconcileFormActionsCb) {
@@ -1244,10 +1336,20 @@ export function updateInstance(inst, values, reconcileFormActionsCb) {
   // not fall back to `nothing` when that value was nullish: a hole that rendered
   // `title=""` from `undefined` keeps its attribute, as in Lit.
   values = values.map((value, i) => value === noChange ? inst.lastValues[i] : value);
+  /** Interpolated attributes already rebuilt this pass, so each is built once. */
+  /** @type {Set<number> | null} */
+  let rebuilt = null;
   for (let i = 0; i < values.length; i++) {
     const next = values[i];
-    if (Object.is(next, inst.lastValues[i])) continue;
+    // A custom directive runs on every render even when handed the same
+    // result object, as in lit, which resolves a directive before it compares.
+    if (Object.is(next, inst.lastValues[i]) && !isDirectiveResult(next)) continue;
     const bp = inst.bound[i];
+    const anchorIdx = bp.kind === 'attr-mixed' ? i : /** @type any */ (bp).mixedAnchor;
+    if (anchorIdx != null) {
+      if (rebuilt?.has(anchorIdx)) { inst.lastValues[i] = next; continue; }
+      (rebuilt ??= new Set()).add(anchorIdx);
+    }
     // A hole that belongs to a mixed attribute (`class="a ${x} b ${y}"`) is a
     // `noop` pointing at the attribute's anchor part; re-apply the anchor so the
     // whole attribute is rebuilt from every hole's current value, not just the
@@ -1632,13 +1734,14 @@ function teardownRepeat(state) {
  * instance (bookended by its own markers), a `text` carries a single text
  * node, and an `empty` slot (a nullish / boolean element) renders nothing
  * but still holds the position so index-based reconciliation stays aligned.
- * @typedef {{ type: 'tpl', inst: TemplateInstance } | { type: 'text', node: Text } | { type: 'empty' }} ArrayItem
+ * A `node` is a DOM node the array held, rendered as itself.
+ * @typedef {{ type: 'tpl', inst: TemplateInstance } | { type: 'text', node: Text } | { type: 'node', node: ChildNode } | { type: 'empty' }} ArrayItem
  */
 
 /** @param {ArrayItem} item @returns {ChildNode | null} */
 function arrayItemFirstNode(item) {
   if (item.type === 'tpl') return item.inst.startNode;
-  if (item.type === 'text') return item.node;
+  if (item.type === 'text' || item.type === 'node') return item.node;
   return null;
 }
 
@@ -1647,7 +1750,7 @@ function removeArrayItem(item) {
   if (item.type === 'tpl') {
     disposeInstance(item.inst);
     removeBetween(item.inst.startNode, item.inst.endNode);
-  } else if (item.type === 'text') {
+  } else if (item.type === 'text' || item.type === 'node') {
     item.node.parentNode?.removeChild(item.node);
   }
 }
@@ -1667,7 +1770,8 @@ function buildArrayItem(v, reconcileFormActionsCb) {
     const { inst, frag } = buildDetached(/** @type any */ (v), reconcileFormActionsCb);
     return { item: { type: 'tpl', inst }, frag };
   }
-  if (v != null && v !== nothing && v !== noChange) {
+  if (isDomNode(v)) return { item: { type: 'node', node: /** @type any */ (v) }, frag: /** @type any */ (v) };
+  if (v != null && v !== nothing && v !== noChange && v !== '') {
     const node = document.createTextNode(String(v));
     return { item: { type: 'text', node }, frag: node };
   }
@@ -1734,7 +1838,13 @@ function reconcileArray(part, value, reconcileFormActionsCb) {
           consumed = i + 1;
           continue;
         }
-      } else if (v != null && v !== nothing && v !== noChange) {
+      } else if (isDomNode(v)) {
+        if (o && o.type === 'node' && o.node === v) {
+          next.push(o);
+          consumed = i + 1;
+          continue;
+        }
+      } else if (v != null && v !== nothing && v !== noChange && v !== '') {
         if (o && o.type === 'text') {
           const str = String(v);
           if (o.node.data !== str) o.node.data = str;

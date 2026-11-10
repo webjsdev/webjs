@@ -88,6 +88,7 @@ export type { CSSResultGroup, CSSResultOrNative, CSSResultArray } from './src/cs
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';
+export type { RootPart } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
 export { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
 export type { RedirectType } from './src/nav.js';

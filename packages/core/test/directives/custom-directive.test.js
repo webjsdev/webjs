@@ -52,7 +52,7 @@ test('SSR: attribute, quoted piece and boolean parts resolve with their part inf
   assert.equal(strip(out), '<a title="T" class="x Y z" hidden=""></a>');
   assert.equal(infos[0].type, PartType.ATTRIBUTE);
   assert.equal(infos[0].name, 'title');
-  assert.equal(infos[0].tagName, 'a');
+  assert.equal(infos[0].tagName, 'A');
   assert.equal(infos[1].type, PartType.ATTRIBUTE);
   assert.equal(infos[1].name, 'class');
 });

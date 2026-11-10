@@ -11,7 +11,23 @@
  * @returns {TemplateResult}
  */
 export function html(strings, ...values) {
-  return { _$webjs: 'template', strings, values };
+  return { _$webjs: 'template', strings: trusted(strings), values };
+}
+
+/**
+ * The renderers render a template result's strings as markup only when they
+ * carry `raw`, which a tagged template's strings always do, so a result that
+ * arrived as data (JSON with the `_$webjs` brand) is refused. A plain array
+ * passed to `html()` / `svg()` / `mathml()` is code, as `string[]` in the type
+ * says, so it is marked the same way (kept in place so the template cache
+ * still keys on it, copied only when frozen).
+ * @param {TemplateStringsArray | string[]} strings
+ */
+function trusted(strings) {
+  if (!Array.isArray(strings) || Object.prototype.hasOwnProperty.call(strings, 'raw')) return strings;
+  const target = Object.isExtensible(strings) ? strings : strings.slice();
+  Object.defineProperty(target, 'raw', { value: target });
+  return target;
 }
 
 /**
@@ -32,7 +48,7 @@ export function html(strings, ...values) {
  * @returns {TemplateResult}
  */
 export function svg(strings, ...values) {
-  return { _$webjs: 'template', strings, values, svg: true };
+  return { _$webjs: 'template', strings: trusted(strings), values, svg: true };
 }
 
 /**
@@ -46,7 +62,7 @@ export function svg(strings, ...values) {
  * @returns {TemplateResult}
  */
 export function mathml(strings, ...values) {
-  return { _$webjs: 'template', strings, values, mathml: true };
+  return { _$webjs: 'template', strings: trusted(strings), values, mathml: true };
 }
 
 /**

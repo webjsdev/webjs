@@ -215,14 +215,14 @@ export function regionRouteKey(segmentPath, params) {
  */
 export function wrapWithChildrenMarker(tree, segmentPath, params) {
   const routeKey = regionRouteKey(segmentPath, params);
-  return {
-    _$webjs: 'template',
-    strings: [
-      `<!--wj:children:${segmentPath}:${routeKey}-->`,
-      `<!--/wj:children:${segmentPath}-->`,
-    ],
-    values: [tree],
-  };
+  const strings = [
+    `<!--wj:children:${segmentPath}:${routeKey}-->`,
+    `<!--/wj:children:${segmentPath}-->`,
+  ];
+  // `raw` marks the strings as the framework's own markup, which is what the
+  // renderers require of a template result (a tagged template's strings have it).
+  Object.defineProperty(strings, 'raw', { value: strings.slice() });
+  return { _$webjs: 'template', strings, values: [tree] };
 }
 
 /** Internal helpers re-exported for unit testing. */

@@ -260,6 +260,12 @@ export class Walker {
 
   /** @param {import('../html.js').TemplateResult} tr */
   async template(tr) {
+    // Only a tagged template's strings carry `raw`, so a result that arrived as
+    // data (JSON with the `_$webjs` brand) is refused rather than rendered as
+    // markup, as the client renderer and lit's `trustFromTemplateString` do.
+    if (!Array.isArray(tr.strings) || !Object.prototype.hasOwnProperty.call(tr.strings, 'raw')) {
+      throw new Error("[webjs] refusing to render a template result whose strings are not a tagged template's (a TemplateResult built from data, not by html``).");
+    }
     await this.ops(compile(tr.strings), tr.values);
     this.flush();
   }
@@ -334,7 +340,7 @@ export class Walker {
                       if (isLive(piece)) piece = piece.value;
                     }
                     piece = await attrValueOf(piece);
-                    if (isDirectiveResult(piece)) piece = resolveDirective(piece, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
+                    if (isDirectiveResult(piece)) piece = resolveDirective(piece, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag?.toUpperCase() });
                     if (isSignal(piece) || isWatch(piece)) piece = signalValue(piece);
                     if (isAttributeMap(piece)) piece = attributeMapText(piece, op.name);
                     assertNotFunctionActionAttr(piece, op.name, op.tag);
@@ -356,7 +362,7 @@ export class Walker {
               // A hole inside a quoted/unquoted value, the `action="${fn}"` and
               // mixed `action="/x/${fn}"` shapes (#1154).
               val = await attrValueOf(val);
-              if (isDirectiveResult(val)) val = resolveDirective(val, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag });
+              if (isDirectiveResult(val)) val = resolveDirective(val, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag?.toUpperCase() });
               if (isSignal(val) || isWatch(val)) val = signalValue(val);
               assertNotFunctionActionAttr(val, op.name, op.tag);
               this.buf += escapeAttr(String(val ?? ''));
@@ -430,7 +436,7 @@ export class Walker {
     // directive never runs here.
     if (isDirectiveResult(val) && op.kind !== 'event') {
       const type = op.kind === 'prop' ? PartType.PROPERTY : op.kind === 'bool' ? PartType.BOOLEAN_ATTRIBUTE : PartType.ATTRIBUTE;
-      val = resolveDirective(val, { type, name: op.name, tagName: op.tag });
+      val = resolveDirective(val, { type, name: op.name, tagName: op.tag?.toUpperCase() });
     }
     // A bare signal in an attribute or boolean hole renders its current value;
     // a `.prop` hole hands the signal object itself to the property, as lit's

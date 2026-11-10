@@ -14,7 +14,7 @@ import { compile, submitterActionBindings, INSTANCE } from './template-compiler.
 import { commitAdoption, planSlotAdoption, retargetParts } from './adopt-slots.js';
 import {
   applyPart, bindPart, currentRenderHost, setCurrentRenderHost, currentRenderRoot, findSlotHost, setCurrentRenderRoot, updateInstance,
-  releaseInstanceDirectives,
+  releaseInstanceDirectives, setInstanceDirectivesConnected, ROOT_DISCONNECTED,
 } from './parts.js';
 
 /**
@@ -32,13 +32,46 @@ const rootList = (list) => html`${list}`;
  * @param {{host?: object}} [options]
  */
 export function render(value, container, options = {}) {
+  renderValue(value, container, options);
+  return rootPart(container);
+}
+
+/** @type {WeakMap<object, { setConnected(connected: boolean): void }>} */
+const rootParts = new WeakMap();
+
+/**
+ * What `render()` returns, lit's `RootPart`: `setConnected(false)` reports
+ * every async directive in the container disconnected (and starts the ones a
+ * later render creates disconnected), `setConnected(true)` reconnects them.
+ * @param {any} container
+ */
+function rootPart(container) {
+  let part = rootParts.get(container);
+  if (!part) {
+    part = {
+      setConnected(connected) {
+        container[ROOT_DISCONNECTED] = !connected;
+        setInstanceDirectivesConnected(container[INSTANCE], connected);
+      },
+    };
+    rootParts.set(container, part);
+  }
+  return part;
+}
+
+/**
+ * @param {unknown} value
+ * @param {Element | DocumentFragment | ShadowRoot} container
+ * @param {{host?: object}} options
+ */
+function renderValue(value, container, options) {
   if (value === noChange) return;
-  // An array or any other iterable (a `map()` / `join()` / `range()`
-  // generator, a Set) renders through a child binding, as Lit's `render()`
-  // renders every value: each item a template, a node or text (#1686). It used
-  // to be written as text, "[object Generator]" or "[object Object]".
-  if (value !== null && typeof value === 'object' && !isTemplate(value)
-      && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
+  // Any object that is not a template (an array or other iterable such as a
+  // `map()` / `join()` / `range()` generator or a Set, a DOM node, a directive)
+  // renders through a child binding, as Lit's `render()` renders every value
+  // (#1686). It used to be written as text, "[object Generator]" or
+  // "[object Object]".
+  if (value !== null && typeof value === 'object' && !isTemplate(value)) {
     value = rootList(value);
   }
   const host = /** @type any */ (container);

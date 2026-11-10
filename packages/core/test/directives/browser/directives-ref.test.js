@@ -302,4 +302,15 @@ suite('ref directive (lit parity port)', () => {
     go();
     assert.deepEqual(calls, ['DIV', undefined, 'DIV', undefined, 'DIV']);
   });
+
+  test('binds after a bare attribute (whitespace after a valueless name)', () => {
+    // The compiler's state after `disabled ` must still read a hole as an
+    // element binding, not drop it.
+    const inputRef = createRef();
+    const dialogRef = createRef();
+    render(html`<input disabled ${ref(inputRef)}><dialog open ${ref(dialogRef)}></dialog>`, container);
+    assert.equal(inputRef.value, container.querySelector('input'));
+    assert.equal(dialogRef.value, container.querySelector('dialog'));
+    assert.equal(container.querySelector('input').disabled, true);
+  });
 });
