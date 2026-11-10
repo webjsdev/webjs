@@ -127,3 +127,22 @@ test('a flash is still shown on the page its redirect names, and stays off other
   assert.equal(messageOf(await (await app.handle(new Request('http://x/other', { headers: { cookie } }))).text()), 'none');
   assert.equal(messageOf(await (await app.handle(new Request('http://x/done', { headers: { cookie } }))).text()), 'SAVED_MSG');
 });
+
+test('a redirect of the page to itself (the trailing-slash policy) does not retire its flash', async () => {
+  // /done/ and /done are one page, so the 308 between them is not the page
+  // sending the visitor away: the result is still shown on /done.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'slash', type: 'module', webjs: { trailingSlash: 'never' } }),
+    'modules/x/actions/act.server.ts': `'use server';\nexport async function act() { return { success: true, message: 'SAVED_MSG', redirect: '/done/' }; }\n`,
+    'app/f/page.ts': showsMessage(`import { act } from '../../modules/x/actions/act.server.ts';`),
+    'app/done/page.ts': plainPage,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger: quiet });
+  const html = await (await app.handle(new Request('http://x/f'))).text();
+  let cookie = nextCookie('', await app.handle(post('/f', { __webjs_action: identityOf(html) })));
+  const slash = await app.handle(new Request('http://x/done/', { headers: { cookie } }));
+  assert.equal(slash.status, 308);
+  assert.equal(slash.headers.getSetCookie().length, 0, 'the flash is not retired by a redirect to its own page');
+  cookie = nextCookie(cookie, slash);
+  assert.equal(messageOf(await (await app.handle(new Request('http://x/done', { headers: { cookie } }))).text()), 'SAVED_MSG');
+});

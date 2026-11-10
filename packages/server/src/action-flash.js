@@ -152,13 +152,16 @@ export function appRelativePath(pathname, mount) {
 /**
  * Retire an unshown flash when the page it is bound to answers a redirect
  * instead of rendering (#1686). The result belongs to the page the success
- * redirect named; when that page sends the visitor on (a sign-in check, a
- * redirects rule, middleware), nothing shows it, as a redirect after an action
+ * redirect named; when that page sends the visitor on to ANOTHER page (a
+ * sign-in check, a redirects rule, middleware), nothing shows it, as a
+ * redirect after an action
  * discards its state in Next.js. Following the redirect instead would put the
  * result on whatever page the chain ends on, a sign-in page included. The
  * flash is marked shown, so it stays the next submission's `prevState` (as a
- * 422's does) and is never displayed later. A speculative prefetch leaves it
- * alone. Mutates `res.headers`; a no-op for anything else.
+ * 422's does) and is never displayed later. A redirect to the same page (the
+ * trailing-slash policy answering /done/ with /done) is not one away, so it
+ * leaves the flash for the page; a speculative prefetch leaves it too.
+ * Mutates `res.headers`; a no-op for anything else.
  * @param {Request} req
  * @param {Response} res
  * @param {string} mount the app's `webjs.basePath` ('' when none)
@@ -169,7 +172,14 @@ export async function retireFlashOnRedirect(req, res, mount) {
   const flash = await readFlash(req);
   if (!flash || flash.shown || !flash.path) return;
   const from = new URL(req.url);
-  if (trimSlash(appRelativePath(from.pathname, mount)) !== trimSlash(flash.path)) return;
+  const bound = trimSlash(flash.path);
+  if (trimSlash(appRelativePath(from.pathname, mount)) !== bound) return;
+  const location = res.headers.get('location');
+  if (location) {
+    let to = null;
+    try { to = new URL(location, from); } catch { /* unparsable: treated as away */ }
+    if (to && to.origin === from.origin && trimSlash(appRelativePath(to.pathname, mount)) === bound) return;
+  }
   const value = await encodeFlash({ ...flash, shown: true });
   if (value) res.headers.append('set-cookie', flashSetCookie(value));
 }
