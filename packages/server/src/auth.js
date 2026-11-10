@@ -362,16 +362,18 @@ export function createAuth(config) {
    * (and does not sign in), any other falsy value denies, truthy allows.
    * @returns {Promise<Response | null>} the refusal, or null to continue
    */
-  async function signInRefusal(user, account, extraCookies = []) {
+  async function signInRefusal(user, account, extraCookies = [], req = getRequest()) {
     if (!cb.signIn) return null;
     const ok = await cb.signIn({ user, account });
     if (ok && typeof ok !== 'string') return null;
     const hdrs = new Headers();
-    // A returned string is where to send the user instead, used only when it
-    // is a local path (anything else is refused like a false), so the callback
-    // cannot become an open redirect.
+    // A returned string is where to send the user instead. As in Auth.js it
+    // goes through callbacks.redirect, whose default allows only this origin,
+    // so the callback cannot become an open redirect; a target the redirect
+    // callback drops is refused like a false.
     const denied = withQuery(pages.error || '/', 'error', 'AccessDenied');
-    hdrs.set('location', (typeof ok === 'string' && safeRedirectPath(ok)) || denied);
+    const target = typeof ok === 'string' ? await resolveRedirect(ok, req, null) : null;
+    hdrs.set('location', headerSafeLocation(target || denied));
     for (const c of extraCookies) hdrs.append('set-cookie', c);
     return new Response(null, { status: 302, headers: hdrs });
   }
@@ -610,7 +612,7 @@ export function createAuth(config) {
         return new Response(null, { status: 302, headers: { location: withQuery(pages.error || pages.signIn || '/', 'error', 'CredentialsSignin') } });
       }
       const account = { provider: providerId, type: 'credentials', providerAccountId: String(user.id ?? '') };
-      const refused = await signInRefusal(user, account);
+      const refused = await signInRefusal(user, account, [], opts.req || getRequest());
       if (refused) return refused;
       const cookie = await writeSession(user, account);
       if (!cookie) return new Response(null, { status: 302, headers: { location: withQuery(pages.error || '/', 'error', 'AccessDenied') } });
@@ -752,7 +754,7 @@ export function createAuth(config) {
     // refused rather than linked under an empty id every such user would share.
     if (user?.id == null || String(user.id) === '') return oauthError('OAuthProfileParseError');
     const account = { ...tokens, provider: provider.id, type: 'oauth', providerAccountId: String(user.id), accessToken };
-    const refused = await signInRefusal(user, account, flowCookies);
+    const refused = await signInRefusal(user, account, flowCookies, req);
     if (refused) return refused;
 
     let sessionUser = user;
