@@ -26,6 +26,16 @@ import { join } from 'node:path';
 const warned = new Set();
 
 /**
+ * Whether this process may use the generated development secret, decided
+ * from the environment on every call: `NODE_ENV=development` or `test`.
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {boolean}
+ */
+export function devSecretApplies(env = process.env) {
+  return env.NODE_ENV === 'development' || env.NODE_ENV === 'test';
+}
+
+/**
  * The development secret, created on first use, or undefined unless this is a
  * development or test process.
  * @param {string} name the variable the app left unset, named in the warning
@@ -34,7 +44,7 @@ const warned = new Set();
  */
 export function devSecret(name, opts = {}) {
   const env = opts.env || process.env;
-  if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test') return undefined;
+  if (!devSecretApplies(env)) return undefined;
   const file = join(opts.dir || process.cwd(), '.webjs', 'dev-secret');
   let secret = '';
   try {

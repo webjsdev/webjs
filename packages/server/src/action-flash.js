@@ -13,8 +13,8 @@
  * already displayed it: a result is shown ONCE as `actionData`, then kept
  * only as the next `prevState`.
  *
- * Key: `WEBJS_SECRET`, else `AUTH_SECRET`, else `SESSION_SECRET`, else (outside
- * production) the persisted dev secret, else a random per-process key (so a
+ * Key: `WEBJS_SECRET`, else `AUTH_SECRET`, else `SESSION_SECRET`, else (in
+ * development and tests) the persisted dev secret, else a random per-process key (so a
  * flash still works on one instance; a multi-instance deploy sets a secret).
  *
  * @module action-flash
@@ -22,7 +22,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { stringify, parse } from '@webjsdev/core';
 import { shared } from './process-shared.js';
-import { devSecret } from './dev-secret.js';
+import { devSecret, devSecretApplies } from './dev-secret.js';
 import { stripBasePath } from './base-path.js';
 
 export const FLASH_COOKIE = '__webjs_flash';
@@ -32,14 +32,19 @@ const MAX_AGE_SECONDS = 60;
 const _key = shared('action-flash-key', () => ({ random: randomBytes(32).toString('hex'), warned: false, dev: /** @type {string | undefined | null} */ (null) }));
 
 function key() {
-  // Any secret the app already set signs it, and outside production the
+  // Any secret the app already set signs it, and in development and tests the
   // persisted dev secret does, so a flash survives a dev server restart too.
   const set = process.env.WEBJS_SECRET || process.env.AUTH_SECRET || process.env.SESSION_SECRET;
   if (set) return set;
-  // Read once: it is a file, and a sign and its verify must use one key even
-  // when .webjs cannot be written (devSecret then makes a new one per call).
-  if (_key.dev === null) _key.dev = devSecret('WEBJS_SECRET');
-  if (_key.dev) return _key.dev;
+  // Whether the dev secret applies is decided on every call, as devSecret
+  // decides it, so a flash signed before NODE_ENV was set does not pin the
+  // random key for the rest of the process. Only a secret it RETURNS is kept:
+  // it is a file, and a sign and its verify must use one key even when .webjs
+  // cannot be written (devSecret then makes a new one per call).
+  if (devSecretApplies()) {
+    if (!_key.dev) _key.dev = devSecret('WEBJS_SECRET') || null;
+    if (_key.dev) return _key.dev;
+  }
   // A per-process key verifies only on the instance that signed it, so behind
   // a load balancer a flash whose 303 lands elsewhere is silently dropped. Say
   // so once in production rather than let it look like a missing feature.
