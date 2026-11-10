@@ -540,7 +540,7 @@ async function main() {
     case 'dev': {
       // `dev` is development unless NODE_ENV says otherwise (Next's convention),
       // so `.env.development` loads; the supervised child inherits it.
-      if (!process.env.NODE_ENV) process.env.NODE_ENV = 'development';
+      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'development');
       // If we're already inside the reload child (under the supervisor),
       // start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
@@ -632,7 +632,8 @@ async function main() {
     case 'start': {
       // Next's convention: `start` is production unless NODE_ENV says
       // otherwise, so `.env.production` loads and the app sees production.
-      if (!process.env.NODE_ENV) process.env.NODE_ENV = 'production';
+      // A test default inherited from an enclosing `webjs test` is replaced.
+      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'production');
       const { startServer } = await import('@webjsdev/server');
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
       // the 8080 default (#447), same as for `dev`.
@@ -779,8 +780,9 @@ async function main() {
       // A test run is NODE_ENV=test unless the shell says otherwise (Jest and
       // Vitest do the same): .env.test loads, and session() / createAuth()
       // may use the generated development secret, which a process with no
-      // NODE_ENV never does.
-      if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test';
+      // NODE_ENV never does. It is marked as this run's default, so a
+      // `webjs start` a test boots still runs as production (node-env.js).
+      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'test');
       const { existsSync } = await import('node:fs');
 
       // Two test runners:

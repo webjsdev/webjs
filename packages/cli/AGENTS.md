@@ -51,6 +51,14 @@ lib/
                          owns the non-zero exit: a hard fail, or a check the app
                          gated `error`.
                          Tests: `test/cli/doctor.test.mjs`.
+  node-env.js            `defaultNodeEnv(env, mode)` (#1686): the NODE_ENV
+                         `dev` (development), `start` (production) and `test`
+                         (test) set when the shell set none. `test` marks its
+                         default (`TEST_DEFAULT_MARKER`) so a `webjs start` or
+                         `webjs dev` a test spawns replaces it with its own
+                         instead of running a server as test; an explicit
+                         shell NODE_ENV=test carries no marker and is kept.
+                         Tests: `test/cli/node-env.test.mjs`.
   port.js                Port resolution for `webjs dev` / `start` (#447).
                          Also `failFastOnPortInUse` + `PORT_IN_USE_EXIT_CODE`
                          (98, #1527): a server start that fails on a taken port
