@@ -1449,10 +1449,9 @@ export default function RootLayout({ children }: LayoutProps) {
          Its height is the --header-h token, so keep it one row: nothing measures
          it, which is what keeps the offset right after a client-router swap. -->
     <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
-      <!-- The WebJs logo, one file per theme (public/brand/). Swap in your own. -->
-      <a href="/" class="inline-flex items-center no-underline" aria-label="${displayName} home">
-        <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="84" height="22" class="block h-[22px] w-auto dark:hidden">
-        <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="84" height="22" class="hidden h-[22px] w-auto dark:block">
+      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
+        <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
+        ${displayName}
       </a>
       <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">Docs</a>
@@ -1480,7 +1479,11 @@ export const metadata = {
 export default function Home() {
   return html\`
     <section class="py-16 flex flex-col items-center text-center gap-4">
-      <h1 class="text-4xl font-bold tracking-tight m-0">${displayName}</h1>
+      <!-- The WebJs logo, one file per theme (public/brand/), as the heading. -->
+      <h1 class="m-0">
+        <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="228" height="60" class="block h-[60px] w-auto dark:hidden">
+        <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-[60px] w-auto dark:block">
+      </h1>
       <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
     </section>
   \`;

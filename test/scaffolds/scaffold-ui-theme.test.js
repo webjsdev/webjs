@@ -59,16 +59,19 @@ test('a fresh app\'s theme is the webjs.dev/ui palette, radius and type', async 
   }
 });
 
-test('a fresh app\'s header shows the WebJs logo, the same files webjs.dev serves', async () => {
+test('a fresh app\'s home heading is the WebJs logo, the same files webjs.dev serves', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'webjs-ui-logo-'));
   try {
     await scaffoldApp('my-app', cwd, { template: 'full-stack' });
     const appDir = join(cwd, 'my-app');
+    const page = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
+    const h1 = page.slice(page.indexOf('<h1'), page.indexOf('</h1>'));
+    assert.match(h1, /<img src="\/brand\/webjs-lockup-on-light\.svg" alt="WebJs"[^>]*dark:hidden/, 'the light logo, hidden in dark');
+    assert.match(h1, /<img src="\/brand\/webjs-lockup-on-dark\.svg" alt="WebJs"[^>]*hidden[^>]*dark:block/, 'the dark logo, shown in dark');
+    assert.doesNotMatch(h1, /My App/, 'no app-name text in the heading');
     const layout = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
     const header = layout.slice(layout.indexOf('<header'), layout.indexOf('</header>'));
-    assert.match(header, /<img src="\/brand\/webjs-lockup-on-light\.svg" alt="WebJs"[^>]*dark:hidden/, 'the light logo, hidden in dark');
-    assert.match(header, /<img src="\/brand\/webjs-lockup-on-dark\.svg" alt="WebJs"[^>]*hidden[^>]*dark:block/, 'the dark logo, shown in dark');
-    assert.doesNotMatch(header, />\s*My App\s*</, 'no app-name text in its place');
+    assert.match(header, /My App/, 'the navbar keeps the app\'s name');
     for (const file of ['webjs-lockup-on-light.svg', 'webjs-lockup-on-dark.svg']) {
       assert.equal(
         readFileSync(join(appDir, 'public', 'brand', file), 'utf8'),
