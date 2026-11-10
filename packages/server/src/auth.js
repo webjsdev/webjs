@@ -589,7 +589,9 @@ export function createAuth(config) {
     if (local) return local;
     try {
       const u = new URL(url);
-      if (baseUrl && u.origin === baseUrl) return u.pathname + u.search + u.hash;
+      // Its path must itself be a safe local path: https://app//evil.com has
+      // the path //evil.com, which a browser reads as another host.
+      if (baseUrl && u.origin === baseUrl) return safeRedirectPath(u.pathname + u.search + u.hash) || fallback;
     } catch { /* not a URL: dropped */ }
     return fallback;
   }
