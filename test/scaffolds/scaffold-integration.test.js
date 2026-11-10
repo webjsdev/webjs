@@ -864,6 +864,7 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /document\.getElementById/, 'naming the raw DOM calls to avoid');
     assert.match(fs, /Style with Tailwind utilities on the kit's design tokens/, 'steers styling to Tailwind on the kit tokens');
     assert.match(fs, /npx webjs ui init --preset/, 'and theming to a kit preset');
+    assert.match(fs, /`modules\/users\/`, `test\/users\/` and the home page's form show\nthat shape: read them, then delete them before you build the app\./, 'tells the agent to delete the example module before building');
     assert.ok(fs.split('\n').length < 60, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);

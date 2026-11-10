@@ -34,10 +34,10 @@ build, so it is the code that runs) or run `npx webjs source <Export>`. The
 human docs are at https://webjs.dev/docs.
 
 Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
-or an in-memory array.
-
-Put each feature in `modules/<feature>/` (`actions/` with one `'use server'` action
-per `*.server.ts`, `queries/`, `components/`, `types.ts`), routes thin: see `modules/users/`.
+or an in-memory array. Put each feature in `modules/<feature>/` (`actions/` with
+one `'use server'` action per `*.server.ts`, `queries/`, `components/`, `types.ts`)
+and keep routes thin. `modules/users/`, `test/users/` and the home page's form show
+that shape: read them, then delete them before you build the app.
 
 In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
 not `document.getElementById`, `document.querySelector` or `addEventListener`.

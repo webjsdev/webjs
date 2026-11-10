@@ -1466,8 +1466,9 @@ Only two scaffolds exist:
                 pages/SSR. Pick this only if the user explicitly asks for an
                 HTTP/JSON API with no UI.
 
-The scaffold is a starting point. Replace the example layout/page/
-components/schema with the actual app the user requested. Use Drizzle +
+The scaffold is a starting point. Delete the example module
+(modules/users/, test/users/) and replace the example page and schema with
+the actual app the user requested. Use Drizzle +
 SQLite for persistence (already wired up). Never store app data in JSON
 files.
 
