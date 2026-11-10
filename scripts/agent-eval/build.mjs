@@ -123,12 +123,12 @@ function grade(appDir, cli) {
  * @param {{ framework: string, parent: string, appName: string }} opts
  * @returns {Promise<string>} the app directory
  */
-export async function prepareApp({ framework, parent, appName }) {
+export async function prepareApp({ framework, parent, appName, template = 'full-stack', db }) {
   mkdirSync(parent, { recursive: true });
   const { scaffoldApp } = await import(pathToFileURL(join(framework, 'packages/cli/lib/create.js')).href);
   const log = console.log;
   console.log = () => {};
-  try { await scaffoldApp(appName, parent, { template: 'full-stack', install: false, skipCi: true }); } finally { console.log = log; }
+  try { await scaffoldApp(appName, parent, { template, install: false, skipCi: true, ...(db ? { db } : {}) }); } finally { console.log = log; }
   const app = join(parent, appName);
   // The scaffold is the root commit, made with the app's own hooks off (its
   // pre-commit hook refuses a commit on main) and BEFORE node_modules is
