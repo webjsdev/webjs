@@ -573,24 +573,20 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   if (typeof validate === 'function') {
     const v = await runValidate(validate, args[0]);
     if (!v.ok) {
-      if (v.invalid) {
-        // A schema library's validation error (zod's `.parse`, valibot,
-        // Standard Schema: a throw carrying `issues`) is invalid INPUT, mapped
-        // by runValidate to fieldErrors for every transport, so it re-renders
-        // the form at 422, not the 500 error page.
-        return ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(v.result, formData), status: 422 });
-      }
-      if (v.thrown !== undefined) {
-        // Any other throw is a crash. A THROWN validator is answered here rather than rethrown. Letting it
+      if (v.thrown !== undefined && !v.invalid) {
+        // A validator that crashed (any throw but a schema library's
+        // validation error) is answered here rather than rethrown. Letting it
         // escape reaches the handler's last-resort catch, which reports the
         // SAME error to `onError` a second time and answers a bare 500 with no
         // digest, so the one thing that makes a prod error diagnosable is lost.
         // The RPC path does exactly this (`actionErrorResponse` in actions.js).
         return errorPage(v.thrown);
       }
-      // A structured failure envelope is a NORMAL result the page renders, so
-      // it takes the 422 re-render path exactly as a failing action would,
-      // submitted values included (#1581).
+      // A structured failure envelope, or a schema library's validation error
+      // (a throw carrying `issues`, mapped to fieldErrors by runValidate for
+      // every transport), is a NORMAL result the page renders, so it takes the
+      // 422 re-render path exactly as a failing action would, submitted values
+      // included (#1581).
       return ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(v.result, formData), status: 422 });
     }
     args = [v.value];
