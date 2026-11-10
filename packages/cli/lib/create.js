@@ -220,6 +220,9 @@ function scaffoldTheme(css) {
 /* The app's own tokens, outside the theme block, so a preset leaves them in
    place. public/input.css maps them into utilities. */
 :root {
+  /* The navbar height. The header is sized BY this token and nothing
+     measures it, so the offset in public/input.css cannot drift from it. */
+  --header-h: 3.5rem;
   --border-strong: oklch(0.87 0 0);
   /* A translucent tint of the primary, so it follows every theme and preset. */
   --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
@@ -1289,11 +1292,28 @@ export type ActionResult<T> =
 @source "../modules/**/*.{ts,js}";
 @source "../lib/**/*.{ts,js}";
 
+/* Base styles, on the kit's tokens. The light tokens are on :root and the
+   dark ones on .dark, which the head script keeps in step with the saved
+   choice or the OS. color-scheme switches on the same class, so native
+   controls and scrollbars always match the tokens: with JavaScript off the
+   page is light throughout rather than light tokens over dark controls. */
+@layer base {
+  :root { color-scheme: light; }
+  :root.dark { color-scheme: dark; }
+  body { @apply bg-background text-foreground font-sans antialiased; }
+}
+
+/* A fixed header leaves normal flow, so reserve its height (--header-h, in
+   styles/globals.css) and stop an in-page #anchor jump (native, or the client
+   router's scrollIntoView) below it. Keyed on the class, so pinning the navbar
+   is a one-class edit. */
+body:has(> header.fixed) { padding-top: var(--header-h); }
+html:has(> body > header.fixed) { scroll-padding-top: var(--header-h); }
+
 /* A navbar pinned from a breakpoint up (md:fixed md:inset-x-0 md:top-0)
    reserves its height from that breakpoint. @variant resolves each breakpoint
    from this app's theme, so a customized --breakpoint-* stays in step; a
-   breakpoint you add under a new name needs its own line. The plain
-   \`fixed\` case lives beside the token in app/layout.ts. */
+   breakpoint you add under a new name needs its own line. */
 body:has(> header[class~="sm:fixed"]) { @variant sm { padding-top: var(--header-h); } }
 body:has(> header[class~="md:fixed"]) { @variant md { padding-top: var(--header-h); } }
 body:has(> header[class~="lg:fixed"]) { @variant lg { padding-top: var(--header-h); } }
@@ -1310,6 +1330,7 @@ html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-to
    replaces), the app's own extras after it. These @theme inline maps turn the
    extras and the type scale into utilities (border-border-strong, text-display). */
 @theme inline {
+  --font-display: var(--font-display);
   --color-border-strong: var(--border-strong);
   --color-primary-tint: var(--primary-tint);
   --text-display: clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
@@ -1405,43 +1426,9 @@ export default function RootLayout({ children }: LayoutProps) {
          preload can never match the request and the file downloads twice. -->
 
     <link rel="stylesheet" href=\${asset('/tailwind.css')}>
-    <style>
-      /* The design tokens (colours, fonts, radius) live in styles/globals.css,
-         in the theme block that webjs ui init owns: npx webjsdev ui init --preset
-         CODE (a code from webjs.dev/ui/create) replaces them, and nothing here
-         overrides them. The light tokens are on :root and the dark ones on
-         .dark, which the script above keeps in step with the saved choice or
-         the OS. color-scheme switches on the same class, so native controls
-         and scrollbars always match the tokens: with JavaScript off the page
-         is light throughout rather than light tokens over dark controls. */
-      :root {
-        /* The navbar height. The header is sized BY this token and nothing
-           measures it, so the offset below can never drift from the header. */
-        --header-h: 3.5rem;
-
-        color-scheme: light;
-      }
-      :root.dark { color-scheme: dark; }
-    </style>
-    <style>
-      /* Base styles utility classes can't reach. */
-      html, body { margin: 0; }
-      body {
-        background: var(--background);
-        color: var(--foreground);
-        font: 15px/1.6 var(--font-sans);
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-      /* A fixed header leaves normal flow, so reserve its height. Keyed on the
-         class, so pinning the navbar below is a one-class edit. Pinning it
-         from a breakpoint up (md:fixed) is handled in public/input.css, where
-         Tailwind resolves the breakpoint from this app's own theme. */
-      body:has(> header.fixed) { padding-top: var(--header-h); }
-      /* And an in-page #anchor jump (native, or the client router's
-         scrollIntoView) stops below the pinned header instead of under it. */
-      html:has(> body > header.fixed) { scroll-padding-top: var(--header-h); }
-    </style>
+    <!-- No style block here: the base styles, color-scheme and the pinned-header
+         offset are in public/input.css, on the kit's tokens, and every token
+         (the --header-h navbar height included) is in styles/globals.css. -->
     <!-- Top navbar, on every page: brand on the left, links + theme toggle on
          the right. It floats (no separator) and is in normal flow, so it just
          scrolls with the page. To pin it, add fixed inset-x-0 top-0 z-20 to its
@@ -1449,8 +1436,8 @@ export default function RootLayout({ children }: LayoutProps) {
          Its height is the --header-h token, so keep it one row: nothing measures
          it, which is what keeps the offset right after a client-router swap. -->
     <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
-      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
-        <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
+      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-display font-bold tracking-tight">
+        <span class="size-5.5 rounded-md bg-linear-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
         ${displayName}
       </a>
       <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
@@ -1481,8 +1468,8 @@ export default function Home() {
     <section class="py-16 flex flex-col items-center text-center gap-4">
       <!-- The WebJs logo, one file per theme (public/brand/), as the heading. -->
       <h1 class="m-0">
-        <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="228" height="60" class="block h-[60px] w-auto dark:hidden">
-        <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-[60px] w-auto dark:block">
+        <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="228" height="60" class="block h-15 w-auto dark:hidden">
+        <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-15 w-auto dark:block">
       </h1>
       <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
     </section>
@@ -1503,12 +1490,11 @@ type Theme = 'system' | 'light' | 'dark';
 /**
  * <theme-toggle> is a light-DOM component styled with Tailwind utilities.
  *
- * Light DOM is the default: no static shadow = true, no static styles.
- * Because this component has no custom CSS (only Tailwind classes,
- * which are already unique by construction), the class-prefix rule
- * doesn't apply here. If you ever add a <style> block, prefix every
- * selector with 'theme-toggle' (e.g. .theme-toggle__btn or
- * \`theme-toggle .btn\`).
+ * Light DOM is the default: no static shadow = true, no static styles. It
+ * is styled only with Tailwind utilities on the kit's tokens and reacts
+ * through Lit's APIs (an @click binding, a signal), never a <style> block or
+ * a document query. The one DOM write is the .dark class on <html>, which
+ * is the theme switch itself and no component renders.
  */
 export class ThemeToggle extends WebComponent {
   readonly #theme = signal<Theme>('system');
@@ -1555,9 +1541,9 @@ export class ThemeToggle extends WebComponent {
 }
 
 const ICONS = {
-  sun: html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M3 12h2M19 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>\`,
-  moon: html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>\`,
-  system: html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg>\`,
+  sun: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M3 12h2M19 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>\`,
+  moon: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>\`,
+  system: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg>\`,
 };
 
 ThemeToggle.register('theme-toggle');

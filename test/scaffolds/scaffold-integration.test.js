@@ -142,6 +142,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       'layout head script must toggle the .dark class (shadcn dark-mode signal)');
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
+    assert.doesNotMatch(toggleSrc, /\sstyle="/, 'the toggle carries no inline style (its icons use SVG attributes)');
+    assert.doesNotMatch(toggleSrc, /document\.(getElementById|querySelector)/, 'and no document query');
     assert.match(toggleSrc, /<button\s+class=\$\{cn\('[^']*\bcursor-pointer\b/, 'the toggle shows the pointer cursor, as the kit\'s button does (Tailwind v4 resets buttons to the default cursor)');
 
     // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
@@ -153,12 +155,17 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // #1660: the navbar is sized by --header-h and nothing measures it, so a
     // client-router swap that replaces the header cannot zero the offset.
     assert.match(layoutSrc, /<header class="[^"]*h-\[var\(--header-h\)\]/, 'the navbar is sized by the token');
-    assert.match(layoutSrc, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
+    const inputCssEarly = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
+    assert.match(inputCssEarly, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
       'pinning the navbar is a one-class edit');
+    // The scaffold follows its own AGENTS.md: no hand-written CSS in the layout,
+    // only Tailwind on the kit's tokens (#1686).
+    assert.doesNotMatch(layoutSrc, /<style\b/, 'the layout carries no <style> block');
+    assert.doesNotMatch(layoutSrc, /\sstyle="/, 'and no inline style attribute');
     // Pinning from a breakpoint up is resolved by Tailwind from the app's own
     // theme (@variant), never from hard-coded widths in the layout.
     assert.doesNotMatch(layoutSrc, /min-width: \d/, 'the layout hard-codes no breakpoint width');
-    assert.match(layoutSrc, /html:has\(> body > header\.fixed\) \{ scroll-padding-top: var\(--header-h\); \}/,
+    assert.match(inputCssEarly, /html:has\(> body > header\.fixed\) \{ scroll-padding-top: var\(--header-h\); \}/,
       'a pinned navbar also offsets in-page anchor jumps');
     const inputCss = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /body:has\(> header\[class~="md:fixed"\]\) \{ @variant md \{ padding-top: var\(--header-h\); \} \}/,
@@ -168,8 +175,9 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // controls switch on the same class. With JavaScript off the page is light
     // throughout, never light tokens over OS-dark controls and scrollbars.
     assert.match(layoutSrc, /<meta name="color-scheme" content="light">/, 'the meta names light only');
-    assert.match(layoutSrc, /:root \{[^}]*color-scheme: light;/, 'color-scheme defaults to light');
-    assert.match(layoutSrc, /:root\.dark \{ color-scheme: dark; \}/, 'and turns dark with the tokens');
+    assert.match(inputCss, /:root \{ color-scheme: light; \}/, 'color-scheme defaults to light');
+    assert.match(inputCss, /:root\.dark \{ color-scheme: dark; \}/, 'and turns dark with the tokens');
+    assert.match(inputCss, /body \{ @apply bg-background text-foreground font-sans antialiased; \}/, 'the body takes the kit tokens');
     assert.doesNotMatch(layoutSrc, /color-scheme: light dark|content="light dark"/, 'never following the OS on its own');
     assert.match(layoutSrc, /family=Geist:/, 'layout loads Geist');
     assert.match(layoutSrc, /family=Geist\+Mono/, 'and Geist Mono');
