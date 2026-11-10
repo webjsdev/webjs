@@ -7,7 +7,7 @@ import { getRequest, getSession, Credentials, GitHub, cookies, headers, createRe
 import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
 import type { GenerateMetadata, LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
-import { defaultConverter, notEqual } from '@webjsdev/core';
+import { defaultConverter, notEqual, WebComponent, prop } from '@webjsdev/core';
 
 // getSession() reads the request in scope, the way cookies() and headers() do.
 // Agents also chained the two WebJs calls, getSession(getRequest()), and
@@ -121,3 +121,21 @@ export const generateMetadataHabit: GenerateMetadata = async ({ params }, parent
   const images = (await parent).openGraph?.images ?? [];
   return { title: params.slug ?? 'Not found', openGraph: { images } };
 };
+
+// Internal state with no default is undefined until set, as Lit's
+// `@state() error?: string` (#1686, the micro-eval todos draft): clearing it
+// with undefined type-checks, while a default makes it a plain string.
+export class StateHabit extends WebComponent({
+  todoId: prop(Number, { attribute: 'todo-id' }),
+  error: prop<string>({ state: true }),
+  label: prop<string>({ state: true, default: '' }),
+}) {
+  clear() {
+    this.error = undefined;
+    const id: number = this.todoId;
+    const text: string = this.label;
+    // @ts-expect-error a state prop with a default is never undefined
+    this.label = undefined;
+    return [id, text];
+  }
+}

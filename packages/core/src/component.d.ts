@@ -309,10 +309,17 @@ export declare function prop<T>(
 ): PropertyDeclaration<T>;
 
 // No type constructor and no attribute: nothing says what the value is, so it
-// is `unknown` until narrowed (`prop<boolean>({ state: true })`).
+// is `unknown` until narrowed (`prop<boolean>({ state: true })`). With a
+// `default` it holds a `T` from the start; without one nothing fills it until
+// the component sets it, so it is `T | undefined`, Lit's `@state() error?:
+// string` (#1686: an agent clearing such a prop with `undefined` failed
+// typecheck against a type that said it was never undefined).
+export declare function prop<T = unknown>(
+  opts: PropertyDeclaration<T> & ({ state: true } | { attribute: false }) & { default: T | (() => T) }
+): PropertyDeclaration<T>;
 export declare function prop<T = unknown>(
   opts: PropertyDeclaration<T> & ({ state: true } | { attribute: false })
-): PropertyDeclaration<T>;
+): PropertyDeclaration<T | undefined>;
 
 export declare function prop<T = string>(
   opts?: PropertyDeclaration<T>

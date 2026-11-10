@@ -211,7 +211,7 @@ Tracked.getPropertyOptions('count').type;   // Number</code-block>
 
     <p>A property that renames its attribute answers to the new name and to nothing else. Given <code>open: prop(Boolean, { attribute: 'is-open' })</code>, write <code>&lt;my-el is-open&gt;</code>; <code>&lt;my-el open&gt;</code> reaches no property on either side.</p>
 
-    <p>A <code>state: true</code> or <code>attribute: false</code> property has no attribute at all and is never read from one, on either side. The way to give one a server-rendered value is a <code>.prop=\${value}</code> binding from the parent template.</p>
+    <p>A <code>state: true</code> or <code>attribute: false</code> property has no attribute at all and is never read from one, on either side. The way to give one a server-rendered value is a <code>.prop=\${value}</code> binding from the parent template. With no <code>default</code> it is typed <code>T | undefined</code>, as Lit's <code>@state() open?: boolean</code> is, since nothing fills it until the component does; give it a <code>default</code> to type it as <code>T</code>.</p>
 
 
     <h3>Reflecting a function is refused</h3>

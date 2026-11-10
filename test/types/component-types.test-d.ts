@@ -123,10 +123,16 @@ class Panel extends WebComponent({
 }) {}
 Panel.register('my-panel');
 const panel = new Panel();
-type _PanelOpen = Assert<Equal<typeof panel.open, boolean>>;
-type _PanelRows = Assert<Equal<typeof panel.rows, string[]>>;
+// With no default nothing fills them until the component does, so they are
+// `T | undefined`, Lit's `@state() open?: boolean` (#1686).
+type _PanelOpen = Assert<Equal<typeof panel.open, boolean | undefined>>;
+type _PanelRows = Assert<Equal<typeof panel.rows, string[] | undefined>>;
 type _PanelLoose = Assert<Equal<typeof panel.loose, unknown>>;
 type _PanelLabel = Assert<Equal<typeof panel.label, string>>;
+// A default makes it a plain `T` from the start.
+class PanelDefaults extends WebComponent({ open: prop<boolean>({ state: true, default: false }) }) {}
+PanelDefaults.register('my-panel-defaults');
+type _PanelDefaultOpen = Assert<Equal<InstanceType<typeof PanelDefaults>['open'], boolean>>;
 panel.open = true;
 
 /* ------------- PropertyDeclaration shape accepts the expected fields ------------- */
