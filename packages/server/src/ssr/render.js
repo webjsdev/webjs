@@ -1057,7 +1057,11 @@ export async function ssrPage(route, params, url, opts) {
   // before the bump, so the funnel must not store it under the bumped key.
   // Read before the first await, so the whole render counts.
   const cacheGeneration = htmlCacheGeneration();
+  // A failed form action's error render (`renderError`, form-dispatch.js) is
+  // never a cache read: a warm entry would answer 200 with the page and the
+  // throw would never reach the error boundary or onError.
   const cacheEligible =
+    opts.renderError === undefined &&
     !opts.actionData &&
     !opts.status &&
     !opts.pageModule &&
