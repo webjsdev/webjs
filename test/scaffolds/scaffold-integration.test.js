@@ -142,6 +142,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       'layout head script must toggle the .dark class (shadcn dark-mode signal)');
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
+    assert.match(toggleSrc, /<button\s+class=\$\{cn\('[^']*\bcursor-pointer\b/, 'the toggle shows the pointer cursor, as the kit\'s button does (Tailwind v4 resets buttons to the default cursor)');
 
     // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
     // Geist), with a floating top navbar and a main that fills the viewport
