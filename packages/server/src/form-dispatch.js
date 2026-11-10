@@ -466,12 +466,23 @@ function issuesResult(e) {
   const fieldErrors = {};
   let error;
   for (const issue of schemaIssues(e) || []) {
+    // A segment is a key, or Standard Schema's { key }; a symbol key is
+    // converted explicitly, since join's implicit conversion throws on one.
     const path = Array.isArray(issue.path)
-      ? issue.path.map((p) => (p && typeof p === 'object' && 'key' in p ? /** @type {any} */ (p).key : p)).join('.')
+      ? issue.path.map((p) => {
+        const k = p && typeof p === 'object' && 'key' in p ? /** @type {any} */ (p).key : p;
+        return typeof k === 'symbol' ? (k.description ?? '') : String(k);
+      }).join('.')
       : '';
     const message = typeof issue.message === 'string' ? issue.message : 'Invalid value.';
-    if (path) { if (!(path in fieldErrors)) fieldErrors[path] = message; }
-    else if (!error) error = message;
+    if (path) {
+      // Own keys only (a field named `constructor` is not already present),
+      // and defined rather than assigned, so `__proto__` is a field, not the
+      // object's prototype.
+      if (!Object.hasOwn(fieldErrors, path)) {
+        Object.defineProperty(fieldErrors, path, { value: message, enumerable: true, writable: true, configurable: true });
+      }
+    } else if (!error) error = message;
   }
   return { success: false, fieldErrors, ...(error ? { error } : {}), status: 422 };
 }
