@@ -183,7 +183,7 @@ UserCard.register('user-card');</code-block>
     <ul>
       <li><code>static elementProperties</code> is a <code>Map</code> of every declared property, own and inherited, to its normalised declaration.</li>
       <li><code>static getPropertyOptions(name)</code> returns one declaration, or the default <code>{ type: String }</code>.</li>
-      <li><code>static createProperty(name, options)</code> declares a property from code. Call it at class definition time; once an instance exists the accessors are installed, so a later call throws naming the fix.</li>
+      <li><code>static createProperty(name, options)</code> declares a property from code. Call it at class definition time; once an instance of the class, or of any subclass, exists the accessors are installed, so a later call throws naming the fix. Before then, a subclass picks up a property its parent creates.</li>
       <li><code>static getPropertyDescriptor(name, key, options)</code> returns the accessor installed for each property. Override it and wrap <code>super.getPropertyDescriptor(...)</code>, or return <code>undefined</code> to install none.</li>
       <li><code>static addInitializer(fn)</code> runs <code>fn(element)</code> in the constructor of every instance of the class and its subclasses (Lit's hook for controllers that attach themselves).</li>
       <li><code>static finalize()</code> is idempotent, and <code>register()</code> and <code>observedAttributes</code> call it for you.</li>

@@ -1,10 +1,11 @@
 /**
- * `createProperty` on a parent reaches a subclass whose declarations were
- * already read (review of PR #1687). The per-class memo of
- * `declaredProperties` holds the superclass's declarations merged in, so
- * clearing only the parent's entry left the subclass with a map missing the
- * new property, and its attribute handling and reflection disagreed with the
- * parent's.
+ * `createProperty` on a parent and its subclasses (reviews of PR #1687). The
+ * per-class memos (`declaredProperties`, its attribute list, and
+ * `elementProperties`) hold the superclass's declarations merged in, so a
+ * parent's `createProperty` has to reach a subclass read earlier. A subclass
+ * that already has an instance has its accessors installed and can never gain
+ * the new property, so the call is refused there, as it is on a class with an
+ * instance of its own.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,11 +17,29 @@ test("a parent's createProperty reaches a subclass already read", () => {
     static properties = { a: { type: String } };
   }
   class Child extends Parent {}
-  // Read first, so the subclass's merged map and attribute list are memoized.
+  // Read first, so every memo of the subclass is filled.
   assert.deepEqual(Object.keys(declaredProperties(Child)), ['a']);
   assert.equal(resolveAttributeProperty(Child, 'late'), undefined);
+  assert.equal(Child.elementProperties.has('late'), false);
   Parent.createProperty('late', { type: Number });
   assert.ok('late' in declaredProperties(Parent), 'the parent has it');
   assert.ok('late' in declaredProperties(Child), 'and so does the subclass read before it existed');
-  assert.equal(resolveAttributeProperty(Child, 'late')?.propName, 'late', 'and its attribute maps to it');
+  assert.equal(resolveAttributeProperty(Child, 'late')?.propName, 'late', 'its attribute maps to it');
+  assert.equal(Child.elementProperties.get('late')?.type, Number, 'and its elementProperties has it');
+  // Constructed after, the subclass is reactive on it.
+  const el = new Child();
+  const own = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'late')
+    || Object.getOwnPropertyDescriptor(Parent.prototype, 'late');
+  assert.ok(own && own.set, 'an instance gets a reactive accessor for it');
+});
+
+test('createProperty on a class whose subclass has an instance is refused, as on the class itself', () => {
+  class Parent extends WebComponent {}
+  class Child extends Parent {}
+  new Child();
+  assert.throws(() => Parent.createProperty('late', { type: String }), /createProperty\('late'\) ran after an instance of the class, or of a subclass, was constructed/);
+  assert.ok(!('late' in declaredProperties(Child)), 'nothing was half-added');
+  class Own extends WebComponent {}
+  new Own();
+  assert.throws(() => Own.createProperty('x'), /ran after an instance of the class was constructed/, 'the existing rule still holds');
 });

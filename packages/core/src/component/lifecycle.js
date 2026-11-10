@@ -1,7 +1,7 @@
 import { render as clientRender } from '../render-client.js';
 import {
   readAttributeValue, resolveAttributeProperty, observedAttributeNames, declaredProperties,
-  normalizeDecl, addCreatedProperty, attributeNameFor,
+  normalizeDecl, addCreatedProperty, attributeNameFor, propertiesGeneration,
 } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
@@ -131,8 +131,22 @@ const _accessorPlans = new WeakMap();
 /** Classes whose `finalize()` has run. @type {WeakSet<Function>} */
 const FINALIZED = new WeakSet();
 
-/** Per class, the memoized `elementProperties` Map. @type {WeakMap<Function, Map<string, any>>} */
+/**
+ * Per class, the memoized `elementProperties` Map, with the declarations
+ * generation it was built in: a `createProperty` on a superclass moves the
+ * generation, so a subclass's map read earlier is rebuilt.
+ * @type {WeakMap<Function, { gen: number, map: Map<string, any> }>}
+ */
 const ELEMENT_PROPERTIES = new WeakMap();
+
+/**
+ * Classes with a subclass whose accessors are installed (an instance of it was
+ * constructed). `createProperty` on one of them would reach the subclass's
+ * declarations but never its installed accessors, so it is refused, as it is
+ * for the class itself.
+ * @type {WeakSet<Function>}
+ */
+const HAS_CONSTRUCTED_SUBCLASS = new WeakSet();
 
 /** Per class, the memoized `elementStyles` list. @type {WeakMap<Function, any[]>} */
 const ELEMENT_STYLES = new WeakMap();
@@ -206,6 +220,9 @@ function installAccessors(Ctor, props) {
     if (descriptor !== undefined) Object.defineProperty(Ctor.prototype, propName, descriptor);
   }
   _accessorPlans.set(Ctor, plan);
+  for (let p = Object.getPrototypeOf(Ctor); p && p !== Function.prototype; p = Object.getPrototypeOf(p)) {
+    HAS_CONSTRUCTED_SUBCLASS.add(p);
+  }
   return plan;
 }
 
@@ -393,13 +410,13 @@ class WebComponentBase extends Base {
    * @type {Map<string, PropertyDeclaration>}
    */
   static get elementProperties() {
-    let map = ELEMENT_PROPERTIES.get(this);
-    if (map === undefined) {
-      map = new Map();
-      const props = declaredProperties(this);
-      for (const name of Reflect.ownKeys(props)) map.set(name, normalizeDecl(props[name]));
-      ELEMENT_PROPERTIES.set(this, map);
-    }
+    const gen = propertiesGeneration();
+    const hit = ELEMENT_PROPERTIES.get(this);
+    if (hit && hit.gen === gen) return hit.map;
+    const map = new Map();
+    const props = declaredProperties(this);
+    for (const name of Reflect.ownKeys(props)) map.set(name, normalizeDecl(props[name]));
+    ELEMENT_PROPERTIES.set(this, { gen: propertiesGeneration(), map });
     return map;
   }
 
@@ -417,20 +434,21 @@ class WebComponentBase extends Base {
    * Lit's `createProperty(name, options)`: declare a reactive property from
    * code instead of `static properties`. It must run before the first
    * instance is constructed (accessors are installed then, once per class),
-   * which is where Lit calls it from, so a later call throws.
+   * which is where Lit calls it from, so a later call throws. So does a call
+   * on a class one of whose SUBCLASSES has an instance: that subclass's
+   * accessors are installed already and could never gain the new property.
    * @param {string} name
    * @param {PropertyDeclaration} [options]
    */
   static createProperty(name, options = {}) {
-    if (_accessorPlans.has(this)) {
+    if (_accessorPlans.has(this) || HAS_CONSTRUCTED_SUBCLASS.has(this)) {
       throw new Error(
-        `[webjs] ${this.name || 'A component'}.createProperty('${name}') ran after an instance of the class was constructed. ` +
+        `[webjs] ${this.name || 'A component'}.createProperty('${name}') ran after an instance of the class${HAS_CONSTRUCTED_SUBCLASS.has(this) && !_accessorPlans.has(this) ? ', or of a subclass,' : ''} was constructed. ` +
           `Declare the property in \`static properties\` (or the WebComponent({ ... }) factory), or call createProperty ` +
           `at class definition time, before any element is created.`,
       );
     }
     addCreatedProperty(this, name, options);
-    ELEMENT_PROPERTIES.delete(this);
   }
 
   /**

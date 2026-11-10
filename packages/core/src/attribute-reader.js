@@ -305,6 +305,15 @@ const DECLARED = new WeakMap();
 let generation = 0;
 
 /**
+ * The current declarations generation, for a memo outside this module that
+ * derives from `declaredProperties` (lifecycle.js's `elementProperties`).
+ * @returns {number}
+ */
+export function propertiesGeneration() {
+  return generation;
+}
+
+/**
  * Properties added to a class through Lit's `static createProperty(name,
  * options)`, per class. Merged LAST in `declaredProperties`, so a created
  * property wins over a same-named `static properties` entry, as it does in Lit
