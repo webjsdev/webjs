@@ -228,6 +228,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(listSrc, /UserList\.register\('user-list'\)/, 'registered under its tag');
     assert.match(pageSrc, /<form action=\$\{clearUsers\}>/, 'and a Clear list button bound to its clear action');
     assert.match(readFileSync(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), 'utf8'), /^'use server';/, 'which is a server action');
+    // The example agents copy: only a duplicate is a field error, every other
+    // database error throws (no catch that relabels it).
+    const addSrc = readFileSync(join(appDir, 'modules', 'users', 'actions', 'add-user.server.ts'), 'utf8');
+    assert.match(addSrc, /\.onConflictDoNothing\(\)\.returning\(\)/, 'a duplicate is detected by the insert itself');
+    assert.doesNotMatch(addSrc, /catch\s*[{(]/, 'and no catch turns other errors into a duplicate message');
     assert.ok(existsSync(join(appDir, 'test', 'users', 'users.test.ts')), 'the module ships its own test');
     assert.match(pageSrc, /Edit app\/page\.ts/, 'the home points at the file to edit');
     assert.match(layoutSrc, /webjs\.dev\/docs/, 'the navbar links the docs');

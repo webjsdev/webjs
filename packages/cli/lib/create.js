@@ -1542,13 +1542,15 @@ export async function addUser(formData: FormData): Promise<ActionResult<User>> {
   if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
     return { success: false, fieldErrors: { email: 'Enter a valid email address.' }, status: 422 };
   }
-  try {
-    const [user] = await db.insert(users).values({ email }).returning();
-    revalidatePath('/');
-    return { success: true, data: user };
-  } catch {
+  // A duplicate email inserts nothing and returns no row, so only a duplicate
+  // is a field error; any other database error throws and renders the error
+  // page, where onError and the dev overlay see it.
+  const [user] = await db.insert(users).values({ email }).onConflictDoNothing().returning();
+  if (!user) {
     return { success: false, fieldErrors: { email: 'That email is already added.' }, status: 422 };
   }
+  revalidatePath('/');
+  return { success: true, data: user };
 }
 `);
   await writeFile(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), `'use server';
@@ -1593,6 +1595,14 @@ test('addUser adds a user, which listUsers then returns', async () => {
   const result = await addUser(form(email));
   assert.equal(result.success, true);
   assert.ok((await listUsers()).some((u) => u.email === email));
+});
+
+test('addUser refuses an email that is already added', async () => {
+  const email = \`grace-\${Date.now()}@example.com\`;
+  assert.equal((await addUser(form(email))).success, true);
+  const again = await addUser(form(email));
+  assert.equal(again.success, false);
+  assert.match(again.fieldErrors?.email ?? '', /already added/);
 });
 
 test('clearUsers empties the list', async () => {
