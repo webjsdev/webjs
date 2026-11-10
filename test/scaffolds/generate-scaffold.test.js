@@ -11,7 +11,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, symlinkSync, existsSync, readFileSync, appendFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync, existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -141,6 +141,68 @@ test('scaffold on Postgres writes pg columns that check and typecheck', { timeou
     const tc = cli('typecheck');
     const errors = out(tc).split('\n').filter((l) => /error TS/.test(l) && !l.startsWith('db/connection.server.ts'));
     assert.deepEqual(errors, []);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('authentication adds a password hash to users, and its pages, middleware and test work', { timeout: 300_000 }, async () => {
+  const { cwd, app, cli } = await makeApp({});
+  try {
+    const r = cli('g', 'authentication');
+    assert.equal(r.status, 0, out(r));
+    for (const f of ['modules/auth/auth.server.ts', 'modules/auth/password.server.ts', 'app/api/auth/[...path]/route.ts',
+      'app/login/page.ts', 'app/signup/page.ts', 'app/dashboard/middleware.ts', 'test/auth/auth.test.ts']) {
+      assert.ok(existsSync(join(app, f)), f);
+    }
+    assert.match(readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8'), /^ {2}passwordHash: text\(\),$/m);
+    assert.match(out(r), /--name=add_password_hash_to_users/);
+
+    // Running it again changes nothing: every file is identical, the column is there.
+    const again = cli('g', 'authentication');
+    assert.equal(again.status, 0, out(again));
+    assert.match(out(again), /identical {2}app\/login\/page\.ts/);
+    assert.match(out(again), /users already has passwordHash/);
+
+    // A resource that belongs to a user.
+    const notes = cli('g', 'scaffold', 'note', 'body:text!', 'user:references');
+    assert.equal(notes.status, 0, out(notes));
+
+    const check = cli('check');
+    assert.equal(check.status, 0, out(check));
+    const tc = cli('typecheck');
+    assert.equal(tc.status, 0, out(tc));
+    const tests = cli('test', '--server');
+    assert.equal(tests.status, 0, out(tests));
+    assert.match(tests.stdout, /sign up, see the dashboard, log out, then log in again/);
+
+    const migrate = cli('db', 'migrate');
+    assert.equal(migrate.status, 0, out(migrate));
+    const status = cli('status', '--boot', '/login', '/signup');
+    assert.equal(status.status, 0, out(status));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('authentication creates the users table when the app has none', { timeout: 300_000 }, async () => {
+  const { cwd, app, cli } = await makeApp({});
+  try {
+    // The app after its example module is deleted: no users table, no page using it.
+    rmSync(join(app, 'modules', 'users'), { recursive: true, force: true });
+    rmSync(join(app, 'test', 'users'), { recursive: true, force: true });
+    writeFileSync(join(app, 'app', 'page.ts'), "import { html } from '@webjsdev/core';\n\nexport default function Home() {\n  return html`<h1>Home</h1>`;\n}\n");
+    writeFileSync(join(app, 'db', 'schema.server.ts'), "import { defineRelations } from 'drizzle-orm';\n\nexport const relations = defineRelations({}, () => ({}));\n");
+    const r = cli('g', 'authentication');
+    assert.equal(r.status, 0, out(r));
+    const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schema, /^export const users = sqliteTable\('users', \{$/m);
+    assert.match(schema, /defineRelations\(\{ users \}/);
+    assert.match(out(r), /--name=create_users/);
+    const tc = cli('typecheck');
+    assert.equal(tc.status, 0, out(tc));
+    const tests = cli('test', '--server');
+    assert.equal(tests.status, 0, out(tests));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

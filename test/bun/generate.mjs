@@ -47,6 +47,9 @@ try {
   assert.ok(existsSync(join(app, 'db', 'migrations')), 'db generate ran under ' + runtime);
   const product = cli('g', 'resource', 'product', 'name:string!', 'price:float');
   assert.equal(product.status, 0, out(product));
+  // scrypt from node:crypto and the signed session cookie are runtime-sensitive.
+  const auth = cli('g', 'authentication');
+  assert.equal(auth.status, 0, out(auth));
 
   const tests = cli('test', '--server');
   assert.equal(tests.status, 0, out(tests));
@@ -55,10 +58,12 @@ try {
   if (process.versions.bun) {
     assert.match(text, /test\/posts\/posts\.test\.ts:/);
     assert.match(text, /test\/products\/products\.test\.ts:/);
+    assert.match(text, /test\/auth\/auth\.test\.ts:/);
     assert.match(text, /\n\s*0 fail\n/);
   } else {
     assert.match(text, /create, show, edit and delete a post through its forms/);
     assert.match(text, /create, read, update and delete a product over JSON/);
+    assert.match(text, /sign up, see the dashboard, log out, then log in again/);
   }
   console.log(`ok generate: scaffold and resource output passes its tests on ${runtime}`);
 } finally {

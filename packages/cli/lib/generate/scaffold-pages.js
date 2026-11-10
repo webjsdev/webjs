@@ -30,14 +30,7 @@ export function pageFiles(ctx, n, fields) {
   const needsTextarea = fields.some((f) => f.kind === 'text' || f.kind === 'json');
   let textarea = ctx.ui.textarea;
   if (needsTextarea && !textarea && ctx.ui.kit) { uiAdd.push('textarea'); textarea = true; }
-  const cls = {
-    input: ctx.ui.input ? 'class=${inputClass()}' : `class="${PLAIN_INPUT}"`,
-    textarea: textarea ? 'class=${textareaClass()}' : `class="${PLAIN_INPUT}"`,
-    label: ctx.ui.label ? 'class=${labelClass()}' : `class="${PLAIN_LABEL}"`,
-    button: ctx.ui.button ? 'class=${buttonClass()}' : `class="${PLAIN_BUTTON}"`,
-    outline: ctx.ui.button ? "class=${buttonClass({ variant: 'outline' })}" : `class="${PLAIN_OUTLINE}"`,
-    destructive: ctx.ui.button ? "class=${buttonClass({ variant: 'destructive' })}" : `class="${PLAIN_OUTLINE}"`,
-  };
+  const cls = uiClasses(ctx, textarea);
   const buttonImport = ctx.ui.button ? "import { buttonClass } from '#components/ui/button.ts';\n" : '';
   const mod = `#modules/${n.kebabPlural}`;
   const app = `app/${n.kebabPlural}`;
@@ -166,6 +159,24 @@ export default async function Edit${n.Singular}Page({ params, actionData }: Page
       { path: `${app}/[id]/page.ts`, content: show },
       { path: `${app}/[id]/edit/page.ts`, content: edit },
     ],
+  };
+}
+
+/**
+ * The `class=...` attribute for each control: the UI kit helper when the app
+ * has it, plain Tailwind otherwise.
+ * @param {AppContext} ctx
+ * @param {boolean} [textarea] whether the kit's textarea helper is there
+ * @returns {Record<'input'|'textarea'|'label'|'button'|'outline'|'destructive', string>}
+ */
+export function uiClasses(ctx, textarea = false) {
+  return {
+    input: ctx.ui.input ? 'class=${inputClass()}' : `class="${PLAIN_INPUT}"`,
+    textarea: textarea ? 'class=${textareaClass()}' : `class="${PLAIN_INPUT}"`,
+    label: ctx.ui.label ? 'class=${labelClass()}' : `class="${PLAIN_LABEL}"`,
+    button: ctx.ui.button ? 'class=${buttonClass()}' : `class="${PLAIN_BUTTON}"`,
+    outline: ctx.ui.button ? "class=${buttonClass({ variant: 'outline' })}" : `class="${PLAIN_OUTLINE}"`,
+    destructive: ctx.ui.button ? "class=${buttonClass({ variant: 'destructive' })}" : `class="${PLAIN_OUTLINE}"`,
   };
 }
 
