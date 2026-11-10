@@ -439,9 +439,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
       // Pinned EXACTLY (no caret): a caret on a prerelease still admits later
       // rc.N of 1.0.0, and the relations-v2 query API the scaffold is written and
-      // tested against is rc.3 (#562). An exact pin keeps generated apps
+      // tested against is rc.5 (#562). An exact pin keeps generated apps
       // deterministic instead of silently drifting to a newer rc.
-      'drizzle-orm': '1.0.0-rc.3',
+      'drizzle-orm': '1.0.0-rc.5',
       ...(dialect === 'postgres' ? { pg: '^8.13.0' } : {}),
       '@webjsdev/cli': 'latest',
       '@webjsdev/core': 'latest',
@@ -456,7 +456,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // isolated linker and pnpm link only declared packages, so leaving it
       // transitive (via @tailwindcss/cli) fails the compile with
       // `Can't resolve 'tailwindcss'`. The api template has no CSS.
-      'drizzle-kit': '1.0.0-rc.3',
+      'drizzle-kit': '1.0.0-rc.5',
       ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0', tailwindcss: '^4.1.0' }),
     },
     devDependencies: {
@@ -832,7 +832,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // A column's SQL name is its key, Drizzle's default; name one explicitly
   // (\`integer('created_at')\`) when a different SQL name is wanted. Only the
   // schema's builders, the connection and the driver differ between SQLite and
-  // Postgres. Pinned to drizzle-orm 1.0.0-rc.3 (relations v2). See research #562.
+  // Postgres. Pinned to drizzle-orm 1.0.0-rc.5 (relations v2). See research #562.
 
   const schemaShared = `// A foreign key belongs on the COLUMN, as in any Drizzle schema, and an index
 // in the table's third argument:
@@ -924,7 +924,7 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
 // One concrete type for db. Both drivers share the same synchronous SQLite
 // query builder, but typed as a union of the two, TypeScript cannot resolve an
 // overloaded method across it and db.select({ id: users.id }) fails to compile.
-type Db = NodeSQLiteDatabase<Record<string, never>, typeof schema.relations>;
+type Db = NodeSQLiteDatabase<typeof schema.relations>;
 
 async function connect(): Promise<Db> {
   if ((globalThis as { Bun?: unknown }).Bun) {

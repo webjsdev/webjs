@@ -7,7 +7,7 @@
  * this app to Postgres, swap this file for the pg variant (same export names);
  * the schema, queries, and actions do not change.
  *
- * Pinned to drizzle-orm 1.0.0-rc.3. See research #562 for the full rationale.
+ * Pinned to drizzle-orm 1.0.0-rc.5. See research #562 for the full rationale.
  */
 import { sqliteTableCreator, integer, text, real, blob, index as _index } from 'drizzle-orm/sqlite-core';
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
