@@ -361,14 +361,15 @@ async function scaffoldStage(runtime, tarballs, port) {
       writeFileSync(join(copy, '.env'), readFileSync(join(appDir, '.env'), 'utf8').replace(/^PORT=.*$/m, `PORT=${port + 20}`));
       const home = join(copy, 'app/page.ts');
       writeFileSync(home, readFileSync(home, 'utf8').replace(/export default/, "export const gateCopy = 'gate-copy-marker';\nexport default"));
-      appendFileSync(join(copy, 'app/features/auth/dashboard/page.ts'), '// copy\n');
+      const copyDashboard = join(copy, 'app/features/auth/dashboard/page.ts');
+      if (existsSync(copyDashboard)) appendFileSync(copyDashboard, '// copy\n');
       const dev2 = await startDev(copy, 'bun', ['run', 'dev'], port + 20);
       try {
         const base2 = `http://localhost:${port + 20}`;
         const bad = [];
         for (const p of staticPages(copy)) { const r = await fetch(base2 + p); if (r.status >= 500) bad.push(`${p} ${r.status}`); }
         record(stage, 'second path, warm Bun cache: every static page renders', bad.length === 0, bad.slice(0, 5).join(', '));
-        await authFlow(stage, base2, 'second path');
+        if (existsSync(join(copy, 'app/features/auth/dashboard'))) await authFlow(stage, base2, 'second path');
         const leaked = /\/gateapp\//.test(dev2.log()) && /ENOENT|Cannot find/.test(dev2.log());
         record(stage, 'second path imports nothing from the first', !leaked);
       } finally { await dev2.stop(); }

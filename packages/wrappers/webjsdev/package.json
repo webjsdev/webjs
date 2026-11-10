@@ -11,7 +11,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/cli": "^0.11.0"
+    "@webjsdev/cli": "^0.12.0"
   },
   "publishConfig": {
     "access": "public"
