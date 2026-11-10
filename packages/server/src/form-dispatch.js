@@ -3,7 +3,8 @@ import { headerSafeLocation } from './redirect-location.js';
 import { ssrPage, ssrNotFound, ssrForbidden, ssrUnauthorized } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
 import { getBodyLimits, refreshHeaderValue } from './context.js';
-import { readFlash, encodeFlash, flashSetCookie } from './action-flash.js';
+import { readFlash, encodeFlash, flashSetCookie, appRelativePath } from './action-flash.js';
+import { basePath as appBasePath } from './importmap.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { makeThenable, searchParamsRecord } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
@@ -784,8 +785,9 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // once, and the next submission of this action gets it as prevState.
     // A success with nothing to carry still replaces an earlier flash, so the
     // next submission's prevState is never a stale failure.
-    // Bound to the page the redirect lands on, so no other page shows it.
-    const path = new URL(safe || ownPath, url).pathname;
+    // Bound to the page the redirect lands on, so no other page shows it,
+    // app-root-relative (the mount prefix dropped) as the render compares it.
+    const path = appRelativePath(new URL(safe || ownPath, url).pathname, appBasePath());
     const value = result !== undefined && result !== null ? await encodeFlash({ id, result, shown: false, path }) : null;
     res.headers.append('set-cookie', flashSetCookie(value));
     return res;

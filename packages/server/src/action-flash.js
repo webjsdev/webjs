@@ -23,6 +23,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { stringify, parse } from '@webjsdev/core';
 import { shared } from './process-shared.js';
 import { devSecret } from './dev-secret.js';
+import { stripBasePath } from './base-path.js';
 
 export const FLASH_COOKIE = '__webjs_flash';
 const MAX_BYTES = 2048;
@@ -127,4 +128,47 @@ export async function readFlash(req) {
   if (!header || !header.includes(FLASH_COOKIE)) return null;
   const m = new RegExp(`(?:^|;\\s*)${FLASH_COOKIE}=([^;]*)`).exec(header);
   return m ? decodeFlash(m[1]) : null;
+}
+
+/** A path without its trailing slash (the root stays "/"). @param {string} p */
+const trimSlash = (p) => (p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p);
+
+/**
+ * The app-root-relative form of a path: the `webjs.basePath` mount prefix
+ * removed when the path is under it (a redirect target may be written with or
+ * without it), else the path as is.
+ * @param {string} pathname
+ * @param {string} mount
+ */
+export function appRelativePath(pathname, mount) {
+  return (mount && stripBasePath(pathname, mount)) || pathname;
+}
+
+/**
+ * Carry an unshown flash across a redirect of the page it is bound to (#1686).
+ * A success redirect names a path, and a redirects rule, middleware or the
+ * trailing-slash policy can send that path on (`/posts` to `/en/posts`); the
+ * flash then has to follow, or no page would ever show it and it would turn
+ * up stale on a later visit. When `res` redirects the request the flash is
+ * bound to, to another same-origin path, the flash is re-set bound to that
+ * path. Mutates `res.headers`; a no-op for anything else.
+ * @param {Request} req
+ * @param {Response} res
+ * @param {string} mount the app's `webjs.basePath` ('' when none)
+ */
+export async function carryFlashAcrossRedirect(req, res, mount) {
+  if (res.status < 300 || res.status >= 400) return;
+  const location = res.headers.get('location');
+  if (!location) return;
+  const flash = await readFlash(req);
+  if (!flash || flash.shown || !flash.path) return;
+  const from = new URL(req.url);
+  if (trimSlash(appRelativePath(from.pathname, mount)) !== trimSlash(flash.path)) return;
+  let to;
+  try { to = new URL(location, from); } catch { return; }
+  if (to.origin !== from.origin) return;
+  const path = appRelativePath(to.pathname, mount);
+  if (trimSlash(path) === trimSlash(flash.path)) return;
+  const value = await encodeFlash({ ...flash, path });
+  if (value) res.headers.append('set-cookie', flashSetCookie(value));
 }

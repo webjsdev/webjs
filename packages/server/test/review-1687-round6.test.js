@@ -118,3 +118,48 @@ test('an action that throws undefined renders the error page and reaches onError
   assert.equal(res.status, 500, 'an error, not the page at 200');
   assert.ok(seen.some((e) => e instanceof Error && /threw undefined/.test(e.message)), 'onError hears it, as an Error');
 });
+
+/** The `name=value` pairs a response sets, merged over the cookies a request sent. */
+function nextCookie(prev, res) {
+  const jar = new Map(prev ? prev.split('; ').map((kv) => [kv.split('=')[0], kv]) : []);
+  for (const c of res.headers.getSetCookie()) { const kv = c.split(';')[0]; jar.set(kv.split('=')[0], kv); }
+  return [...jar.values()].join('; ');
+}
+
+test('a flash follows a redirects rule that sends its target on, and stays off other pages', async () => {
+  const { app, id } = await formApp(
+    `export async function act() { return { success: true, message: 'SAVED_MSG', redirect: '/posts' }; }`,
+    {
+      'package.json': JSON.stringify({ name: 'chain', type: 'module', webjs: { redirects: [{ source: '/posts', destination: '/en/posts', permanent: false }] } }),
+      'app/en/posts/page.ts': `import { html } from ${CORE};\nexport default ({ actionData }) => html\`<p id="r">\${actionData?.message ?? 'none'}</p>\`;\n`,
+      'app/other/page.ts': `import { html } from ${CORE};\nexport default ({ actionData }) => html\`<p id="r">\${actionData?.message ?? 'none'}</p>\`;\n`,
+    },
+  );
+  const done = await app.handle(post('/f', { __webjs_action: id }));
+  assert.equal(done.status, 303);
+  let cookie = nextCookie('', done);
+  // What the path binding protects: another page leaves it.
+  assert.match(await (await app.handle(new Request('http://x/other', { headers: { cookie } }))).text(), /<p id="r">none<\/p>/);
+  // The redirect target is itself redirected on.
+  const hop = await app.handle(new Request('http://x/posts', { headers: { cookie } }));
+  assert.equal(hop.status, 307);
+  cookie = nextCookie(cookie, hop);
+  const landing = await app.handle(new Request('http://x/en/posts', { headers: { cookie } }));
+  assert.match(await landing.text(), /<p id="r">SAVED_MSG<\/p>/, 'the page the chain ends on shows it');
+});
+
+test('a flash bound to a redirect written with the basePath mount prefix is shown there', async () => {
+  const { app, id } = await formApp(
+    `export async function act() { return { success: true, message: 'MOUNTED_MSG', redirect: '/app/done' }; }`,
+    {
+      'package.json': JSON.stringify({ name: 'mounted', type: 'module', webjs: { basePath: '/app' } }),
+      'app/done/page.ts': `import { html } from ${CORE};\nexport default ({ actionData }) => html\`<p id="r">\${actionData?.message ?? 'none'}</p>\`;\n`,
+    },
+  );
+  // Under a mount the app is reached at /app/...
+  const html = await (await app.handle(new Request('http://x/app/f'))).text();
+  const done = await app.handle(post('/app/f', { __webjs_action: identityOf(html) || id }));
+  assert.equal(done.status, 303);
+  const landing = await app.handle(new Request('http://x/app/done', { headers: { cookie: nextCookie('', done) } }));
+  assert.match(await landing.text(), /<p id="r">MOUNTED_MSG<\/p>/, 'the mounted target shows it');
+});
