@@ -699,9 +699,9 @@ export function createAuth(config) {
 
   /**
    * Read the signed post-sign-in target the redirect leg stored. It went
-   * through the redirect callback before it was signed, so the signature
-   * proves it is a target this app allowed; it is still re-checked as a local
-   * path or an http(s) URL. Null when absent or invalid.
+   * through callbacks.redirect before it was signed, so the signature proves
+   * it is a target this app allowed, and it is used as is, exactly as the
+   * credentials path uses the callback's answer. Null when absent or forged.
    *
    * @param {Request} req
    * @returns {Promise<string | null>}
@@ -710,8 +710,7 @@ export function createAuth(config) {
     const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(REDIRECT_COOKIE, secure(req))];
     if (!raw) return null;
     const value = await unsign(raw, secret);
-    if (typeof value !== 'string') return null;
-    return safeRedirectPath(value) || (/^https?:\/\//i.test(value) ? value : null);
+    return typeof value === 'string' && value !== '' ? value : null;
   }
 
   async function oauthCallback(req, provider) {
