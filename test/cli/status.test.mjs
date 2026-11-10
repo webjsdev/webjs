@@ -10,7 +10,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { runStatus, NO_SERVER_EXIT_CODE } from '../../packages/cli/lib/status.js';
+import { runStatus, runStatusBoot, bootProbePaths, NO_SERVER_EXIT_CODE } from '../../packages/cli/lib/status.js';
+import { buildRouteTable } from '../../packages/server/src/router.js';
+import { projectRoutes } from '../../packages/mcp/src/routes-report.js';
+import { extractRouteMethods } from '../../packages/mcp/src/mcp.js';
+import { readFile } from 'node:fs/promises';
 import { createRequestHandler } from '../../packages/server/src/dev.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -64,6 +68,27 @@ test('a healthy app settles and exits 0, listing each requested path', async () 
   assert.equal(code, 0, lines.join('\n'));
   assert.match(lines[0], /ok \(settled, ready: ok/);
   assert.ok(lines.some((l) => /GET \/  200/.test(l)));
+});
+
+test('browser code in a page is a warning, not a failure: the page runs only on the server (#1686)', async () => {
+  const appDir = mkdtempSync(join(tmpRoot, 'app-'));
+  mkdirSync(join(appDir, 'app'), { recursive: true });
+  writeFileSync(join(appDir, 'app', 'page.ts'),
+    `import { html } from ${CORE};\nconst w = typeof window !== 'undefined' ? window.innerWidth : 0;\nexport default () => html\`<p>\${w}</p>\`;\n`);
+  const app = await createRequestHandler({ appDir, dev: true, logger: SILENT });
+  const lines = [];
+  const opts = { port: 3999, graceMs: 0, timeoutMs: 5000, cwd: appDir, fetch: (url, init) => app.handle(new Request(url, init)), out: (s) => lines.push(s), err: () => {} };
+  assert.equal(await runStatus({ ...opts, paths: ['/'] }), 0, 'a warning never fails the run');
+  const out = lines.join('\n');
+  assert.match(out, /1 warning:/);
+  assert.match(out, /\[route-browser-code\] app[\\/]page\.ts: `window` is used/);
+
+  lines.length = 0;
+  await runStatus({ ...opts, paths: ['/'], json: true });
+  const report = JSON.parse(lines.join('\n'));
+  assert.equal(report.ok, true);
+  assert.equal(report.warnings.length, 1);
+  assert.equal(report.warnings[0].kind, 'route-browser-code');
 });
 
 test('a broken page is reported with its file and exits 1, in human and JSON form', async () => {
@@ -171,4 +196,57 @@ test('a re-requested page that now answers 404 does not fail the run', async () 
     assert.equal(code, 0, out);
     assert.match(out, /GET \/boom  404/, 'the old page was re-requested and is gone');
   } finally { restore(); }
+});
+
+// --boot: agents in the evals spent 10 to 25 tool calls per build starting a
+// dev server, curling routes and killing it. --boot does it in-process.
+test('bootProbePaths takes parameter-free pages and GET routes, and an optional catch-all at its parent', () => {
+  const { paths, skipped } = bootProbePaths({
+    pages: [{ path: '/' }, { path: '/posts/[id]' }, { path: '/help/[[...slug]]' }],
+    apis: [{ path: '/api/me', methods: ['GET'] }, { path: '/api/upload', methods: ['POST'] }, { path: '/api/x/[id]', methods: ['GET'] }],
+  });
+  assert.deepEqual(paths, ['/', '/help', '/api/me']);
+  assert.deepEqual(skipped, ['/posts/[id]', '/api/x/[id]']);
+});
+
+test('status --boot probes every parameter-free route in-process: a server error fails, a 401 does not', async () => {
+  const appDir = mkdtempSync(join(tmpRoot, 'boot-'));
+  const files = {
+    'app/page.ts': `import { html } from ${CORE};\nexport default () => html\`<p>home</p>\`;\n`,
+    'app/boom/page.ts': `export default () => { throw new Error('page exploded'); };\n`,
+    'app/posts/[id]/page.ts': `import { html } from ${CORE};\nexport default () => html\`<p>post</p>\`;\n`,
+    'app/api/me/route.ts': `export function GET() { return new Response('no', { status: 401 }); }\n`,
+  };
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(appDir, rel)), { recursive: true });
+    writeFileSync(join(appDir, rel), body);
+  }
+  const lines = [];
+  const run = (paths) => runStatusBoot({
+    appDir,
+    paths,
+    timeoutMs: 5000,
+    createHandler: (dir) => createRequestHandler({ appDir: dir, dev: true, logger: SILENT }),
+    // The same projection the CLI wires in.
+    listRoutes: async (dir) => projectRoutes(await buildRouteTable(dir), { appDir: dir, readFile, extractRouteMethods }),
+    out: (s) => lines.push(s),
+    err: (s) => lines.push(s),
+  });
+
+  const code = await run([]);
+  const text = lines.join('\n');
+  assert.equal(code, 1, 'the broken page fails the run');
+  assert.match(text, /GET \/boom {2}500/);
+  assert.match(text, /page exploded/);
+  assert.match(text, /GET \/api\/me {2}401/, 'the signed-out route was probed');
+  assert.match(text, /skipped 1 route that needs a parameter.*\/posts\/\[id\]/);
+
+  // A path the caller names still fails at 400.
+  lines.length = 0;
+  assert.equal(await run(['/api/me']), 1, 'a named 401 fails');
+
+  // Without the broken page, the derived 401 alone does not fail the run.
+  rmSync(join(appDir, 'app/boom'), { recursive: true, force: true });
+  lines.length = 0;
+  assert.equal(await run([]), 0, `a signed-out 401 on a derived route is an answer, not a fault:\n${lines.join('\n')}`);
 });

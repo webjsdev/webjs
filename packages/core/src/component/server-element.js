@@ -44,7 +44,8 @@ export function makeServerInternals() {
  * reflected/added attributes in the output. Event methods are no-ops (no
  * server event loop), and `attachInternals()` returns the inert object
  * above. The genuinely browser-only surface (`querySelector`, layout reads,
- * `attachShadow`, `focus`) is deliberately absent and still throws at SSR,
+ * `focus`) is deliberately absent and still throws at SSR (`attachShadow`
+ * throws with the `static shadow = true` fix),
  * which the `no-browser-globals-in-render` rule and the SSR crash hint flag.
  *
  * Deliberate deviation from lit: this shim lowercases attribute names so
@@ -208,6 +209,27 @@ export class ServerElement {
   addEventListener() {}
   removeEventListener() {}
   dispatchEvent() { return true; }
+
+  /**
+   * There is no shadow root at SSR: the server writes a shadow component's
+   * root as Declarative Shadow DOM from `static shadow = true`, and the
+   * browser attaches it while parsing.
+   * @returns {null}
+   */
+  get shadowRoot() { return null; }
+
+  /**
+   * `attachShadow()` cannot run at SSR, which has no DOM. Called from a
+   * constructor or `render()` (Lit's habit of attaching in the constructor),
+   * it names the WebJs spelling instead of failing as an unknown method.
+   */
+  attachShadow() {
+    throw new Error(
+      '[webjs] attachShadow() was called during SSR, which has no DOM. Declare `static shadow = true` ' +
+        '(and `static shadowRootOptions` for the attachShadow options) instead: the server writes the shadow root ' +
+        'as Declarative Shadow DOM and the browser attaches it.',
+    );
+  }
 
   /** @returns {any} */
   attachInternals() {

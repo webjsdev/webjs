@@ -11,7 +11,7 @@ export const ROUTE_WALK_IGNORE = new Set(['node_modules', '.git', '.webjs', 'dis
  * A route module that renders markup on the server, which is where `asset()`
  * belongs. Page and layout are the common case, but the BOUNDARY modules matter
  * too and are easy to miss: `error` / `not-found` / `forbidden` / `unauthorized`
- * / `loading` are always shipped and never elided, and `global-error` renders
+ * / `loading` render on every route that reaches them, and `global-error` renders
  * its OWN `<!doctype><html><head>` and is returned verbatim with no framework
  * head splice, which makes it the likeliest place outside the root layout for
  * an author to hand-write a stylesheet link.

@@ -11,8 +11,8 @@
  *     export const metadata: Metadata = { title: 'Home', description: '…' };
  *     export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> { … }
  *
- * The shape mirrors what ssr.js actually consumes (and the skill's
- * references/routing-and-pages.md documents), NOT Next.js's full superset.
+ * The shape mirrors what ssr.js actually consumes (and
+ * https://webjs.dev/docs/metadata-routes documents), NOT Next.js's full superset.
  * Every field is optional. Zero
  * runtime cost: nothing in this file ships to the browser.
  */
@@ -209,7 +209,7 @@ export interface PreloadDescriptor {
  * optional. Where the framework accepts a string OR an object (`title`,
  * `viewport`, `robots`, `appleWebApp`, `icons`), the type is a union.
  *
- * @see the skill's references/routing-and-pages.md for the field-by-field emission reference.
+ * @see https://webjs.dev/docs/metadata-routes for the field-by-field emission reference.
  */
 export interface Metadata {
   /** -> `<title>`. Plain string or `{ template, default, absolute }`. */
@@ -337,3 +337,22 @@ export interface MetadataContext {
    */
   actionData?: unknown;
 }
+
+/**
+ * A page's or layout's `generateMetadata` export, Next.js's: called per
+ * request with the page context and a promise of the metadata the outer
+ * layouts resolved, it returns this segment's {@link Metadata}. Export a static
+ * `metadata` object instead when nothing depends on the request.
+ *
+ * @example
+ * ```ts
+ * // app/posts/[slug]/page.ts
+ * import type { Metadata, MetadataContext } from '@webjsdev/core';
+ * export async function generateMetadata({ params }: MetadataContext, parent: Promise<Metadata>): Promise<Metadata> {
+ *   const post = await getPost(params.slug);
+ *   const images = (await parent).openGraph?.images ?? [];
+ *   return { title: post?.title ?? 'Not found', openGraph: { images } };
+ * }
+ * ```
+ */
+export type GenerateMetadata = (ctx: MetadataContext, parent: Promise<Metadata>) => Metadata | Promise<Metadata>;

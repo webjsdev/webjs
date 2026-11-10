@@ -111,12 +111,12 @@ test('hoistHeadTags: lifts leading <link rel="icon"> to head', () => {
   // them in their template body must be hoisted, otherwise the tab icon
   // never appears.
   const bodyHtml =
-    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
-    '<link rel="apple-touch-icon" href="/public/favicon.png">' +
+    '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' +
+    '<link rel="apple-touch-icon" href="/favicon.png">' +
     '<main>page</main>';
   const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
-  assert.ok(head.includes('<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">'));
-  assert.ok(head.includes('<link rel="apple-touch-icon" href="/public/favicon.png">'));
+  assert.ok(head.includes('<link rel="icon" href="/favicon.svg" type="image/svg+xml">'));
+  assert.ok(head.includes('<link rel="apple-touch-icon" href="/favicon.png">'));
   assert.equal(body, '<main>page</main>');
 });
 
@@ -147,11 +147,11 @@ test('hoistHeadTags: lifts head-bound tags at the top of body (no wrapper now)',
   // partial-nav uses inline comment markers instead. Head-bound tags
   // emitted at the top of a layout template lift directly into <head>.
   const bodyHtml =
-    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
+    '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' +
     '<script>var t=1;</script>' +
     '<main>page</main>';
   const { head, body } = _hoistHeadTags('<head></head>', bodyHtml);
-  assert.ok(head.includes('<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">'));
+  assert.ok(head.includes('<link rel="icon" href="/favicon.svg" type="image/svg+xml">'));
   assert.ok(head.includes('<script>var t=1;</script>'));
   assert.ok(body.startsWith('<main>page</main>'),
     `body starts with the first non-head content, got: ${body.slice(0, 80)}`);
@@ -223,8 +223,10 @@ test('buildDocumentParts: keeps user shell attrs; splices framework tags into us
     streaming: false,
   });
   // Open tag attributes from user.
-  assert.match(prefix, /<html lang="es" data-theme="dark">/);
-  assert.match(prefix, /<body class="bg-dark">/);
+  // The attributes are kept and listed, so the client router can keep them in
+  // step with the server after a soft navigation (#1686).
+  assert.match(prefix, /<html lang="es" data-theme="dark" data-wj-html="lang data-theme">/);
+  assert.match(prefix, /<body class="bg-dark" data-wj-body="class">/);
   // Framework tags injected into <head>.
   assert.match(prefix, /<title>X<\/title>/);
   assert.match(prefix, /<meta name="description" content="d">/);
@@ -275,8 +277,8 @@ test('buildDocumentParts: user shell is detected directly (no wrapper to peek pa
     streaming: false,
   });
   // User shell attributes preserved.
-  assert.match(prefix, /<html lang="es" data-theme="dark">/);
-  assert.match(prefix, /<body class="bg-test">/);
+  assert.match(prefix, /<html lang="es" data-theme="dark" data-wj-html="lang data-theme">/);
+  assert.match(prefix, /<body class="bg-test" data-wj-body="class">/);
   // User body content preserved.
   assert.match(streamBody, /<main>page<\/main>/);
 });
@@ -696,8 +698,8 @@ test('a declared metadata.icons suppresses the icon route (Next precedence)', (t
   // and the route is often a placeholder the app has outgrown, which is
   // exactly the gallery's case.
   withIconRoutes(t, ['icon', 'apple-icon']);
-  const html = render({ icons: '/public/favicon.svg' });
-  assert.match(html, /<link rel="icon" href="\/public\/favicon\.svg">/);
+  const html = render({ icons: '/favicon.svg' });
+  assert.match(html, /<link rel="icon" href="\/favicon\.svg">/);
   assert.doesNotMatch(html, /href="\/icon"/);
   assert.doesNotMatch(html, /href="\/apple-icon"/);
 });
@@ -782,8 +784,8 @@ test('a nested icon route is not the app favicon', (t) => {
 test('app/manifest.*: linked automatically, a declared manifest wins, null opts out', (t) => {
   withStaticIcons(t, [{ stem: 'manifest', urlPath: '/manifest.webmanifest', static: true, contentType: 'application/manifest+json' }]);
   assert.match(render({}), /<link rel="manifest" href="\/manifest\.webmanifest">/);
-  const declared = render({ manifest: '/public/site.webmanifest' });
-  assert.match(declared, /<link rel="manifest" href="\/public\/site\.webmanifest">/);
+  const declared = render({ manifest: '/site.webmanifest' });
+  assert.match(declared, /<link rel="manifest" href="\/site\.webmanifest">/);
   assert.doesNotMatch(declared, /href="\/manifest\.webmanifest"/);
   assert.doesNotMatch(render({ manifest: null }), /rel="manifest"/);
 });
@@ -1575,8 +1577,10 @@ test('ssrPage: modulepreload never points at a server-only dep reached THROUGH a
   const serverFiles = new Map([[action, 'hashA']]);
 
   const route = { file: pageFile, layouts: [], errors: [], metadataFiles: [] };
+  // The page never ships (#1686); its frontier (the client module) does.
+  const routeFrontiers = new Map([[pageFile, [clientComp]]]);
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), {
-    dev: false, appDir, moduleGraph, serverFiles,
+    dev: false, appDir, moduleGraph, serverFiles, routeFrontiers,
   });
   const preloads = ((await resp.text()).match(/modulepreload[^>]*href="[^"]*"/g) || []).join('\n');
 
@@ -1734,14 +1738,27 @@ test('ssrPage: error.js boundary catches a render throw and returns 500', async 
   writeFileSync(errorFile,
     `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
     `export default function Err({ error }) {\n` +
-    `  return html\`<p>Handled: \${error.message}</p>\`;\n` +
+    `  return html\`<p>Handled: \${error.message} [\${error.digest || ''}]</p>\`;\n` +
     `}\n`);
 
   const route = { file: pageFile, layouts: [], errors: [errorFile], metadataFiles: [] };
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  // Production sanitizes what the boundary sees (Next parity): a generic
+  // message plus a digest, never the raw thrown message.
+  const origError = console.error;
+  const logged = [];
+  console.error = (...a) => logged.push(a.map(String).join(' '));
+  let resp;
+  try { resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir }); }
+  finally { console.error = origError; }
   assert.equal(resp.status, 500);
   const body = await resp.text();
-  assert.ok(body.includes('Handled: kaboom'));
+  const m = /Handled: Internal server error \[([0-9a-f]{10})\]/.exec(body);
+  assert.ok(m, 'prod boundary gets the generic message and a digest');
+  assert.ok(!body.includes('kaboom'), 'the raw message never reaches the page');
+  assert.ok(logged.some((l) => l.includes(`digest=${m[1]}`) && l.includes('kaboom')), 'the full error is logged under the digest');
+  // Dev passes the real error through.
+  const dev = await ssrPage(route, {}, new URL('http://localhost/'), { dev: true, appDir });
+  assert.match(await dev.text(), /Handled: kaboom/);
 });
 
 test('ssrPage: error.js that itself throws falls through to the default 500', async () => {
@@ -2023,36 +2040,23 @@ test('boundary: an excluded layout id is never advertised, so the NEXT nav keeps
   assertPaired(body);
 });
 
-test('boundary: the boot script ships the boundary module, not the page module (#1298)', async () => {
-  // The boundary is what rendered, so it is what has to upgrade its custom
-  // elements. The page module never ran, so booting it was always wrong.
+test('boundary: the boot imports the frontier of what rendered, never a route module (#1298, #1686)', async () => {
+  // The boundary is what rendered, so its components are what has to upgrade.
+  // The page never ran, so its frontier stays out. No route module ships.
   const { route, appDir } = crashApp();
-  const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), { dev: false, appDir }));
+  const routeFrontiers = new Map([
+    [join(appDir, 'docs/error.js'), [join(appDir, 'components/retry.js')]],
+    [join(appDir, 'docs/layout.js'), [join(appDir, 'components/thing.js')]],
+    [join(appDir, 'docs/crash/page.js'), [join(appDir, 'components/page-only.js')]],
+  ]);
+  const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), { dev: false, appDir, routeFrontiers }));
   const body = await resp.text();
-  assert.ok(body.includes('"/docs/error.js"'), 'the boundary module is booted');
-  assert.ok(!body.includes('"/docs/crash/page.js"'), 'the page module is not booted');
-});
-
-test('boundary: the #963 inert / import-only substitution still applies to the boot set', async () => {
-  // An import-only layout is replaced by the component URLs it would have
-  // emitted, exactly as on the happy path. Without this an import-only module
-  // with a bare `.server.*` import loads whole and crashes the boundary's boot
-  // on the throw-at-load stub, killing every sibling registration with it.
-  const { route, appDir } = crashApp();
-  const importOnly = new Map([[join(appDir, 'docs/layout.js'), [join(appDir, 'components/thing.js')]]]);
-  const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), {
-    dev: false, appDir, importOnlyRouteModules: importOnly,
-  }));
-  const body = await resp.text();
-  assert.ok(body.includes('"/components/thing.js"'), 'the substitute component URL is booted');
-  assert.ok(!body.includes('"/docs/layout.js"'), 'the import-only layout module itself is not');
-
-  const inert = new Set([join(appDir, 'docs/layout.js')]);
-  const resp2 = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), {
-    dev: false, appDir, inertRouteModules: inert,
-  }));
-  const body2 = await resp2.text();
-  assert.ok(!body2.includes('"/docs/layout.js"'), 'an inert layout is dropped from the boot set');
+  assert.ok(body.includes('"/components/retry.js"'), "the boundary's component is booted");
+  assert.ok(body.includes('"/components/thing.js"'), "the wrapping layout's component is booted");
+  assert.ok(!body.includes('"/components/page-only.js"'), "the page's component is not: the page never rendered");
+  for (const f of ['/docs/error.js', '/docs/layout.js', '/layout.js', '/docs/crash/page.js']) {
+    assert.ok(!body.includes(`"${f}"`), `no route module is booted (${f})`);
+  }
 });
 
 test('boundary: a throwing LAYOUT renders the boundary OUTSIDE it, not the one at its own segment', async () => {
@@ -2144,7 +2148,11 @@ test('boundary: a thrown forbidden() renders inside its layouts and receives a r
     layouts: ['layout.js'],
     forbiddens: ['admin/[org]/forbidden.js'],
   });
-  const resp = await ssrPage(route, { org: 'acme' }, new URL('http://localhost/admin/acme'), { dev: false, appDir });
+  const routeFrontiers = new Map([
+    [join(appDir, 'layout.js'), [join(appDir, 'components/site-nav.js')]],
+    [join(appDir, 'admin/[org]/forbidden.js'), [join(appDir, 'components/ask-access.js')]],
+  ]);
+  const resp = await ssrPage(route, { org: 'acme' }, new URL('http://localhost/admin/acme'), { dev: false, appDir, routeFrontiers });
   assert.equal(resp.status, 403);
   const body = await resp.text();
   assert.ok(body.includes('id="fb"'));
@@ -2152,10 +2160,11 @@ test('boundary: a thrown forbidden() renders inside its layouts and receives a r
   assert.ok(body.includes('id="root-chrome"'), 'the root layout wraps it');
   assert.deepEqual(openSegments(body), ['/', '/admin/[org]']);
   assertPaired(body);
-  // The chain rendered, so its modules must boot. Chrome that paints and never
-  // hydrates is worse than no chrome: its controls look live and are not.
-  assert.ok(body.includes('"/layout.js"'), 'the wrapping layout module boots');
-  assert.ok(body.includes('"/admin/[org]/forbidden.js"'), 'and so does the boundary that rendered');
+  // The chain rendered, so its components must boot. Chrome that paints and
+  // never hydrates is worse than no chrome: its controls look live and are not.
+  assert.ok(body.includes('"/components/site-nav.js"'), "the wrapping layout's component boots");
+  assert.ok(body.includes('"/components/ask-access.js"'), "and so does the boundary's");
+  assert.ok(!body.includes('"/layout.js"') && !body.includes('"/admin/[org]/forbidden.js"'), 'never the route modules');
 });
 
 test('boundary: a 404 for a URL that matched no route stays a bare document', async () => {
@@ -2182,13 +2191,14 @@ test('boundary: instrumentation-client boots FIRST on a boundary page too (#848)
   });
   const resp = await SILENT(() => ssrPage(route, {}, new URL('http://localhost/docs/crash'), {
     dev: false, appDir, instrumentationClient: join(appDir, 'instrumentation-client.js'),
+    routeFrontiers: new Map([[join(appDir, 'docs/error.js'), [join(appDir, 'components/retry.js')]]]),
   }));
   const body = await resp.text();
   const boot = body.match(/<script type="module">([\s\S]*?)<\/script>/);
   assert.ok(boot, 'the boundary page has a boot script');
   const imports = [...boot[1].matchAll(/import\s+"([^"]+)"/g)].map((m) => m[1]);
   assert.equal(imports[0], '/instrumentation-client.js', 'and instrumentation is its FIRST import');
-  assert.ok(imports.includes('/docs/error.js'), 'the boundary module still boots');
+  assert.ok(imports.includes('/components/retry.js'), "the boundary's component still boots");
 });
 
 test('boundary: a layout that throws while wrapping a 403 is REPORTED, not swallowed', async () => {
@@ -2675,14 +2685,15 @@ test('boundary: the DEFAULT 403 page renders in its layouts too (no forbidden.ts
     layouts: ['layout.js'],
     forbiddens: [],
   });
-  const resp = await ssrPage(route, {}, new URL('http://localhost/admin'), { dev: false, appDir });
+  const routeFrontiers = new Map([[join(appDir, 'layout.js'), [join(appDir, 'components/site-nav.js')]]]);
+  const resp = await ssrPage(route, {}, new URL('http://localhost/admin'), { dev: false, appDir, routeFrontiers });
   assert.equal(resp.status, 403);
   const body = await resp.text();
   assert.ok(body.includes('403: Forbidden'), 'the default body still renders');
   assert.ok(body.includes('id="root-chrome"'), 'inside the layout chain');
   assert.ok(openSegments(body).length > 0, 'so it carries markers and can soft-swap');
   assertPaired(body);
-  assert.ok(body.includes('"/layout.js"'), 'and the layout that rendered boots');
+  assert.ok(body.includes('"/components/site-nav.js"'), "and the rendered layout's component boots");
 });
 
 test('boundary: the DEFAULT 404 page renders in its layouts too (no not-found.ts)', async () => {
@@ -2805,7 +2816,7 @@ test('ssrPage: metadata.twitter emits twitter:* meta tags', async () => {
   assert.ok(body.includes('<meta name="twitter:image" content="/og.png">'));
 });
 
-test('ssrPage: a metadata file that throws is silently skipped', async () => {
+test('ssrPage: a metadata file that throws is skipped, logged, and reported', async () => {
   const sub = mkdtempSync(join(tmpDir, 'metaerr-'));
   const appDir = join(sub, 'app');
   mkdirSync(appDir, { recursive: true });
@@ -2820,10 +2831,20 @@ test('ssrPage: a metadata file that throws is silently skipped', async () => {
     `export function generateMetadata() { throw new Error('meta boom'); }\n`);
 
   const route = { file: pageFile, layouts: [], errors: [], metadataFiles: [brokenMeta, pageFile] };
-  const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir });
+  const reported = [];
+  const origError = console.error;
+  const logged = [];
+  console.error = (...a) => logged.push(a.map(String).join(' '));
+  let resp;
+  try {
+    resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, onError: (e) => reported.push(e) });
+  } finally { console.error = origError; }
   assert.equal(resp.status, 200);
   const body = await resp.text();
   assert.ok(body.includes('<p>ok</p>'));
+  assert.equal(reported.length, 1, 'the metadata error reaches onError');
+  assert.equal(reported[0].message, 'meta boom');
+  assert.ok(logged.some((l) => l.includes('metadata failed') && l.includes('broken.js')), 'the error is logged naming the file');
 });
 
 /* ------------ loading.ts → automatic Suspense wrap ------------ */

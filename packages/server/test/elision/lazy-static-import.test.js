@@ -18,7 +18,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createRequestHandler } from '../../src/dev.js';
-import { deferLazyImportsFromSource, lazyComponentFiles, bindingImportedLazyFiles } from '../../src/component-elision.js';
+import { deferLazyImportsFromSource, lazyComponentFiles, bindingImportedLazyFiles } from '../../src/lazy-components.js';
 import { declaresLazy } from '../../src/component-scanner.js';
 import { createBrowserTestHandler } from '../../src/testing.js';
 
@@ -79,14 +79,14 @@ test('declaresLazy reads code, not comments or strings', () => {
   assert.equal(declaresLazy("const s = 'static lazy = true';"), false);
 });
 
-test('lazyComponentFiles keeps lazy files only, and leaves an elided one to the strip', () => {
+test('lazyComponentFiles keeps the lazy files only', () => {
   const comps = [
     { tag: 'x-pane', file: PANE, lazy: true },
     { tag: 'x-badge', file: BADGE, lazy: true },
     { tag: 'x-counter', file: COUNTER, lazy: false },
   ];
-  const out = lazyComponentFiles(comps, new Set([BADGE]));
-  assert.deepEqual([...out.entries()], [[PANE, ['x-pane']]]);
+  const out = lazyComponentFiles(comps);
+  assert.deepEqual([...out.entries()], [[PANE, ['x-pane']], [BADGE, ['x-badge']]]);
 });
 
 test('bindingImportedLazyFiles finds lazy files a module imports with bindings', async () => {

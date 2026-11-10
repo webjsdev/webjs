@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
 # PreToolUse hook: BLOCK a `git commit` that changes framework FEATURE
-# source but stages NO scaffold surface. The scaffold is webjs's PRIMARY
-# teaching surface for AI agents: an agent learns the framework by reading
-# the generated gallery/showcase and its comments, then builds the real app
-# by adapting them. So when a webjs FEATURE is added or changed, the scaffold
-# that teaches it must move too, exactly as the docs must (this is the
-# scaffold twin of require-docs-with-src.sh).
+# source but stages NO teaching surface. A scaffolded app is minimal and its
+# only agent doc is the brief; agents rely on Lit and Next.js habits, and the
+# feature gallery (gallery/, gallery.webjs.dev) carries a runnable demo per
+# capability. So when a WebJs FEATURE is added or changed, the generator, a
+# gallery demo or the brief must move too, exactly as the docs must (this is
+# the scaffold twin of require-docs-with-src.sh).
 #
 # It fires on every commit, decides from the STAGED diff (not model
 # judgement), and BLOCKS (exit 2) when framework-feature source is staged
@@ -24,7 +24,7 @@
 # reconciles the live framework surface (@webjsdev/core + @webjsdev/server exports
 # AND the routing convention files the router parses) against
 # test/scaffolds/gallery-coverage.json and FAILS when a new one is neither
-# demonstrated by the scaffold nor consciously exempted. That is the un-skippable
+# demonstrated by the gallery or a scaffold nor consciously exempted. That is the un-skippable
 # gate (the analogue of a test that must exist AND pass); this hook is the fast
 # commit-time reminder in front of it.
 #
@@ -35,16 +35,12 @@
 # CLI packages' src, packages/(core|server|cli)/src/**. Editor plugins, the
 # MCP, and intellisense do not shape the scaffold, so they are excluded.
 #
-# Satisfying surface: either of the scaffold's TWO primary teaching surfaces.
-# (1) the scaffold itself, packages/cli/templates/** (the template files +
-# per-agent rule files) OR packages/cli/lib/** (the generators); and (2) the
-# agent skill at the repo-root .agents/skills/webjs/** (SKILL.md + references/),
-# which is bundled into every scaffold at prepack and is the DURABLE teacher:
-# `gallery:clear` removes the gallery, so the skill is the only teaching surface
-# that survives, and a feature it does not teach is lost the moment an agent
-# clears the gallery. So a feature-source commit must move the gallery OR the
-# skill (per-surface judgment on whether BOTH are needed is the skill's manual
-# walk + the CI coverage gate).
+# Satisfying surface: the scaffold itself (packages/cli/templates/**, whose
+# AGENTS.md carries the brief, or packages/cli/lib/**, the generators), the
+# gallery app (gallery/**), or the brief's source, packages/mcp/src/brief.js.
+# The brief changes only when a Lit or Next.js habit stops producing correct
+# WebJs (per-surface judgment is the scaffold-sync skill's manual walk plus
+# the CI coverage gate).
 #
 # Allowed (exit 0): commits touching no feature src; commits that stage a
 # scaffold surface alongside the source; and a change that genuinely needs
@@ -68,6 +64,16 @@ if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])git commit([^[:alnum:]-]|$)
   exit 0
 fi
 
+# The bypass above reads this hook's OWN environment, which an agent cannot set:
+# Claude Code runs hooks with the harness environment, not the command's. So the
+# remedy this hook prints (re-run with WEBJS_NO_SCAFFOLD_GATE=1) also counts when it is written
+# as an env assignment directly in front of the `git commit` it applies to. It
+# must lead a simple command, so the same text in a commit message, an echo or a
+# separate command does not count.
+if printf '%s' "$cmd" | grep -Eq '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*WEBJS_NO_SCAFFOLD_GATE=1[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*git commit([^[:alnum:]-]|$)'; then
+  exit 0
+fi
+
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 0; fi
 
 staged=$(git diff --cached --name-only 2>/dev/null || true)
@@ -78,37 +84,29 @@ if [ -z "$staged" ]; then exit 0; fi
 src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/(core|server|cli)/src/' || true)
 if [ -z "$src_touched" ]; then exit 0; fi
 
-# Any scaffold teaching surface staged in the same commit? Either the scaffold
-# templates/generators, or the canonical repo-root gallery/ app (the gallery is
-# runnable but disposable via gallery:clear, and prepack bundles it into the CLI
-# tarball), OR the agent skill at .agents/skills/webjs/ (the durable teacher
-# bundled into every scaffold, the only surface that survives gallery:clear).
-scaffold_staged=$(printf '%s\n' "$staged" | grep -E '^packages/cli/(templates|lib)/|^gallery/|^\.agents/skills/webjs/' || true)
+# Any teaching surface staged in the same commit? The scaffold
+# templates/generators, the repo-root gallery/ app, or the brief's source
+# (packages/mcp/src/brief.js), which the scaffold AGENTS.md carries.
+scaffold_staged=$(printf '%s\n' "$staged" | grep -E '^packages/cli/(templates|lib)/|^gallery/|^packages/mcp/src/brief\.js$' || true)
 if [ -n "$scaffold_staged" ]; then exit 0; fi
 
 cat >&2 <<'EOF'
-BLOCKED: this commit changes framework-feature source but stages no scaffold.
+BLOCKED: this commit changes framework-feature source but stages no teaching surface.
 
-Staged source under packages/(core|server|cli)/src/** with no scaffold
-surface in the same commit. The scaffold is webjs's PRIMARY teaching surface
-for AI agents (they learn the framework by reading the generated
-gallery/showcase, then build the real app by adapting it), so a task is NOT
-done until the scaffold that teaches the changed feature is in sync too.
+Staged source under packages/(core|server|cli)/src/** with no generator,
+gallery demo or brief change in the same commit.
 
-If this added or changed a WebJs FEATURE an agent should learn from the
-scaffold (a new export/API, an html hole, a lifecycle hook, a server-action
-capability, a config key, a CLI behaviour), invoke the `webjs-scaffold-sync`
-skill, then `git add` the teaching surface(s) and commit again:
-  `.agents/skills/webjs/`                  the DURABLE teacher (SKILL.md + references/),
-                                          survives `gallery:clear` so it MUST teach the feature
-  gallery/                                a UI feature-gallery demo (runnable, disposable).
-                                          The canonical root app; prepack bundles it into the CLI
-  packages/cli/lib/api-gallery.js         an api backend-showcase endpoint
-  packages/cli/lib/{create,saas-template}.js  the generators (home, theme, schema, wiring)
-  packages/cli/templates/ (AGENTS/CONVENTIONS/.cursorrules/...)  scaffold rules in lockstep
-  test/scaffolds/**                       the scaffold assertions for the above
-A feature usually needs BOTH: a gallery demo (learn by running) AND skill
-coverage (the pattern that survives the clear). The skill walks every surface
+If this added or changed a WebJs FEATURE (a new export/API, an html hole, a
+lifecycle hook, a server-action capability, a config key, a CLI behaviour),
+invoke the scaffold-sync skill, then `git add` the surface(s) and commit
+again:
+  packages/mcp/src/brief.js     the brief (paste it into templates/AGENTS.md too),
+                                only when a Lit or Next.js habit stops working
+  gallery/                      a runnable feature demo (gallery.webjs.dev)
+  packages/cli/lib/create.js    the generator (layout, home, theme, schema, wiring)
+  packages/cli/templates/       files copied into every new app
+  (plus test/** for the assertions; a test alone does not satisfy this gate)
+A feature usually needs a gallery demo and, on the docs site, the reference. The webjs-scaffold-sync skill walks every surface
 AND runs the mandatory generate + boot + `webjs check` verification (the
 generators emit strings, so escaping bugs only show in a freshly generated app).
 

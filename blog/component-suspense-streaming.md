@@ -35,7 +35,7 @@ SalesDashboard.register('sales-dashboard');
 
 On the wire, the framework renders everything fast, flushes the first byte with the summary card already filled in, and in the hole where `<slow-analytics>` goes it emits the `.fallback` markup. The browser paints that skeleton at once. The slow component keeps rendering on the server, and when its data resolves WebJs streams the real content down the same response and swaps it in. Shell instantly, skeleton where the slow panel will be, then the panel.
 
-Watch the dot on `.fallback`. It is a property hole, so it must be unquoted. Write `.fallback=${html`...`}`, never `.fallback="${...}"`. The leading dot is what tells WebJs to pass the template as a DOM property instead of stringifying it into an attribute, and quoting it breaks that.
+Watch the dot on `.fallback`. It is a property binding, exactly as in Lit, so write `.fallback=${html`...`}`. The leading dot is what tells WebJs to pass the template as a DOM property instead of stringifying it into an attribute. Drop the dot and the fallback arrives as text.
 
 # Two slow panels do not wait on each other
 
@@ -64,4 +64,4 @@ Two behaviors fall out of that for free. It streams on soft navigation, so when 
 
 Do not reach for `<webjs-suspense>` reflexively. It is the exception, not the pattern. For request-time server data that resolves fast, block in `async render()` and bake it into the first paint. That is faster, simpler, and the whole reason WebJs blocks by default. The signal that flips me to a boundary is concrete: I want a first-paint skeleton for a region. That is the tell that the region is slow enough to be worth streaming, because a blocking `async render()` never shows a first-paint fallback (it has real data instead), so wanting one means the data is not there fast enough. One genuinely slow panel on a fast page is the case `<webjs-suspense>` exists for. A page where the whole route is slow is a different tool, the region-level `Suspense({ fallback, children })` you drop into a template hole, or a `loading.js` route file that wraps the whole page with an immediately flushed fallback.
 
-One note for the curious. A streamed component with `static shadow = true` always ships its JavaScript module, even when it would otherwise be elided, because Declarative Shadow DOM only attaches during initial HTML parsing, so a component arriving mid-stream needs its module to re-run `attachShadow` in the browser. Light-DOM streamed components have no such requirement.
+One note for the curious. A streamed component with `static shadow = true` needs its JavaScript module on the page, because Declarative Shadow DOM only attaches during initial HTML parsing, so a component arriving mid-stream needs its module to re-run `attachShadow` in the browser. Light-DOM streamed components have no such requirement.

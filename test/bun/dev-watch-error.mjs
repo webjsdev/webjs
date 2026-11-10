@@ -21,6 +21,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -30,7 +31,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../..');
 const CLI = join(ROOT, 'packages/cli/bin/webjs.js');
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
-const PORT = 9500 + (process.pid % 240);
+// A port the OS reports free right now. `9500 + pid % 240` collided with
+// another suite's dev server on CI, which held the same number.
+const PORT = await new Promise((done, fail) => {
+  const probe = createServer();
+  probe.once('error', fail);
+  probe.listen(0, '127.0.0.1', () => {
+    const { port } = /** @type {import('node:net').AddressInfo} */ (probe.address());
+    probe.close(() => done(port));
+  });
+});
 const BASE = `http://localhost:${PORT}`;
 const canLockFiles = process.platform !== 'win32' && !(typeof process.getuid === 'function' && process.getuid() === 0);
 

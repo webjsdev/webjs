@@ -91,8 +91,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      # Some integration tests boot the blog example in-process (e.g. the
-      # differential elision test renders its mixed `/` page), which calls
+      # Some integration tests boot the blog example in-process (e.g.
+      # test/integration/blog-http.test.mjs renders its `/` page), which calls
       # listPosts() and needs a migrated SQLite DB, the same setup the e2e job
       # does.
       - name: Prepare the blog example database
@@ -194,6 +194,11 @@ jobs:
       # silently vanish on the other. Asserts both directions.
       - name: SSR comment and raw-text handling on Bun
         run: bun test/bun/comment-not-an-element.mjs
+      # An unquoted attribute value holding a hole is written quoted, and a
+      # template result built from data is refused (#1686): a slicing or regex
+      # difference between V8 and JSC here would be an attribute injection.
+      - name: SSR unquoted attribute values on Bun
+        run: bun test/bun/ssr-unquoted-attr.mjs
       # The one-pass SSR renderer on Bun (#1646): the per-template tokenizer,
       # the op walker and the in-walk component expansion are string slicing
       # and regex work on the hot path, where a V8-versus-JSC difference shows
@@ -363,6 +368,26 @@ jobs:
       # on the Bun SSR path (buffered and streamed) as on Node.
       - name: webjs binding-prefix dispatch on Bun
         run: bun test/bun/binding-prefixes.mjs
+      # Decorators refused loudly on Bun: Bun runs legacy decorators and throws
+      # a ReferenceError for the undefined decorator where Node throws a bare
+      # SyntaxError, so this asserts check, the dev module refusal, and the SSR
+      # dev frame all name the WebJs fix on the Bun path too.
+      - name: WebJs decorator detection on Bun
+        run: bun test/bun/decorator-detection.mjs
+      # The lit directive surface (iterables in a child hole, the two-argument
+      # repeat, when / choose / map / join / range, unsafeSVG, the mathml tag,
+      # static-html) renders the same on the Bun SSR path.
+      - name: WebJs lit directive parity on Bun
+        run: bun test/bun/lit-directives.mjs
+      # A custom directive (directive / async-directive subpaths) resolves to
+      # its render() result in every SSR part, across the source subpath and
+      # the built root bundle.
+      - name: WebJs custom directives on Bun
+        run: bun test/bun/custom-directive.mjs
+      # A bare signal in a template hole renders its value at SSR, and the
+      # /signals subpath carries SignalWatcher and watch on the built bundle.
+      - name: WebJs bare signals in template holes on Bun
+        run: bun test/bun/bare-signal.mjs
       # Reverse-proxy forwarded headers on Bun (#1090): the node shell corrects
       # the request url via urlFromRequest before building its Request, but the
       # Bun shell handed Bun.serve's request straight through, so behind a
@@ -408,6 +433,11 @@ jobs:
       # turn a warning into a dead app.
       - name: Config validation warns and boots on Bun
         run: bun test/bun/webjs-config-validate.mjs
+      # Lit's `static properties` spelling (#1686): the merged props map feeds
+      # SSR attribute application and reflection, so a Bun difference in class
+      # statics or the prototype walk would render wrong values.
+      - name: Static properties render and merge on Bun
+        run: bun test/bun/static-properties.mjs
       # Light-DOM slot SSR projection on Bun (#1021): slot substitution
       # (injectDSD / substituteSlotsInRender) is on the SSR hot path, so the
       # projection must be byte-consistent across runtimes: authored children

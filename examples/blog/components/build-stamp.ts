@@ -5,17 +5,16 @@ import { WebComponent, html } from '@webjsdev/core';
  * markup, no reactive properties, no events, no lifecycle hooks, no
  * slot. Its SSR'd HTML is the complete output.
  *
- * It exists to demonstrate (and e2e-pin) display-only component elision.
- * Because it does no client-side work, the framework strips its import
- * from the served page source, so its module is never downloaded by the
- * browser. View the network panel on the home page: build-stamp.ts is
- * absent while interactive components like counter.ts are fetched.
+ * It still ships, as every component does in Lit: the e2e probe pins that
+ * the browser downloads build-stamp.ts next to the interactive counter.ts
+ * (#1686). A component that must never reach the browser goes in a
+ * `*.server.ts` file instead.
  */
 export class BuildStamp extends WebComponent {
   render() {
     return html`<span
       class="font-mono text-[11px] tracking-[0.12em] uppercase text-muted-foreground/70"
-      >no-build · zero JS shipped for this badge</span
+      >no-build · served as written</span
     >`;
   }
 }

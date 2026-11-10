@@ -126,7 +126,7 @@ try {
   put('package.json', JSON.stringify({ name: 'load-rss', private: true, type: 'module', imports: { '#*': './*' }, webjs: {} }));
   put('app/layout.ts', "import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html`<header>load</header>${children}`; }\n");
   // About 2.5 KB of body, like a real page, plus a display-only component the
-  // render pass resolves (elided from the browser, still rendered on the server).
+  // render pass resolves (shipped to the browser and rendered on the server).
   put('app/page.ts', "import { html } from '@webjsdev/core';\nimport '../components/badge.ts';\nexport default function P() { return html`<main><x-badge label=\"load\"></x-badge><p>${'lorem ipsum dolor sit amet '.repeat(90)}</p></main>`; }\n");
   put('components/badge.ts', "import { WebComponent, html } from '@webjsdev/core';\nclass Badge extends WebComponent({ label: String }) {\n  constructor() { super(); this.label = ''; }\n  render() { return html`<span>${this.label}</span>`; }\n}\nBadge.register('x-badge');\n");
   // The server reports its own memory and CPU; `/proc` would be Node-only

@@ -9,6 +9,7 @@
  */
 
 export * from './src/component.js';
+export * from './src/converters.js';
 export type {
   Metadata,
   MetadataContext,
@@ -25,6 +26,7 @@ export type {
   AuthorMetadata,
   PreloadDescriptor,
   JsonLd,
+  GenerateMetadata,
 } from './src/metadata.d.ts';
 
 // Typed route props + the opt-in generated route union (#258). The
@@ -36,13 +38,14 @@ export type {
   RouteParams,
   PageProps,
   LayoutProps,
+  FormActionData,
   RouteHandlerContext,
   WebjsRoutes,
   RouteParamMap,
 } from './src/routes.d.ts';
 
 // The package.json `webjs` config block (#259). Typed reference for the
-// elide / headers / redirects / trailingSlash / csp / ingress-limit knobs;
+// seed / headers / redirects / trailingSlash / csp / ingress-limit knobs;
 // the companion JSON Schema (packages/server/webjs-config.schema.json) gives
 // editors native validation of package.json itself.
 export type {
@@ -74,20 +77,25 @@ export type {
   NonSerializable,
 } from './src/serializable.d.ts';
 
-export { html, svg, isTemplate, MARKER } from './src/html.js';
+export { html, svg, mathml, isTemplate, MARKER } from './src/html.js';
+export { isServer } from './src/is-server.js';
 // The `html\`\`` return type. A JSDoc typedef in html.js used across the
 // component / route / testing type surfaces; re-exported so an app or the
 // docs/website can annotate a value as `TemplateResult` (#772).
 export type { TemplateResult } from './src/html.js';
-export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export type { CSSResultGroup, CSSResultOrNative, CSSResultArray } from './src/css.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';
+export type { RootPart } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
-export { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export type { RedirectType } from './src/nav.js';
 export { repeat, isRepeat } from './src/repeat.js';
 export { Suspense, isSuspense } from './src/suspense.js';
 export { connectWS } from './src/websocket-client.js';
+export type { WSConnection, ConnectOptions } from './src/websocket-client.js';
 export { richFetch } from './src/rich-fetch.js';
 export { enableClientRouter, disableClientRouter, revalidate, refreshPage, loadFrame } from './src/router-client.js';
 
@@ -103,21 +111,25 @@ export {
   unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
   templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
   until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
-  watch, isWatch,
+  watch, isWatch, unsafeSVG, unsafeMathML, when, choose, map, join, range,
 } from './src/directives.js';
-export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
-export { Task, TaskStatus } from './src/task.js';
+export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent, ContextProviderEvent, ContextRoot } from './src/context.js';
+export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';
 
 // Signals (the default state primitive, invariant 5), the CSP nonce reader,
 // the wire serializer, and the streaming/frame custom elements. These mirror
 // the index.js runtime re-exports; their declarations live in the matching
 // src/*.d.ts (#388 fixed the index.d.ts drift from index.js).
-export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+export { signal, computed, effect, batch, isSignal, Signal, SignalWatcher } from './src/signal.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
 export { asset, setAssetUrlProvider } from './src/asset-url.js';
-export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';
+export {
+  FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver,
+  installActionBind, bindActionId, splitActionId,
+} from './src/form-action.js';
 export { takeSeed, scanSeeds, seedStats, SEED_MISS } from './src/action-seed-client.js';
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
+export { applyActionRefresh, followActionRedirect } from './src/action-effects-client.js';
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';
@@ -125,7 +137,7 @@ export { setActiveActionSignal, activeActionSignal } from './src/action-abort-cl
 export {
   STREAM_CONTENT_TYPE, FRAME_CHUNK, FRAME_END, FRAME_ERROR, encodeFrame, createFrameDecoder,
 } from './src/action-stream.js';
-export { stringify, parse, serialize, deserialize } from './src/serialize.js';
+export { stringify, stringifySync, parse, serialize, deserialize } from './src/serialize.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';
 

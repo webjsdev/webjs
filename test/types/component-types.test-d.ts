@@ -16,6 +16,7 @@ import {
   prop,
   html,
   type PropertyDeclaration,
+  type PropertyConstructor,
   type ReactiveController,
 } from '@webjsdev/core';
 
@@ -61,13 +62,38 @@ type _Count = Assert<Equal<typeof counter.count, number>>;
 type _Label = Assert<Equal<typeof counter.label, string>>;
 type _Open = Assert<Equal<typeof counter.open, boolean>>;
 
+/* ------------- Lit's static properties spelling type-checks (#1686) -------------
+ * Lit's decorator-free form: a `static properties` map plus an erasable
+ * `declare` per prop. The bare-constructor value and a `static get` work too. */
+class LitStyle extends WebComponent {
+  static properties = {
+    count: { type: Number, reflect: true },
+    label: { type: String, attribute: 'aria-label' },
+    items: { type: Array, default: () => [] as string[] },
+  };
+  declare count: number;
+  declare label: string;
+  declare items: string[];
+}
+const litStyle = new LitStyle();
+type _LitCount = Assert<Equal<typeof litStyle.count, number>>;
+class BareValue extends WebComponent {
+  static properties = { count: Number };
+  declare count: number;
+}
+class GetterForm extends WebComponent {
+  static get properties() { return { open: { type: Boolean } }; }
+  declare open: boolean;
+}
+void BareValue; void GetterForm;
+
 /* ------------- The factory-produced base carries the FULL static surface -------------
  * Regression net for the de-duplicated `WebComponentStatics` (#602): both the
  * constructor type and the factory-call return type reference the one shared
  * declaration, so dropping any static from it must red this block. */
 const _shadow: boolean = Counter.shadow;
 const _hydrate: 'visible' | undefined = Counter.hydrate;
-const _properties: Record<string, PropertyDeclaration> = Counter.properties;
+const _properties: Record<string, PropertyDeclaration | PropertyConstructor> = Counter.properties;
 const _styles = Counter.styles;
 const _lazy: boolean | undefined = Counter.lazy;
 const _observed: readonly string[] = Counter.observedAttributes;
@@ -97,10 +123,16 @@ class Panel extends WebComponent({
 }) {}
 Panel.register('my-panel');
 const panel = new Panel();
-type _PanelOpen = Assert<Equal<typeof panel.open, boolean>>;
-type _PanelRows = Assert<Equal<typeof panel.rows, string[]>>;
+// With no default nothing fills them until the component does, so they are
+// `T | undefined`, Lit's `@state() open?: boolean` (#1686).
+type _PanelOpen = Assert<Equal<typeof panel.open, boolean | undefined>>;
+type _PanelRows = Assert<Equal<typeof panel.rows, string[] | undefined>>;
 type _PanelLoose = Assert<Equal<typeof panel.loose, unknown>>;
 type _PanelLabel = Assert<Equal<typeof panel.label, string>>;
+// A default makes it a plain `T` from the start.
+class PanelDefaults extends WebComponent({ open: prop<boolean>({ state: true, default: false }) }) {}
+PanelDefaults.register('my-panel-defaults');
+type _PanelDefaultOpen = Assert<Equal<InstanceType<typeof PanelDefaults>['open'], boolean>>;
 panel.open = true;
 
 /* ------------- PropertyDeclaration shape accepts the expected fields ------------- */

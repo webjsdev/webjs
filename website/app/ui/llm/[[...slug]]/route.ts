@@ -16,8 +16,9 @@ import { renderUiMarkdown, markdownResponse, cachedTextResponse } from '#lib/ui/
 import { originFor } from '#lib/docs-llms.server.ts';
 import { uiPathFromSlug } from '#lib/ui/llm-path.ts';
 
-export async function GET(req: Request, { params }: { params: { slug?: string | string[] } }) {
-  const slug = Array.isArray(params.slug) ? params.slug : typeof params.slug === 'string' ? params.slug.split('/') : [];
+// An optional catch-all arrives as string[] (absent at /ui/llm itself), as in Next.
+export async function GET(req: Request, { params }: { params: { slug?: string[] } }) {
+  const slug = params.slug ?? [];
   const path = uiPathFromSlug(slug);
   const md = await renderUiMarkdown(path, originFor(req));
   if (md == null) return markdownResponse(`# Not found\n\nNo /ui page at ${path}.\n`, 404);

@@ -73,9 +73,13 @@ export function isAttributeBacked(decl) {
  * applied to the JSON and converter branches alone, which left a `String`-typed
  * prop holding the raw source text at SSR while `getAttribute()` on the client
  * returned the decoded one.
+ * @param {string} [propName] the property being read, named in the Boolean warning
  * @returns {unknown}
  */
-export function readAttributeValue(def, value) {
+export function readAttributeValue(def, value, propName) {
+  // Lit's function form: a bare `converter: (value, type) => ...` IS the
+  // `fromAttribute` half, and reflection uses the default serialization.
+  if (typeof def.converter === 'function') return def.converter(value, def.type);
   if (def.converter && def.converter.fromAttribute) {
     // Deliberately UNGUARDED, and deliberately first (#1340). An author who
     // supplies a converter owns the whole read, which is the same rule
@@ -109,7 +113,13 @@ export function readAttributeValue(def, value) {
     return def.converter.fromAttribute(value, def.type);
   }
   if (def.type === Number) return value == null ? null : Number(value);
-  if (def.type === Boolean) return value != null && value !== 'false';
+  if (def.type === Boolean) {
+    // A boolean attribute is on whenever it is PRESENT, as in HTML and Lit,
+    // so `open="false"` is true. Say so once per property, since the literal
+    // reads as off to anyone coming from a JSX prop.
+    if (value === 'false') warnFalseBoolean(def, propName);
+    return value != null;
+  }
   if (def.type === Object || def.type === Array) {
     // An attribute that is not parseable JSON yields `null` rather than the raw
     // string (#1253), because a STRING is never a valid value for a property
@@ -135,9 +145,47 @@ export function readAttributeValue(def, value) {
   return value;
 }
 
+/** Declarations already warned about a literal "false". @type {WeakSet<object>} */
+const WARNED_FALSE = new WeakSet();
+
+/**
+ * @param {object} def
+ * @param {string | undefined} propName
+ */
+function warnFalseBoolean(def, propName) {
+  if (WARNED_FALSE.has(def)) return;
+  WARNED_FALSE.add(def);
+  const name = propName ? `\`${String(propName)}\`` : 'A Boolean property';
+  console.warn(
+    `[webjs] ${name} received the attribute value "false", which is TRUE: a Boolean property is on whenever its ` +
+      `attribute is present, as in HTML and Lit. To turn it off, leave the attribute out, or bind it with ` +
+      `?attr=\${false} in a template.`,
+  );
+}
+
 /** Kebab-case a property name for its default HTML attribute. @param {string} s */
 function hyphenate(s) {
   return s.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+/**
+ * The attribute a declared property reads and reflects to, Lit's
+ * `attribute` option: a string is used as written, `false` (or
+ * `state: true`) means none, and anything else (absent, or `true`) is Lit's
+ * default name, the LOWERCASED property name (`isOpen` -> `isopen`). The
+ * kebab spelling (`is-open`) stays readable as an alias (see
+ * `attributeBackedProps`) but is never what a property reflects to.
+ *
+ * @param {string} propName
+ * @param {{ attribute?: string | boolean, state?: boolean }} decl  normalised declaration
+ * @returns {string | undefined}
+ */
+export function attributeNameFor(propName, decl) {
+  if (!isAttributeBacked(decl)) return undefined;
+  if (typeof decl.attribute === 'string') return decl.attribute;
+  // A symbol-keyed property has no default attribute name, as in Lit.
+  if (typeof propName !== 'string') return undefined;
+  return propName.toLowerCase();
 }
 
 /**
@@ -182,14 +230,20 @@ function hyphenate(s) {
  *   which case the caller must IGNORE the attribute entirely (#1341).
  */
 export function resolveAttributeProperty(Cls, attrName) {
-  // Primary names first, so a prop literally named `foobar` keeps `foobar`
-  // even when a sibling `fooBar` would answer to it as an alias.
+  // Primary names first, then aliases. Two props can share a primary name
+  // (`fooBar` and `foobar` both default to `foobar`); the prop literally
+  // named after the attribute keeps it, so a sibling never steals a real prop.
+  let primaryHit;
   let aliasHit;
   for (const { propName, def, primary, alias } of attributeBackedProps(Cls)) {
-    if (primary === attrName) return { propName, def };
-    if (aliasHit === undefined && alias === attrName) aliasHit = { propName, def };
+    if (primary === attrName) {
+      if (propName === attrName) return { propName, def };
+      if (primaryHit === undefined) primaryHit = { propName, def };
+    } else if (aliasHit === undefined && alias === attrName) {
+      aliasHit = { propName, def };
+    }
   }
-  return aliasHit;
+  return primaryHit ?? aliasHit;
 }
 
 /**
@@ -210,12 +264,127 @@ export function observedAttributeNames(Cls) {
 }
 
 /**
+ * Every reactive property `Cls` declares, its own over its superclasses', the
+ * way Lit's `finalize` merges `elementProperties` down the chain. A class's own
+ * `static properties` (Lit's spelling, a field or a `static get`) and the map
+ * the `WebComponent({ ... })` factory puts on the base it returns are the same
+ * thing here, so a subclass adding props keeps its parent's, and a factory
+ * class may add a `static properties` block of its own.
+ *
+ * Memoized per class: the accessors (`installAccessors`), the attribute list
+ * (`attributeBackedProps`) and reflection all read this one map, so they
+ * cannot disagree about which props exist. The map is the same OBJECT for as
+ * long as the class's declarations, and its superclasses', are unchanged, so
+ * a memo derived from it is keyed on that identity.
+ *
+ * A memo holds its superclasses' declarations merged in, so `createProperty`
+ * on a parent has to reach every subclass already read, which a WeakMap
+ * cannot enumerate. So each memo records its parent's map and its own class's
+ * version, and stays valid while both are unchanged: a change rebuilds exactly
+ * the changed class and the classes below it. Checking that walks the chain,
+ * so it runs only after some class changed (`epoch` moved); until then a read
+ * is one lookup.
+ *
+ * @param {any} Cls  the component class
+ * @returns {Record<string, any>}
+ */
+export function declaredProperties(Cls) {
+  if (!Cls || typeof Cls !== 'function') return (Cls && Cls.properties) || {};
+  const hit = DECLARED.get(Cls);
+  if (hit && hit.epoch === epoch) return hit.merged;
+  const parent = Object.getPrototypeOf(Cls);
+  const inherited = parent && parent !== Function.prototype ? declaredProperties(parent) : ROOT;
+  const version = VERSION.get(Cls) ?? 0;
+  if (hit && hit.inherited === inherited && hit.version === version) {
+    // Unaffected by whatever changed: keep the same map, valid at this epoch.
+    hit.epoch = epoch;
+    return hit.merged;
+  }
+  const own = Object.hasOwn(Cls, 'properties') ? Cls.properties : undefined;
+  const created = CREATED.get(Cls);
+  let merged = own && typeof own === 'object' ? { ...inherited, ...own } : inherited;
+  if (created) merged = { ...merged, ...created };
+  DECLARED.set(Cls, { epoch, inherited, version, merged });
+  return merged;
+}
+
+/** @type {WeakMap<Function, { epoch: number, inherited: Record<string, any>, version: number, merged: Record<string, any> }>} */
+const DECLARED = new WeakMap();
+
+/** The declarations above every class: none. Shared, so a root-level memo can be compared by identity. */
+const ROOT = Object.freeze({});
+
+/** Per class, how many times its own declarations changed (`createProperty`). @type {WeakMap<Function, number>} */
+const VERSION = new WeakMap();
+
+/** Moves whenever any class's declarations change, so a memo knows to re-check its chain. */
+let epoch = 0;
+
+/**
+ * The current declarations epoch, for a memo outside this module derived from
+ * `declaredProperties` (lifecycle.js's `elementProperties`): while it has not
+ * moved, no class's declarations changed and a memo needs no re-check.
+ * @returns {number}
+ */
+export function declarationsEpoch() {
+  return epoch;
+}
+
+/**
+ * Properties added to a class through Lit's `static createProperty(name,
+ * options)`, per class. Merged LAST in `declaredProperties`, so a created
+ * property wins over a same-named `static properties` entry, as it does in Lit
+ * (`createProperty` writes straight into `elementProperties`).
+ * @type {WeakMap<Function, Record<string, any>>}
+ */
+const CREATED = new WeakMap();
+
+/**
+ * Normalise one declaration: the bare-constructor shorthand (`count: Number`)
+ * becomes `{ type: Number }`, an options object is returned as is.
+ * @param {unknown} decl
+ * @returns {Record<string, any>}
+ */
+export function normalizeDecl(decl) {
+  return typeof decl === 'object' && decl !== null ? /** @type {any} */ (decl) : { type: decl };
+}
+
+/**
+ * Record a property created through `static createProperty()` and drop the
+ * class's memoized declarations so the next read includes it.
+ * @param {Function} Cls
+ * @param {string} name
+ * @param {Record<string, any>} decl
+ */
+export function addCreatedProperty(Cls, name, decl) {
+  let own = CREATED.get(Cls);
+  if (!own) CREATED.set(Cls, (own = {}));
+  own[name] = decl;
+  invalidateClass(Cls);
+}
+
+/**
+ * Drop every memo this module keeps for `Cls`, so its declarations are read
+ * again on next use.
+ * @param {Function} Cls
+ */
+export function invalidateClass(Cls) {
+  // This class's memo is rebuilt, which gives it a new map, and every
+  // subclass's memo then sees a parent map it was not built from. Classes on
+  // other chains re-check once and keep their maps.
+  VERSION.set(Cls, (VERSION.get(Cls) ?? 0) + 1);
+  epoch++;
+}
+
+/**
  * The attribute-backed props of `Cls` with the names each answers to.
  *
  * `primary` is the custom `attribute` option, matched VERBATIM, or else the
- * kebab-cased property name. `alias` is the LOWERCASED property name, lit's
- * default attribute name, present only when the prop has no custom `attribute`
- * and the lowercased name differs from the kebab one. Without it,
+ * LOWERCASED property name, Lit's default attribute name and the one a
+ * reflected property writes. `alias` is the KEBAB-cased property name, kept
+ * as a read-only alias (WebJs's earlier default, and the spelling HTML
+ * authors reach for), present only when the prop has no custom `attribute`
+ * and the kebab name differs from the lowercase one. Without it,
  * `<quiz-player quizId=${id}>` against `{ quizId: Number }` reached neither
  * side: the parser lowercases the name to `quizid`, which matched nothing, so
  * the prop silently stayed undefined on the server AND the client (#1540).
@@ -229,31 +398,36 @@ function attributeBackedProps(Cls) {
   // Memoized per class (#1646): the SSR walk resolves every source attribute
   // of every instance through this list, and rebuilding it (one hyphenate per
   // declared prop) was a measurable share of a component's render. A class's
-  // declarations never change after it is defined (a `static properties`
-  // block throws at runtime, and the factory fixes the set), so the first
-  // walk is the only one.
+  // declarations are fixed once it is defined (`declaredProperties` reads them
+  // once per class), so the first walk is the only one.
   if (Cls && typeof Cls === 'function') {
+    // Valid while no declarations changed anywhere (one lookup); after a
+    // change, while the class's declarations map is the same object, which it
+    // stays unless this class or a superclass changed.
     const hit = BACKED_PROPS.get(Cls);
-    if (hit) return hit;
+    if (hit && hit.epoch === epoch) return hit.built;
+    const merged = declaredProperties(Cls);
+    if (hit && hit.merged === merged) { hit.epoch = epoch; return hit.built; }
     const built = buildAttributeBackedProps(Cls);
-    BACKED_PROPS.set(Cls, built);
+    BACKED_PROPS.set(Cls, { epoch, merged, built });
     return built;
   }
   return buildAttributeBackedProps(Cls);
 }
 
-/** @type {WeakMap<Function, { propName: string, def: any, primary: string, alias: string | undefined }[]>} */
+/** @type {WeakMap<Function, { epoch: number, merged: Record<string, any>, built: { propName: string, def: any, primary: string, alias: string | undefined }[] }>} */
 const BACKED_PROPS = new WeakMap();
 
 function buildAttributeBackedProps(Cls) {
-  const props = (Cls && Cls.properties) || {};
+  const props = declaredProperties(Cls);
   const out = [];
-  for (const [k, decl] of Object.entries(props)) {
-    const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
-    if (!isAttributeBacked(d)) continue;
-    const primary = d.attribute || hyphenate(k);
-    const lower = k.toLowerCase();
-    const alias = !d.attribute && lower !== primary ? lower : undefined;
+  // Symbol keys too: one reaches an attribute through its `attribute` option.
+  for (const k of Reflect.ownKeys(props)) {
+    const d = normalizeDecl(props[k]);
+    const primary = attributeNameFor(k, d);
+    if (primary === undefined) continue;
+    const kebab = typeof k === 'string' ? hyphenate(k) : primary;
+    const alias = typeof d.attribute !== 'string' && kebab !== primary ? kebab : undefined;
     out.push({ propName: k, def: d, primary, alias });
   }
   return out;

@@ -1,11 +1,15 @@
 import { render as clientRender } from '../render-client.js';
-import { readAttributeValue, resolveAttributeProperty, observedAttributeNames, isAttributeBacked } from '../attribute-reader.js';
+import {
+  readAttributeValue, resolveAttributeProperty, observedAttributeNames, declaredProperties,
+  normalizeDecl, addCreatedProperty, attributeNameFor, declarationsEpoch,
+} from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
-import { isCSS, adoptStyles } from '../css.js';
+import { adoptStyles, finalizeStyles, lightDomStylesMessage } from '../css.js';
 import { register, tagOf } from '../registry.js';
 import { parse as deserializeProp } from '../serialize.js';
 import { Signal } from '../signal.js';
+import { noChange } from '../sentinels.js';
 import {
   captureAuthoredChildren,
   adoptSSRAssignments,
@@ -72,8 +76,14 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
  *
  * @property {boolean} [reflect]
  *   When `true`, writing to the property also sets the corresponding
- *   HTML attribute on the element (kebab-cased). Useful when you want
+ *   HTML attribute on the element (Lit's lowercased property name unless
+ *   `attribute` names one). Useful when you want
  *   CSS attribute selectors like `my-el[mode="dark"]` to work.
+ *
+ * @property {boolean} [useDefault]
+ *   Lit's `useDefault`: the property's first value is its default. That
+ *   value is not reflected, and removing the attribute restores it instead
+ *   of the converter's `null`.
  *
  * @property {boolean} [state]
  *   When `true`, the property is *internal-only*: it is NOT exposed as an
@@ -105,15 +115,6 @@ const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undef
 // Base class choice: real HTMLElement on the browser, the shim on the server.
 const Base = isBrowser ? HTMLElement : /** @type {any} */ (ServerElement);
 
-/**
- * Marker stamped on the anonymous subclass the `WebComponent({...})` factory
- * produces. It lets `_assertFactoryProperties` tell the framework's own
- * factory-generated `static properties` (allowed) apart from a `static
- * properties` a user wrote by hand in a class body (no longer allowed).
- */
-const FACTORY_PROPS = Symbol('webjs.factoryProps');
-// Per-class memo so the constructor-time enforcement walk runs once per class.
-const _propsChecked = new WeakSet();
 
 /** A settled `updateComplete` shared by every instance until its first update. */
 const RESOLVED_TRUE = Promise.resolve(true);
@@ -127,52 +128,141 @@ const NO_CONTROLLERS = new Set();
  */
 const _accessorPlans = new WeakMap();
 
+/** Classes whose `finalize()` has run. @type {WeakSet<Function>} */
+const FINALIZED = new WeakSet();
+
+/**
+ * Per class, the memoized `elementProperties` Map: valid while no class's
+ * declarations changed (`declarationsEpoch`), and after a change while the
+ * `declaredProperties` map it was built from is the same object, which it
+ * stays unless this class or a superclass changed (a `createProperty`).
+ * @type {WeakMap<Function, { epoch: number, merged: Record<string, any>, map: Map<string, any> }>}
+ */
+const ELEMENT_PROPERTIES = new WeakMap();
+
+/**
+ * Classes with a subclass whose accessors are installed (an instance of it was
+ * constructed). `createProperty` on one of them would reach the subclass's
+ * declarations but never its installed accessors, so it is refused, as it is
+ * for the class itself.
+ * @type {WeakSet<Function>}
+ */
+const HAS_CONSTRUCTED_SUBCLASS = new WeakSet();
+
+/** Per class, the memoized `elementStyles` list. @type {WeakMap<Function, any[]>} */
+const ELEMENT_STYLES = new WeakMap();
+
+/** Light-DOM classes already told that `static styles` needs shadow DOM. @type {WeakSet<Function>} */
+const WARNED_LIGHT_STYLES = new WeakSet();
+
+/** Controller classes whose `hostUpdate()` already threw at SSR. @type {WeakSet<Function>} */
+const REPORTED_SSR_CONTROLLERS = new WeakSet();
+
+/** What `getPropertyOptions()` answers for an undeclared name, Lit's default declaration. */
+const DEFAULT_DECLARATION = Object.freeze({ type: String });
+
+/**
+ * The setters WebJs generated, mapped to the author accessor each one wraps
+ * (or `null` for the built-in per-instance storage). A subclass constructed
+ * after its parent finds the parent's generated pair first; this map lets it
+ * wrap the author's accessor underneath instead of mistaking the wrapper for
+ * one.
+ * @type {WeakMap<Function, { get?: () => unknown, set?: (v: unknown) => void } | null>}
+ */
+const GENERATED_SETTERS = new WeakMap();
+
+/**
+ * The nearest author-written accessor for `name` on `Cls`'s prototype chain,
+ * below the WebJs base: what Lit's `getPropertyDescriptor` wraps when a class
+ * declares a reactive property AND defines its own `get` / `set` for it.
+ * Returns null when there is none (the property uses built-in storage).
+ * @param {any} Cls
+ * @param {string} name
+ */
+function authorAccessor(Cls, name) {
+  for (let p = Cls.prototype; p && p !== WebComponentBase.prototype; p = Object.getPrototypeOf(p)) {
+    const d = Object.getOwnPropertyDescriptor(p, name);
+    if (!d) continue;
+    if (d.set && GENERATED_SETTERS.has(d.set)) return GENERATED_SETTERS.get(d.set) ?? null;
+    if (d.get || d.set) return { get: d.get, set: d.set };
+    return null;
+  }
+  return null;
+}
+
 /**
  * Define the getter/setter pair for every declared property on the class's
  * prototype, once, and record the plan the constructor applies per instance
- * (own-value capture and `default`). The setter coerces nothing itself (the
- * attribute readers do), runs `hasChanged`, reflects, and schedules an update.
+ * (own-value capture and `default`). The descriptor comes from the class's
+ * `static getPropertyDescriptor()`, Lit's override point, so a subclass can
+ * wrap it.
  * @param {any} Ctor
  * @param {Record<string, unknown>} props
  */
 function installAccessors(Ctor, props) {
   /** @type {{ propName: string, decl: any }[]} */
   const plan = [];
-  for (const [propName, decl] of Object.entries(props)) {
-    const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
-    plan.push({ propName, decl: d });
-    const changedCheck = d.hasChanged || defaultHasChanged;
-    Object.defineProperty(Ctor.prototype, propName, {
-      configurable: true,
-      enumerable: true,
-      get() { return this.__propValues[propName]; },
-      set(newVal) {
-        const oldVal = this.__propValues[propName];
-        this.__propValues[propName] = newVal;
-        if (!changedCheck(newVal, oldVal)) return;
-        // Reflect to attribute if requested (_reflectAttribute skips a prop
-        // with no attribute: `state: true` or `attribute: false`).
-        if (d.reflect) {
-          if (this._connected) {
-            this._reflectAttribute(propName, newVal, d);
-          } else {
-            (this.__reflectPending ??= new Set()).add(propName);
-          }
-        }
-        // requestUpdate records the (name, oldValue) entry AND schedules a
-        // render. During the update phase the scheduler short-circuits and
-        // the entry folds into the current cycle's changedProperties.
-        this.requestUpdate(propName, oldVal);
-      },
-    });
+  for (const propName of Reflect.ownKeys(props)) {
+    const decl = props[propName];
+    const d = normalizeDecl(decl);
+    // `noAccessor` (Lit): the author's own accessor stays and calls
+    // `requestUpdate()` itself. A wrapped author accessor owns its storage, so
+    // the constructor does not apply a `default` to it (its private fields may
+    // not exist yet); a pre-upgrade own value is assigned through the accessor
+    // at the first update, as for every declared property.
+    const author = authorAccessor(Ctor, propName);
+    const builtIn = !d.noAccessor && author === null;
+    // Lit's `wrapped`: the property sits on an author accessor, whose initial
+    // value the first update records (see `_prepareFirstUpdate`).
+    const key = Symbol(String(propName));
+    plan.push({ propName, decl: d, builtIn, wrapped: author !== null, key });
+    if (d.noAccessor) continue;
+    const descriptor = Ctor.getPropertyDescriptor(propName, key, d);
+    if (descriptor !== undefined) Object.defineProperty(Ctor.prototype, propName, descriptor);
   }
   _accessorPlans.set(Ctor, plan);
+  for (let p = Object.getPrototypeOf(Ctor); p && p !== Function.prototype; p = Object.getPrototypeOf(p)) {
+    HAS_CONSTRUCTED_SUBCLASS.add(p);
+  }
   return plan;
+}
+
+
+/**
+ * The declarative CLOSED shadow root the parser attached to `el`, through
+ * `ElementInternals.shadowRoot`, or null when there is none or internals are
+ * unavailable. `attachInternals()` may be called once per element, so the
+ * internals object is handed back to the component's own later call instead
+ * of that call throwing. A component that already took its internals (in its
+ * constructor, the form-associated pattern) makes this throw, and then the
+ * caller falls back to attachShadow(), Lit's behaviour.
+ * @param {HTMLElement} el
+ * @returns {ShadowRoot | null}
+ */
+function declarativeClosedRoot(el) {
+  if (typeof el.attachInternals !== 'function') return null;
+  let internals;
+  try {
+    internals = el.attachInternals();
+  } catch {
+    return null;
+  }
+  Object.defineProperty(el, 'attachInternals', { value: () => internals, configurable: true, writable: true });
+  return internals.shadowRoot ?? null;
 }
 
 class WebComponentBase extends Base {
   /** Whether to use shadow DOM. Default: false (light DOM). @type {boolean} */
   static shadow = false;
+
+  /**
+   * Lit's `shadowRootOptions`: the options `createRenderRoot()` passes to
+   * `attachShadow()`, and the attributes the server writes on the Declarative
+   * Shadow DOM template (`delegatesFocus`, `clonable`, `serializable`, and a
+   * `closed` mode). Read only with `static shadow = true`.
+   * @type {ShadowRootInit}
+   */
+  static shadowRootOptions = { mode: 'open' };
 
   /**
    * Hydration strategy for this component.
@@ -210,10 +300,39 @@ class WebComponentBase extends Base {
   static properties = {};
 
   /**
-   * Styles to adopt into the shadow root.
-   * @type {import('../css.js').CSSResult | import('../css.js').CSSResult[] | null}
+   * Styles to adopt into the shadow root, Lit's `static styles`: a `css`
+   * result, a `CSSStyleSheet`, or nested arrays of them. Shadow DOM only
+   * (`static shadow = true`); a light-DOM component has no root to adopt
+   * them into, so declaring them there is reported as an error.
+   * @type {unknown}
    */
   static styles = null;
+
+  /**
+   * Lit's `elementStyles`: `static styles` flattened by `finalizeStyles()`,
+   * the list `createRenderRoot()` adopts and the server inlines. Memoized per
+   * class.
+   * @type {(import('../css.js').CSSResult | CSSStyleSheet)[]}
+   */
+  static get elementStyles() {
+    let list = ELEMENT_STYLES.get(this);
+    if (list === undefined) {
+      list = this.finalizeStyles(this.styles);
+      ELEMENT_STYLES.set(this, list);
+    }
+    return list;
+  }
+
+  /**
+   * Lit's `finalizeStyles(styles)`: flatten nested arrays and drop
+   * duplicates, keeping each style's LAST position so a later override still
+   * wins. Override it to post-process the list.
+   * @param {unknown} styles
+   * @returns {(import('../css.js').CSSResult | CSSStyleSheet)[]}
+   */
+  static finalizeStyles(styles) {
+    return finalizeStyles(styles);
+  }
 
   /**
    * Register this class as a custom element under `tag`.
@@ -233,6 +352,41 @@ class WebComponentBase extends Base {
   }
 
   /**
+   * The node `render()` commits into, Lit's `renderRoot`: the element itself
+   * for a light-DOM component, its shadow root for `static shadow = true`.
+   * Undefined until the element first connects, and always undefined at SSR,
+   * which has no DOM. Query rendered children through it
+   * (`this.renderRoot.querySelector('input')`) so the same line works in
+   * either mode.
+   * @type {HTMLElement | ShadowRoot | DocumentFragment | undefined}
+   */
+  get renderRoot() {
+    return this._renderRoot;
+  }
+
+  set renderRoot(value) {
+    this._renderRoot = value;
+  }
+
+  /**
+   * True once the component has completed its first update, Lit's
+   * `hasUpdated`. It is still false inside the first `willUpdate()` and
+   * `render()`, and true from `firstUpdated()` on.
+   * @type {boolean}
+   */
+  get hasUpdated() {
+    return !!this.__firstRendered;
+  }
+
+  /**
+   * True while an update is queued or running, Lit's `isUpdatePending`.
+   * @type {boolean}
+   */
+  get isUpdatePending() {
+    return this._scheduled || this._isUpdating || this._initialUpdatePending;
+  }
+
+  /**
    * Returns the list of attribute names the browser should observe.
    * Properties with `state: true` or `attribute: false` are excluded: they
    * do not correspond to any HTML attribute.
@@ -240,19 +394,167 @@ class WebComponentBase extends Base {
    * @returns {string[]}
    */
   static get observedAttributes() {
+    this.finalize();
     // Derived from the same walk `resolveAttributeProperty` matches against, so
     // every observed name resolves and nothing else does. A camelCase prop with
-    // no custom `attribute` is observed under its kebab name AND its lowercased
-    // name (lit's default), since the parser turns `quizId=` into `quizid`
-    // (#1540).
+    // no custom `attribute` is observed under Lit's lowercased name (what it
+    // reflects to, and what the parser turns `quizId=` into) AND its kebab
+    // name, kept as a read alias.
     return observedAttributeNames(this);
+  }
+
+  /**
+   * Lit's `elementProperties`: every reactive property this class declares,
+   * its own and its superclasses', as a Map of name to normalised
+   * declaration. Built from the same merge the accessors and the attribute
+   * readers use (`static properties`, the factory, `createProperty`).
+   * @type {Map<string, PropertyDeclaration>}
+   */
+  static get elementProperties() {
+    const epoch = declarationsEpoch();
+    const hit = ELEMENT_PROPERTIES.get(this);
+    if (hit && hit.epoch === epoch) return hit.map;
+    const merged = declaredProperties(this);
+    if (hit && hit.merged === merged) { hit.epoch = epoch; return hit.map; }
+    const map = new Map();
+    for (const name of Reflect.ownKeys(merged)) map.set(name, normalizeDecl(merged[name]));
+    ELEMENT_PROPERTIES.set(this, { epoch, merged, map });
+    return map;
+  }
+
+  /**
+   * Lit's `getPropertyOptions(name)`: the declaration for `name`, or the
+   * default declaration (`{ type: String }`) when it is not declared.
+   * @param {string} name
+   * @returns {PropertyDeclaration}
+   */
+  static getPropertyOptions(name) {
+    return this.elementProperties.get(name) ?? DEFAULT_DECLARATION;
+  }
+
+  /**
+   * Lit's `createProperty(name, options)`: declare a reactive property from
+   * code instead of `static properties`. It must run before the first
+   * instance is constructed (accessors are installed then, once per class),
+   * which is where Lit calls it from, so a later call throws. So does a call
+   * on a class one of whose SUBCLASSES has an instance: that subclass's
+   * accessors are installed already and could never gain the new property.
+   * @param {string} name
+   * @param {PropertyDeclaration} [options]
+   */
+  static createProperty(name, options = {}) {
+    if (_accessorPlans.has(this) || HAS_CONSTRUCTED_SUBCLASS.has(this)) {
+      throw new Error(
+        `[webjs] ${this.name || 'A component'}.createProperty('${name}') ran after an instance of the class${HAS_CONSTRUCTED_SUBCLASS.has(this) && !_accessorPlans.has(this) ? ', or of a subclass,' : ''} was constructed. ` +
+          `Declare the property in \`static properties\` (or the WebComponent({ ... }) factory), or call createProperty ` +
+          `at class definition time, before any element is created.`,
+      );
+    }
+    addCreatedProperty(this, name, options);
+  }
+
+  /**
+   * Lit's `getPropertyDescriptor(name, key, options)`: the accessor pair
+   * installed on the prototype for one reactive property. Override it to wrap
+   * the default (call `super.getPropertyDescriptor(...)` and delegate to its
+   * `get` / `set`); return `undefined` to install no accessor.
+   *
+   * When the class defines its own `get` / `set` for a declared property, the
+   * default wraps it, as Lit's does: reads go to the author's getter, and a
+   * write calls the author's setter and then `requestUpdate(name, oldValue,
+   * options)`. Otherwise the value is stored on the instance under `key`. Either way
+   * `requestUpdate` runs `hasChanged`, records the change, reflects, and
+   * schedules the update.
+   * @param {string} name
+   * @param {symbol} key  the instance slot the default accessor stores the value in, as in Lit
+   * @param {PropertyDeclaration} options
+   * @returns {PropertyDescriptor | undefined}
+   */
+  static getPropertyDescriptor(name, key, options) {
+    const author = authorAccessor(this, name);
+    /** @type {PropertyDescriptor} */
+    let descriptor;
+    if (author) {
+      const { get, set } = author;
+      descriptor = {
+        configurable: true,
+        enumerable: true,
+        get() { return get?.call(this); },
+        set(value) {
+          const oldValue = get?.call(this);
+          set?.call(this, value);
+          this.requestUpdate(name, oldValue, options);
+        },
+      };
+    } else {
+      descriptor = {
+        configurable: true,
+        enumerable: true,
+        get() { return this[key]; },
+        set(value) {
+          const oldValue = this[key];
+          this[key] = value;
+          // requestUpdate runs hasChanged, records the (name, oldValue) entry,
+          // reflects, AND schedules a render. During the update phase the
+          // scheduler short-circuits and the entry folds into the current
+          // cycle's changedProperties.
+          this.requestUpdate(name, oldValue, options);
+        },
+      };
+    }
+    GENERATED_SETTERS.set(/** @type {Function} */ (descriptor.set), author);
+    return descriptor;
+  }
+
+  /**
+   * Lit's `finalize()`: prepare the class's metadata once. Idempotent and
+   * called for you (from `observedAttributes` and `register()`), so calling it
+   * yourself is never required.
+   */
+  static finalize() {
+    if (FINALIZED.has(this)) return;
+    FINALIZED.add(this);
+    const parent = Object.getPrototypeOf(this);
+    if (parent && typeof parent.finalize === 'function') parent.finalize();
+    // Lit creates every `static properties` entry through `createProperty`,
+    // so an override of it (a default declaration mixed into each) applies to
+    // them too. The base implementation needs no call.
+    if (this.createProperty !== WebComponentBase.createProperty && Object.hasOwn(this, 'properties')) {
+      const own = this.properties;
+      if (own && typeof own === 'object') for (const name of Reflect.ownKeys(own)) this.createProperty(name, normalizeDecl(own[name]));
+    }
+    void this.elementProperties;
+    void this.elementStyles;
+  }
+
+  /**
+   * Lit's `addInitializer(initializer)`: run `initializer(instance)` in the
+   * constructor of every instance of this class and its subclasses. A
+   * subclass inherits its parent's initializers; one added to a subclass does
+   * not reach the parent.
+   * @param {(element: any) => void} initializer
+   */
+  static addInitializer(initializer) {
+    if (!Object.hasOwn(this, '_initializers')) {
+      const inherited = /** @type {any} */ (Object.getPrototypeOf(this))._initializers;
+      this._initializers = inherited ? [...inherited] : [];
+    }
+    this._initializers.push(initializer);
   }
 
   constructor() {
     super();
-    this._renderRoot = null;
+    /**
+     * The node `render()` commits into: the element itself for light DOM, its
+     * shadow root for shadow DOM. Undefined until the element connects (and at
+     * SSR, where nothing is connected), as in Lit.
+     * @type {HTMLElement | ShadowRoot | DocumentFragment | undefined}
+     */
+    this._renderRoot = undefined;
     this._scheduled = false;
     this._connected = false;
+    /** Pending from construction until the first update runs, as in Lit. */
+    this._initialUpdatePending = true;
 
     /**
      * Set of attached reactive controllers, created by the first
@@ -306,43 +608,14 @@ class WebComponentBase extends Base {
      */
     this._isUpdating = false;
 
-    // Enforce the declare-free factory DX: a hand-written `static properties`
-    // in a class body is a hard error (use `extends WebComponent({ … })`).
-    this._assertFactoryProperties();
-
-    // Install reactive property accessors for `static properties` declarations.
+    // Install the reactive property accessors. Props come from Lit's
+    // `static properties` and from the `WebComponent({ ... })` factory alike,
+    // merged down the class chain by `declaredProperties`.
     this._initializeProperties();
-  }
 
-  /**
-   * Throw if a class in this instance's constructor chain declares its own
-   * `static properties`. Reactive properties must be declared via the
-   * `extends WebComponent({ … })` factory, which stamps {@link FACTORY_PROPS}
-   * on the subclass it generates; a `static properties` written by hand in a
-   * class body carries no such marker and is rejected here (issue #598).
-   *
-   * The walk stops at {@link WebComponentBase} (whose `static properties = {}`
-   * default is internal) and is memoized per class so it runs once.
-   * @private
-   */
-  _assertFactoryProperties() {
-    const Ctor = /** @type {any} */ (this.constructor);
-    if (_propsChecked.has(Ctor)) return;
-    let C = Ctor;
-    while (C && C !== WebComponentBase) {
-      if (Object.hasOwn(C, 'properties') && !Object.hasOwn(C, FACTORY_PROPS)) {
-        const name = C.name || 'a component';
-        throw new Error(
-          `${name}: \`static properties\` is no longer supported. Declare reactive ` +
-            `properties via the factory instead: \`class ${name} extends WebComponent({ ` +
-            `count: Number })\`. Use the \`prop()\` helper for options ` +
-            `(\`prop(Number, { reflect: true })\`) and set defaults in the ` +
-            `constructor after \`super()\`. See https://webjs.dev/docs/components.`,
-        );
-      }
-      C = Object.getPrototypeOf(C);
-    }
-    _propsChecked.add(Ctor);
+    // Lit's `addInitializer` callbacks, after the properties exist.
+    const initializers = /** @type {any} */ (this.constructor)._initializers;
+    if (initializers) for (const init of initializers) init(this);
   }
 
   /**
@@ -352,17 +625,13 @@ class WebComponentBase extends Base {
    * once per class. Per instance this only lifts a value written before the
    * element upgraded and applies the declared `default`s.
    *
-   * Called once from the constructor. The backing store is a plain object
-   * (`this.__propValues`), so the accessors never collide with it.
+   * Called once from the constructor. Each value is stored on the instance
+   * under a per-property symbol (Lit's `key`), so the accessors never collide
+   * with it.
    * @private
    */
   _initializeProperties() {
     const Ctor = /** @type {any} */ (this.constructor);
-    const props = Ctor.properties;
-    if (!props || typeof props !== 'object') return;
-
-    /** @type {Record<string, unknown>} */
-    this.__propValues = {};
 
     // The accessors live on the PROTOTYPE, installed once per class (#1646).
     // They used to be defined on every instance, two closures and a
@@ -370,27 +639,32 @@ class WebComponentBase extends Base {
     // cost of constructing a component on the SSR path (one instance per
     // rendered element) and a measurable one on upgrade in the browser.
     let plan = _accessorPlans.get(Ctor);
-    if (plan === undefined) plan = installAccessors(Ctor, props);
+    if (plan === undefined) {
+      // Defining or registering the class finalizes it already; a class
+      // constructed without either is finalized here, before its accessors.
+      Ctor.finalize();
+      plan = installAccessors(Ctor, declaredProperties(Ctor));
+    }
 
     for (let i = 0; i < plan.length; i++) {
-      const { propName, decl: d } = plan[i];
-      // Capture any value set before the accessor could apply (an own data
-      // property written on the element before it upgraded). It shadows the
-      // prototype accessor, so it is lifted into the backing store.
-      let initial;
+      const { propName, decl: d, builtIn, key } = plan[i];
+      // A value set before the element upgraded is an own data property that
+      // shadows the prototype accessor. Lit's `__saveInstanceProperties`: take
+      // it off now and assign it through the accessor at the first update, so
+      // it wins over a default the constructor body writes.
       if (Object.hasOwn(this, propName)) {
-        initial = /** @type {any} */ (this)[propName];
+        (this.__instanceProperties ??= new Map()).set(propName, /** @type {any} */ (this)[propName]);
         delete (/** @type {any} */ (this))[propName];
       }
-      if (initial !== undefined) {
-        this.__propValues[propName] = initial;
-      } else if (d.default !== undefined) {
+      if (!builtIn) continue;
+      if (d.default !== undefined) {
         // Declarative `default` option (lit-parity). A function default is
         // CALLED per instance, so an object / array default is a fresh value
         // per element. Written straight to the backing store; an applied
         // attribute (attributeChangedCallback runs later) overrides it.
-        this.__propValues[propName] =
-          typeof d.default === 'function' ? d.default() : d.default;
+        const value = typeof d.default === 'function' ? d.default() : d.default;
+        /** @type {any} */ (this)[key] = value;
+        if (d.useDefault) (this.__defaultValues ??= new Map()).set(propName, value);
       }
     }
   }
@@ -408,9 +682,10 @@ class WebComponentBase extends Base {
   _reflectAttribute(propName, value, decl) {
     // A property with no attribute (`state: true` / `attribute: false`) has
     // nothing to reflect to.
-    if (!isAttributeBacked(decl)) return;
-    // A custom `attribute` option wins over the kebab-cased property name.
-    const attrName = decl.attribute || hyphenate(propName);
+    // The attribute name comes from the one rule the readers use, so a prop
+    // reflects to exactly the name it observes.
+    const attrName = attributeNameFor(propName, decl);
+    if (attrName === undefined) return;
     // Guard against re-entrant loops: attributeChangedCallback fires when
     // we call setAttribute, which would call the setter again.
     if (this.__reflectingAttribute) return;
@@ -569,10 +844,16 @@ class WebComponentBase extends Base {
       const n = attrs[i].name;
       if (n.startsWith('data-webjs-prop-')) names.push(n);
     }
+    // The last value each binding carried, so a later morph re-reads only the
+    // ones the server changed (router-client/dom-differ.js), the way Lit
+    // commits a property binding only when its value changed.
+    /** @type any */ const self = this;
+    if (!self.__webjsPropAttrValues) self.__webjsPropAttrValues = new Map();
     for (const fullName of names) {
       const raw = this.getAttribute(fullName);
       this.removeAttribute(fullName);
       if (raw == null) continue;
+      self.__webjsPropAttrValues.set(fullName, raw);
       const propName = camelCase(fullName.slice('data-webjs-prop-'.length));
       try {
         /** @type any */ (this)[propName] = deserializeProp(raw);
@@ -588,7 +869,7 @@ class WebComponentBase extends Base {
     this._connected = true;
     // A value written on the element before its class was defined is an own
     // data property, and it hides any accessor of the same name for good.
-    // `_initializeProperties` lifts the declared properties in the
+    // `_initializeProperties` saves the declared properties in the
     // constructor; an accessor the subclass defines itself (a getter/setter
     // over a private signal, the shape internal state another element assigns
     // takes) gets the same lift here, on the first connect, since its private
@@ -615,98 +896,18 @@ class WebComponentBase extends Base {
     if (Ctor.shadow !== true && !this.hasAttribute('data-wj-host')) {
       this.setAttribute('data-wj-host', '');
     }
-    if (Ctor.shadow === true) {
-      const hadSSRShadow = !!this.shadowRoot;
-      if (!this.shadowRoot) {
-        /** @type any */ (this).attachShadow({ mode: 'open' });
-      }
-      this._renderRoot = this.shadowRoot;
-      const styles = Ctor.styles;
-      const list = Array.isArray(styles) ? styles : isCSS(styles) ? [styles] : [];
-      if (list.length) {
-        // If the shadow root came from Declarative Shadow DOM (SSR), it
-        // contains an inline <style> tag. Remove it before switching to
-        // adoptedStyleSheets to avoid duplicate styles.
-        if (hadSSRShadow) {
-          const ssrStyle = this.shadowRoot.querySelector('style');
-          if (ssrStyle) ssrStyle.remove();
-        }
-        adoptStyles(this._renderRoot, list);
-      }
-    } else {
-      this._renderRoot = this;
-      // Light DOM: static styles is not supported (no shadow root for
-      // adoptedStyleSheets). Warn if the developer set both.
-      if (Ctor.styles) {
-        console.warn(
-          `[webjs] <${tagOf(Ctor) || this.tagName?.toLowerCase()}> has static shadow = false AND static styles. ` +
-          `static styles only works with shadow DOM (adoptedStyleSheets). ` +
-          `For light DOM, use global CSS or <style> in render().`
-        );
-      }
-      // Light-DOM slot capture: ONCE per host lifetime (#1015). Three
-      // sub-paths, all of which resolve to "the record is populated
-      // exactly once and never re-captured":
-      //
-      // a. Reconnection. The record already exists from a prior mount.
-      //    The host still carries the rendered template DOM (plus
-      //    placed slot children) from before the disconnect. Skip
-      //    capture (would wrongly hoover up rendered nodes) and skip
-      //    SSR adoption. clientRender will see the existing INSTANCE
-      //    and updateInstance instead of recreating; the DOM stays.
-      //
-      // b. SSR hydration (first mount, <!--webjs-hydrate--> marker
-      //    present). Children are already inside their
-      //    <slot data-webjs-light data-projection="actual"> elements
-      //    (the SSR walk placed them). Adopt those assignments BEFORE
-      //    _performRender so we retain references to the SSR'd nodes;
-      //    the renderer's createInstance().replaceChildren() will
-      //    detach them, but the slot-apply step re-attaches the same
-      //    Node refs into the freshly-cloned slot. DOM identity
-      //    preserved through the hydration round-trip.
-      //
-      // c. First mount, no SSR. Partition authored children into the
-      //    record before _performRender wipes the host.
-      //
-      // After capture, installSlotInterception + installSlotSensors below make
-      // native DOM writes on a mounted host live (appendChild, slot= flips,
-      // innerHTML, HTMLSlotElement.assign), so light-DOM slots match shadow DOM
-      // through the standard API.
-      if (hasSlotState(this)) {
-        // (a) Reconnection. Record already populated. Sweep any direct child
-        //     added by a raw bypass write while the host was disconnected (no
-        //     sensor was live to catch it), then re-arm the sensors below.
-        reconnectSweep(this);
-      } else if (
-        this.__isHydrating() ||
-        this.hasAttribute('data-wj-serialized') ||
-        hasFrameworkRenderedSubtree(this)
-      ) {
-        // (b) Framework-rendered markup, from any of three signals: boot-time
-        //     SSR hydration (the webjs-hydrate marker), the router's
-        //     data-wj-serialized stamp (applySwap marks every host in a parsed
-        //     doc, covering a snapshot restore whose serialized shape has no
-        //     projected slot to detect), or the structural detector (own
-        //     data-webjs-light[data-projection] slots, attributes only the
-        //     renderer / SSR stamps). Adopt-not-capture: capturing restored
-        //     post-hydration HTML would hoover the rendered tree into the
-        //     record and duplicate content on the next render (the #1006
-        //     shape, on the restore path).
-        this.removeAttribute('data-wj-serialized');
-        ensureSlotState(this);
-        adoptSSRAssignments(this);
-      } else {
-        // (c) First mount with author-written children. Capture them.
-        captureAuthoredChildren(this);
-      }
+    this._setupRenderRoot();
+    if (Ctor.shadow !== true && this._renderRoot === this) {
       // Install native-write interception AFTER capture (capture uses the
       // host's still-native methods), then arm the sensors. Together they make
       // appendChild / insertBefore / removeChild / innerHTML / slot= flips on a
       // mounted light host drive the slot record, restoring full shadow-DOM
       // parity through the standard DOM API. Interception installs once;
       // sensors are armed on every connect and torn down on disconnect.
-      installSlotInterception(this);
-      installSlotSensors(this);
+      if (hasSlotState(this)) {
+        installSlotInterception(this);
+        installSlotSensors(this);
+      }
     }
 
     // Notify all controllers that the host is connected.
@@ -733,19 +934,248 @@ class WebComponentBase extends Base {
         this._updateResolve = resolve;
       });
     }
+    // Lit's `enableUpdating(requestedUpdate)` hook: called once the element is
+    // ready to update, before the first update is queued.
+    this.__updatingEnabled = true;
+    this.enableUpdating(true);
+    if (this._scheduled) return;
     this._scheduled = true;
-    queueMicrotask(() => {
-      this._scheduled = false;
-      try {
-        this._performRender();
-      } catch (err) {
-        console.error(`[webjs] lifecycle hook threw during initial render:`, err);
+    // The renderer's slot parts place the record content as part of the
+    // commit; native DOM writes on the host (appendChild, slot= flips,
+    // innerHTML) drive the record live through the interception + sensors
+    // installed on connect. There is no WebJs-specific slot API.
+    queueMicrotask(() => this._runScheduledUpdate('initial render'));
+  }
+
+  /**
+   * Create the render root once (Lit's `createRenderRoot()`) and, for a
+   * light-DOM host, settle its slot record: capture the authored children,
+   * adopt a server-rendered projection, or sweep on a reconnection. Runs on
+   * every connect, and from the first update of an element flushed before it
+   * ever connected.
+   * @private
+   */
+  _setupRenderRoot() {
+    const Ctor = /** @type any */ (this.constructor);
+    // Lit's `createRenderRoot()`, called once per element. The server renders
+    // from `static shadow` alone (it has no DOM to call this against), so a
+    // root that contradicts it would hydrate against markup of the other kind:
+    // refuse that loudly instead.
+    if (this._renderRoot === undefined) {
+      const root = this.createRenderRoot();
+      const isShadowRoot = typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot;
+      if (isShadowRoot !== (Ctor.shadow === true)) {
+        const name = tagOf(Ctor) || this.tagName?.toLowerCase();
+        throw new Error(
+          isShadowRoot
+            ? `[webjs] <${name}> createRenderRoot() returned a shadow root, but the class does not declare \`static shadow = true\`. ` +
+              `WebJs renders on the server from \`static shadow\`, so add \`static shadow = true\` (with \`static shadowRootOptions\` for the ` +
+              `attachShadow options) and drop the override, or call \`super.createRenderRoot()\` from it.`
+            : `[webjs] <${name}> declares \`static shadow = true\`, but createRenderRoot() returned something other than a shadow root. ` +
+              `Return \`super.createRenderRoot()\` from the override, or remove \`static shadow = true\` to render into light DOM.`,
+        );
       }
-      // The renderer's slot parts place the record content as part of the
-      // commit; native DOM writes on the host (appendChild, slot= flips,
-      // innerHTML) drive the record live through the interception + sensors
-      // installed on connect. There is no WebJs-specific slot API.
-    });
+      this._renderRoot = root;
+    }
+    if (Ctor.shadow !== true && this._renderRoot === this) {
+      // Light DOM: static styles is not supported (no shadow root for
+      // adoptedStyleSheets), so they would silently never apply. Say so,
+      // loudly, once per class.
+      if (Ctor.styles && !WARNED_LIGHT_STYLES.has(Ctor)) {
+        WARNED_LIGHT_STYLES.add(Ctor);
+        console.error(lightDomStylesMessage(tagOf(Ctor) || this.tagName?.toLowerCase()));
+      }
+      // Light-DOM slot capture: ONCE per host lifetime (#1015). Three
+      // sub-paths, all of which resolve to "the record is populated
+      // exactly once and never re-captured":
+      //
+      // a. Reconnection. The record already exists from a prior mount.
+      //    The host still carries the rendered template DOM (plus
+      //    placed slot children) from before the disconnect. Skip
+      //    capture (would wrongly hoover up rendered nodes) and skip
+      //    SSR adoption. clientRender will see the existing INSTANCE
+      //    and updateInstance instead of recreating; the DOM stays.
+      //
+      // b. SSR hydration (first mount, <!--webjs-hydrate--> marker
+      //    present). Children are already inside their
+      //    <slot data-webjs-light data-projection="actual"> elements
+      //    (the SSR walk placed them). Adopt those assignments BEFORE
+      //    _performRender so we retain references to the SSR'd nodes;
+      //    the renderer's createInstance().replaceChildren() will
+      //    detach them, but the slot-apply step re-attaches the same
+      //    Node refs into the freshly-cloned slot. DOM identity
+      //    preserved through the hydration round-trip.
+      //
+      // c. First mount, no SSR. Partition authored children into the
+      //    record before _performRender wipes the host.
+      //
+      // After capture, installSlotInterception + installSlotSensors in `_activate` make
+      // native DOM writes on a mounted host live (appendChild, slot= flips,
+      // innerHTML, HTMLSlotElement.assign), so light-DOM slots match shadow DOM
+      // through the standard API.
+      if (this.render === WebComponentBase.prototype.render) {
+        // A render-less component (no `render()` override). Lit's default
+        // `render()` returns `noChange`, so its children are never touched:
+        // there is no template to project them into, so they are neither
+        // captured nor intercepted, and the commit leaves them in place.
+        this.removeAttribute('data-wj-serialized');
+      } else if (hasSlotState(this)) {
+        // (a) Reconnection. Record already populated. Sweep any direct child
+        //     added by a raw bypass write while the host was disconnected (no
+        //     sensor was live to catch it), then re-arm the sensors below.
+        reconnectSweep(this);
+      } else if (
+        this.__isHydrating() ||
+        this.hasAttribute('data-wj-serialized') ||
+        hasFrameworkRenderedSubtree(this)
+      ) {
+        // (b) Framework-rendered markup, from any of three signals: boot-time
+        //     SSR hydration (the webjs-hydrate marker), the router's
+        //     data-wj-serialized stamp (applySwap marks every host in a parsed
+        //     doc, covering a snapshot restore whose serialized shape has no
+        //     projected slot to detect), or the structural detector (own
+        //     data-webjs-light[data-projection] slots, attributes only the
+        //     renderer / SSR stamps). Adopt-not-capture: capturing restored
+        //     post-hydration HTML would hoover the rendered tree into the
+        //     record and duplicate content on the next render (the #1006
+        //     shape, on the restore path).
+        this.removeAttribute('data-wj-serialized');
+        ensureSlotState(this);
+        adoptSSRAssignments(this);
+      } else {
+        // (c) First mount with author-written children. Capture them.
+        captureAuthoredChildren(this);
+      }
+    }
+  }
+
+  /**
+   * The microtask both scheduling sites queue: hand the update to
+   * `scheduleUpdate()` (Lit's override point for WHEN an update runs) and
+   * surface a throw, or the rejection of an async override, as a console
+   * error instead of bricking the element. `_performRender` already resets
+   * `_isUpdating` and settles `updateComplete` in its own `finally` blocks.
+   * @param {string} phase
+   * @private
+   */
+  _runScheduledUpdate(phase) {
+    try {
+      const r = this.scheduleUpdate();
+      if (r && typeof (/** @type {any} */ (r).then) === 'function') {
+        /** @type {Promise<unknown>} */ (r).then(undefined, (err) => {
+          console.error(`[webjs] lifecycle hook threw during ${phase}:`, err);
+        });
+      }
+    } catch (err) {
+      console.error(`[webjs] lifecycle hook threw during ${phase}:`, err);
+    }
+  }
+
+  /**
+   * Lit's `scheduleUpdate()`: called from the update microtask to run the
+   * pending update. Override it to change WHEN an update runs, for example to
+   * wait for a frame, and call `super.scheduleUpdate()` (or
+   * `this.performUpdate()`) when it should run. `updateComplete` waits for it.
+   *
+   * ```js
+   * async scheduleUpdate() {
+   *   await new Promise((r) => requestAnimationFrame(r));
+   *   super.scheduleUpdate();
+   * }
+   * ```
+   *
+   * @returns {void | Promise<unknown>}
+   */
+  scheduleUpdate() {
+    return this.performUpdate();
+  }
+
+  /**
+   * Lit's `performUpdate()`: run the pending update now, synchronously. Does
+   * nothing when no update is pending, so calling it to flush a queued update
+   * early is safe.
+   * @returns {void}
+   */
+  performUpdate() {
+    // As in Lit, an element is pending from construction until its first
+    // update, so a flush before it ever connected still updates.
+    if (!this._scheduled && !this._initialUpdatePending) return;
+    if (!this.__firstRendered) this._prepareFirstUpdate();
+    this._scheduled = false;
+    this._initialUpdatePending = false;
+    this._performRender();
+  }
+
+  /**
+   * The first-update half of Lit's `performUpdate`: create the render root
+   * when the element was never connected, assign the values saved from before
+   * the upgrade, and record each author accessor's initial value (Lit's
+   * `wrapped` properties, which no setter reported). Runs while the update is
+   * still marked pending, so the assignments fold into it.
+   * @private
+   */
+  _prepareFirstUpdate() {
+    if (this._renderRoot === undefined) this._setupRenderRoot();
+    const saved = this.__instanceProperties;
+    if (saved) {
+      this.__instanceProperties = undefined;
+      for (const [name, value] of saved) /** @type {any} */ (this)[name] = value;
+    }
+    for (const { propName, decl, wrapped } of _accessorPlans.get(this.constructor) || []) {
+      const value = /** @type {any} */ (this)[propName];
+      if (!wrapped || this._changedProperties.has(propName) || value === undefined) continue;
+      if (decl.useDefault && !(this.__defaultValues ??= new Map()).has(propName)) {
+        this.__defaultValues.set(propName, value);
+        continue;
+      }
+      this._changedProperties.set(propName, undefined);
+      if (decl.reflect) (this.__reflectPending ??= new Set()).add(propName);
+    }
+  }
+
+  /**
+   * Lit's `enableUpdating(requestedUpdate)` hook, called when the element
+   * connects, right before its first update is queued. The default does
+   * nothing.
+   * @param {boolean} _requestedUpdate
+   */
+  enableUpdating(_requestedUpdate) {}
+
+  /**
+   * Lit's `createRenderRoot()`: create the node `render()` commits into. The
+   * default returns the element itself for a light-DOM component, and for
+   * `static shadow = true` the shadow root, attached with
+   * `static shadowRootOptions` (default `{ mode: 'open' }`) unless the server
+   * already rendered one as Declarative Shadow DOM, with `static styles`
+   * adopted into it. Override it for Lit's `createRenderRoot() { return this; }`
+   * (already the default) or to post-process the root; a shadow root is
+   * accepted only with `static shadow = true`, because the server renders
+   * from that flag.
+   * @returns {HTMLElement | ShadowRoot | DocumentFragment}
+   */
+  createRenderRoot() {
+    const Ctor = /** @type any */ (this.constructor);
+    if (Ctor.shadow !== true) return this;
+    const options = Ctor.shadowRootOptions ?? { mode: 'open' };
+    // A CLOSED declarative root is invisible to `this.shadowRoot`, and
+    // attachShadow() on an element that has one empties it (the spec reuses
+    // the root but removes its children), so the server-rendered markup would
+    // vanish and the first render would build from nothing. Lit has the same
+    // gap; ElementInternals reaches the declarative root, so use it.
+    const existing = this.shadowRoot ?? (options.mode === 'closed' ? declarativeClosedRoot(this) : null);
+    const root = existing ?? /** @type any */ (this).attachShadow(options);
+    const list = Ctor.elementStyles;
+    if (list.length) {
+      // A shadow root that came from Declarative Shadow DOM (SSR) carries the
+      // inline <style> the server emitted. Remove it before switching to
+      // adoptedStyleSheets so the rules are not applied twice.
+      if (existing) {
+        const ssrStyle = existing.querySelector('style');
+        if (ssrStyle) ssrStyle.remove();
+      }
+      adoptStyles(root, list);
+    }
+    return root;
   }
 
   /**
@@ -824,30 +1254,72 @@ class WebComponentBase extends Base {
     const resolved = resolveAttributeProperty(this.constructor, name);
     if (resolved === undefined) return;
     const { propName, def } = resolved;
+    // An accessor that stores its value in the attribute writes it back while
+    // this very read assigns it; Lit's `__reflectingProperty` check ignores
+    // that nested callback instead of recursing.
+    if (this.__attributeToProperty === propName) return;
 
     // One reader for both sides, in `attribute-reader.js`: this and
     // `applyAttrsToInstance` in `render-server.js` call the same function, so
     // precedence and every fallback are shared rather than mirrored (#1340).
     // It takes an already-decoded value, which the DOM has done here and
     // `decodeAttrEntities` does at the SSR call site (#1341).
-    const v = readAttributeValue(def, value);
+    let v = readAttributeValue(def, value, propName);
+    if (v == null && def.useDefault && this.__defaultValues?.has(propName)) v = this.__defaultValues.get(propName);
 
-    if (this[propName] !== v) {
+    // Assigned unconditionally, as Lit's `_$attributeToProperty` does: the
+    // setter's `hasChanged` decides whether it is a change, so a declared
+    // `hasChanged` that rejects the value schedules no update.
+    this.__attributeToProperty = propName;
+    try {
       this[propName] = v;
-      if (this._connected) this.requestUpdate();
+    } finally {
+      this.__attributeToProperty = undefined;
     }
   }
 
   /**
-   * Schedule a re-render. Optionally record a property change in
-   * `changedProperties` so hooks can branch on what changed.
+   * Schedule a re-render, Lit's `requestUpdate(name, oldValue, options)`.
+   * With a name, the property's `hasChanged` (from `options`, else its
+   * declaration) compares its current value with `oldValue`: an unchanged
+   * value schedules nothing. A change is recorded in `changedProperties`
+   * and reflected when the property declares `reflect: true`. With no
+   * arguments it always schedules an update.
    *
    * @param {string} [name]      Property name that changed
    * @param {unknown} [oldValue] Previous value of the property
+   * @param {PropertyDeclaration} [options] The property's declaration
    */
-  requestUpdate(name, oldValue) {
-    if (name !== undefined && !this._changedProperties.has(name)) {
-      this._changedProperties.set(name, oldValue);
+  requestUpdate(name, oldValue, options) {
+    if (name !== undefined) {
+      const decl = options ?? /** @type {any} */ (this.constructor).getPropertyOptions(name);
+      const hasChanged = decl.hasChanged || defaultHasChanged;
+      const value = /** @type {any} */ (this)[name];
+      // Lit's `useDefault`: the first value written is the default, recorded
+      // and neither counted as a change nor reflected.
+      if (decl.useDefault && !(this.__defaultValues ??= new Map()).has(name)) {
+        this.__defaultValues.set(name, oldValue !== undefined ? oldValue : value);
+        if (oldValue === undefined) { this._scheduleUpdate(); return; }
+      }
+      // Writing the unreflected default back IS a change when the attribute
+      // is absent, since it now reflects (Lit's corner case).
+      const attrName = decl.useDefault && decl.reflect ? attributeNameFor(name, decl) : undefined;
+      const restoresDefault = attrName !== undefined
+        && Object.is(value, this.__defaultValues?.get(name)) && !this.hasAttribute(attrName);
+      if (!hasChanged(value, oldValue) && !restoresDefault) return;
+      // Before the first update the recorded old value is `undefined`, except
+      // with `useDefault`, as in Lit's `_$changeProperty`.
+      if (!this._changedProperties.has(name)) {
+        this._changedProperties.set(name, this.__firstRendered || decl.useDefault ? oldValue : undefined);
+      }
+      // Reflect to the attribute if requested (_reflectAttribute skips a prop
+      // with no attribute: `state: true` or `attribute: false`). Disconnected,
+      // it waits for the next update. A value just read FROM the attribute is
+      // never written back to it.
+      if (decl.reflect && this.__attributeToProperty !== name) {
+        if (this._connected) this._reflectAttribute(name, value, decl);
+        else (this.__reflectPending ??= new Set()).add(name);
+      }
     }
     this._scheduleUpdate();
   }
@@ -868,21 +1340,21 @@ class WebComponentBase extends Base {
       });
     }
     if (this._isUpdating) return;
-    if (this._scheduled || !this._connected) return;
+    // Lit runs updates once updating is enabled at the first connect, connected
+    // or not afterwards, so a disconnected element still updates.
+    if (this._scheduled || !this.__updatingEnabled) return;
     this._scheduled = true;
-    queueMicrotask(() => {
-      this._scheduled = false;
-      try {
-        this._performRender();
-      } catch (err) {
-        // _performRender wraps the update phase in try/finally so this
-        // catches throws from shouldUpdate / willUpdate / hostUpdate /
-        // hostUpdated / firstUpdated / updated. The component is not
-        // left in a bad state (the finally blocks reset _isUpdating and
-        // resolve updateComplete). Surface the error for visibility.
-        console.error(`[webjs] lifecycle hook threw during update cycle:`, err);
-      }
-    });
+    // _performRender wraps the update phase in try/finally, so a throw from
+    // shouldUpdate / willUpdate / hostUpdate / hostUpdated / firstUpdated /
+    // updated leaves the component in a good state; the wrapper only
+    // surfaces it.
+    // Requested while a finished cycle is still settling (from `updated()`, or
+    // after `super.update()`): run once that cycle's `updateComplete` has
+    // resolved, after whoever was already awaiting it, as Lit's
+    // `__enqueueUpdate` awaits the previous promise. Otherwise next microtask.
+    const settling = this.__settlingPromise;
+    if (settling) settling.then(() => this._runScheduledUpdate('update cycle'));
+    else queueMicrotask(() => this._runScheduledUpdate('update cycle'));
   }
 
   /**
@@ -1039,7 +1511,8 @@ class WebComponentBase extends Base {
       // Consume this phase's snapshot even when shouldUpdate skips it. For an
       // async render, changes during the fetch start a new cycle whose token
       // supersedes the in-flight commit.
-      this._changedProperties = new Map();
+      // `update()` already swapped it when it committed (see there).
+      if (this._changedProperties === changedProperties) this._changedProperties = new Map();
     }
 
     // --- Async render: finish the cycle when the pending commit settles. ---
@@ -1150,8 +1623,17 @@ class WebComponentBase extends Base {
     this._isUpdating = true;
     try {
       this.willUpdate(changedProperties);
+      // Each controller is isolated: a `hostUpdate()` that reaches for the
+      // browser (a third-party Lit controller written for the client) is
+      // reported once per controller class and skipped, so the component
+      // still renders its first paint instead of an error state.
       for (const c of this.__controllers || NO_CONTROLLERS) {
-        if (c.hostUpdate) c.hostUpdate();
+        if (!c.hostUpdate) continue;
+        try {
+          c.hostUpdate();
+        } catch (err) {
+          reportSsrControllerError(this, c, err);
+        }
       }
       this._reflectDeclaredAttributes();
     } finally {
@@ -1177,10 +1659,16 @@ class WebComponentBase extends Base {
    * @private
    */
   _reflectDeclaredAttributes() {
-    const props = /** @type {any} */ (this.constructor).properties || {};
-    for (const name of Object.keys(props)) {
+    const props = declaredProperties(this.constructor);
+    for (const name of Reflect.ownKeys(props)) {
       const decl = props[name];
       if (!decl || !decl.reflect) continue;
+      // A property never given a value has nothing to reflect: Lit reflects a
+      // property only once it changes from `undefined`.
+      if (this[name] === undefined) continue;
+      // A `useDefault` value is not reflected while it is the default, and a
+      // wrapped accessor's default is only recorded at the first update.
+      if (decl.useDefault && (!this.__defaultValues?.has(name) || Object.is(this[name], this.__defaultValues.get(name)))) continue;
       this._reflectAttribute(name, this[name], decl);
     }
   }
@@ -1247,7 +1735,7 @@ class WebComponentBase extends Base {
     const pendingReflection = this.__reflectPending;
     this.__reflectPending = undefined;
     for (const name of pendingReflection || []) {
-      const def = this.constructor.properties[name];
+      const def = declaredProperties(this.constructor)[name];
       this._reflectAttribute(name, this[name], def);
     }
     // The signal reads render() makes are tracked by the watcher
@@ -1279,11 +1767,31 @@ class WebComponentBase extends Base {
     if (tpl && typeof (/** @type any */ (tpl).then) === 'function') {
       return this._commitAsync(/** @type {Promise<unknown>} */ (tpl));
     }
+    // Marked before the commit, as LitElement calls `super.update()` between
+    // `render()` and committing: a property a child sets while the template
+    // commits (an event it dispatches from connectedCallback) is a new update.
+    this._markUpdated();
     // The commit is untracked: a signal read while the DOM is patched (a
     // `watch()` part, a child's synchronous work) belongs to whatever read
     // it, not to this component's next render.
     Signal.subtle.untrack(() => clientRender(tpl, this._renderRoot, { host: this }));
     return undefined;
+  }
+
+  /**
+   * Lit's `__markUpdated()`, the last step of the base `update()` once its
+   * commit is done: the update is no longer pending, so a property set after
+   * `super.update()` returns (in an `update()` override, or in `updated()`)
+   * starts the next cycle, with its own `updateComplete`, instead of folding
+   * into this one. This cycle's resolver is kept for `_postCommit`.
+   * @private
+   */
+  _markUpdated() {
+    this._isUpdating = false;
+    this._changedProperties = new Map();
+    this.__cycleResolve = this._updateResolve;
+    this.__settlingPromise = this._updatePromise;
+    this._updateResolve = null;
   }
 
   /**
@@ -1380,8 +1888,18 @@ class WebComponentBase extends Base {
    * @private
    */
   _postCommit(changedProperties) {
-    const resolve = this._updateResolve;
-    this._updateResolve = null;
+    // The resolver `update()` set aside when it marked the update done, or
+    // else the pending one. A cycle `update()` scheduled after marking has its
+    // own promise in `_updateResolve`, which this one must leave alone.
+    let resolve;
+    if (this.__cycleResolve !== undefined) {
+      resolve = this.__cycleResolve;
+      this.__cycleResolve = undefined;
+    } else {
+      resolve = this._updateResolve;
+      this._updateResolve = null;
+      this.__settlingPromise = this._updatePromise;
+    }
     try {
       this._tracked('__postWatcher', () => {
         for (const c of this.__controllers || NO_CONTROLLERS) c.hostUpdated?.();
@@ -1394,6 +1912,7 @@ class WebComponentBase extends Base {
     } catch (postCommitError) {
       console.error(`[webjs] lifecycle hook threw during post-commit phase:`, postCommitError);
     } finally {
+      this.__settlingPromise = undefined;
       resolve?.(!this._scheduled);
     }
   }
@@ -1433,7 +1952,7 @@ class WebComponentBase extends Base {
    *
    * ```js
    * firstUpdated(changedProperties) {
-   *   this.shadowRoot.querySelector('input')?.focus();
+   *   this.renderRoot.querySelector('input')?.focus();
    * }
    * ```
    *
@@ -1477,6 +1996,14 @@ class WebComponentBase extends Base {
    * @returns {Promise<boolean>}
    */
   getUpdateComplete() {
+    // As in Lit, the promise read before the first update settles with that
+    // update, not at once. Created on first read, so an element nothing awaits
+    // (every SSR instance) never allocates one; the server never updates.
+    if (isBrowser && this._initialUpdatePending && this._updateResolve === null) {
+      this._updatePromise = new Promise((resolve) => {
+        this._updateResolve = resolve;
+      });
+    }
     return this._updatePromise;
   }
 
@@ -1535,11 +2062,13 @@ class WebComponentBase extends Base {
   }
 
   /**
-   * Override in subclasses to return a TemplateResult.
+   * Override in subclasses to return a TemplateResult. The default returns
+   * `noChange`, as Lit's does, so a component with no `render()` leaves its
+   * children exactly as they are, on the server and in the browser.
    * @returns {unknown}
    */
   render() {
-    return '';
+    return noChange;
   }
 
   /**
@@ -1597,10 +2126,33 @@ class WebComponentBase extends Base {
   }
 }
 
-/** @param {string} s */
-function hyphenate(s) {
-  return s.replace(/([A-Z])/g, '-$1').toLowerCase();
+/**
+ * Report a controller whose `hostUpdate()` threw during SSR, once per
+ * controller class.
+ * @param {any} host
+ * @param {any} controller
+ * @param {unknown} err
+ */
+function reportSsrControllerError(host, controller, err) {
+  const Cls = controller && controller.constructor;
+  if (Cls && REPORTED_SSR_CONTROLLERS.has(Cls)) return;
+  if (Cls) REPORTED_SSR_CONTROLLERS.add(Cls);
+  const tag = host.__ssrTag || tagOf(host.constructor) || 'a component';
+  console.error(
+    `[webjs] ${Cls && Cls.name ? Cls.name : 'A controller'}.hostUpdate() threw during SSR of <${tag}>, so it was skipped ` +
+      `and the component rendered without it. Controllers' hostUpdate() runs on the server too; guard browser-only ` +
+      `work with \`if (isServer) return;\` (isServer from '@webjsdev/core'), or move it to hostConnected() or hostUpdated(), ` +
+      `which never run at SSR.`,
+    err,
+  );
 }
+
+/**
+ * The error a light-DOM component with `static styles` gets, on the server
+ * (dev) and in the browser.
+ * @param {string | undefined} tag
+ * @returns {string}
+ */
 /** @param {string} s */
 function camelCase(s) {
   return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -1620,7 +2172,6 @@ export function WebComponent(properties) {
   } else {
     return class extends WebComponentBase {
       static properties = properties;
-      static [FACTORY_PROPS] = true;
     };
   }
 }

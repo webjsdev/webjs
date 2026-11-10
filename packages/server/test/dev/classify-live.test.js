@@ -25,9 +25,8 @@ import { startServer } from '../../src/dev.js';
 const REPO_NODE_MODULES = join(process.cwd(), 'node_modules');
 
 /**
- * A minimal app: a root layout, a page rendering an interactive component, and
- * the component itself. The component must be genuinely interactive (an
- * `@click`), or elision drops it and it never enters the shipped closure.
+ * A minimal app: a root layout, a page rendering a component, and the
+ * component itself, which ships and so enters the shipped closure.
  *
  * The temp dir gets a `node_modules` symlink back to the repo so the modules'
  * `@webjsdev/core` imports resolve during SSR.
@@ -92,7 +91,7 @@ async function verdictForEdit(appDir, file, body) {
   const port = srv.server.address().port;
   try {
     // A real request forces `ensureReady()` to completion, so the module graph
-    // and the elision verdict are live before the edit lands.
+    // and the shipped closure are live before the edit lands.
     const res = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(res.status, 200, 'the fixture app renders');
     await res.text();

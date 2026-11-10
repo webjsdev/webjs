@@ -10,12 +10,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { scaffoldApp } from '../../packages/cli/lib/create.js';
+
+const GALLERY = join(import.meta.dirname, '..', '..', 'gallery');
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-integ-'));
@@ -78,7 +80,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(appDir), 'app directory created');
 
     // Core directories
-    for (const d of ['app', 'components', 'modules', 'lib', 'public', 'db', 'test/unit', 'test/e2e']) {
+    for (const d of ['app', 'components', 'lib', 'public', 'db', 'test']) {
       assert.ok(existsSync(join(appDir, d)), `${d}/ should exist`);
     }
 
@@ -86,20 +88,23 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'package.json')));
     assert.ok(existsSync(join(appDir, 'tsconfig.json')));
 
-    // Single cross-agent source (AGENTS.md + the one skill + the .agents workflow
-    // rules), CONVENTIONS.md, CLAUDE.md bridge, and Claude protective hooks.
-    for (const f of ['AGENTS.md', '.agents/skills/webjs/SKILL.md', '.agents/rules/workflow.md', 'CLAUDE.md', 'CONVENTIONS.md', '.claude/settings.json', '.editorconfig']) {
+    // Single cross-agent source (AGENTS.md carrying the brief), the CLAUDE.md
+    // bridge, and Claude protective hooks.
+    for (const f of ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', '.editorconfig']) {
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
     // Per-agent files and design-distinctness ceremony removed.
-    for (const f of ['GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review']) {
+    // The agent skill, the workflow rules, CONVENTIONS.md and the gallery were
+    // dropped: the brief in AGENTS.md plus Lit and Next.js muscle memory is the
+    // whole agent doc set.
+    for (const f of ['GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review', '.agents', 'CONVENTIONS.md', 'scripts/clear-gallery.mjs', 'app/features', 'app/examples', 'modules/gallery']) {
       assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the scaffold`);
     }
-    // Thin bridges (pointers to AGENTS.md / the skill).
-    for (const f of ['CLAUDE.md', 'CONVENTIONS.md']) {
+    // Thin bridge (a pointer to AGENTS.md).
+    for (const f of ['CLAUDE.md']) {
       const src = readFileSync(join(appDir, f), 'utf8');
       assert.ok(src.length < 2200, `${f} is a thin bridge, not a full rule duplicate`);
-      assert.match(src, /AGENTS\.md|\.agents\/skills\/webjs/, `${f} points at AGENTS.md or the skill`);
+      assert.match(src, /AGENTS\.md/, `${f} points at AGENTS.md`);
     }
 
     // #271: the opt-in progressive-enhancement service worker + its offline
@@ -130,29 +135,47 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // must toggle the shadcn `.dark` class, not only the `data-theme`
     // attribute. Without `.dark`, the theme (and the copied components/ui/*)
     // render light tokens on the dark chrome (white buttons/cards, invisible text). Light
-    // mode hides this, so guard it here. See .agents/skills/webjs/references/styling.md "Dark mode".
+    // mode hides this, so guard it here. See https://webjs.dev/docs/styling.
     const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
     const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
     assert.match(layoutSrc, /classList\.toggle\(['"]dark['"]/,
       'layout head script must toggle the .dark class (shadcn dark-mode signal)');
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
+    assert.doesNotMatch(toggleSrc, /\sstyle="/, 'the toggle carries no inline style (its icons use SVG attributes)');
+    assert.doesNotMatch(toggleSrc, /document\.(getElementById|querySelector)/, 'and no document query');
+    // The head script only applies the theme before paint; following the OS is
+    // the toggle's job, on Lit's lifecycle (#1686).
+    assert.doesNotMatch(layoutSrc, /addEventListener/, 'the pre-paint script attaches no listener');
+    assert.match(toggleSrc, /connectedCallback\(\) \{[\s\S]*?matchMedia\('\(prefers-color-scheme: dark\)'\)[\s\S]*?addEventListener\('change'/, 'the toggle follows the OS from connectedCallback');
+    assert.match(toggleSrc, /disconnectedCallback\(\) \{[\s\S]*?removeEventListener\('change'/, 'and stops in disconnectedCallback');
+    // The toggle is the UI kit's own Button (the AGENTS.md rule), which also
+    // gives it the pointer cursor Tailwind v4's reset takes from a button.
+    assert.match(toggleSrc, /import \{ buttonClass \} from '#components\/ui\/button\.ts'/, 'the toggle uses the kit Button');
+    assert.match(toggleSrc, /class=\$\{buttonClass\(\{ variant: 'ghost', size: 'icon' \}\)\}/, 'as a ghost icon button');
+    assert.match(readFileSync(join(appDir, 'components', 'ui', 'button.ts'), 'utf8'), /\bcursor-pointer\b/, 'whose classes carry the pointer cursor');
+    assert.match(toggleSrc, /static properties = \{ theme: \{ state: true \} \};/, 'its theme is Lit reactive state');
 
-    // Re-skinned shell: a JetBrains Mono type system on a cool neutral-grey
-    // surface palette (not the old orange brand), a floating top navbar, and a
-    // main that fills the viewport minus the navbar.
+    // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
+    // Geist), with a floating top navbar and a main that fills the viewport
+    // minus the navbar.
     assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
       'layout main fills the viewport minus the navbar');
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
     // #1660: the navbar is sized by --header-h and nothing measures it, so a
     // client-router swap that replaces the header cannot zero the offset.
-    assert.match(layoutSrc, /<header class="[^"]*h-\[var\(--header-h\)\]/, 'the navbar is sized by the token');
-    assert.match(layoutSrc, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
+    assert.match(layoutSrc, /<header class="[^"]*h-\(--header-h\)/, 'the navbar is sized by the token');
+    const inputCssEarly = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
+    assert.match(inputCssEarly, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
       'pinning the navbar is a one-class edit');
+    // The scaffold follows its own AGENTS.md: no hand-written CSS in the layout,
+    // only Tailwind on the kit's tokens (#1686).
+    assert.doesNotMatch(layoutSrc, /<style\b/, 'the layout carries no <style> block');
+    assert.doesNotMatch(layoutSrc, /\sstyle="/, 'and no inline style attribute');
     // Pinning from a breakpoint up is resolved by Tailwind from the app's own
     // theme (@variant), never from hard-coded widths in the layout.
     assert.doesNotMatch(layoutSrc, /min-width: \d/, 'the layout hard-codes no breakpoint width');
-    assert.match(layoutSrc, /html:has\(> body > header\.fixed\) \{ scroll-padding-top: var\(--header-h\); \}/,
+    assert.match(inputCssEarly, /html:has\(> body > header\.fixed\) \{ scroll-padding-top: var\(--header-h\); \}/,
       'a pinned navbar also offsets in-page anchor jumps');
     const inputCss = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /body:has\(> header\[class~="md:fixed"\]\) \{ @variant md \{ padding-top: var\(--header-h\); \} \}/,
@@ -162,18 +185,17 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // controls switch on the same class. With JavaScript off the page is light
     // throughout, never light tokens over OS-dark controls and scrollbars.
     assert.match(layoutSrc, /<meta name="color-scheme" content="light">/, 'the meta names light only');
-    assert.match(layoutSrc, /:root \{[^}]*color-scheme: light;/, 'color-scheme defaults to light');
-    assert.match(layoutSrc, /:root\.dark \{ color-scheme: dark; \}/, 'and turns dark with the tokens');
+    assert.match(inputCss, /:root \{ color-scheme: light; \}/, 'color-scheme defaults to light');
+    assert.match(inputCss, /:root\.dark \{ color-scheme: dark; \}/, 'and turns dark with the tokens');
+    assert.match(inputCss, /body \{ @apply bg-background text-foreground font-sans antialiased; \}/, 'the body takes the kit tokens');
     assert.doesNotMatch(layoutSrc, /color-scheme: light dark|content="light dark"/, 'never following the OS on its own');
-    const clearSrc = readFileSync(join(appDir, 'scripts', 'clear-gallery.mjs'), 'utf8');
-    assert.match(clearSrc, /:root\.dark \{ color-scheme: dark; \}/, 'the gallery:clear layout pairs them the same way');
-    assert.doesNotMatch(clearSrc, /content="light dark"/);
-    assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
+    assert.match(layoutSrc, /family=Geist:/, 'layout loads Geist');
+    assert.match(layoutSrc, /family=Geist\+Mono/, 'and Geist Mono');
     // The palette lives in the theme block of styles/globals.css (light on
     // :root, dark on .dark), where a preset replaces it, never in the layout.
     const themeSrc = readFileSync(join(appDir, 'styles', 'globals.css'), 'utf8');
-    assert.match(themeSrc, /:root \{[\s\S]*?--primary: #1e2226;/, 'the theme ships the cool neutral-grey palette');
-    assert.match(themeSrc, /\.dark \{[\s\S]*?--primary: #dee2e6;/, 'with its dark half on .dark');
+    assert.match(themeSrc, /:root \{[\s\S]*?--primary: oklch\(0% 0 0\);/, 'the theme ships the webjs.dev/ui palette');
+    assert.match(themeSrc, /\.dark \{[\s\S]*?--primary: oklch\(0\.922 0 0\);/, 'with its dark half on .dark');
     assert.doesNotMatch(layoutSrc, /--primary\s*:/, 'and the layout overrides none of it');
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
@@ -193,44 +215,44 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.equal(manifest.icons[0].src, '/icon.svg', 'the manifest names the app icon');
     assert.ok(manifest.name, 'the manifest carries the app name');
 
-    // The home page is a gallery index: an 'Explore the gallery' hero, a grid
-    // linking every feature demo + the example app, and a footer with the docs +
-    // source links.
+    // The home page is a minimal starting point that imports nothing from a
+    // gallery, and the navbar links the docs and the source.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.match(pageSrc, /Explore the gallery/, 'home hero indexes the gallery');
-    assert.match(pageSrc, /from '#modules\/gallery\/nav\.ts'/, 'home reads the shared gallery nav (the feature + example index)');
-    assert.match(pageSrc, /webjs\.dev\/docs/, 'footer links the docs');
-    assert.match(pageSrc, /github\.com\/webjsdev\/webjs/, 'footer links the source');
-    assert.doesNotMatch(pageSrc, /<prompt-button\b/, 'the AI-prompts card is gone');
-    assert.doesNotMatch(pageSrc, /Coding with AI/, 'the coding-with-AI section is gone');
-
-    // The gallery ships: single-feature demos under app/features/, the example
-    // app under app/examples/, and their logic under modules/, all without the
-    // dead scaffold-placeholder markers (that gate was retired).
-    assert.ok(existsSync(join(appDir, 'app', 'features', 'routing', 'page.ts')),
-      'gallery feature demos ship under app/features/');
-    assert.ok(existsSync(join(appDir, 'app', 'examples', 'todo', 'page.ts')),
-      'the example app ships under app/examples/');
-    assert.ok(existsSync(join(appDir, 'modules', 'todo', 'components', 'todo-app.ts')),
-      'gallery module logic ships under modules/');
-    assert.doesNotMatch(
-      readFileSync(join(appDir, 'app', 'features', 'routing', 'page.ts'), 'utf8'),
-      /webjs-scaffold-placeholder/, 'gallery files ship without dead placeholder markers');
+    // The home is a thin route over the example module (modules/users/).
+    assert.match(pageSrc, /from '#modules\/users\/actions\/add-user\.server\.ts'/, 'the home binds the example module\'s action');
+    assert.match(pageSrc, /from '#modules\/users\/queries\/list-users\.server\.ts'/, 'and reads its query');
+    assert.match(pageSrc, /<form action=\$\{addUser\}/, 'as a bound form');
+    assert.match(pageSrc, /<user-list \.users=\$\{latest\}><\/user-list>/, 'and renders the users with the module\'s component');
+    const listSrc = readFileSync(join(appDir, 'modules', 'users', 'components', 'user-list.ts'), 'utf8');
+    assert.match(listSrc, /static properties = \{ users: \{ type: Array \} \};/, 'a Lit-style reactive property');
+    assert.match(listSrc, /UserList\.register\('user-list'\)/, 'registered under its tag');
+    assert.match(pageSrc, /<form action=\$\{clearUsers\}>/, 'and a Clear list button bound to its clear action');
+    assert.match(readFileSync(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), 'utf8'), /^'use server';/, 'which is a server action');
+    // The example agents copy: only a duplicate is a field error, every other
+    // database error throws (no catch that relabels it).
+    const addSrc = readFileSync(join(appDir, 'modules', 'users', 'actions', 'add-user.server.ts'), 'utf8');
+    assert.match(addSrc, /\.onConflictDoNothing\(\)\.returning\(\)/, 'a duplicate is detected by the insert itself');
+    assert.doesNotMatch(addSrc, /catch\s*[{(]/, 'and no catch turns other errors into a duplicate message');
+    assert.ok(existsSync(join(appDir, 'test', 'users', 'users.test.ts')), 'the module ships its own test');
+    assert.match(pageSrc, /Edit app\/page\.ts/, 'the home points at the file to edit');
+    assert.match(layoutSrc, /webjs\.dev\/docs/, 'the navbar links the docs');
+    assert.match(layoutSrc, /github\.com\/webjsdev\/webjs/, 'the navbar links the source');
+    assert.doesNotMatch(layoutSrc + toggleSrc, /#modules\//, 'the shell imports no demo module');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
-    assert.ok(existsSync(join(appDir, 'db', 'columns.server.ts')), 'db/columns.server.ts written');
     assert.ok(existsSync(join(appDir, 'db', 'connection.server.ts')), 'db/connection.server.ts written');
     assert.ok(existsSync(join(appDir, 'drizzle.config.ts')), 'drizzle.config.ts written');
-    // A JSON column helper ships so persisting structured data (a board, a tag
-    // list, a settings blob) needs no outside Drizzle knowledge. SQLite path
-    // uses text({ mode: 'json' }). The example schema demonstrates it once.
-    const colsSrc = readFileSync(join(appDir, 'db', 'columns.server.ts'), 'utf8');
-    assert.match(colsSrc, /export const json = <T>\(\) => text\(\{ mode: 'json' \}\)\.\$type<T>\(\)/,
-      'sqlite columns.server.ts exports a generic json<T>() helper');
+    // The schema is plain Drizzle, as in Drizzle's own docs (#1686): no
+    // helper module an agent must first read, and a column's type is visible
+    // where it is declared (integer({ mode: 'timestamp_ms' }) is a Date).
+    assert.ok(!existsSync(join(appDir, 'db', 'columns.server.ts')), 'no db/columns.server.ts helper module');
     const schemaSrc = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
-    assert.match(schemaSrc, /\bjson\b/, 'schema imports json');
-    assert.match(schemaSrc, /json<\{[^}]*\}>\(\)/, 'schema demonstrates json<T>() on a column (counterfactual: fails if the demo column is dropped)');
+    assert.match(schemaSrc, /from 'drizzle-orm\/sqlite-core'/, 'the schema imports Drizzle directly');
+    assert.match(schemaSrc, /sqliteTable\('users'/, 'a plain sqliteTable');
+    assert.match(schemaSrc, /text\(\{ mode: 'json' \}\)\.\$type<\{[^}]*\}>\(\)/, 'a JSON column the Drizzle way (counterfactual: fails if the demo column is dropped)');
+    assert.match(schemaSrc, /integer\(\{ mode: 'timestamp_ms' \}\)/, 'a Date column says so where it is declared');
+    assert.doesNotMatch(schemaSrc, /columns\.server/, 'no import of a helper module');
     assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
     // The INITIAL migration is authored by `webjs create` only AFTER a successful
     // install (drizzle-kit is needed). This test scaffolds with install:false, so
@@ -258,7 +280,9 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
         else if (/\.(ts|js)$/.test(e.name)) tsFiles.push(full);
       }
     })(appDir);
-    for (const f of tsFiles) {
+    // components/ui/ is the kit's own add output (relative imports to cn(),
+    // which `webjs ui diff` compares against), so it is not the scaffold's code.
+    for (const f of tsFiles.filter((f) => !f.includes(`${join('components', 'ui')}`))) {
       const src = readFileSync(f, 'utf8');
       assert.ok(!/from '(\.\.\/){2,}/.test(src), `${f.slice(appDir.length)} must not keep a deep relative import`);
     }
@@ -295,6 +319,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       .flatMap((g) => g.hooks.map((h) => h.command));
     assert.ok(postCommands.includes('.claude/hooks/cleanup-merged-worktree.sh'),
       'settings.json wires cleanup-merged-worktree into PostToolUse');
+    // The check-on-edit feedback loop: `webjs check` runs after each edit and
+    // the edited file's violations go back to the agent.
+    assert.ok(postCommands.includes('.claude/hooks/check-on-edit.sh'),
+      'settings.json wires check-on-edit into PostToolUse');
+    for (const h of ['check-on-edit.sh', 'check-on-edit.mjs']) {
+      assert.ok(existsSync(join(appDir, '.claude/hooks', h)), `${h} is scaffolded`);
+    }
+    assert.ok(statSync(join(appDir, '.claude/hooks/check-on-edit.sh')).mode & 0o111,
+      'check-on-edit.sh is executable');
 
     // The design-review ceremony (a skill + a UserPromptSubmit router + a Stop
     // hook) was retired in #969; only the protective hooks above ship now.
@@ -425,6 +458,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(!pkg.devDependencies['ts-lit-plugin'] && !pkg.dependencies['ts-lit-plugin'], 'scaffold pulls no ts-lit-plugin');
     assert.ok(tsconfig.include.includes('test/**/*'),
       'generated tsconfig type-checks the app test directory (#1299)');
+    assert.ok(tsconfig.include.includes('db/**/*'),
+      'generated tsconfig type-checks the schema and connection on their own (#1686)');
 
     // {{APP_NAME}} placeholder substituted in template files
     const agents = readFileSync(join(appDir, 'AGENTS.md'), 'utf8');
@@ -555,24 +590,13 @@ test('scaffoldApp: both templates pin a puppeteer-core floor clearing the extrac
   }
 });
 
-test('scaffoldApp full-stack: the auth card wires createAuth + dashboard + User model', async () => {
-  const cwd = await tempCwd();
-  const restore = muteConsole();
-  try {
-    await scaffoldApp('my-app', cwd, { template: 'full-stack' });
-    const appDir = join(cwd, 'my-app');
-
-    // Core scaffold in place
-    assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
-    assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
-
-    // The UI template ships the opt-in service worker (#271).
-    assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'ships public/sw.js');
-    assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'ships public/offline.html');
-
-    // Auth server modules (the auth gallery card). createAuth config + hashing
-    // live under modules/auth/ so copyGallery ships them and gallery:clear prunes
-    // them; the handler route stays at the app root (createAuth hardcodes /api/auth).
+test('gallery app: the auth card wires createAuth + dashboard + User model', () => {
+  // The auth card lives in the repo gallery app (gallery.webjs.dev); the
+  // scaffold no longer ships it.
+  const appDir = GALLERY;
+  {
+    // Auth server modules. createAuth config + hashing live under modules/auth/;
+    // the handler route stays at the app root (createAuth hardcodes /api/auth).
     assert.ok(existsSync(join(appDir, 'modules', 'auth', 'password.server.ts')), 'modules/auth/password.server.ts present');
     assert.ok(existsSync(join(appDir, 'modules', 'auth', 'auth.server.ts')), 'modules/auth/auth.server.ts present');
     assert.ok(existsSync(join(appDir, 'app', 'api', 'auth', '[...path]', 'route.ts')), 'auth api handler at the app root');
@@ -596,8 +620,7 @@ test('scaffoldApp full-stack: the auth card wires createAuth + dashboard + User 
       assert.equal(h1Count(pageSrc), 1, `auth/${p.join('/')} page has exactly one <h1>`);
     }
 
-    // The users table carries the auth passwordHash column (create.js adds it in
-    // the UI template; gallery:clear strips it back out).
+    // The users table carries the auth passwordHash column.
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
     assert.match(schema, /export const users = table\('users'/, 'users table present');
     assert.match(schema, /passwordHash/, 'users table carries the auth passwordHash column');
@@ -649,9 +672,6 @@ test('scaffoldApp full-stack: the auth card wires createAuth + dashboard + User 
     assert.match(authTest, /@webjsdev\/server\/testing/, 'auth test uses the handle() test harness');
     assert.match(authTest, /redirects to login when unauthenticated/, 'auth test asserts the protected-route gate');
     assert.match(authTest, /loginAndGetCookies/, 'auth test drives the real login flow');
-  } finally {
-    restore();
-    await rm(cwd, { recursive: true, force: true });
   }
 });
 
@@ -684,24 +704,15 @@ test('scaffoldApp: generated users module models HTTP-verb actions (#488)', asyn
   }
 });
 
-test('scaffoldApp full-stack: per-session current-user stays POST-default (#488)', async () => {
+test('gallery app: per-session current-user stays POST-default (#488)', () => {
   // The auth-card current-user read is per-user, so it deliberately is NOT a
   // cacheable GET server action: it ships as the documented counter-example.
   // Counterfactual: add `export const method = 'GET'` to the auth card's
   // current-user and this fails (the exact data-leak the comment warns against).
-  const cwd = await tempCwd();
-  const restore = muteConsole();
-  try {
-    await scaffoldApp('verb-app', cwd, { template: 'full-stack' });
-    const appDir = join(cwd, 'verb-app');
-    const currentUser = readFileSync(
-      join(appDir, 'modules', 'auth', 'queries', 'current-user.server.ts'), 'utf8');
-    assert.doesNotMatch(currentUser, /export const method =/, 'current-user is not a verb-configured GET');
-    assert.match(currentUser, /per-session/, 'current-user explains why it stays POST-default');
-  } finally {
-    restore();
-    await rm(cwd, { recursive: true, force: true });
-  }
+  const currentUser = readFileSync(
+    join(GALLERY, 'modules', 'auth', 'queries', 'current-user.server.ts'), 'utf8');
+  assert.doesNotMatch(currentUser, /export const method =/, 'current-user is not a verb-configured GET');
+  assert.match(currentUser, /per-session/, 'current-user explains why it stays POST-default');
 });
 
 test('scaffoldApp: exits / throws when the target dir already exists', async () => {
@@ -741,7 +752,7 @@ test('scaffoldApp: template placeholder substitution in copied files', async () 
     const appDir = join(cwd, 'PlaceholderTest');
 
     // Walk a few template-copied files and verify {{APP_NAME}} was replaced.
-    const filesToCheck = ['AGENTS.md', 'CONVENTIONS.md', 'CLAUDE.md'];
+    const filesToCheck = ['AGENTS.md', 'CLAUDE.md'];
     for (const f of filesToCheck) {
       const p = join(appDir, f);
       if (!existsSync(p)) continue;
@@ -755,20 +766,17 @@ test('scaffoldApp: template placeholder substitution in copied files', async () 
   }
 });
 
-test('scaffoldApp --db postgres: json<T>() helper maps to jsonb, one schema both dialects', async () => {
+test('scaffoldApp --db postgres: the schema is plain Drizzle pg-core, a jsonb JSON column', async () => {
   const cwd = await tempCwd();
   const restore = muteConsole();
   try {
     await scaffoldApp('my-pg', cwd, { template: 'full-stack', db: 'postgres' });
     const appDir = join(cwd, 'my-pg');
-    const cols = readFileSync(join(appDir, 'db', 'columns.server.ts'), 'utf8');
-    // The Postgres seam uses jsonb; the schema (shared across dialects) is
-    // unchanged, so the same json<T>() call compiles on both.
-    assert.match(cols, /jsonb/, 'postgres columns.server.ts imports jsonb');
-    assert.match(cols, /export const json = <T>\(\) => jsonb\(\)\.\$type<T>\(\)/,
-      'postgres json<T>() maps to jsonb().$type<T>() (counterfactual: fails if the helper is sqlite-only)');
+    assert.ok(!existsSync(join(appDir, 'db', 'columns.server.ts')), 'no helper module on postgres either');
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
-    assert.match(schema, /json<\{[^}]*\}>\(\)/, 'the one shared schema demonstrates json<T>() on postgres too');
+    assert.match(schema, /from 'drizzle-orm\/pg-core'/, 'the postgres schema imports pg-core directly');
+    assert.match(schema, /pgTable\('users'/, 'a plain pgTable');
+    assert.match(schema, /jsonb\(\)\.\$type<\{[^}]*\}>\(\)/, 'a jsonb JSON column (counterfactual: fails if the dialect is ignored)');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });
@@ -839,10 +847,12 @@ test('scaffoldApp --db postgres: an already-lowercase name is unchanged', async 
 // AGENTS.md carries a template-SPECIFIC build playbook (#1076): the full-stack
 // scaffold teaches the UI playbook (design tokens, the UI kit, an MPA), the api
 // scaffold teaches the backend playbook (route handlers, endpoint security), and
-// neither ships guidance that does not match what it generated. Both front-load
-// the same required meta-rules and drop the opt-out phrasing that let smaller
-// models under-gather context.
-test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async () => {
+// neither ships guidance that does not match what it generated. Both open with
+// the same brief and drop the opt-out phrasing that let smaller models
+// under-gather context.
+test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', async () => {
+  // The agent doc set is the brief plus Lit and Next.js muscle memory, so both
+  // templates ship one short AGENTS.md with no template-specific playbook.
   const cwd = await tempCwd();
   const restore = muteConsole();
   try {
@@ -850,58 +860,24 @@ test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async
     await scaffoldApp('api-app', cwd, { template: 'api' });
     const fs = readFileSync(join(cwd, 'fs-app', 'AGENTS.md'), 'utf8');
     const api = readFileSync(join(cwd, 'api-app', 'AGENTS.md'), 'utf8');
-
-    // The placeholder is always substituted (a leftover would ship a broken app).
-    for (const [label, md] of [['full-stack', fs], ['api', api]]) {
-      assert.doesNotMatch(md, /\{\{PLAYBOOK\}\}|\{\{APP_NAME\}\}/, `${label}: no leftover placeholder`);
-    }
-
-    // Shared, required meta-rules on BOTH templates.
-    for (const [label, md] of [['full-stack', fs], ['api', api]]) {
-      assert.match(md, /Gather context BEFORE you build \(required\)/, `${label}: required context-gathering`);
-      assert.match(md, /Read the framework source for exact contracts/, `${label}: source-reading step`);
-      assert.match(md, /Never reach for `any`/, `${label}: no-any strict typing`);
-      assert.match(md, /npm run check/, `${label}: verification includes the check script`);
-      // No opt-out / permission-to-skip phrasing (the #1076 regression to
-      // prevent; "only when a task needs" is the historical wording).
-      assert.doesNotMatch(md, /do not have to read|only exploring|only (if|when) a task needs/i,
-        `${label}: no opt-out phrasing`);
-    }
-
-    // Full-stack teaches the UI playbook; the api template must NOT.
-    assert.match(fs, /light-dark\(LIGHT, DARK\)/, 'full-stack: design-token mandate');
-    assert.match(fs, /Tier 2, custom elements/, 'full-stack: UI kit tier-2 discovery');
-    assert.match(fs, /multi-page app \(MPA\)/, 'full-stack: MPA structure');
-    assert.match(fs, /position: fixed/, 'full-stack: fixed navbar');
-    assert.match(fs, /npx webjs regenerate/, 'full-stack: the recorded Tailwind build in the pipeline (#1672)');
-    for (const uiOnly of [/light-dark/, /Tier 2/, /ui add/, /css:build/, /regenerate/, /position: fixed/]) {
-      assert.doesNotMatch(api, uiOnly, `api: no UI-only guidance (${uiOnly})`);
-    }
-
-    // The api template teaches the backend playbook the full-stack one does not.
-    assert.match(api, /Build a backend API \(api template\)/, 'api: backend playbook heading');
-    assert.match(api, /app\/api\/features\//, 'api: backend-features showcase path');
-    assert.match(api, /`route\(\)` adapter/, 'api: route() adapter');
-    assert.match(api, /Secure every endpoint/, 'api: endpoint security section');
-    assert.doesNotMatch(fs, /Build a backend API/, 'full-stack: no backend-API heading');
-
-    // The component guidance (WebComponent, reactive props) is UI-only, so it
-    // lives in the full-stack playbook, never in the api AGENTS.md.
-    assert.match(fs, /Build components for interactivity/, 'full-stack: component guidance');
-    assert.doesNotMatch(api, /Build components for interactivity|WebComponent/,
-      'api: no component/reactive-props guidance');
-
-    // The sibling agent-doc surfaces (CONVENTIONS.md, .agents/rules/workflow.md)
-    // ship into BOTH apps, so they must be template-neutral: no opt-out phrasing,
-    // and they must acknowledge the api showcase rather than only the UI gallery.
-    const apiConv = readFileSync(join(cwd, 'api-app', 'CONVENTIONS.md'), 'utf8');
-    const apiFlow = readFileSync(join(cwd, 'api-app', '.agents/rules/workflow.md'), 'utf8');
-    for (const [label, md] of [['CONVENTIONS.md', apiConv], ['workflow.md', apiFlow]]) {
-      assert.doesNotMatch(md, /only while exploring|do not have to read|only (if|when) a task needs/i,
-        `api ${label}: no opt-out phrasing`);
-    }
-    for (const [label, md] of [['CONVENTIONS.md', apiConv], ['workflow.md', apiFlow]]) {
-      assert.match(md, /app\/api\/features/, `api ${label}: acknowledges the api showcase`);
+    assert.equal(fs.replace('fs-app', 'X'), api.replace('api-app', 'X'), 'one AGENTS.md for both templates');
+    assert.doesNotMatch(fs, /\{\{[A-Z_]+\}\}/, 'no leftover placeholder');
+    assert.match(fs, /## The WebJs brief/, 'opens with the brief');
+    assert.match(fs, /node_modules\/@webjsdev\/\*/, 'points at the framework source');
+    assert.match(fs, /npx w[e]bjs check/, 'names the check loop');
+    assert.match(fs, /use Lit's APIs over raw DOM calls/, 'steers components to Lit APIs over raw DOM');
+    assert.match(fs, /document\.getElementById/, 'naming the raw DOM calls to avoid');
+    assert.match(fs, /Style with Tailwind utilities on the kit's design tokens/, 'steers styling to Tailwind on the kit tokens');
+    assert.match(fs, /npx webjs ui init --preset/, 'and theming to a kit preset');
+    assert.match(fs, /`modules\/users\/` is an example of that shape: read it, then\ndelete it, its test and whatever uses it before you build the app\./, 'tells the agent to delete the example module before building');
+    assert.match(fs, /\n## This app\n\nReplace this paragraph with what /, 'ends with a This app section the agent fills in');
+    assert.match(fs, /`CLAUDE\.md` imports this file, so notes go here\./, 'which says app notes live in AGENTS.md, not CLAUDE.md');
+    // The brief plus the scaffold's rules plus the This app stub: still short,
+    // since every line is read on every turn.
+    assert.match(fs, /run `npx webjs source`, which lists what WebJs provides for each need\./, 'names the feature catalogue');
+    assert.ok(fs.split('\n').length < 68, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
+    for (const dir of ['fs-app', 'api-app']) {
+      assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);
     }
   } finally {
     restore();

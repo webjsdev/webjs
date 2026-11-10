@@ -50,7 +50,7 @@ import type { LayoutProps } from '@webjsdev/core';
 
 export default function RootLayout({ children }: LayoutProps) {
   return html\`
-    &lt;link rel="stylesheet" href=\${asset('/public/tailwind.css')}&gt;
+    &lt;link rel="stylesheet" href=\${asset('/tailwind.css')}&gt;
     &lt;style&gt;
       /* Token VALUES: plain CSS custom properties, so they resolve with JS off. */
       :root {
@@ -148,7 +148,7 @@ class MyCard extends WebComponent {
     <p><strong>Verify by USING it.</strong> A layout bug only shows mid-interaction. Render the app, play through every state (fill the board, win, draw, reload), and confirm nothing resizes and the cells stay equal.</p>
 
     <h2>Opting in to shadow DOM</h2>
-    <p>Set <code>static shadow = true</code> when you want <code>adoptedStyleSheets</code>-scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed-proof CSS isolation:</p>
+    <p>Set <code>static shadow = true</code> when you want <code>adoptedStyleSheets</code>-scoped styles, <code>::slotted()</code> selectors, or third-party-embed-proof CSS isolation (<code>&lt;slot&gt;</code> itself works the same in light DOM):</p>
 
     <code-block>import { WebComponent, html, css } from '@webjsdev/core';
 
@@ -167,6 +167,21 @@ export class Card extends WebComponent {
   }
 }
 Card.register('my-card');</code-block>
+
+    <h3>The css tag, composition and unsafeCSS</h3>
+    <p><code>css</code> follows Lit's contract. A hole may hold another <code>css</code> result, which is composed in as text, or a number. Any other value throws, and the error names <code>unsafeCSS()</code>, because a plain string in a stylesheet is how untrusted text reaches CSS (a <code>url()</code> or an attribute selector can leak data), so a trusted string has to be wrapped on purpose. A result reads back as <code>cssText</code> (or <code>text</code>) and stringifies to its CSS.</p>
+    <code-block>import { css, unsafeCSS } from '@webjsdev/core';
+
+const brand = css\`#e33\`;
+const gap = 8;
+const accent = unsafeCSS(THEME.accent);   // a trusted, author-controlled value only
+
+static styles = [
+  sharedReset,                            // a css result or a CSSStyleSheet
+  css\`a { color: \${brand}; margin: \${gap}px; border-color: \${accent}; }\`,
+];</code-block>
+    <p><code>static styles</code> takes a <code>css</code> result, a constructed <code>CSSStyleSheet</code>, or arrays of them nested to any depth. They are flattened by <code>static finalizeStyles()</code> into <code>static elementStyles</code>; a style listed twice keeps its last position, so a later override still wins. Each <code>css</code> result builds one shared <code>CSSStyleSheet</code> in the browser, so every element adopting it shares a sheet.</p>
+    <p><code>static styles</code> needs <code>static shadow = true</code>. A light-DOM component has no shadow root to adopt them into, so declaring them there is an error, not a silent no-op. <code>webjs check</code> reports <code>static-styles-need-shadow</code> (and <code>shadow-options-need-shadow</code> for <code>static shadowRootOptions</code>), the dev server logs it once per class during SSR, and the browser logs it once per class on connect.</p>
 
     <p>Shadow-DOM components are SSR'd via Declarative Shadow DOM. Styles paint before JS loads, with no boot script in between, and the browser enforces the boundary. Light-DOM components are SSR'd as direct HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker, and client-side rendering replaces the marker without flash.</p>
 
@@ -189,9 +204,9 @@ Card.register('my-card');</code-block>
 
     <p>Where it lives follows who consumes it. A fragment used across the app goes in <code>lib/utils/ui.ts</code> (and once app-wide fragments become a subsystem of their own, one file each under <code>lib/ui/</code>); one used by a single feature goes in <code>modules/&lt;feature&gt;/utils/ui/&lt;name&gt;.ts</code>, one file per fragment. The <code>ui</code> segment is what separates a function returning markup from the plain <code>utils/</code> neighbours that return data, and from <code>components/</code>, which means custom elements.</p>
 
-    <p>Read-only markup can be a fragment or a display-only component, and structure decides it, not bytes. A component is a tag in the DOM, so it adds a wrapper node. Two cases rule the element out entirely: a <code>&lt;table&gt;</code> child, where the HTML parser foster-parents an unknown element out of the table so it never renders where you put it, and output that is a string rather than DOM, such as a <code>&lt;webjs-stream&gt;</code> payload. Three more render but land wrong, so they are strong reasons rather than hard blocks: a <code>&lt;ul&gt;</code> / <code>&lt;ol&gt;</code> / <code>&lt;dl&gt;</code> child, where <code>ul &gt; li</code>, <code>:nth-child</code>, and list markers now see the wrapper; a <code>&lt;select&gt;</code> child, where the control still offers the option but it is no longer <code>select &gt; option</code>; and a grid or flex child, where the wrapper becomes the laid-out item. Prefer the component everywhere else, since it gets a tag you can target and can grow behaviour later.</p>
+    <p>Read-only markup can be a fragment or a <a href="/docs/components#server-only">server-only component</a> (a component in a <code>*.server.ts</code> file), and structure decides it, not bytes. A component is a tag in the DOM, so it adds a wrapper node. Two cases rule the element out entirely: a <code>&lt;table&gt;</code> child, where the HTML parser foster-parents an unknown element out of the table so it never renders where you put it, and output that is a string rather than DOM, such as a <code>&lt;webjs-stream&gt;</code> payload. Three more render but land wrong, so they are strong reasons rather than hard blocks: a <code>&lt;ul&gt;</code> / <code>&lt;ol&gt;</code> / <code>&lt;dl&gt;</code> child, where <code>ul &gt; li</code>, <code>:nth-child</code>, and list markers now see the wrapper; a <code>&lt;select&gt;</code> child, where the control still offers the option but it is no longer <code>select &gt; option</code>; and a grid or flex child, where the wrapper becomes the laid-out item. Prefer the component everywhere else, since it gets a tag you can target and can grow behaviour later.</p>
 
-    <p>On cost the two tie under a page: the page is inert, so the fragment runs at SSR and is never fetched, and a component doing no client work is elided. Under an interactive island <em>both</em> ship, because an island's imports are fetched either way. The component additionally carries an element class plus its registration, an upgrade per instance, and the display-only components it renders, which stop being elided with it. Treat that as the last consideration, not the first.</p>
+    <p>On cost the two tie under a page: neither ships, since the page and a server-only component both run only on the server. An ordinary component, by contrast, always ships. Under an interactive island a fragment ships with the island's code, while a server-only component cannot be rendered there at all (pass it in as a child from the page instead). Treat cost as the last consideration, not the first.</p>
 
     <code-block>// lib/utils/ui.ts
 import { html } from '@webjsdev/core';

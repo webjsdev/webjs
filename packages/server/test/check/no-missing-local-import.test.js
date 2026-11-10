@@ -9,7 +9,7 @@ import { checkConventions, RULES } from '../../src/check.js';
 /**
  * Tests for `no-missing-local-import`: a NAMED value import of a symbol a
  * resolvable app-internal module does not export is a runtime crash the
- * elision-based checks miss. The rule fills that gap while staying conservative
+ * graph-based checks miss. The rule fills that gap while staying conservative
  * enough to never false-positive on a valid app (the whole point of it).
  */
 const RULE = 'no-missing-local-import';
@@ -177,5 +177,23 @@ test('FP: a named-default import resolves against an export default module', asy
     'use.ts': `import { default as Widget } from './lib/widget.ts';\nimport { default as v } from './lib/val.ts';\nexport const u = [Widget, v];\n`,
   });
   assert.equal(hits(await checkConventions(dir)).length, 0, 'default is a recognized export');
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('names the app module that does export the name, in the import style used (#1686)', async () => {
+  // The micro-eval auth draft imported a UI helper from its sibling's file.
+  const dir = await makeApp({
+    'package.json': JSON.stringify({ name: 'x', type: 'module', imports: { '#*': './*' } }),
+    'components/ui/card.ts': `export function cardClass() { return 'card'; }\n`,
+    'components/ui/button.ts': `export function buttonClass() { return 'btn'; }\n`,
+    'app/dashboard/page.ts': `import { buttonClass } from '#components/ui/card.ts';\nexport default () => buttonClass();\n`,
+    'app/other/page.ts': `import { buttonClass } from '../../components/ui/card.ts';\nexport default () => buttonClass();\n`,
+  });
+  const v = hits(await checkConventions(dir));
+  const aliased = v.find((x) => /dashboard/.test(x.file));
+  const relative = v.find((x) => /other/.test(x.file));
+  assert.match(aliased.message, /`buttonClass` is exported by `#components\/ui\/button\.ts`/);
+  assert.equal(aliased.fix, 'Import `buttonClass` from `#components/ui/button.ts`.');
+  assert.equal(relative.fix, 'Import `buttonClass` from `../../components/ui/button.ts`.');
   await rm(dir, { recursive: true, force: true });
 });

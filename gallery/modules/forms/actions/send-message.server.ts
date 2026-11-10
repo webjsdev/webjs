@@ -9,11 +9,10 @@
 // `actionData` (so the fields repopulate), or a SUCCESS with a same-site
 // `redirect` for a 303 Post-Redirect-Get.
 //
-// FOOTGUN: to redirect on success, RETURN `{ success: true, redirect: '/path' }`
-// (a 303 See Other, so the browser follows with a GET). Do NOT THROW `redirect()`
-// from a form action, that is a 307 which PRESERVES the POST method and body, so
-// the browser re-POSTs to the target and re-runs the mutation (a duplicate
-// write). Throw `redirect()` only from a page render / GET context.
+// To redirect on success, either RETURN `{ success: true, redirect: '/path' }` or
+// THROW `redirect('/path')` as you would in Next.js. A form submission answers
+// both with a 303 See Other, so the browser follows with a GET and never
+// re-POSTs the mutation.
 export interface Result {
   success: boolean;
   fieldErrors?: Record<string, string>;

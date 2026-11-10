@@ -51,24 +51,48 @@ export default async function Dashboard() {
   if (!session) throw redirect('/login');
   return html\`&lt;h1&gt;Welcome, \${session.user.name}&lt;/h1&gt;\`;
 }</code-block>
-    <p>A <code>redirect()</code> thrown during a GET page render (an auth gate like this) defaults to <code>302 Found</code>, the conventional bounce code. The same <code>redirect()</code> thrown from a server action (a POST) defaults to the method-preserving <code>307</code> instead; an explicit <code>redirect(url, status)</code> overrides either. To type <code>session.user</code> so <code>session.user.name</code> needs no cast, see <a href="/docs/typescript">Typing the auth() Session User</a>.</p>
+    <p>A <code>redirect()</code> thrown during a GET page render (an auth gate like this) defaults to <code>302 Found</code>, the conventional bounce code. The same <code>redirect()</code> thrown from a form-bound server action answers <code>303 See Other</code>, as in Next.js, so the browser follows with a GET and the action runs once; called over RPC from a component, it navigates the client router to the target. An explicit <code>redirect(url, status)</code> overrides the GET-gate default. To type <code>session.user</code> so <code>session.user.name</code> needs no cast, see <a href="/docs/typescript">Typing the auth() Session User</a>.</p>
 
     <h2>Sign in and sign out</h2>
-    <code-block>// Server actions
+    <code-block>// modules/auth/actions/session.server.ts, bound as &lt;form action=\${logIn}&gt;
+'use server';
+import { AuthError } from '@webjsdev/server';
 import { signIn, signOut } from '#lib/auth.server.ts';
 
-export async function login(credentials) {
-  return signIn('credentials', credentials);
+export async function logIn(formData: FormData) {
+  try {
+    await signIn('credentials', formData, { redirectTo: '/dashboard' });
+  } catch (error) {
+    if (error instanceof AuthError) return { success: false, error: 'Wrong email or password.' };
+    throw error; // the success redirect
+  }
 }
 
-export async function loginWithGoogle() {
-  return signIn('google', {}, { redirectTo: '/dashboard' });
+export async function logInWithGoogle() {
+  await signIn('google', undefined, { redirectTo: '/dashboard' });
 }
 
-export async function logout() {
-  return signOut({ redirectTo: '/' });
+export async function logOut() {
+  await signOut({ redirectTo: '/' });
 }</code-block>
-    <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the scaffold's auth gallery card renders its logout button.</p>
+    <p><code>signIn</code> and <code>signOut</code> work the way Auth.js v5's do in a Next.js server action. Inside a request they set or clear the session cookie on the response and throw a redirect, which a form-bound action answers with a 303, so the form works with JavaScript off. A credentials sign-in whose <code>authorize</code> returns <code>null</code> throws <code>CredentialsSignin</code>, a subclass of <code>AuthError</code> with <code>type</code> set to <code>'CredentialsSignin'</code>. Catch it to return a message, which re-renders the page with it on <code>actionData</code>. Left uncaught, it redirects to <code>pages.error</code> (or <code>pages.signIn</code>) with <code>?error=CredentialsSignin</code>, as the <code>/api/auth/signin/credentials</code> route does. Pass <code>{ redirect: false }</code> to get the target url back instead of the redirect. Called with no request in scope, from a script, they return the <code>Response</code> the auth routes send.</p>
+    <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the auth demo in the WebJs gallery renders its logout button. A <code>GET /api/auth/signout</code> never signs out, as in Auth.js: it answers a page whose button posts (or redirects to <code>pages.signOut</code>), because a link prefetch or a crawler following a GET would otherwise log the visitor out. The auth <code>POST</code> routes also refuse a cross-site request, the same origin check server actions get, with <code>webjs.allowedOrigins</code> honoured.</p>
+
+    <h2>Protect routes with middleware</h2>
+    <p>As in Auth.js, <code>auth</code> is also middleware. Export it from the root <code>middleware.ts</code> and decide who passes in <code>callbacks.authorized</code>: <code>true</code> continues, <code>false</code> redirects to <code>pages.signIn</code> (or <code>/api/auth/signin</code>) with a <code>callbackUrl</code>, and a returned <code>Response</code> is sent as is. Without the callback the middleware only attaches the session as <code>req.auth</code>.</p>
+    <code-block>// middleware.ts
+export { auth as middleware } from '#lib/auth.server.ts';
+
+// lib/auth.server.ts
+createAuth({
+  // ...providers
+  pages: { signIn: '/login' },
+  callbacks: {
+    authorized: ({ auth, request }) =>
+      !!auth || !new URL(request.url).pathname.startsWith('/dashboard'),
+  },
+});</code-block>
+    <p>To run your own logic, wrap it: <code>export default auth((req) =&gt; ...)</code> gives the function <code>req.auth</code>, and returning nothing continues to the page.</p>
 
     <h2>Return to the page the user started from</h2>
     <p>Pass <code>redirectTo</code> and the user lands there after signing in, for OAuth providers as well as credentials. A plain form is enough: the mounted handler reads the field, carries it through the provider round trip in a short-lived signed cookie, and the callback lands on it.</p>
@@ -76,7 +100,8 @@ export async function logout() {
   &lt;input type="hidden" name="redirectTo" value="/dashboard/x"&gt;
   &lt;button&gt;Sign in with GitHub&lt;/button&gt;
 &lt;/form&gt;</code-block>
-    <p>A link works too (<code>/api/auth/signin/github?redirectTo=/dashboard/x</code>), and so does <code>signIn('github', undefined, { redirectTo })</code> from an action. A <code>redirectTo</code> that comes from a request must be a same-origin local path: one leading <code>/</code>, not followed by <code>/</code> or <code>\</code>. An absolute URL or a protocol-relative <code>//host</code> is dropped rather than repaired, and the sign-in lands on <code>/</code>, so the field can never be used as an open redirect. A denied sign-in still goes to <code>pages.error</code>.</p>
+    <p>A link works too (<code>/api/auth/signin/github?redirectTo=/dashboard/x</code>), and so does <code>signIn('github', undefined, { redirectTo })</code> from an action. A <code>redirectTo</code> that comes from a request must be a same-origin local path: one leading <code>/</code>, not followed by <code>/</code> or <code>\</code>. An absolute URL or a protocol-relative <code>//host</code> is dropped rather than repaired, and the sign-in lands on <code>/</code>, so the field can never be used as an open redirect. Every target, whether your server code passed it to <code>signIn()</code> / <code>signOut()</code>, a form submitted it, or the <code>signIn</code> callback returned it, goes through Auth.js's <code>callbacks.redirect(&#123; url, baseUrl &#125;)</code>. Its default keeps a local path or a URL on this origin (as its path, which must itself be a local path) and sends anything else to <code>/</code>; a <code>signIn</code> callback's URL it drops denies the sign-in. To land on another origin, an identity provider's end-session URL for instance, return it from the callback: <code>redirect: (&#123; url, baseUrl &#125;) =&gt; url.startsWith('https://idp.example/') ? url : new URL(url, baseUrl).pathname</code>. A denied sign-in still goes to <code>pages.error</code>.</p>
+    <p>As in Auth.js, a server-side <code>signIn()</code> or <code>signOut()</code> with no <code>redirectTo</code> returns to the page it was called from (the <code>Referer</code>, same-origin only), else <code>/</code>. From a sign-in form that is the sign-in page itself, so pass <code>redirectTo</code> to land elsewhere. The routes also read Auth.js's field name, <code>callbackUrl</code>, and a sign-out lands on <code>redirectTo</code> or <code>/</code>; <code>pages.signOut</code> is the sign-out page a <code>GET /api/auth/signout</code> shows, not where it lands.</p>
 
     <h2>Showing a failed sign-in</h2>
     <p>A failed credentials sign-in redirects to <code>&#36;{pages.error}?error=CredentialsSignin</code>, falling back to the home page when <code>pages.error</code> is unset (which silently swallows the failure). Point the error page at your login route, then read the code and render a message:</p>
@@ -93,7 +118,7 @@ export default function LoginPage({ searchParams }) {
     &lt;form method="POST" action="/api/auth/signin/credentials"&gt;...&lt;/form&gt;
   \`;
 }</code-block>
-    <p>The scaffold's auth gallery card wires exactly this, so a wrong password shows a message on the login page instead of bouncing to the landing page with no feedback.</p>
+    <p>The auth demo in the WebJs gallery wires exactly this, so a wrong password shows a message on the login page instead of bouncing to the landing page with no feedback.</p>
 
     <h2>Callbacks</h2>
     <p>Customize the session and JWT with callbacks:</p>
@@ -116,6 +141,8 @@ export default function LoginPage({ searchParams }) {
     },
   },
 });</code-block>
+    <p>At sign-in the <code>jwt</code> callback receives what Auth.js passes it: <code>{ token, user, account, profile, trigger: 'signIn' }</code>, where an OAuth <code>account</code> is the provider's token response (<code>access_token</code>, <code>refresh_token</code>, <code>expires_at</code>), so <code>if (account) token.accessToken = account.access_token</code> keeps it for later reads. A credentials <code>authorize(credentials, request)</code> gets the request too, and the session <code>auth()</code> returns carries <code>expires</code>.</p>
+    <p>The <code>signIn</code> callback follows Auth.js's rule: return <code>true</code> to allow, a url string to send the visitor there without signing them in, and anything else (including nothing) to deny with <code>AccessDenied</code>.</p>
 
     <h2>Type the session</h2>
     <p>By default <code>auth()</code> resolves <code>{ user: Record&lt;string, unknown&gt; }</code>, so reading a custom field your callbacks set (like <code>session.user.id</code>) needs a cast and a typo slips past TypeScript. Opt into a typed <code>user</code> one of two ways.</p>
@@ -152,9 +179,11 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
         <tr><td><code>GitHub()</code></td><td><code>AUTH_GITHUB_ID</code>, <code>AUTH_GITHUB_SECRET</code></td><td>OAuth 2.0 redirect flow</td></tr>
       </tbody>
     </table>
+    <p>As in Auth.js, an OAuth provider can be listed uncalled, <code>providers: [GitHub]</code>, when its credentials come from the environment variables above.</p>
 
     <h2>Session strategies</h2>
-    <p><strong>JWT (default):</strong> Session data signed in a cookie. Stateless and scales horizontally without Redis. Cannot be revoked before expiry.</p>
+    <p><strong>JWT (default):</strong> Session data encrypted in a cookie, exactly as Auth.js encrypts it (a JWE, <code>dir</code> + <code>A256CBC-HS512</code>, the key derived from the secret and the cookie name), so the browser holding it cannot read what is inside. Stateless and scales horizontally without Redis. Cannot be revoked before expiry.</p>
+    <p><strong>Database with an Auth.js adapter:</strong> pass one, as in Auth.js (<code>adapter: DrizzleAdapter(db)</code> from <code>@auth/drizzle-adapter</code>, or any <code>@auth/*-adapter</code>), and sessions become database rows: the strategy defaults to <code>database</code>, the cookie holds the session token, an OAuth sign-in creates the user and links the account (an email another user already has is refused with <code>OAuthAccountNotLinked</code> unless the provider sets <code>allowDangerousEmailAccountLinking</code>), a session is extended once <code>session.updateAge</code> has passed, and sign-out deletes it. A credentials sign-in gets a database session too, so it can be revoked (Auth.js needs <code>strategy: 'jwt'</code> there).</p>
     <p><strong>Database:</strong> Session ID in cookie, data in cache store. Can revoke sessions instantly. Requires Redis or similar for horizontal scaling.</p>
     <code-block>createAuth({
   session: { strategy: 'database' },  // default: 'jwt'
@@ -162,14 +191,20 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
 });</code-block>
 
     <h2>Cookie names</h2>
-    <p>In development the session cookie is <code>webjs.auth</code>, and the OAuth round trip uses <code>webjs.auth.state</code> and <code>webjs.auth.redirect</code>. In production (<code>NODE_ENV=production</code>) each name carries the <code>__Host-</code> prefix: <code>__Host-webjs.auth</code>, <code>__Host-webjs.auth.state</code>, <code>__Host-webjs.auth.redirect</code>. A browser stores a <code>__Host-</code> cookie only when it is <code>Secure</code>, has <code>Path=/</code> and has no <code>Domain</code>, so an app on a sibling subdomain of a shared hosting domain cannot plant its own session cookie in yours and sign a visitor in to the wrong account. Production reads only the prefixed names, so a production app upgrading from an earlier version signs its users in once more. A test or tool that sets the cookie by hand in production uses the prefixed name.</p>
+    <p>Over http the session cookie is <code>webjs.auth</code>, and the OAuth round trip uses <code>webjs.auth.state</code> and <code>webjs.auth.redirect</code>. Over https each name carries the <code>__Host-</code> prefix and the <code>Secure</code> flag: <code>__Host-webjs.auth</code>, <code>__Host-webjs.auth.state</code>, <code>__Host-webjs.auth.redirect</code>. That is Auth.js's rule: <code>useSecureCookies</code> when you set it, else whether the auth URL is https, <code>AUTH_URL</code>'s when set, else the request's (behind a TLS-terminating proxy that forwards <code>X-Forwarded-Proto</code>, the request is https). <code>NODE_ENV</code> plays no part, so <code>npm start</code> over plain http still signs in. A browser stores a <code>__Host-</code> cookie only when it is <code>Secure</code>, has <code>Path=/</code> and has no <code>Domain</code>, so an app on a sibling subdomain of a shared hosting domain cannot plant its own session cookie in yours and sign a visitor in to the wrong account. Over https only the prefixed names are read, so an app upgrading from an earlier version signs its users in once more. A test or tool that sets the cookie by hand for an https request uses the prefixed name.</p>
+
+    <h2>Differences from Auth.js</h2>
+    <ul>
+    </ul>
 
     <h2>Environment variables</h2>
     <code-block>AUTH_SECRET=your-random-secret-32-chars-minimum
 AUTH_GOOGLE_ID=your-google-oauth-client-id
 AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
 AUTH_GITHUB_ID=your-github-oauth-client-id
-AUTH_GITHUB_SECRET=your-github-oauth-client-secret</code-block>
-    <p>Generate a secret: <code>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code></p>
+AUTH_GITHUB_SECRET=your-github-oauth-client-secret
+AUTH_URL=https://app.example.com/api/auth   # optional, behind a proxy</code-block>
+    <p>As in Auth.js, <code>AUTH_URL</code> (or <code>NEXTAUTH_URL</code>) sets the public origin OAuth callback URLs use, so a provider gets a callback on your real domain when the app runs behind a proxy, and its path is the base path the routes are mounted at. Without it the request's origin and <code>/api/auth</code> are used. <code>basePath</code> in <code>createAuth</code> sets the mount point directly.</p>
+    <p>Generate a secret: <code>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code>. <code>webjs create</code> writes one into <code>.env</code> for you. As in Auth.js, <code>createAuth</code> reads <code>AUTH_SECRET</code> itself when <code>secret</code> is left out, and <code>secret: process.env.AUTH_SECRET</code> type-checks as is. In development and tests (<code>webjs dev</code>, <code>webjs test</code>, or <code>NODE_ENV=development</code> / <code>test</code>) a missing secret is generated once into the gitignored <code>.webjs/dev-secret</code> with a warning, since a fresh clone has no <code>.env</code>. Anywhere else it is required, including a process with no <code>NODE_ENV</code> at all, and <code>createAuth</code> throws without one.</p>
   `;
 }

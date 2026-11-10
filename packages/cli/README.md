@@ -38,7 +38,7 @@ Both `webjs create` and `create-webjs-app` auto-install dependencies in the new 
 ## Commands
 
 ```sh
-webjs create <name>            # scaffold a full-stack app (default; auth ships as a gallery card)
+webjs create <name>            # scaffold a full-stack app (the default)
                                # <name> must be a valid package name: letters, digits,
                                # and - . _ , starting with a letter or a digit
 webjs create <name> --template api   # backend-only API app (routes + modules + Drizzle)
@@ -74,8 +74,8 @@ the CLI gives you `webjs ui` automatically. See
 
 The scaffold seeds opinionated defaults so AI agents produce consistent code:
 
-- `AGENTS.md` + `CONVENTIONS.md` + `.agents/skills/webjs/` (single cross-agent source of truth)
-- `.agents/rules/workflow.md` & `.claude/` protective hooks
+- `AGENTS.md`, opening with the WebJs brief (single cross-agent source of truth)
+- `CLAUDE.md` (a bridge to `AGENTS.md`) and the `.claude/` protective hooks
 - A `webjs.ci` step list in `package.json` (`npm run ci`, local CI) and a one-job GitHub workflow that runs the same list
 - `test/<feature>/` (with optional `browser/` / `e2e/` subfolders per kind) with example tests
 - Tailwind CSS via CLI (no browser runtime at build time)

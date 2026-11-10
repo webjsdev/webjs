@@ -11,7 +11,7 @@ import { PlusIcon } from '#lib/ui/lucide.ts';
 const people = [
   {
     username: 'vivek',
-    avatar: '/public/avatars/vivek.jpg',
+    avatar: '/avatars/vivek.jpg',
     email: 'vivek@example.com',
   },
   {

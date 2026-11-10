@@ -12,6 +12,8 @@ import {
   isSubmitterReflectedProp, FORM_ACTION_FIELD,
 } from '../form-action.js';
 import { isRepeat } from '../repeat.js';
+import { isDirectiveResult, PartType } from '../directive.js';
+import { isSignal } from '../signal.js';
 import { isSuspense } from '../suspense.js';
 import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from '../directives.js';
 import { stringify } from '../serialize.js';
@@ -83,6 +85,8 @@ export class Walker {
     this.defer = 0;
     /** @type {any} */
     this.tagState = null;
+    /** How many component templates (render / renderError) are being walked. */
+    this.componentDepth = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -165,6 +169,10 @@ export class Walker {
    * @param {unknown} value
    */
   async value(value) {
+    if (isDirectiveResult(value)) value = resolveDirective(value, CHILD_PART);
+    // A bare `${signal}` renders its current value (the client binds the hole
+    // to the signal so it updates in place, as `watch()` does).
+    if (isSignal(value)) value = /** @type any */ (value).get();
     if (value == null || value === nothing || value === noChange) return;
     if (typeof (/** @type any */ (value).then) === 'function') {
       return this.value(await value);
@@ -173,6 +181,14 @@ export class Walker {
     if (isTemplate(value)) return this.template(/** @type any */ (value));
     if (Array.isArray(value)) {
       for (const v of value) await this.value(v);
+      return;
+    }
+    // Any other iterable renders like an array, as in lit: a generator from
+    // `map()` / `join()` / `range()`, a Set, a Map's values. A string is
+    // iterable too and was handled above, and every directive marker is a
+    // plain object with no iterator, so none of them reaches this branch.
+    if (typeof value === 'object' && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
+      for (const v of /** @type {Iterable<unknown>} */ (value)) await this.value(v);
       return;
     }
     // An unsafeHTML value is raw markup. With expansion on, the components it
@@ -244,6 +260,12 @@ export class Walker {
 
   /** @param {import('../html.js').TemplateResult} tr */
   async template(tr) {
+    // Only a tagged template's strings carry `raw`, so a result that arrived as
+    // data (JSON with the `_$webjs` brand) is refused rather than rendered as
+    // markup, as the client renderer and lit's `trustFromTemplateString` do.
+    if (!Array.isArray(tr.strings) || !Object.prototype.hasOwnProperty.call(tr.strings, 'raw')) {
+      throw new Error("[webjs] refusing to render a template result whose strings are not a tagged template's (a TemplateResult built from data, not by html``).");
+    }
     await this.ops(compile(tr.strings), tr.values);
     this.flush();
   }
@@ -317,6 +339,9 @@ export class Walker {
                       if (piece && typeof piece.then === 'function') piece = await piece;
                       if (isLive(piece)) piece = piece.value;
                     }
+                    piece = await attrValueOf(piece);
+                    if (isDirectiveResult(piece)) piece = resolveDirective(piece, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag?.toUpperCase() });
+                    if (isSignal(piece) || isWatch(piece)) piece = signalValue(piece);
                     if (isAttributeMap(piece)) piece = attributeMapText(piece, op.name);
                     assertNotFunctionActionAttr(piece, op.name, op.tag);
                     if (piece === nothing) omitted = true;
@@ -336,6 +361,9 @@ export class Walker {
               }
               // A hole inside a quoted/unquoted value, the `action="${fn}"` and
               // mixed `action="/x/${fn}"` shapes (#1154).
+              val = await attrValueOf(val);
+              if (isDirectiveResult(val)) val = resolveDirective(val, { type: PartType.ATTRIBUTE, name: op.name, tagName: op.tag?.toUpperCase() });
+              if (isSignal(val) || isWatch(val)) val = signalValue(val);
               assertNotFunctionActionAttr(val, op.name, op.tag);
               this.buf += escapeAttr(String(val ?? ''));
               break;
@@ -351,6 +379,8 @@ export class Walker {
   // -------------------------------------------------------------------------
   // Start tags
   // -------------------------------------------------------------------------
+  // (attrValueOf, the attribute-position unwrap of the value-carrying
+  // built-in directives, is a module function below.)
 
   /** @param {string} tag */
   open(tag) {
@@ -400,6 +430,18 @@ export class Walker {
    * @param {unknown} val
    */
   async attr(op, val) {
+    if (op.kind !== 'event') val = await attrValueOf(val);
+    // A custom directive renders its `render()` result at SSR (lit's server
+    // rule: `update()` needs a DOM). An event part is client-only, so its
+    // directive never runs here.
+    if (isDirectiveResult(val) && op.kind !== 'event') {
+      const type = op.kind === 'prop' ? PartType.PROPERTY : op.kind === 'bool' ? PartType.BOOLEAN_ATTRIBUTE : PartType.ATTRIBUTE;
+      val = resolveDirective(val, { type, name: op.name, tagName: op.tag?.toUpperCase() });
+    }
+    // A bare signal in an attribute or boolean hole renders its current value;
+    // a `.prop` hole hands the signal object itself to the property, as lit's
+    // signals package does.
+    if ((isSignal(val) || isWatch(val)) && (op.kind === 'plain' || op.kind === 'bool')) val = signalValue(val);
     if (isAttributeMap(val)) {
       if (op.kind !== 'plain') throw new Error('classMap/styleMap require an attribute binding.');
       val = attributeMapText(val, op.name);
@@ -410,7 +452,10 @@ export class Walker {
     const name = /** @type string */ (op.name);
     const tag = /** @type string */ (op.tag);
     if (op.kind === 'event') {
-      // An event listener is client-only behaviour, dropped at SSR.
+      // An event listener is client-only behaviour, dropped at SSR. Outside
+      // any component template it can never run either: a page or layout
+      // never hydrates. Dev makes that a render error naming the fix.
+      if (this.dev && this.componentDepth === 0) throw new Error(pageBindingError(true, name, tag));
       return;
     }
     if (op.kind === 'prop') {
@@ -424,6 +469,9 @@ export class Walker {
         return;
       }
       if (!tag.includes('-')) {
+        if (this.dev && this.componentDepth === 0 && !isReflectedFormProp(name, tag)) {
+          throw new Error(pageBindingError(false, name, tag));
+        }
         // A native element's `.prop` is dropped at SSR. It still refuses a
         // function where the property is a REFLECTED IDL attribute (`.action`
         // on a form, `.formAction` on a button or input), and records the
@@ -464,7 +512,7 @@ export class Walker {
         // page's own url; the identity is remembered for the `>`. Trailing
         // whitespace goes with the attribute, since every injected attribute
         // carries its own leading space.
-        if (ts) ts.actionId = assertIdentifiableAction(await resolveFormActionId(val), tag);
+        if (ts) ts.actionId = assertIdentifiableAction(await resolveFormActionId(val), tag, val);
         this.buf = this.buf.replace(/\s+$/, '');
       } else {
         // #1207, the submitter binding. The identity replaces the
@@ -475,7 +523,7 @@ export class Walker {
         if (attrs.has('name')) assertSubmitterHasNoName(attrs.get('name') || '', tag, false);
         if (attrs.has('value')) assertSubmitterHasNoValue(tag);
         if (attrs.has('form')) assertSubmitterHasNoFormAttribute(tag);
-        const subId = assertIdentifiableAction(await resolveFormActionId(val), tag);
+        const subId = assertIdentifiableAction(await resolveFormActionId(val), tag, val);
         if (ts) ts.submitterTag = tag;
         this.buf += `name="${FORM_ACTION_FIELD}" value="${escapeAttr(subId)}"`;
       }
@@ -727,6 +775,37 @@ export class Walker {
 const EMPTY = Object.freeze([]);
 
 /**
+ * The current value of a bare signal or a `watch(signal)` marker in an
+ * attribute-shaped hole (SSR reads it once; the client binds the hole).
+ * @param {any} v
+ */
+function signalValue(v) {
+  return isWatch(v) ? v.signal.get() : v.get();
+}
+
+/** The part info every child-position directive is constructed with. */
+const CHILD_PART = Object.freeze({ type: PartType.CHILD });
+
+/**
+ * Resolve a custom directive result (`directive(C)(...values)`) to the value
+ * it renders, lit's server rule: construct the class with the part info and
+ * call `render(...values)` (never `update()`, which needs a DOM). A directive
+ * that returns another directive resolves in turn. A fresh instance per
+ * render is right here, since an SSR render is one shot.
+ * @param {any} value
+ * @param {{ type: number, name?: string, tagName?: string }} partInfo
+ * @returns {unknown}
+ */
+function resolveDirective(value, partInfo) {
+  for (let depth = 0; isDirectiveResult(value); depth++) {
+    if (depth > 100) throw new Error('[webjs] a custom directive kept returning directives (more than 100 levels deep).');
+    const instance = new value.ctor(partInfo);
+    value = instance.render(...value.values);
+  }
+  return value;
+}
+
+/**
  * #1155: a `.method` / `.enctype` / `.encoding` prop on a form is dropped at
  * SSR but applied for real in the browser, where all three are reflected IDL
  * attributes, so a bound form carrying one submits differently with JS than
@@ -795,4 +874,57 @@ export async function streamValue(value, ctx, controller) {
   const w = new Walker(ctx, { expand: false, controller });
   await w.value(value);
   w.flush();
+}
+
+/**
+ * A form-shape property the dedicated form guards judge (and refuse with a
+ * more specific message), so the page-binding error leaves it to them.
+ * @param {string} name
+ * @param {string} tag
+ */
+function isReflectedFormProp(name, tag) {
+  return /^(?:action|method|enctype|encoding|formaction|formmethod|formenctype)$/i.test(name)
+    && /^(?:form|button|input)$/.test(tag);
+}
+
+/**
+ * The dev error for an `@event` or native `.prop` binding in a template no
+ * component renders (a page or layout, which never hydrates).
+ * @param {boolean} isEvent an `@event` listener (else a `.prop` binding)
+ * @param {string} name
+ * @param {string} tag
+ */
+function pageBindingError(isEvent, name, tag) {
+  const what = isEvent ? `an \`@${name}\` event listener` : `a \`.${name}\` property binding`;
+  return `webjs: ${what} on <${tag}> in a page or layout template. Pages and layouts render only on the server and never hydrate, so it is dropped and never runs. `
+    + `Move the interactive markup into a WebComponent and render its tag from the page (its render() hydrates in the browser)`
+    + (!isEvent ? ', or write a plain attribute (\`' + name.toLowerCase() + '=${value}\`) when the value only needs to reach the HTML' : '')
+    + '. This check runs in dev only. See https://webjs.dev/docs/troubleshooting#binding-in-page-template';
+}
+
+/**
+ * The value a value-carrying built-in directive stands for in an ATTRIBUTE,
+ * property or boolean position, as in Lit (#1686): `guard` renders its
+ * callback's result, `until` its first non-promise argument (else the first
+ * promise to settle, a rejection reading as no value), `keyed` and `cache`
+ * their value. A child position unwraps these in `value()`; an attribute hole
+ * used to stringify the directive object to "[object Object]".
+ * @param {unknown} v
+ * @returns {Promise<unknown>}
+ */
+async function attrValueOf(v) {
+  for (let depth = 0; depth < 8; depth++) {
+    /** @type any */
+    const d = v;
+    if (isGuard(d)) v = d.fn();
+    else if (isKeyed(d) || isCache(d)) v = d.value;
+    else if (isLive(d)) v = d.value;
+    else if (isUntil(d)) {
+      const sync = d.args.find((a) => !a || typeof a.then !== 'function');
+      if (sync !== undefined || d.args.some((a) => !a || typeof a.then !== 'function')) v = sync;
+      else if (d.args.length) v = await Promise.race(d.args.map((p) => Promise.resolve(p).catch(() => undefined)));
+      else v = undefined;
+    } else return v;
+  }
+  return v;
 }

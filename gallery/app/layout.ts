@@ -18,10 +18,10 @@ export const metadata = {
   // markup at all.
   icons: {
     icon: [
-      { url: '/public/favicon-192.png', type: 'image/png', sizes: '192x192' },
-      { url: '/public/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/favicon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
     ],
-    apple: { url: '/public/apple-touch-icon.png', sizes: '180x180' },
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
   },
 };
 
@@ -50,10 +50,10 @@ export default function RootLayout({ children }: { children: unknown }) {
            deliberately NOT asset(): the bytes are fetched by a CSS url(), so a
            hashed preload could never match the request and each file would be
            downloaded twice. -->
-      <link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
-      <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
-      <link rel="preload" href="/public/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
-      <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
+      <link rel="preload" href="/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
+      <link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+      <link rel="preload" href="/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
+      <link rel="stylesheet" href=${asset('/tailwind.css')}>
       <style>
         :root {
           /* The website's stack, self-hosted in public/fonts/, so both origins
@@ -182,8 +182,8 @@ export default function RootLayout({ children }: { children: unknown }) {
                  inverted, because invert() flips the paper along with the ink
                  and the mark stops sitting on the page. Intrinsic box is
                  722 x 190, so a 26px height is 99px wide. -->
-            <img src=${asset('/public/brand/webjs-lockup-on-dark.svg')} alt="WebJs" width="99" height="26" class="w-auto hidden dark:block" style="height:26px" />
-            <img src=${asset('/public/brand/webjs-lockup-on-light.svg')} alt="WebJs" width="99" height="26" class="w-auto block dark:hidden" style="height:26px" />
+            <img src=${asset('/brand/webjs-lockup-on-dark.svg')} alt="WebJs" width="99" height="26" class="w-auto hidden dark:block" style="height:26px" />
+            <img src=${asset('/brand/webjs-lockup-on-light.svg')} alt="WebJs" width="99" height="26" class="w-auto block dark:hidden" style="height:26px" />
             <span class="text-sm text-muted-foreground font-medium">Gallery</span>
           </a>
           <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
@@ -212,8 +212,8 @@ export default function RootLayout({ children }: { children: unknown }) {
           <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div class="flex flex-col gap-3">
               <a href="https://webjs.dev" aria-label="WebJs home" class="no-underline text-foreground inline-flex w-fit transition-opacity duration-150 hover:opacity-80">
-                <img src=${asset('/public/brand/webjs-lockup-on-dark.svg')} alt="" width="99" height="26" class="w-auto hidden dark:block" style="height:26px" />
-                <img src=${asset('/public/brand/webjs-lockup-on-light.svg')} alt="" width="99" height="26" class="w-auto block dark:hidden" style="height:26px" />
+                <img src=${asset('/brand/webjs-lockup-on-dark.svg')} alt="" width="99" height="26" class="w-auto hidden dark:block" style="height:26px" />
+                <img src=${asset('/brand/webjs-lockup-on-light.svg')} alt="" width="99" height="26" class="w-auto block dark:hidden" style="height:26px" />
               </a>
               <p class="m-0 text-xs text-muted-foreground leading-relaxed">The web framework for AI agents. Full-stack web components, SSR, zero build step.</p>
             </div>

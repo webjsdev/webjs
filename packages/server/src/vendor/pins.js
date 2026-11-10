@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { BUILTIN, FRAMEWORK_SERVER_ONLY, extractPackageName, scanBareImports } from './scanner.js';
+import { foreignImport } from '../foreign-imports.js';
 import { getPackageVersion, getPackageDeps } from './manifest.js';
 import { SUPPORTED_PROVIDERS } from './providers.js';
 import { PIN_BUNDLE_TIMEOUT_MS, fetchIntegrity, sha384Integrity } from './integrity.js';
@@ -494,12 +495,12 @@ export function basePackage(spec) {
 
 /**
  * Prune a pinned import map to the vendor specifiers still reachable from
- * NON-elided modules. A committed pin is the whole map, but elision can make
- * a pinned package unreachable (its only importer is a display-only component
- * that ships no JS, e.g. dayjs via the blog's vendor-badge). The live-resolve
- * path prunes such a package by excluding elided components from the bare-
- * import scan; this brings the pinned path to the same result, so a pinned app
- * and an unpinned app serve the same import map (issue #197).
+ * modules the browser loads. A committed pin is the whole map, but a pinned
+ * package can be unreachable from the browser (its only importer is a route
+ * module, which runs only on the server). The live-resolve path prunes such a
+ * package by excluding the route-table files from the bare-import scan; this
+ * brings the pinned path to the same result, so a pinned app and an unpinned
+ * app serve the same import map (issue #197).
  *
  * Keeps an entry when its specifier is reachable, OR when its base package is
  * the base of any reachable specifier (so a pinned base entry `dayjs` survives
@@ -520,7 +521,7 @@ export function basePackage(spec) {
  *
  * @param {Record<string, string>} imports  pin entries (specifier -> URL)
  * @param {Record<string, string>} integrity  SRI hashes keyed by URL
- * @param {Set<string>} reachable  bare specifiers used by non-elided modules
+ * @param {Set<string>} reachable  bare specifiers used by modules the browser loads
  * @param {{ appDir?: string }} [opts]
  * @returns {{ imports: Record<string, string>, integrity: Record<string, string> }}
  */
@@ -699,7 +700,7 @@ export async function pinAll(appDir, opts = {}) {
   for (const spec of bare) {
     if (BUILTIN.has(spec)) continue;
     const pkg = extractPackageName(spec);
-    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg)) continue;
+    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg) || foreignImport(spec)) continue;
     const version = getPackageVersion(pkg, appDir);
     if (!version) {
       droppedUnresolvable.push(spec);

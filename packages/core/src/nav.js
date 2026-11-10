@@ -59,30 +59,63 @@ export function unauthorized() {
  * each kind of redirect gets the conventional code:
  *   - thrown during a GET page/layout render (a gating redirect like an auth
  *     bounce to `/login`): 302 Found, the conventional GET-to-GET code.
- *   - thrown from a server action (a POST): 307 Temporary Redirect, which is
- *     method-preserving so the action's intent survives. (The PRG success
- *     path uses 303 separately.)
+ *   - thrown from a `route.ts` handler: 307 Temporary Redirect.
+ *   - thrown from a server action bound to a form: always 303 See Other, so
+ *     the browser follows with a GET and the action runs once (Next parity).
+ *   - thrown from a server action called over RPC: the client router
+ *     navigates to the target.
  * Pass an explicit status to override: `redirect('/x', 308)` (permanent) or the
- * options form `redirect('/x', { status: 301 })`. An explicit status wins at
- * every catching site.
+ * options form `redirect('/x', { status: 301 })`. An explicit status wins
+ * everywhere except a form-bound action, which always answers 303.
+ *
+ * The second argument may instead be `'push'` or `'replace'` (Next's
+ * `RedirectType`): how the client records the navigation when the redirect
+ * reaches the browser from an action called over RPC. `'push'` is the
+ * default there, as in a Next.js server action.
  *
  * @param {string} url
- * @param {number | { status?: number }} [status] explicit status (number) or
- *   `{ status }`; omit to let the catching site pick (302 for a GET gate, 307
- *   for an action).
+ * @param {number | RedirectType | { status?: number, type?: RedirectType }} [status]
+ *   explicit status (number), a `RedirectType`, or `{ status, type }`; omit to
+ *   let the catching site pick.
  * @returns {never}
  */
 export function redirect(url, status) {
-  const code = typeof status === 'object' && status !== null ? status.status : status;
+  /** @type {number | undefined} */
+  let code;
+  /** @type {RedirectType | undefined} */
+  let type;
+  if (status === 'push' || status === 'replace') type = status;
+  else if (typeof status === 'object' && status !== null) {
+    code = status.status;
+    if (status.type === 'push' || status.type === 'replace') type = status.type;
+  } else if (typeof status === 'number') code = status;
   const err = new Error(`webjs: redirect(${url})`);
   /** @type any */ (err).__webjs = REDIRECT;
   /** @type any */ (err).url = url;
   // Left undefined when the caller did not specify one, so the catching site
-  // can apply its convention (302 GET gate vs 307 action). A caller-supplied
-  // code is stored verbatim and overrides that convention.
+  // can apply its convention (302 GET gate, 307 route handler, 303 form action).
+  // A caller-supplied code is stored verbatim and overrides that convention,
+  // except at a form-bound action, which always answers 303.
   /** @type any */ (err).status = typeof code === 'number' ? code : undefined;
+  /** @type any */ (err).redirectType = type;
   throw err;
 }
+
+/**
+ * Throw a PERMANENT redirect sentinel, Next.js's `permanentRedirect()`: a 308
+ * Permanent Redirect everywhere except a form-bound action, which answers 303. Use it
+ * when a URL has moved for good (a renamed slug); browsers and search engines
+ * remember a 308.
+ *
+ * @param {string} url
+ * @param {RedirectType} [type] how an RPC caller's client records the navigation.
+ * @returns {never}
+ */
+export function permanentRedirect(url, type) {
+  return redirect(url, { status: 308, type });
+}
+
+/** @typedef {'push' | 'replace'} RedirectType */
 
 /** @param {unknown} e */
 export function isNotFound(e) {

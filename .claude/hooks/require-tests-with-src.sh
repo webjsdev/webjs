@@ -47,6 +47,16 @@ if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])git commit([^[:alnum:]-]|$)
   exit 0
 fi
 
+# The bypass above reads this hook's OWN environment, which an agent cannot set:
+# Claude Code runs hooks with the harness environment, not the command's. So the
+# remedy this hook prints (re-run with WEBJS_NO_TEST_GATE=1) also counts when it is written
+# as an env assignment directly in front of the `git commit` it applies to. It
+# must lead a simple command, so the same text in a commit message, an echo or a
+# separate command does not count.
+if printf '%s' "$cmd" | grep -Eq '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*WEBJS_NO_TEST_GATE=1[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*git commit([^[:alnum:]-]|$)'; then
+  exit 0
+fi
+
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 0; fi
 
 staged=$(git diff --cached --name-only 2>/dev/null || true)
@@ -90,7 +100,13 @@ EOF
   exit 2
 fi
 
-if [ "${WEBJS_ALLOW_TEST_REMOVAL:-}" != "1" ]; then
+# The removal override reads an inline prefix the same way as the bypass above.
+allow_removal="${WEBJS_ALLOW_TEST_REMOVAL:-}"
+if printf '%s' "$cmd" | grep -Eq '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*WEBJS_ALLOW_TEST_REMOVAL=1[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*git commit([^[:alnum:]-]|$)'; then
+  allow_removal=1
+fi
+
+if [ "$allow_removal" != "1" ]; then
   nums=$(git diff --cached --numstat -- \
     '**/test/**' '*.test.*' '*.spec.*' 'test/**' 2>/dev/null || true)
   if [ -n "$nums" ]; then
@@ -132,7 +148,7 @@ fi
 runtime_sensitive=$(printf '%s\n' "$src_touched" | grep -E 'serialize|/json\.js|file-storage|listener|ts-strip|action|render-server|/ssr[./]|conditional-get|websocket|node-version|csrf|/auth\.js|/session\.js|/cors\.js|crypto|compression|body-limit|/dev[./]|stream' || true)
 if [ -n "$runtime_sensitive" ]; then
   rlist=$(printf '%s' "$runtime_sensitive" | tr '\n' ' ')
-  reminder="${reminder}Runtime-sensitive source changed ($rlist). webjs runs on Node AND Bun: run \`node scripts/run-bun-tests.js\` (needs bun installed) plus the test/bun/*.mjs scripts under Bun, and treat any divergence as a real framework bug to fix (not a skip). Add a test/bun/<feature>.mjs cross-runtime script for a new listener/serializer/streaming surface. See .agents/skills/webjs/references/testing.md. "
+  reminder="${reminder}Runtime-sensitive source changed ($rlist). webjs runs on Node AND Bun: run \`node scripts/run-bun-tests.js\` (needs bun installed) plus the test/bun/*.mjs scripts under Bun, and treat any divergence as a real framework bug to fix (not a skip). Add a test/bun/<feature>.mjs cross-runtime script for a new listener/serializer/streaming surface. See https://webjs.dev/docs/testing. "
 fi
 
 if [ -n "$reminder" ]; then

@@ -1,4 +1,5 @@
 import { renderToString, isNotFound, isRedirect, isForbidden, isUnauthorized } from '@webjsdev/core';
+import { headerSafeLocation } from '../redirect-location.js';
 import { vendorPreloadTargets } from '../importmap.js';
 import {
   componentPreloads, pagePreloadHints, toUrlPath,
@@ -12,7 +13,7 @@ import {
   HTML_CACHE_MARKER,
 } from '../html-cache.js';
 import { requestedFrameId, extractFrameSubtree } from '../frame-render.js';
-import { makeThenable } from '../thenable-params.js';
+import { makeThenable, searchParamsRecord } from '../thenable-params.js';
 import { buildDocumentParts, wrapInDocument, layoutSegmentPath, pageSegmentPath, boundarySegmentPath, layoutsForBoundary, regionRouteKey, wrapWithChildrenMarker } from './document.js';
 import { escapeHtml } from './escape.js';
 import {
@@ -20,6 +21,9 @@ import {
 } from './responses.js';
 import { devImport } from '../dev-import.js';
 import { applySeoDefaults } from './seo.js';
+import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from '../action-error.js';
+import { readFlash, encodeFlash, FLASH_COOKIE } from '../action-flash.js';
+import { requestCookieStore } from '../context.js';
 
 
 /**
@@ -124,11 +128,25 @@ function nearest(arr) {
 }
 
 /**
+ * Collect and merge metadata across the route's layouts (outermost first) and
+ * its page, Next.js style. `generateMetadata(props, parent)` and
+ * `generateViewport(props, parent)` receive `parent`, a promise of the
+ * metadata (or viewport) resolved from the segments above, with `title`
+ * normalized to Next's `{ absolute, template }`.
+ *
+ * A thrown `notFound()` / `redirect()` / `forbidden()` / `unauthorized()`
+ * propagates, so it answers the request exactly as it would from the page. Any
+ * other error is logged and reported through `onError`, and that segment's
+ * metadata is skipped, so a broken `generateMetadata` never fails the page.
+ *
  * @param {import('../router.js').PageRoute} route
  * @param {Record<string,unknown>} ctx
- * @param {boolean} dev
+ * @param {{ dev?: boolean, onError?: (e: unknown) => void }} opts
  */
-async function collectMetadata(route, ctx, dev) {
+async function collectMetadata(route, ctx, opts) {
+  const dev = !!opts.dev;
+  /** @type {Record<string, any>} */
+  let viewportSoFar = {};
   /** @type {Record<string, any>} */
   let meta = {};
   // Carry the title template forward across layers. Once an outer layout
@@ -142,7 +160,7 @@ async function collectMetadata(route, ctx, dev) {
       const mod = await loadModule(file, dev);
       let m = null;
       if (typeof mod.generateMetadata === 'function') {
-        m = await mod.generateMetadata(ctx);
+        m = await mod.generateMetadata(ctx, Promise.resolve(resolvedParent(meta, titleTemplate)));
       } else if (mod.metadata) {
         m = mod.metadata;
       }
@@ -153,14 +171,17 @@ async function collectMetadata(route, ctx, dev) {
       // working. Likewise for `themeColor` and `colorScheme`.
       let vp = null;
       if (typeof mod.generateViewport === 'function') {
-        vp = await mod.generateViewport(ctx);
+        vp = await mod.generateViewport(ctx, Promise.resolve({ ...viewportSoFar }));
       } else if (mod.viewport) {
         vp = mod.viewport;
       }
       if (vp && typeof vp === 'object') {
+        viewportSoFar = { ...viewportSoFar, ...vp };
         m = { ...(m || {}), _viewport: { ...(m && m._viewport), ...vp } };
         // Allow `themeColor` / `colorScheme` to live on the viewport export.
-        if (typeof vp.themeColor === 'string' && !(m && m.themeColor)) {
+        // `themeColor` may be a string, a `{ color, media }` descriptor, or an
+        // array of them (Next's shape); head.js emits one <meta> per entry.
+        if (vp.themeColor && !(m && m.themeColor)) {
           m.themeColor = vp.themeColor;
         }
         if (typeof vp.colorScheme === 'string') m.colorScheme = vp.colorScheme;
@@ -176,6 +197,11 @@ async function collectMetadata(route, ctx, dev) {
           // { template, default, absolute }: `absolute` overrides everything;
           // `template` is captured for deeper layers; `default` is the value
           // used when no deeper layer supplies a plain title string.
+          // A layer's own template applies to the layers BELOW it, never to
+          // its own `default`, which goes through the closest PARENT template
+          // as Next.js documents ("augments title.template from the closest
+          // parent segment", #1686).
+          const parentTemplate = titleTemplate;
           if (typeof t.template === 'string') titleTemplate = t.template;
           if (typeof t.absolute === 'string') {
             resolved.title = t.absolute;
@@ -183,15 +209,22 @@ async function collectMetadata(route, ctx, dev) {
             // it for deeper segments below, but the *current* segment is
             // rendered absolute.
           } else if (typeof t.default === 'string') {
-            resolved.title = t.default;
+            resolved.title = parentTemplate ? parentTemplate.replace('%s', t.default) : t.default;
           } else {
             delete resolved.title;
           }
         }
       }
       meta = { ...meta, ...resolved };
-    } catch {
-      // ignore: metadata collection never fails the request
+    } catch (e) {
+      // Control flow answers the request, as it would from the page.
+      if (isControlFlowThrow(e)) throw e;
+      // Anything else is a bug in that segment's metadata: say so, report it,
+      // and render the page with the metadata the other segments produced.
+      console.error(`[webjs] metadata failed in ${file}:`, e);
+      if (typeof opts.onError === 'function') {
+        try { opts.onError(e); } catch { /* a throwing sink must not affect the response */ }
+      }
     }
   }
   try {
@@ -199,6 +232,19 @@ async function collectMetadata(route, ctx, dev) {
   } catch {
     return meta;
   }
+}
+
+/**
+ * The `parent` metadata a `generateMetadata` receives: a shallow snapshot of
+ * what the outer segments resolved, `title` in Next's `{ absolute, template }`
+ * shape so `(await parent).title.absolute` works as it does in Next.
+ * @param {Record<string, any>} meta
+ * @param {string | null} template
+ */
+function resolvedParent(meta, template) {
+  const snap = { ...meta };
+  snap.title = { absolute: typeof meta.title === 'string' ? meta.title : '', template };
+  return snap;
 }
 
 /**
@@ -471,7 +517,11 @@ async function defaultBoundaryInChain(raw, opts) {
  * @returns {{ _$webjs: 'template', strings: string[], values: unknown[] }}
  */
 function rawTemplate(raw) {
-  return { _$webjs: 'template', strings: [raw], values: [] };
+  // `raw` marks the strings as the framework's own markup, which is what the
+  // renderers require of a template result (a tagged template's strings have it).
+  const strings = [raw];
+  Object.defineProperty(strings, 'raw', { value: [raw] });
+  return { _$webjs: 'template', strings, values: [] };
 }
 
 /**
@@ -485,6 +535,35 @@ function rawTemplate(raw) {
  */
 function wrapLayoutsFor(route, boundaryFile) {
   return layoutsForBoundary(route.layouts, boundarySegmentPath(boundaryFile));
+}
+
+/**
+ * The metadata of a 404 / 403 / 401 page, resolved like a page's (#1686): the
+ * layouts that wrap the boundary, then the boundary file's own `metadata` or
+ * `generateMetadata`, so the title runs through the layouts' template and a
+ * layout's description and openGraph carry over, as in Next.js. The
+ * framework's default page (no boundary file) keeps its own `fallbackTitle`;
+ * a boundary file that names no title takes the layouts' default.
+ * @param {string | null} file
+ * @param {string} fallbackTitle
+ * @param {{ dev: boolean, route?: any, ctx?: Record<string, unknown>,
+ *   params?: Record<string, string>, url?: URL, onError?: (e: unknown) => void }} opts
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function boundaryMetadata(file, fallbackTitle, opts) {
+  const layouts = opts.route ? (file ? wrapLayoutsFor(opts.route, file) : opts.route.layouts || []) : [];
+  const metadataFiles = file ? [...layouts, file] : layouts;
+  const ctx = opts.ctx || boundaryCtx(opts.params, opts.url, undefined);
+  /** @type {Record<string, any>} */
+  let meta = {};
+  try {
+    meta = await collectMetadata(/** @type any */ ({ metadataFiles }), ctx, { dev: opts.dev, onError: opts.onError });
+  } catch {
+    // A control-flow throw from a layout's metadata cannot re-route an error
+    // page that is already the answer; the fallback title stands.
+  }
+  if (!file || meta.title === undefined) meta = { ...meta, title: file && meta.title !== undefined ? meta.title : fallbackTitle };
+  return meta;
 }
 
 /**
@@ -653,24 +732,17 @@ function reportBoundaryLayoutError(err, opts, cfg = {}) {
  * The boot module set for a boundary response: what actually RENDERED, the
  * boundary module plus the layouts wrapping it (#1298).
  *
- * Applies the SAME inert / import-only substitution as the happy-path boot
- * (#963), so a boundary never ships a route module the normal render drops.
- * Pre-substitution, an import-only layout with a bare `.server.*` import
- * (legal, it never loads client-side) would load here whole and crash the
- * boundary page's boot on the throw-at-load stub, killing the sibling
- * component registrations in the same module script.
- *
- * The substitution applies to the boundary file harmlessly: only page and
- * layout files are fed to the elision analysis, so a boundary is never inert
- * and never import-only, gets no verdict, and is pushed as-is. Every boundary
- * kind is a `browserEntryFiles` entry (browser-entries.js), so each of these
- * URLs is servable through the auth gate.
+ * Applies the SAME frontier substitution as the happy-path boot, so a
+ * boundary response never ships a route module (#1686): the boundary and each
+ * wrapping layout are replaced by the components they import. Shipped whole, a
+ * layout with a bare `.server.*` import (legal, it never loads client-side)
+ * would crash the boundary page's boot on the throw-at-load stub, killing the
+ * sibling component registrations in the same module script.
  *
  * @param {string | null} boundaryFile  Null for the framework's default body,
  *   which has no module of its own; only the layouts boot then.
  * @param {string[]} wrapLayouts
- * @param {{ appDir: string, inertRouteModules?: Set<string>,
- *   importOnlyRouteModules?: Map<string, string[]>,
+ * @param {{ appDir: string, routeFrontiers?: Map<string, string[]>,
  *   instrumentationClient?: string }} opts
  * @returns {string[]}
  */
@@ -683,10 +755,10 @@ function boundaryModuleUrls(boundaryFile, wrapLayouts, opts) {
   // `lazyFiles` is deliberately not passed: a boundary render has no lazy map
   // of its own to register a diverted frontier component with, so a `static
   // lazy` component imported by a boundary is imported eagerly, as before.
-  return assembleBootModules(boundaryFile ? [boundaryFile, ...wrapLayouts] : wrapLayouts, {
+  // Nesting order, as on the happy path: the wrapping layouts, then the boundary.
+  return assembleBootModules(boundaryFile ? [...wrapLayouts, boundaryFile] : wrapLayouts, {
     appDir: opts.appDir,
-    inert: opts.inertRouteModules,
-    importOnly: opts.importOnlyRouteModules,
+    frontiers: opts.routeFrontiers,
     lazyFiles: undefined,
     instrumentationClient: opts.instrumentationClient,
   }).moduleUrls;
@@ -704,10 +776,37 @@ function boundaryModuleUrls(boundaryFile, wrapLayouts, opts) {
 function boundaryCtx(params, url, actionData) {
   return {
     params: makeThenable(params || {}),
-    searchParams: makeThenable(url ? Object.fromEntries(url.searchParams.entries()) : {}),
+    searchParams: makeThenable(url ? searchParamsRecord(url.searchParams) : {}),
     url: url ? url.toString() : '',
     actionData,
   };
+}
+
+/**
+ * The markup a streamed Suspense boundary renders when its content throws
+ * notFound(), forbidden() or unauthorized() after the 200 went out (#1686):
+ * the nearest matching boundary file, else the default heading. Null for any
+ * other throw, which keeps the streamed-error behaviour.
+ * @param {unknown} e
+ * @param {any} route
+ * @param {Record<string, unknown>} ctx
+ * @param {{ dev: boolean, globalNotFound?: string | null, onError?: (e: unknown) => void }} opts
+ * @returns {Promise<string | null>}
+ */
+async function streamedAccessFallback(e, route, ctx, opts) {
+  const kind = isNotFound(e) ? 'notFounds' : isForbidden(e) ? 'forbiddens' : isUnauthorized(e) ? 'unauthorizeds' : null;
+  if (!kind) return null;
+  const heading = kind === 'notFounds' ? '404: Not found' : kind === 'forbiddens' ? '403: Forbidden' : '401: Unauthorized';
+  const file = nearest(route[kind]) || (kind === 'notFounds' ? opts.globalNotFound : null);
+  if (!file) return `<h1>${heading}</h1>`;
+  try {
+    const mod = await loadModule(file, opts.dev);
+    if (typeof mod.default !== 'function') return `<h1>${heading}</h1>`;
+    return await renderToString(await mod.default(ctx), { ssr: true, dev: opts.dev });
+  } catch (err) {
+    reportBoundaryLayoutError(err, opts, { what: STAGE_BOUNDARY, overlay: true });
+    return `<h1>${heading}</h1>`;
+  }
 }
 
 /**
@@ -730,6 +829,9 @@ async function ssrBoundaryHtml(file, heading, opts) {
   let body = `<h1>${heading}</h1>`;
   /** @type {string[]} */
   let moduleUrls = [];
+  // Whether the boundary module imported, so a broken one is reported once
+  // (by the render below) and not again by the metadata read.
+  let loaded = false;
   // No boundary FILE, but a route matched: the framework's own default page is
   // what renders, and it belongs inside the layouts just as a custom one does.
   // This is the COMMON case for 403 / 401, since most apps ship no
@@ -744,6 +846,7 @@ async function ssrBoundaryHtml(file, heading, opts) {
     const ctx = opts.ctx || boundaryCtx(opts.params, opts.url, undefined);
     try {
       const mod = await loadModule(file, opts.dev);
+      loaded = true;
       if (mod.default) {
         const tree = await mod.default(ctx);
         try {
@@ -820,7 +923,7 @@ async function ssrBoundaryHtml(file, heading, opts) {
   }
   const nonce = getNonce();
   return wrapInDocument(body, {
-    metadata: { title: heading.replace(/^\d+:\s*/, '') },
+    metadata: await boundaryMetadata(loaded ? file : null, heading.replace(/^\d+:\s*/, ''), opts),
     moduleUrls,
     dev: opts.dev,
     nonce,
@@ -841,6 +944,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   let body = '<h1>404: Not found</h1>';
   /** @type {string[]} */
   let moduleUrls = [];
+  let loaded = false;
   if (!notFoundFile && opts.route) {
     const wrapped = await defaultBoundaryInChain('<h1>404: Not found</h1>', opts);
     if (wrapped) { body = wrapped.body; moduleUrls = wrapped.moduleUrls; }
@@ -849,6 +953,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
     const ctx = opts.ctx || boundaryCtx(opts.params, opts.url, undefined);
     try {
       const mod = await loadModule(notFoundFile, opts.dev);
+      loaded = true;
       if (mod.default) {
         const tree = await mod.default(ctx);
         try {
@@ -890,11 +995,26 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
   }
   const nonce = getNonce();
   return wrapInDocument(body, {
-    metadata: { title: 'Not found' },
+    // The boundary's own `metadata` / `generateMetadata` over its layouts', as
+    // a `not-found.tsx` resolves in Next; "Not found" is only the fallback.
+    metadata: await boundaryMetadata(loaded ? notFoundFile : null, 'Not found', opts),
     moduleUrls,
     dev: opts.dev,
     nonce,
   });
+}
+
+/**
+ * Whether a flash belongs to the page at `url`: the path its success redirect
+ * named, compared without a trailing slash. A flash with no recorded path (a
+ * cookie from before the path was recorded) is shown as before.
+ * @param {{ path?: string }} flash
+ * @param {URL} url
+ */
+function flashTargets(flash, url) {
+  if (!flash.path) return true;
+  const norm = (/** @type {string} */ p) => (p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p);
+  return norm(flash.path) === norm(url.pathname);
 }
 
 /**
@@ -911,10 +1031,38 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
  * @param {import('../router.js').PageRoute} route
  * @param {Record<string,string>} params
  * @param {URL} url
- * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('../module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown>, cspEnabled?: boolean }} opts
+ * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('../module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown>, cspEnabled?: boolean, renderError?: unknown, onError?: (error: unknown) => void }} opts
+ *   `renderError`: a form action's throw (form-dispatch.js), answered with the
+ *   page's nearest error boundary and never from the HTML cache.
  * @returns {Promise<Response>}
  */
 export async function ssrPage(route, params, url, opts) {
+  // A form action's result carried across its 303 (action-flash.js): shown
+  // once as actionData on the page the redirect lands on, then marked shown
+  // so a reload does not repeat it (it stays the next submission's prevState).
+  // Read BEFORE the HTML-cache lookup, since a page carrying actionData is
+  // never served from or written to the cache. A speculative prefetch never
+  // consumes it.
+  // Set when this render shows a flash: its body then carries one visitor's
+  // action result, so the response must never reach a shared cache (below).
+  // Shown only on the page the success redirect named (flash.path), and never
+  // on an error render. Another page or tab rendered inside the 60 seconds, or
+  // a <webjs-frame> loading another path, leaves it for the right one. A frame
+  // render OF that path is the landing of a form submitted inside the frame
+  // (the redirect is followed with x-webjs-frame), so it shows it.
+  let showsFlash = false;
+  if (!opts.actionData && opts.renderError === undefined && opts.req
+      && opts.req.headers.get('x-webjs-prefetch') !== '1') {
+    const flash = await readFlash(opts.req);
+    if (flash && !flash.shown && flashTargets(flash, url)) {
+      showsFlash = true;
+      opts = { ...opts, actionData: flash.result };
+      try {
+        const shown = await encodeFlash({ ...flash, shown: true });
+        if (shown) requestCookieStore().set(FLASH_COOKIE, shown, { httpOnly: true, sameSite: 'lax', maxAge: 60 });
+      } catch { /* no request scope (a direct ssrPage call): nothing to rewrite */ }
+    }
+  }
   // Server HTML response cache (ISR for no-build, #241). OPT-IN: only a page
   // that declares `export const revalidate = N` is ever cached (the page
   // module export is the single trigger). The page module is loaded ONCE up
@@ -930,7 +1078,11 @@ export async function ssrPage(route, params, url, opts) {
   // before the bump, so the funnel must not store it under the bumped key.
   // Read before the first await, so the whole render counts.
   const cacheGeneration = htmlCacheGeneration();
+  // A failed form action's error render (`renderError`, form-dispatch.js) is
+  // never a cache read: a warm entry would answer 200 with the page and the
+  // throw would never reach the error boundary or onError.
   const cacheEligible =
+    opts.renderError === undefined &&
     !opts.actionData &&
     !opts.status &&
     !opts.pageModule &&
@@ -966,7 +1118,7 @@ export async function ssrPage(route, params, url, opts) {
     // `params.id` still works, `await params` also works (Next 15/16 parity).
     // The `then` is non-enumerable so spread / JSON / Object.keys are unchanged.
     params: makeThenable(params),
-    searchParams: makeThenable(Object.fromEntries(url.searchParams.entries())),
+    searchParams: makeThenable(searchParamsRecord(url.searchParams)),
     url: url.toString(),
     // Populated only when this render is the re-render after a failed page
     // `action` submission (#244). The page function and every layout receive
@@ -977,9 +1129,23 @@ export async function ssrPage(route, params, url, opts) {
   };
 
   // Collect metadata across layouts (outermost first) then page.
-  const metadata = await collectMetadata(route, ctx, opts.dev);
+  // A control-flow throw from generateMetadata (notFound(), redirect(), ...)
+  // is rethrown inside the try below, so it answers exactly as a page throw.
+  /** @type {Record<string, any>} */
+  let metadata = {};
+  /** @type {unknown} */
+  let metadataThrow = null;
+  try {
+    metadata = await collectMetadata(route, ctx, { dev: opts.dev, onError: opts.onError });
+  } catch (e) {
+    metadataThrow = e;
+  }
 
   try {
+    if (metadataThrow) throw metadataThrow;
+    // A form action that threw (form-dispatch.js): the page answers with its
+    // nearest error boundary exactly as a failed render does (#1686).
+    if (opts.renderError !== undefined) throw opts.renderError;
     const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set(), dev: opts.dev };
     // Parse the partial-nav "have" header from the client. The server walks
     // the target route's layout chain innermost → outermost and
@@ -1114,8 +1280,7 @@ export async function ssrPage(route, params, url, opts) {
     const lazyFiles = opts.lazyComponentFiles;
     const { moduleUrls, frontierLazy } = shippedBootModules(route, {
       appDir: opts.appDir,
-      inert: opts.inertRouteModules,
-      importOnly: opts.importOnlyRouteModules,
+      frontiers: opts.routeFrontiers,
       lazyFiles,
       instrumentationClient: opts.instrumentationClient,
     });
@@ -1126,11 +1291,11 @@ export async function ssrPage(route, params, url, opts) {
     // preloads and instead loaded via IntersectionObserver when they
     // enter the viewport.
     const { eager: eagerComponents, lazy: renderedLazy } =
-      componentPreloads(suspenseCtx.usedComponents, opts.appDir, opts.elidableComponents, lazyFiles);
+      componentPreloads(suspenseCtx.usedComponents, opts.appDir, lazyFiles);
     const lazyComponents = { ...frontierLazy, ...renderedLazy };
     // Both preload passes (the app-module hints and the vendor hints, #754)
     // root at the BOOT's shipped set plus the rendered components and skip a
-    // lazy component (#1524) or an elided one and the subtree only it reaches;
+    // lazy component (#1524) and the subtree only it reaches;
     // `pagePreloadHints` walks that closure ONCE for both (#1644), where the
     // two passes used to walk it twice. The over-fetch rules (#780, #754) are
     // documented on the helper.
@@ -1139,7 +1304,6 @@ export async function ssrPage(route, params, url, opts) {
       appDir: opts.appDir,
       moduleUrls,
       eagerComponents,
-      elidableComponents: opts.elidableComponents,
       lazyFiles,
       serverFiles: opts.serverFiles,
     });
@@ -1216,12 +1380,17 @@ export async function ssrPage(route, params, url, opts) {
       metadata,
       nonce,
       opts.dev,
+      (e) => streamedAccessFallback(e, route, ctx, opts),
     );
     // Dev-only seeding diagnostics (#1309). A miss is indistinguishable from a
     // hit from the outside, so an app whose seeding silently broke looks exactly
     // like one where it works. Dev only: a production header would publish how
     // many server calls a page made, for no benefit.
     if (opts.dev) res.headers.set('X-Webjs-Seed', seedHeader);
+    // A 200 takes the page's metadata.cacheControl, but a render showing a
+    // flash is per-visitor (like the 422 re-render, which is never cached), so
+    // a page marked public must not hand this body to a shared cache.
+    if (showsFlash) res.headers.set('cache-control', 'private, no-store');
     // REDUCED response (#1009): the X-Webjs-Have short-circuit omitted the
     // outer-layout chrome, so these bytes are only valid for a request that
     // sent a matching `have`. Left shared-cacheable, a CDN edge could store the
@@ -1260,9 +1429,9 @@ export async function ssrPage(route, params, url, opts) {
       // A redirect thrown during a GET page/layout render is a GET-to-GET
       // navigation (an auth bounce, a gate). 302 Found is the conventional
       // code there, so it is the default when the caller did not pick one. An
-      // explicit `redirect(url, status)` overrides it. (Action redirects, a
-      // POST, default to 307 in form-dispatch.js so the method is preserved.)
-      return new Response(null, { status: e.status || 302, headers: { location: e.url } });
+      // explicit `redirect(url, status)` overrides it. (A form action's
+      // redirect, a POST, always answers 303 in form-dispatch.js.)
+      return new Response(null, { status: e.status || 302, headers: { location: headerSafeLocation(e.url) } });
     }
     if (isNotFound(err)) {
       // Nearest not-found.{js,ts} in the page's chain wins (#848 fix: previously
@@ -1288,6 +1457,21 @@ export async function ssrPage(route, params, url, opts) {
     // rendering the boundary, so the sink gets the ORIGINAL error even if the
     // boundary itself swallows or transforms it. notFound / redirect are
     // sentinels (control flow), not errors, so they are excluded above.
+    //
+    // Production sanitizes what the boundary sees (Next.js parity): error.ts
+    // and global-error.ts receive a generic message plus a `digest`, never the
+    // raw message (a driver error, a path, a connection string), and the full
+    // error is logged under the same digest so a user-reported digest maps
+    // back to it. The sinks get the original error, carrying the digest too.
+    // Dev passes the real error through unchanged.
+    let boundaryErr = err;
+    if (!opts.dev) {
+      let digest;
+      try { digest = await errorDigest(err); } catch { digest = crypto.randomUUID().replace(/-/g, '').slice(0, 10); }
+      try { if (err && typeof err === 'object' && /** @type {any} */ (err).digest == null) /** @type {any} */ (err).digest = digest; } catch { /* frozen */ }
+      console.error(`[webjs] render error [digest=${digest}]:`, err);
+      boundaryErr = Object.assign(new Error(GENERIC_ERROR_MESSAGE), { digest });
+    }
     if (typeof opts.onError === 'function') {
       try { opts.onError(err); } catch { /* a throwing sink must not affect the response */ }
     }
@@ -1320,7 +1504,7 @@ export async function ssrPage(route, params, url, opts) {
       try {
         const mod = await loadModule(route.errors[i], opts.dev);
         if (!mod.default) continue;
-        const tree = await mod.default({ ...ctx, error: err });
+        const tree = await mod.default({ ...ctx, error: boundaryErr });
         // The layouts that wrap THIS boundary: its own segment and every
         // ancestor (#1298). A layout deeper than the boundary never rendered.
         const wrapLayouts = layoutsForBoundary(route.layouts, boundarySegmentPath(route.errors[i]));
@@ -1333,11 +1517,10 @@ export async function ssrPage(route, params, url, opts) {
         // needed (a throw out of renderToString is not attributable to one
         // layout anyway, so tracking would be absent exactly when it mattered).
         const body = await renderBoundaryInChain(tree, route, route.errors[i], ctx, opts.dev);
-        // Apply the SAME inert / import-only substitution as the happy-path
-        // boot (#963): the error page must not ship a page/layout module the
-        // normal render drops. Pre-substitution, an import-only page with a
-        // bare `.server.*` import (legal, it never loads client-side) would
-        // load here whole and crash the error page's boot on the throw-at-load
+        // Apply the SAME frontier substitution as the happy-path boot
+        // (#1686): the error page must not ship a route module. Shipped whole,
+        // one with a bare `.server.*` import (legal, it never loads
+        // client-side) would crash the error page's boot on the throw-at-load
         // stub, killing the sibling component registrations in the same
         // module script.
         //
@@ -1345,10 +1528,7 @@ export async function ssrPage(route, params, url, opts) {
         // the layouts wrapping it. It used to be the page module plus every
         // layout, so a boundary shipped the page (which never ran) and any
         // deeper layout (which never ran either), while omitting the boundary
-        // itself, and a component the boundary rendered never upgraded. The
-        // substitution applies to the boundary file harmlessly: only page and
-        // layout files are fed to the elision analysis, so a boundary is never
-        // inert and never import-only, gets no verdict, and is pushed as-is.
+        // itself, and a component the boundary rendered never upgraded.
         const errModuleUrls = boundaryModuleUrls(route.errors[i], wrapLayouts, opts);
         const html = wrapInDocument(body, { metadata, moduleUrls: errModuleUrls, dev: opts.dev, nonce: errNonce });
         return htmlResponse(html, 500, opts.req, url);
@@ -1386,7 +1566,7 @@ export async function ssrPage(route, params, url, opts) {
       try {
         const mod = await loadModule(opts.globalError, opts.dev);
         if (mod.default) {
-          const tree = await mod.default({ error: err });
+          const tree = await mod.default({ error: boundaryErr });
           const body = await renderToString(tree, { ssr: true, dev: opts.dev });
           return htmlResponse(body, 500, opts.req, url);
         }
@@ -1404,10 +1584,10 @@ export async function ssrPage(route, params, url, opts) {
       }
     }
     // Default: dev shows stack, prod shows a terse message (no stack trace leaks).
-    console.error('[webjs] unhandled render error:', err);
+    if (opts.dev) console.error('[webjs] unhandled render error:', err);
     const body = opts.dev
       ? `<h1>Server error</h1><pre style="white-space:pre-wrap">${escapeHtml(safeErrorText(err))}</pre>`
-      : `<h1>Server error</h1><p>Something went wrong. Please try again.</p>`;
+      : `<h1>Server error</h1><p>Something went wrong. Please try again.</p><p><small>Digest: ${escapeHtml(String(/** @type {any} */ (boundaryErr).digest || ''))}</small></p>`;
     return htmlResponse(
       wrapInDocument(body, { metadata, moduleUrls: [], dev: opts.dev, nonce: errNonce }),
       500,

@@ -90,7 +90,7 @@ test('mcp: initialize handshake returns serverInfo + capabilities', async () => 
   const r = frames[0];
   assert.equal(r.id, 1);
   assert.equal(r.result.protocolVersion, '2024-11-05');
-  assert.deepEqual(r.result.capabilities, { tools: {}, resources: {}, prompts: {} });
+  assert.deepEqual(r.result.capabilities, { tools: {} }, 'tools only: no doc resources, no recipe prompts');
   assert.deepEqual(r.result.serverInfo, { name: 'webjs', version: '9.9.9' });
 });
 
@@ -112,17 +112,16 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   ]);
   const tools = frames[0].result.tools;
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['check', 'docs', 'init', 'list_actions', 'list_components', 'list_elision', 'list_routes', 'source', 'ui']);
+  assert.deepEqual(names, ['check', 'init', 'list_actions', 'list_components', 'list_routes', 'source', 'ui']);
   for (const t of tools) {
     assert.equal(typeof t.description, 'string');
     assert.equal(t.inputSchema.type, 'object');
   }
-  // The introspection tools take appDir, and so do init + docs, whose corpus is
-  // resolved from the app being asked about; docs also takes topic/query.
+  // The introspection tools take appDir, and so does init, which compares the
+  // app's installed @webjsdev/mcp with the running server's.
   const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
   assert.ok(byName.list_routes.inputSchema.properties.appDir, 'introspection tool declares appDir');
   assert.deepEqual(Object.keys(byName.init.inputSchema.properties), ['appDir'], 'init takes only appDir');
-  assert.ok(byName.docs.inputSchema.properties.topic && byName.docs.inputSchema.properties.query, 'docs takes topic/query');
   assert.ok(byName.source.inputSchema.properties.path && byName.source.inputSchema.properties.query, 'source takes path/query/package');
   assert.ok(byName.ui.inputSchema.properties.name, 'ui takes an optional component name');
 });
@@ -230,35 +229,10 @@ test('mcp: tools/call list_components reports tag + file + className', async () 
   assert.match(c.file, /my-thing\.ts$/);
 });
 
-test('mcp: list_elision output equals analyzeAppElision (no drift with the CLI)', async () => {
-  // `list_elision` returns the report VERBATIM, and `webjs elision --json`
-  // prints the same object, so the two surfaces cannot disagree about an app.
-  // Unlike list_routes there is no projector leaf to delegate to, which makes
-  // this equality the only thing holding the contract together.
-  const { analyzeAppElision } = await import('@webjsdev/server');
-  const dir = tmpDir();
-  write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
-  write(dir, 'components/badge.ts',
-    `import { WebComponent, html } from '@webjsdev/core';\n` +
-    `export class Badge extends WebComponent { render() { return html\`<span>x</span>\`; } }\n` +
-    `Badge.register('my-badge');\n`);
-  write(dir, 'app/page.ts',
-    `import { html } from '@webjsdev/core';\nimport '../components/badge.ts';\nexport default () => html\`<my-badge></my-badge>\`;\n`);
-
-  const { frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'list_elision', arguments: {} } },
-  ]);
-  const toolOut = JSON.parse(frames[0].result.content[0].text);
-  assert.deepEqual(toolOut, JSON.parse(JSON.stringify(await analyzeAppElision(dir))));
-  const badge = toolOut.components.find((c) => c.file.includes('badge'));
-  assert.equal(badge.verdict, 'elided', 'the display-only badge is never downloaded');
-});
-
-test('mcp: list_components stays a cheap lexical inventory (no elision fields)', async () => {
-  // The guard for the rejected alternative: growing an `elided` flag onto
-  // list_components would silently turn a scan that loads no module and builds
-  // no graph into one that does both, and it still could not carry the route
-  // verdicts or the orphans. The elision verdict lives in its own tool.
+test('mcp: list_components stays a cheap lexical inventory', async () => {
+  // Growing a field that needs the module graph onto list_components would
+  // silently turn a scan that loads no module and builds no graph into one
+  // that does both.
   const dir = tmpDir();
   write(dir, 'components/my-thing.ts',
     `import { WebComponent, html } from '@webjsdev/core';\n` +
@@ -356,11 +330,19 @@ test('mcp: a falsy id (0) and a string id are echoed, not dropped', async () => 
 
 test('mcp: tools/call source reads/greps/lists the framework source (driven against the monorepo)', async () => {
   // Drive with cwd = the repo so @webjsdev/* resolves to the workspace packages.
-  // no-args -> the package listing
+  // no-args -> the feature catalogue (#1686)
   let { frames } = await driveMcp(REPO, [
     { jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'source', arguments: {} } },
   ]);
   let text = frames[0].result.content[0].text;
+  assert.match(text, /^What WebJs provides, by need\./, 'returns the feature catalogue');
+  assert.match(text, /^  Auth: createAuth, /m, 'one line per need');
+
+  // package -> that package's source listing
+  ({ frames } = await driveMcp(REPO, [
+    { jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'source', arguments: { package: 'server' } } },
+  ]));
+  text = frames[0].result.content[0].text;
   assert.match(text, /@webjsdev\/server\/src:/, 'lists the server source dir');
   assert.match(text, /buildless|authored source/i, 'frames it as the real authored source');
 
@@ -459,93 +441,46 @@ test('mcp: throwing ui deps degrade only the ui tool, the server stays up', asyn
   assert.ok(Array.isArray(JSON.parse(routesFrame.result.content[0].text).pages), 'list_routes returns the route projection');
 });
 
-/* ---------------- knowledge layer (#376): init / docs / resources / prompts ---------------- */
+/* ---------------- init: the WebJs brief ---------------- */
 
-test('mcp: tools/call init returns the read-first primer (NOT-React mental model + invariants)', async () => {
-  const dir = tmpDir();
-  const { frames } = await driveMcp(dir, [
+const { BRIEF } = await import(resolve(REPO, 'packages', 'mcp', 'src', 'brief.js'));
+
+test('mcp: tools/call init returns the brief and the tool map', async () => {
+  const { frames } = await driveMcp(tmpDir(), [
     { jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'init', arguments: {} } },
   ]);
   const text = frames[0].result.content[0].text;
-  assert.equal(typeof text, 'string');
   assert.match(text, /read first/i);
-  assert.match(text, /NO RSC/, 'steers away from the React/RSC mental model');
-  assert.match(text, /Invariants/, 'includes the invariants section sourced from AGENTS.md');
-  assert.match(text, /webjs-docs:\/\//, 'lists the doc resources');
+  assert.ok(text.includes(BRIEF), 'carries the brief verbatim');
+  assert.match(text, /`source`/, 'points at the source tool for exact contracts');
+  assert.match(text, /`check`/, 'points at the check tool');
+  assert.ok(!/Warning:/.test(text), 'no installed copy, nothing to warn about');
 });
 
-test('mcp: tools/call docs returns a topic, a query search, and the index', async () => {
-  const dir = tmpDir();
-  // topic
-  let { frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 21, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'recipes' } } },
+test('mcp: the docs tool, doc resources and recipe prompts are gone', async () => {
+  const { frames } = await driveMcp(tmpDir(), [
+    { jsonrpc: '2.0', id: 21, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'components' } } },
+    { jsonrpc: '2.0', id: 22, method: 'resources/list' },
+    { jsonrpc: '2.0', id: 23, method: 'prompts/list' },
+    { jsonrpc: '2.0', id: 24, method: 'tools/list' },
   ]);
-  assert.match(frames[0].result.content[0].text, /recipe|page|action|component/i, 'topic returns the recipes doc');
-  // query
-  ({ frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 22, method: 'tools/call', params: { name: 'docs', arguments: { query: 'signal' } } },
-  ]));
-  assert.match(frames[0].result.content[0].text, /webjs-docs:\/\//, 'query returns hits tagged with their source URI');
-  // no args -> index
-  ({ frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 23, method: 'tools/call', params: { name: 'docs', arguments: {} } },
-  ]));
-  assert.match(frames[0].result.content[0].text, /topics/i, 'no args returns the topic index');
-  // unknown topic fails soft (no crash, a helpful message)
-  ({ frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 24, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'does-not-exist' } } },
-  ]));
-  assert.match(frames[0].result.content[0].text, /Unknown topic/, 'unknown topic returns a message, not an error frame');
+  assert.equal(frames[0].error.code, -32602, 'docs is an unknown tool');
+  assert.equal(frames[1].error.code, -32601, 'resources/list is not served');
+  assert.equal(frames[2].error.code, -32601, 'prompts/list is not served');
+  assert.ok(frames[3].result.tools, 'the loop kept serving after the errors');
 });
 
-test('mcp: resources/list + resources/read serve the framework docs; unknown uri errors cleanly', async () => {
+/** An app dir with its own installed @webjsdev/mcp at `version`. */
+function appWithMcp(version) {
   const dir = tmpDir();
-  let { frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 25, method: 'resources/list' },
-  ]);
-  const resources = frames[0].result.resources;
-  assert.ok(Array.isArray(resources) && resources.length >= 5, 'a corpus of resources');
-  assert.ok(resources.some((r) => r.uri === 'webjs-docs://AGENTS'), 'the AGENTS contract is a resource');
-  assert.ok(resources.some((r) => r.uri === 'webjs-docs://components'), 'the skill references are resources');
-  for (const r of resources) assert.equal(r.mimeType, 'text/markdown');
-
-  // read one
-  ({ frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 26, method: 'resources/read', params: { uri: 'webjs-docs://components' } },
-  ]));
-  const contents = frames[0].result.contents;
-  assert.equal(contents[0].uri, 'webjs-docs://components');
-  assert.equal(contents[0].mimeType, 'text/markdown');
-  assert.ok(contents[0].text.length > 100, 'returns the doc text');
-
-  // unknown uri -> JSON-RPC error, loop survives
-  ({ frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 27, method: 'resources/read', params: { uri: 'webjs-docs://nope' } },
-    { jsonrpc: '2.0', id: 28, method: 'resources/list' },
-  ]));
-  assert.equal(frames[0].error.code, -32602, 'unknown resource is a -32602');
-  assert.ok(frames[1].result.resources, 'the loop kept serving after the error');
-});
-
-/** An app dir carrying its own installed @webjsdev/mcp corpus, stamped and seeded. */
-function appWithCorpus(sentinel, version) {
-  const dir = tmpDir();
-  const res = join('node_modules', '@webjsdev', 'mcp', 'resources');
-  write(dir, join(res, 'references', 'components.md'), `# Components\n\n${sentinel}\n`);
-  write(dir, join(res, 'AGENTS.md'), `# AGENTS\n\n## Execution model\n\n${sentinel}\n\n## Invariants\n\n1. ${sentinel}\n`);
-  write(dir, join(res, 'SKILL.md'), `# SKILL\n\n${sentinel}\n`);
-  write(dir, join(res, 'corpus.json'), JSON.stringify({ package: '@webjsdev/mcp', version, sha: null, copiedAt: '2026-08-08T00:00:00.000Z' }));
   write(dir, join('node_modules', '@webjsdev', 'mcp', 'package.json'), JSON.stringify({ name: '@webjsdev/mcp', version }));
   return dir;
 }
 
 test('mcp: every app-scoped tool ADVERTISES appDir, so a conforming client can actually send one', async () => {
-  // The corpus follows appDir, so a tool whose inputSchema omits it could never
-  // receive one from a model driving tools/call, and the app-corpus rung would
-  // be reachable only from hand-written JSON-RPC.
   const { frames } = await driveMcp(tmpDir(), [{ jsonrpc: '2.0', id: 87, method: 'tools/list' }]);
   const byName = Object.fromEntries(frames[0].result.tools.map((t) => [t.name, t]));
-  for (const name of ['init', 'docs', 'list_routes', 'list_actions', 'list_components', 'list_elision', 'check']) {
+  for (const name of ['init', 'list_routes', 'list_actions', 'list_components', 'check']) {
     assert.ok(byName[name], `${name} is advertised`);
     assert.equal(typeof byName[name].inputSchema.properties.appDir, 'object', `${name} advertises appDir`);
     assert.equal(byName[name].inputSchema.properties.appDir.type, 'string', `${name}'s appDir is a string`);
@@ -556,114 +491,19 @@ test('mcp: every app-scoped tool ADVERTISES appDir, so a conforming client can a
   }
 });
 
-test("mcp: the docs corpus follows appDir, so an app's own installed copy wins over the server's", async () => {
-  // The #1319 incident: a global server keeps serving the snapshot it was
-  // published with, and contradicts the corpus sitting in the app's own
-  // node_modules. The app's copy is version-matched to the framework the agent
-  // is editing, so it is the one that can be right about that app.
-  const other = appWithCorpus('SENTINEL_OTHER_APP', '9.9.9');
-  const here = appWithCorpus('SENTINEL_CWD_APP', '9.9.9');
-
-  let { frames } = await driveMcp(here, [
-    { jsonrpc: '2.0', id: 80, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'components', appDir: other } } },
-    { jsonrpc: '2.0', id: 81, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'components' } } },
-  ]);
-  assert.match(frames[0].result.content[0].text, /SENTINEL_OTHER_APP/, 'an explicit appDir reads that app');
-  assert.match(frames[1].result.content[0].text, /SENTINEL_CWD_APP/, 'no appDir defaults to cwd');
-
-  // resources/* carry no appDir in the MCP protocol, so they resolve from cwd,
-  // which is exactly what a no-appDir tools/call defaults to. The two surfaces
-  // therefore agree whenever appDir does.
-  ({ frames } = await driveMcp(here, [
-    { jsonrpc: '2.0', id: 82, method: 'resources/read', params: { uri: 'webjs-docs://components' } },
-  ]));
-  assert.match(frames[0].result.contents[0].text, /SENTINEL_CWD_APP/, 'resources/read reads the cwd corpus');
-
-  // init reports which corpus it served, and its body comes from that same one.
-  ({ frames } = await driveMcp(here, [
-    { jsonrpc: '2.0', id: 83, method: 'tools/call', params: { name: 'init', arguments: {} } },
-  ]));
-  const primer = frames[0].result.content[0].text;
-  assert.match(primer, /Docs corpus: @webjsdev\/mcp@9\.9\.9, copied on 2026-08-08\./, 'names the corpus it served');
-  assert.match(primer, /SENTINEL_CWD_APP/, 'and the primer body came from that same corpus');
-  // App and server are both 9.9.9 here, so there is nothing to warn about.
-  assert.ok(!/Warning:/.test(primer), 'equal versions stay silent');
-});
-
 test('mcp: init warns when the app has a newer @webjsdev/mcp than the running server', async () => {
   // driveMcp pins the server at 9.9.9, so an app on 10.0.0 is the stale-server case.
-  const newer = appWithCorpus('SENTINEL_NEWER', '10.0.0');
-  const { frames } = await driveMcp(newer, [
-    { jsonrpc: '2.0', id: 84, method: 'tools/call', params: { name: 'init', arguments: {} } },
+  const newer = appWithMcp('10.0.0');
+  const same = appWithMcp('9.9.9');
+  const { frames } = await driveMcp(same, [
+    { jsonrpc: '2.0', id: 84, method: 'tools/call', params: { name: 'init', arguments: { appDir: newer } } },
+    { jsonrpc: '2.0', id: 85, method: 'tools/call', params: { name: 'init', arguments: {} } },
   ]);
-  const primer = frames[0].result.content[0].text;
-  assert.match(primer, /Warning: this MCP server is @webjsdev\/mcp@9\.9\.9, but this app has @webjsdev\/mcp@10\.0\.0, so the server may be stale\./);
-  assert.match(primer, /npm i -g @webjsdev\/mcp@latest/, 'says how to fix the stale install');
-  // This app HAS its own resources/, so rung 1 served them and the warning must
-  // say so. Asserting the served clause end to end is what makes the
-  // `corpusSource` hand-off from resolveDocsLocation to the warning testable:
-  // drop it in mcp.js and the clause degrades, reddening this line.
-  assert.match(primer, /The docs below come from this app's own copy, so they match it/, 'names the corpus it actually served');
-  // Advisory, never a refusal: the corpus rung already pointed at the app's docs.
-  assert.match(primer, /SENTINEL_NEWER/, 'still answers, with the app corpus');
-});
-
-test('mcp: an injected docsDeps still wins for every appDir', async () => {
-  // The seam every pre-existing knowledge-layer test relies on: injection must
-  // short-circuit the per-appDir resolution entirely.
-  const stdin = new PassThrough();
-  const stdout = new PassThrough();
-  const stderr = new PassThrough();
-  let out = '';
-  stdout.on('data', (c) => { out += c.toString(); });
-  const docsDeps = {
-    docsDir: '/docs',
-    agentsPath: '/AGENTS.md',
-    skillPath: '/SKILL.md',
-    corpusPath: null,
-    listDir: (d) => (d === '/docs' ? ['components.md'] : []),
-    exists: (p) => p === '/AGENTS.md' || p === '/docs',
-    readFile: async () => '# injected\n\nSENTINEL_INJECTED\n',
-  };
-  const app = appWithCorpus('SENTINEL_ON_DISK', '10.0.0');
-  const done = runMcpServer({ stdin, stdout, stderr, cwd: app, version: '9.9.9', docsDeps });
-  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 85, method: 'tools/call', params: { name: 'docs', arguments: { topic: 'components', appDir: app } } }) + '\n');
-  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 86, method: 'resources/read', params: { uri: 'webjs-docs://components' } }) + '\n');
-  stdin.end();
-  await done;
-
-  const frames = out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
-  assert.match(frames[0].result.content[0].text, /SENTINEL_INJECTED/, 'injection beats an explicit appDir');
-  assert.match(frames[1].result.contents[0].text, /SENTINEL_INJECTED/, 'and beats the cwd resolution too');
-  assert.ok(!/SENTINEL_ON_DISK/.test(out), 'the on-disk corpus was never consulted');
-});
-
-test('mcp: prompts/list + prompts/get serve the recipe workflows; unknown prompt errors cleanly', async () => {
-  const dir = tmpDir();
-  let { frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 29, method: 'prompts/list' },
-  ]);
-  const prompts = frames[0].result.prompts;
-  const names = prompts.map((p) => p.name).sort();
-  assert.deepEqual(names, ['add_component', 'add_dynamic_route', 'add_module', 'add_page', 'add_server_action', 'fetch_data_in_component']);
-
-  // get one, with an argument folded in
-  ({ frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 30, method: 'prompts/get', params: { name: 'add_component', arguments: { tag: 'my-thing' } } },
-  ]));
-  const got = frames[0].result;
-  assert.equal(typeof got.description, 'string');
-  assert.equal(got.messages[0].role, 'user');
-  assert.match(got.messages[0].content.text, /my-thing/, 'the provided arg is folded in');
-  assert.match(got.messages[0].content.text, /register|signal|WebComponent/, 'carries the component recipe');
-
-  // unknown prompt -> error, loop survives
-  ({ frames } = await driveMcp(dir, [
-    { jsonrpc: '2.0', id: 31, method: 'prompts/get', params: { name: 'nope' } },
-    { jsonrpc: '2.0', id: 32, method: 'prompts/list' },
-  ]));
-  assert.equal(frames[0].error.code, -32602, 'unknown prompt is a -32602');
-  assert.ok(frames[1].result.prompts, 'the loop kept serving after the error');
+  const stale = frames[0].result.content[0].text;
+  assert.match(stale, /Warning: this MCP server is @webjsdev\/mcp@9\.9\.9, but this app has @webjsdev\/mcp@10\.0\.0, so the brief and the tools below may be stale\./);
+  assert.match(stale, /npm i -g @webjsdev\/mcp@latest/, 'says how to fix the stale install');
+  assert.ok(stale.includes(BRIEF), 'advisory, never a refusal: the brief still follows');
+  assert.ok(!/Warning:/.test(frames[1].result.content[0].text), 'no appDir defaults to cwd, where versions are equal');
 });
 
 /* ---------- extractActionConfig unit tests (#488) ---------- */

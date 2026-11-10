@@ -27,6 +27,8 @@
 
 import { createRequire } from 'node:module';
 import { join, resolve, sep, relative } from 'node:path';
+import { readdirSync, statSync } from 'node:fs';
+import { featureCatalog } from './catalog.js';
 
 /** The published framework packages whose source an agent may want to read. */
 export const FRAMEWORK_PACKAGES = ['core', 'server', 'cli', 'intellisense', 'ui'];
@@ -91,6 +93,25 @@ export function resolveFrameworkRoots(cwd, fsDeps) {
  * @param {{ readdir: (d: string) => Array<{ name: string, isDir: boolean }> }} deps
  * @returns {string[]}
  */
+/**
+ * The real directory listing `walkSource` and the source tool read, following
+ * a symlinked directory the way the module resolver does.
+ * @param {string} dir
+ * @returns {Array<{ name: string, isDir: boolean }>}
+ */
+export function listDir(dir) {
+  return readdirSync(dir, { withFileTypes: true }).map((e) => {
+    let isDir = e.isDirectory();
+    // A symlinked directory is a directory: pnpm and workspace installs link
+    // a package (or its `src`) rather than copying it, and a Dirent of a link
+    // answers isDirectory() false, which skipped everything under it (#1686).
+    if (!isDir && e.isSymbolicLink()) {
+      try { isDir = statSync(join(dir, e.name)).isDirectory(); } catch { /* dangling */ }
+    }
+    return { name: e.name, isDir };
+  });
+}
+
 export function walkSource(dir, deps) {
   /** @type {string[]} */
   const files = [];
@@ -114,21 +135,25 @@ export function walkSource(dir, deps) {
 }
 
 /**
- * No-args / `package` mode: list the resolved packages and their `src/`
- * top-level files (the entry points), so the agent has a map to grep or read.
+ * `package` mode: list the resolved packages and their `src/` top-level files
+ * (the entry points), so the agent has a map to grep or read. `readHint` is
+ * the next step the caller offers, since the MCP tool and the CLI read the
+ * listing with different commands.
  *
  * @param {{ roots: Array<{ pkg: string, root: string, src: string }>, readdir: Function }} deps
  * @param {string} [pkgFilter]
+ * @param {{ readHint?: string }} [opts]
  * @returns {string}
  */
-export function listSources(deps, pkgFilter) {
+export function listSources(deps, pkgFilter, opts = {}) {
+  const readHint = opts.readHint ?? 'Read with `source({ path })` or search with `source({ query })`.';
   const roots = pkgFilter ? deps.roots.filter((r) => r.pkg === pkgFilter) : deps.roots;
   if (!roots.length) {
     return pkgFilter
       ? `@webjsdev/${pkgFilter} is not installed/resolvable here. Resolvable: ${deps.roots.map((r) => r.pkg).join(', ') || '(none)'}`
       : 'No @webjsdev/* packages resolvable from here (run inside a webjs app or the monorepo).';
   }
-  const lines = ['webjs framework authored source (buildless; server-side this runs directly, and core ships a built browser dist/ that is excluded here). Read with `source({ path })` or search with `source({ query })`.', ''];
+  const lines = [`webjs framework authored source (buildless; server-side this runs directly, and core ships a built browser dist/ that is excluded here). ${readHint}`, ''];
   for (const r of roots) {
     const dirName = r.src.split(sep).pop(); // 'src' for most, 'lib' for cli
     let entries = [];
@@ -325,9 +350,10 @@ function declarationFrom(lines, line, isTypes) {
  * @param {{ roots: Array<{ pkg: string, root: string, src: string }>, readFile: Function, readdir: Function }} deps
  * @param {string} name an export name, e.g. `createAuth`
  * @param {string} [pkgFilter] one of the framework packages, e.g. `server`
+ * @param {boolean} [caseRetried] internal: the case-swapped retry is already this call
  * @returns {Promise<string>}
  */
-export async function lookupExport(deps, name, pkgFilter) {
+export async function lookupExport(deps, name, pkgFilter, caseRetried = false) {
   const n = String(name || '').trim();
   if (!/^[A-Za-z_$][\w$]*$/.test(n)) return 'Pass an export name (letters, digits, _ or $), e.g. `createAuth`.';
   const roots = pkgFilter ? deps.roots.filter((r) => r.pkg === pkgFilter) : deps.roots;
@@ -360,6 +386,15 @@ export async function lookupExport(deps, name, pkgFilter) {
   }
   const searched = deps.roots.map((r) => r.pkg).join(', ');
   if (!hits.length) {
+    // The name as written with another case: a convention is written lower
+    // camel (`generateMetadata`) and its type upper (`GenerateMetadata`).
+    const other = n[0] === n[0].toLowerCase() ? n[0].toUpperCase() + n.slice(1) : n[0].toLowerCase() + n.slice(1);
+    if (other !== n && !caseRetried) {
+      const cased = await lookupExport(deps, other, pkgFilter, true);
+      if (cased.startsWith('@webjsdev/')) return `"${n}" is not an export; its type is ${other}:\n${cased}`;
+    }
+    const members = await lookupMember(deps, roots, n);
+    if (members) return members;
     return `No export named "${n}" in the searched @webjsdev/* packages (${roots.map((r) => r.pkg).join(', ')}${pkgFilter ? `; resolvable: ${searched}` : ''}). Try \`query\` for a substring search, or \`path\` to read a file.`;
   }
   // The typed declarations are the answer; the JS doc is added only when the
@@ -378,9 +413,59 @@ export async function lookupExport(deps, name, pkgFilter) {
 }
 
 /**
+ * A name that is no export but a MEMBER of an exported interface or class
+ * (`actionData` on `PageProps`, `fieldErrors` on `FormActionData`). Agents look
+ * those up by the name they write (#1686: `actionData` was the most grepped
+ * term across the eval builds), so the member's doc and declaration print,
+ * headed by the type that owns it.
+ * @param {{ readFile: Function, readdir: Function }} deps
+ * @param {Array<{ pkg: string, root: string }>} roots
+ * @param {string} n
+ * @returns {Promise<string | null>}
+ */
+async function lookupMember(deps, roots, n) {
+  const memberRe = new RegExp(`^\\s+(?:readonly\\s+)?(?:static\\s+)?${n.replace(/\$/g, '\\$')}\\??\\s*[:(<]`);
+  const ownerRe = /^export\s+(?:declare\s+)?(?:abstract\s+)?(?:interface|class|type)\s+([A-Za-z_$][\w$]*)/;
+  const out = [];
+  let count = 0;
+  for (const r of roots) {
+    for (const file of walkSource(r.root, deps).filter((f) => /\.d\.(?:ts|mts|cts)$/.test(f))) {
+      let text = '';
+      try { text = await deps.readFile(file, 'utf8'); } catch { continue; }
+      if (!text.includes(n)) continue;
+      const lines = text.split('\n');
+      const rel = relative(r.root, file).split(sep).join('/');
+      for (let i = 0; i < lines.length; i++) {
+        if (!memberRe.test(lines[i])) continue;
+        let owner = null;
+        for (let j = i - 1; j >= 0; j--) {
+          const m = ownerRe.exec(lines[j]);
+          if (m) { owner = m[1]; break; }
+          if (/^\S/.test(lines[j]) && !/^\s*(?:\*|\/\/|\/\*)/.test(lines[j]) && /^(?:}|export)/.test(lines[j])) break;
+        }
+        if (!owner) continue;
+        if (++count > MAX_EXPORT_HITS) continue;
+        const decl = [];
+        for (let k = i, depth = 0; k < lines.length && decl.length < MAX_DECL_LINES; k++) {
+          decl.push(lines[k]);
+          for (const ch of lines[k]) { if (ch === '{' || ch === '(') depth++; else if (ch === '}' || ch === ')') depth--; }
+          if (depth <= 0 && /[;,]\s*$/.test(lines[k])) break;
+        }
+        out.push(`"${n}" is a member of ${owner} (@webjsdev/${r.pkg} ${rel}:${i + 1}); \`source ${owner}\` prints the whole type.`);
+        out.push(...docAbove(lines, i), ...decl, '');
+      }
+    }
+  }
+  if (!out.length) return null;
+  if (count > MAX_EXPORT_HITS) out.push(`... (${count - MAX_EXPORT_HITS} more members named "${n}"; narrow with \`package\`)`);
+  return out.join('\n').trimEnd();
+}
+
+/**
  * The `source` tool entry point. Dispatches on the args: `export` looks up one
- * export's signature and doc, `path` reads a file, `query` greps, otherwise
- * (or with `package`) lists the packages. PURE given `deps`
+ * export's signature and doc, `path` reads a file, `query` greps, `package`
+ * lists that package's entry points, and no args prints the feature catalogue
+ * (what WebJs provides, by need). PURE given `deps`
  * (`{ roots, readFile, readdir }`).
  *
  * @param {object} deps
@@ -392,5 +477,6 @@ export async function runSourceTool(deps, args) {
   if (a.export) return lookupExport(deps, a.export, a.package);
   if (a.path) return readSource(deps, a.path);
   if (a.query) return grepSources(deps, a.query);
-  return listSources(deps, a.package);
+  if (a.package) return listSources(deps, a.package);
+  return featureCatalog();
 }

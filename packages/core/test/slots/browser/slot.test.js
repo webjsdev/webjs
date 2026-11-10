@@ -629,7 +629,7 @@ suite('Light-DOM slot projection (browser)', () => {
   //
   // Documented as the fourth light-DOM gap (initial-projection timing) on
   // every slot doc surface, and as the "Reading assignedNodes() in
-  // firstUpdated" gotcha in the skill's references/muscle-memory-gotchas.md.
+  // firstUpdated" gotcha documented at https://webjs.dev/docs/components.
   // ===========================================================================
 
   test('firstUpdated sees the <slot> element but light-DOM projection has NOT yet populated it', async () => {

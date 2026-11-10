@@ -144,3 +144,68 @@ test('instrumentation-client.js is imported FIRST in the client boot script', as
   const firstImport = boot[1].trim().split('\n')[0];
   assert.match(firstImport, /instrumentation-client/, 'instrumentation-client is the FIRST import');
 });
+
+test('runInstrumentation returns a named onRequestError export', async () => {
+  const appDir = makeApp({
+    'instrumentation.js': `export function onRequestError() {}\nexport function register() {}\n`,
+  });
+  const { onRequestError } = await runInstrumentation(appDir, { dev: true });
+  assert.equal(typeof onRequestError, 'function');
+  const none = await runInstrumentation(makeApp({ 'package.json': '{}' }), { dev: true });
+  assert.equal(none.onRequestError, null);
+});
+
+test('onRequestError receives Next shapes for render and route errors', async () => {
+  const reports = [];
+  globalThis.__onReqErr = (...args) => reports.push(args);
+  const appDir = makeApp({
+    'package.json': '{"name":"x"}',
+    'instrumentation.js':
+      `export async function onRequestError(err, request, context) { globalThis.__onReqErr(err, request, context); }\n`,
+    'app/boom/page.js': `export default function P() { throw new Error('render boom'); }\n`,
+    'app/blog/[slug]/page.js': `export default function P() { throw new Error('slug boom'); }\n`,
+    'app/api/x/route.js': `export function GET() { throw new Error('route boom'); }\n`,
+  });
+  try {
+    const app = await createRequestHandler({ appDir, dev: false, logger: { info() {}, warn() {}, error() {} } });
+    const r1 = await app.handle(new Request('http://x/boom?q=1', { headers: { 'x-test': 'yes' } }));
+    assert.equal(r1.status, 500);
+    const r2 = await app.handle(new Request('http://x/api/x'));
+    assert.equal(r2.status, 500);
+    await app.handle(new Request('http://x/blog/hello'));
+    // Fire-and-forget: let the reporter's promise chain settle.
+    await new Promise((r) => setTimeout(r, 50));
+    const byMsg = Object.fromEntries(reports.map((a) => [a[0].message, a]));
+
+    const [err, request, context] = byMsg['render boom'];
+    assert.equal(typeof err.digest, 'string', 'the error carries a digest');
+    assert.equal(request.path, '/boom?q=1');
+    assert.equal(request.method, 'GET');
+    assert.equal(request.headers['x-test'], 'yes');
+    assert.deepEqual(
+      { routerKind: context.routerKind, routeType: context.routeType, routePath: context.routePath },
+      { routerKind: 'App Router', routeType: 'render', routePath: '/app/boom' },
+    );
+    assert.equal(byMsg['route boom'][2].routeType, 'route');
+    assert.equal(byMsg['route boom'][2].routePath, '/app/api/x');
+    assert.equal(byMsg['slug boom'][2].routePath, '/app/blog/[slug]');
+    // Reported ONCE each, under the most specific phase.
+    assert.equal(reports.filter((a) => a[0].message === 'route boom').length, 1);
+  } finally {
+    delete globalThis.__onReqErr;
+  }
+});
+
+test('a throwing onRequestError never affects the response', async () => {
+  const appDir = makeApp({
+    'package.json': '{"name":"x"}',
+    'instrumentation.js': `export function onRequestError() { throw new Error('reporter broke'); }\n`,
+    'app/page.js': `export default function P() { throw new Error('boom'); }\n`,
+  });
+  const logged = [];
+  const app = await createRequestHandler({ appDir, dev: false, logger: { info() {}, warn() {}, error: (m) => logged.push(m) } });
+  const resp = await app.handle(new Request('http://x/'));
+  assert.equal(resp.status, 500);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.ok(logged.some((m) => String(m).includes('onRequestError threw')));
+});

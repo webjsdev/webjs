@@ -29,7 +29,22 @@ export const RULES = [
   {
     name: 'no-server-env-in-components',
     description:
-      'Component files (under components/ or modules/*/components/) must not read non-public environment variables. process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser via the SSR shim) or equals NODE_ENV (also defined in the browser). Any other process.env read in a component would leak the server-side value into the SSR\'d HTML, then read as undefined after hydration. Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes.',
+      'Code the browser runs must not read non-public environment variables: every component file (under components/ or modules/*/components/) and every module the build ships to the browser (a util a component imports). process.env.X is allowed when X starts with WEBJS_PUBLIC_ (exposed to the browser by the SSR shim) or equals NODE_ENV. Any other read leaks the server-side value into the SSR\'d HTML, then reads as undefined after hydration. Next.js\'s NEXT_PUBLIC_ prefix gets a targeted fix (rename it to WEBJS_PUBLIC_). Read server-only env vars in a page function, server action, or middleware (which never reach the browser as source) and pass derived values to the component as attributes. Page, layout and boundary modules are not scanned: their functions run on the server only.',
+  },
+  {
+    name: 'no-next-runtime-guard',
+    description:
+      'Flags `process.env.NEXT_RUNTIME`, which only Next.js sets (to `nodejs` or `edge`). Under WebJs it is undefined, so the usual `if (process.env.NEXT_RUNTIME === \'nodejs\')` guard around an instrumentation `register()` silently never runs. Drop the guard (WebJs runs `register()` once, server-side only), and use `process.versions.bun` / `process.versions.node` to tell the runtimes apart.',
+  },
+  {
+    name: 'no-next-url',
+    description:
+      'Flags `request.nextUrl` (as `req.nextUrl` / `request.nextUrl`, or any `.nextUrl` in a middleware or proxy file). It is Next.js\'s extended URL; WebJs passes middleware and route handlers the platform Request, so the property throws in dev. Use `new URL(request.url)`.',
+  },
+  {
+    name: 'no-inline-use-server',
+    description:
+      'Flags a `\'use server\'` directive inside a function body (Next.js\'s inline server action, often written in a page). WebJs\'s server boundary is a FILE: the directive is honoured only at the top of a `*.server.{js,ts}` module, so an inline one is an ordinary string and the function runs wherever it is called, and binding it to a form throws (it has no action identity). Move the function into its own module (`modules/<feature>/actions/<name>.server.ts` starting with `\'use server\'`), export it, and import it.',
   },
   {
     name: 'tag-name-has-hyphen',
@@ -42,9 +57,9 @@ export const RULES = [
       'A custom-element tag name must be registered exactly once across the app. Two `Class.register(\'tag\')` / `customElements.define(\'tag\', …)` calls for the SAME tag resolve INCONSISTENTLY at runtime: SSR overwrites the registry (last registration wins) while the browser keeps the first native upgrade, so the rendered element and the webjs registry disagree. Rename one tag.',
   },
   {
-    name: 'no-static-properties',
+    name: 'no-conflicting-routes',
     description:
-      'Reactive properties must be declared via the `extends WebComponent({ … })` factory, never a hand-written `static properties = { … }` field in the class body. The factory types each field for you (no `declare` needed) and the runtime throws on a direct `static properties`. Migrate `class X extends WebComponent { static properties = { count: { type: Number } } }` to `class X extends WebComponent({ count: Number })`; use the `prop()` helper for options (`prop(Number, { reflect: true })`) and set defaults in the constructor after super().',
+      'Two files must not resolve to one URL: two pages (often in different route groups, `app/(marketing)/page.ts` beside `app/(app)/page.ts`, or `[id]` beside `[slug]` at one position), or a `page` and a `route` handler at the same path. Only one can ever be served, and Next.js refuses both at build time.',
   },
   {
     name: 'no-signal-field-assignment',
@@ -54,7 +69,7 @@ export const RULES = [
   {
     name: 'reactive-props-no-class-field',
     description:
-      'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field declaration (`count = 0`, `count: number = 0`, `count!: number`, or `count?: number`) in the class body. Under modern class-field semantics (including `erasableSyntaxOnly: true`) every class-field declaration compiles to Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super().',
+      'A reactive property declared via the `extends WebComponent({ … })` factory or Lit\'s `static properties` must NOT also have a plain class-field declaration (`count = 0`, `count: number = 0`, `count!: number`, or `count?: number`) in the class body. Under modern class-field semantics (including `erasableSyntaxOnly: true`) every class-field declaration compiles to Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super(). A type-only `declare count: number` is erased and is fine.',
   },
   {
     name: 'array-prop-uses-array-type',
@@ -84,7 +99,7 @@ export const RULES = [
   {
     name: 'no-non-erasable-typescript',
     description:
-      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, and _private folders.',
+      'Scans .ts / .mts source for the four non-erasable TypeScript constructs (enum declarations, namespace blocks with value statements, constructor parameter properties, and `import = require`) that the framework\'s type-stripper rejects at request time, and .ts / .mts / .js / .mjs source for DECORATORS (`@customElement`, `@property`, `@state`, `@query`, any `@name` in decorator position). The stripper passes a decorator through untouched, so the module then fails to load with a bare `SyntaxError: Invalid or unexpected token` on Node and in the browser; the rule names the decorator and its WebJs spelling (`static properties` plus `declare`, or the `WebComponent({ ... })` factory, for `@property`; `state: true` for `@state`; `MyEl.register(tag)` for `@customElement`; a getter over `this.renderRoot` for `@query`). Comments, strings and template bodies are masked first, so `@click` in an html template, `@media` in a css template, and a JSDoc `@param` never match. Companion to `erasable-typescript-only`: that rule checks the tsconfig flag, this rule checks the actual source. Both run by default so the flag check catches violations early in the editor while the source scan catches violations even if the tsconfig flag is missing or the rule is bypassed. Skips node_modules, dist, build, .git, .next, _private folders, and .js files under public/.',
   },
   {
     name: 'no-browser-globals-in-render',
@@ -99,7 +114,7 @@ export const RULES = [
   {
     name: 'no-server-import-in-browser-module',
     description:
-      'A page / layout / component module that SHIPS to the browser (the build does NOT elide it) must not transitively import a server-only `.server.{ts,js}` module. The server module is replaced by a stub in the browser, so the import is fine while the module never loads client-side: a display-only page is elided, and a page whose only client relevance is importing shipping components is import-only (#605/#963), dropped from the boot in favour of its components. But the moment the page does its OWN client work (the client router, a reactive primitive, a module-scope browser-global access, a client-effecting non-component util) it ships whole, dragging the server import with it. The stub then throws (or a server-only export like `auth` is missing) the instant the module loads, a runtime browser crash that `webjs typecheck` and the rest of `webjs check` miss. The rule reuses the build\'s own elision verdict, so it ONLY fires on modules that genuinely ship; an elided, inert, or import-only page is never flagged. The fix is to keep the server call off the browser-shipped module: gate the route in `middleware.ts`, call the server through a `\'use server\'` action, or move the module\'s own client work into a component so the page is dropped again. Server-to-server imports (`.server.ts` importing `.server.ts`) and `middleware.ts` / `route.ts` (never shipped) are never flagged.',
+      'A module that loads in the browser (a component outside a `.server` file, `instrumentation-client`, or anything either imports) must not transitively import a server-only `.server.{ts,js}` utility: in the browser that import is a stub that throws when the module loads, so the page crashes while typecheck passes. A `\'use server\'` action is fine (it becomes a working RPC stub). Pages, layouts and boundaries are never checked, because they run only on the server and never load in a browser (#1686), so a server import there is always fine. A component in a `.server` file never loads in the browser either, so it is not flagged.',
   },
   {
     name: 'one-action-per-configured-file',
@@ -112,9 +127,74 @@ export const RULES = [
       'Flags `<form action=${someAction}>` bound to a `\'use server\'` action whose file declares `export const method = \'GET\'` (#488). A GET action is a READ: it is CSRF-exempt and rides its arguments in the url, while a form submission is a CSRF-checked POST carrying a body, so the two contracts contradict each other and the submission is answered with a 405 at runtime. The rule reads the imported action\'s own file, so it only fires when the binding really does resolve to a GET-declared action. Fix by dropping the `method` export (an action with no `method` is a POST, which is what a form wants) or by binding a different action; if the form really is a read, use a plain `<form method="get" action="/search">` with no bound action.',
   },
   {
-    name: 'no-redirect-in-api-route',
+    name: 'no-component-in-use-server-file',
     description:
-      'API route handlers (`route.{js,ts}`) must NOT call `redirect()` from `@webjsdev/core`. That function throws a control-flow signal designed for the SSR page renderer; in a route handler it goes uncaught and produces a 500. Use `Response.redirect(url, 303)` for external redirects or return a 3xx Response directly. Page functions, layouts, and server actions may still use `redirect()` (caught by the SSR pipeline).',
+      "Flags a component class in a `*.server.{ts,js}` file that starts with `'use server'`. Every function export of a `'use server'` file is wrapped as a server action, and a class is a function, so the component is neither a working component nor a usable action. Drop the directive to make it a server-only component (rendered on the server, never shipped), or move it to an ordinary file to make it a component that runs in the browser.",
+  },
+  {
+    name: 'no-interactivity-in-server-component',
+    description:
+      'Flags a component in a `*.server.{ts,js}` file that uses an event binding, a reactive primitive (`signal`, `Task`, ...) or a client-only lifecycle hook (`connectedCallback`, `firstUpdated`, ...). A component in a `.server` file renders on the server only and is never defined in the browser, so that code never runs. Move it to an ordinary file, where a component always ships.',
+  },
+  {
+    name: 'no-server-component-in-client-template',
+    description:
+      'Flags a module that loads in the browser (a component or anything it imports) rendering the tag of a component defined in a `*.server.{ts,js}` file. That tag is never defined in the browser, so it renders on the server and comes back empty after a client re-render, which is why Next.js does not let a client component render a server component. Render it from the page and pass it in as a child, where it lands in the component\'s `<slot>`.',
+  },
+  {
+    name: 'no-use-client-in-route-module',
+    description:
+      "Flags a `'use client'` directive at the top of a page, layout or boundary, the Next.js way to make a page interactive. In WebJs a route module is always a server component and the client part is a component, so the directive does nothing there. Move the interactive part into a component (`components/my-widget.ts`, Lit's APIs) and render its tag from the page. A `'use client'` in a component file is left alone, since a component already runs on the client.",
+  },
+  {
+    name: 'no-component-in-route-module',
+    description:
+      'Flags a component class defined in a page, layout or boundary file. A route module runs only on the server and never loads in the browser (#1686), so the element renders its server markup and never upgrades. Move the class into its own file (`components/my-widget.ts`) and import it. Route-ness comes from the route table, so a helper that happens to be called `page.ts` outside `app/` is not a route module.',
+  },
+  {
+    name: 'no-event-binding-in-route-module',
+    description:
+      'Flags an event binding (`@click=${...}`) on a tag in a page, layout or boundary template. A route module renders only on the server and never hydrates, so the handler never runs, the same reason Next.js refuses an event handler in a server component. Put the interactive part in a component, or use a `<form action=${action}>` or `<a href>` that works without JavaScript. A binding written as escaped text in a code sample (`&lt;button @click=...`) is not flagged.',
+  },
+  {
+    name: 'no-route-module-import-in-browser-module',
+    description:
+      'Flags a module that loads in the browser (a component or anything it imports) importing a page, layout or boundary file. Route modules run only on the server and are never served to the browser (#1686), so the import 404s and the importing module fails to load. Move the shared code into its own file and import it from both.',
+  },
+  {
+    name: 'no-node-builtin-in-browser-module',
+    description:
+      'Flags a `node:` import, or a bare Node builtin such as `fs`, in a module that loads in the browser (a component or anything it imports). It can never resolve there, so the module fails to load. Do the work in the page (pages run only on the server) and pass the result in as a property, or behind a `\'use server\'` action. An `import type` is erased and never flagged.',
+  },
+  {
+    name: 'no-foreign-framework-import',
+    description:
+      'Flags an import of `next` / `next/*`, `react` / `react-dom`, `lit` / `lit-html` / `lit-element` / `lit/*`, `@lit/*` or `@lit-labs/*`, in any form (named, default, namespace, `import type`, side-effect, `export ... from`, or a string-literal dynamic `import()`). WebJs never aliases or loads those packages: a Next import fails to resolve, and a Lit import quietly loads a second component runtime from the CDN. The violation names the exact `@webjsdev/*` replacement (for example `next/navigation` -> `redirect` / `notFound` from `@webjsdev/core`, `lit` -> `WebComponent` / `html` / `css` from `@webjsdev/core`, `@lit/context` -> `@webjsdev/core/context`). `react` / `react-dom` stay allowed inside a `*.server.*` module (an email renderer, say), which never reaches the browser. The same refusal runs at load time: the dev overlay and production readiness name the import, and a server import is rewritten to the same fix.',
+  },
+  {
+    name: 'no-jsx-attributes',
+    description:
+      'Flags JSX written into an `html` template: a `className=` or `htmlFor=` attribute (HTML reads them as unknown `classname` / `htmlfor` attributes, so the class never applies and the label never targets its control) and a capitalised component tag such as `<Link>` or `<Button>` (HTML lowercases it into an unknown element that renders nothing). Both renderers throw on these when the template first compiles; the rule reports them ahead of time. Write `class=` / `for=`, and render a custom element by its registered hyphenated tag (or a plain `<a href>` for a link). Text in the template (`&lt;Link&gt;`, a `className` mentioned in prose), comments, and script / style bodies are never flagged.',
+  },
+  {
+    name: 'no-jsx-route-file',
+    description:
+      'Flags a routing file (`page`, `layout`, `route`, a boundary such as `error` / `not-found` / `loading`, `middleware`, or a metadata route) written as `.tsx` or `.jsx`, the Next.js default. WebJs has no build step, so JSX never loads and the router skips the file: the route silently does not exist. Production refuses to boot on it, dev answers every request with the problem, and `webjs doctor` fails (`JSX_ROUTE_FILES`). Rename it to `.ts` / `.js` and return an `html` template.',
+  },
+  {
+    name: 'no-css-import',
+    description:
+      'Flags `import \'./styles.css\'` (or any `.css` import, including `import styles from \'./x.module.css\'`). Importing CSS is a bundler feature WebJs does not have: Node refuses the `.css` extension, Bun silently turns the import into a no-op on the server, and the browser refuses a stylesheet as a module script, so the importing module never loads. The same refusal runs at load time. Load a stylesheet with `<link rel="stylesheet" href="...">` in the root layout (the scaffold links its Tailwind output this way), or scope CSS to a component with `static styles = css` and `static shadow = true`.',
+  },
+  {
+    name: 'no-public-route-conflict',
+    description:
+      'Files in `public/` are served at the URL ROOT, as in Next.js (`public/logo.png` is `/logo.png`; there is no `/public/` prefix), and before every route, so a public file wins over a dynamic route. A public file at the same URL as a static page, a `route.{js,ts}` handler, or a metadata route (`public/robots.txt` beside `app/robots.ts`) would make one of them unreachable, so it is flagged here and refused at production boot. Rename or move one side.',
+  },
+  {
+    name: 'no-page-route-conflict',
+    description:
+      'A `page.{js,ts}` and a `route.{js,ts}` must not answer the same URL (including through a route group, `app/(a)/x/page.ts` beside `app/x/route.ts`). Next.js refuses this at build time; WebJs refuses to boot in production and answers every dev request with the problem, because the route handler would shadow the page and it could never render. Move the route handler to its own folder (`app/api/...`) or delete the page.',
   },
   {
     name: 'no-interpolation-in-raw-text-element',
@@ -124,7 +204,22 @@ export const RULES = [
   {
     name: 'no-missing-local-import',
     description:
-      'Flags a NAMED value import of a symbol that a resolvable app-internal module does not export (`import { todos } from \'#db/schema.server.ts\'` when the schema no longer exports `todos`). The binding is `undefined` at runtime and crashes on first use, yet the rest of `webjs check` (elision-based, it does not compile types) misses it, so a schema swap that orphans a gallery module can pass `check` while `typecheck` is red. This is the runtime-crash class `check` exists to catch, filling that gap so an agent running only `check` cannot ship a broken import. Deliberately conservative to never false-positive on a valid app: it only inspects app-internal specifiers (a relative `./` path or a `#` alias) that resolve to a file in the app, only NAMED value imports (a `type` import, a default import, a namespace import, and any bare / `node:` / npm-package specifier are skipped), and it treats a module as UNKNOWABLE (never flags imports from it) when its exports are not fully enumerable: a `export * from ...` star re-export, a destructuring `export const { a } = ...`, or a multi-declarator `export const a = .., b = ..`. It reads names from `export function/class/const/let/var/type/interface/enum` and from `export { a, b as c }` / `export { x } from ...` clauses (the alias after `as` is the exported name). A re-export barrel therefore resolves correctly, and a `\'use server\'` action file exports its function names normally. Found dogfooding a tic-tac-toe app: dropping the example `todos` table left a gallery module importing it, green under `check` but red under `typecheck`.',
+      'Flags a NAMED value import of a symbol that a resolvable app-internal module does not export (`import { todos } from \'#db/schema.server.ts\'` when the schema no longer exports `todos`). The binding is `undefined` at runtime and crashes on first use, yet the rest of `webjs check` (graph-based, it does not compile types) misses it, so a schema swap that orphans a gallery module can pass `check` while `typecheck` is red. This is the runtime-crash class `check` exists to catch, filling that gap so an agent running only `check` cannot ship a broken import. Deliberately conservative to never false-positive on a valid app: it only inspects app-internal specifiers (a relative `./` path or a `#` alias) that resolve to a file in the app, only NAMED value imports (a `type` import, a default import, a namespace import, and any bare / `node:` / npm-package specifier are skipped), and it treats a module as UNKNOWABLE (never flags imports from it) when its exports are not fully enumerable: a `export * from ...` star re-export, a destructuring `export const { a } = ...`, or a multi-declarator `export const a = .., b = ..`. It reads names from `export function/class/const/let/var/type/interface/enum` and from `export { a, b as c }` / `export { x } from ...` clauses (the alias after `as` is the exported name). A re-export barrel therefore resolves correctly, and a `\'use server\'` action file exports its function names normally. Found dogfooding a tic-tac-toe app: dropping the example `todos` table left a gallery module importing it, green under `check` but red under `typecheck`.',
+  },
+  {
+    name: 'static-styles-need-shadow',
+    description:
+      'Flags a class extending `WebComponent` that declares `static styles` without `static shadow = true`. WebJs adopts `static styles` into a SHADOW root, and a component renders into light DOM unless it opts into shadow DOM (the reverse of Lit\'s default), so the styles are never applied. Fix: add `static shadow = true` to scope them, or drop `static styles` and style the light DOM with Tailwind utilities or a global stylesheet whose class selectors are prefixed with the tag name. A `static shadow` the rule cannot evaluate (a getter or an expression) is not flagged.',
+  },
+  {
+    name: 'shadow-options-need-shadow',
+    description:
+      'Flags a class extending `WebComponent` that declares `static shadowRootOptions` (Lit\'s `{ mode, delegatesFocus, ... }` for `attachShadow`) without `static shadow = true`. The options configure a shadow root, and the component has none: it renders into light DOM by default, so they are ignored. Fix: add `static shadow = true`, or remove the options.',
+  },
+  {
+    name: 'core-imports-exist',
+    description:
+      'Flags a named value import from `@webjsdev/core` (or one of its subpaths) of a name that module does not export, a default import from a module with no default export, and an import from a subpath core does not export. Each is a load-time crash: ESM refuses to link the module with `does not provide an export named X`, which names neither the cause nor the fix. Lit habits produce it: `LitElement` (use `WebComponent`), a decorator function such as `customElement` or `property` (use `MyEl.register(tag)` and `static properties`), or a type such as `PropertyValues` or `TemplateResult` imported as a value (use `import type`, since the type stripper keeps a plain import). The rule reads the INSTALLED core package\'s real export surface (each `exports` subpath\'s source module for values, its declaration file for types), so a name core gains is accepted as soon as it ships, and a name exported by a different subpath is pointed there. `import type` imports and `type`-qualified names are skipped, since they are erased before load.',
   },
 ];
 

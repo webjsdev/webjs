@@ -1,4 +1,4 @@
-import { html, unsafeHTML } from '@webjsdev/core';
+import { html, unsafeHTML, nothing } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -129,7 +129,7 @@ export default async function DirectoryPage({ searchParams }: PageProps) {
         ? html`<nav aria-label="pagination" class="mx-auto flex w-full justify-center">
             <ul class="flex flex-row items-center gap-1">
               ${Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => html`<li>
-                <a href=${pageHref(query, p)} aria-current=${p === page ? 'page' : null} class=${buttonClass({ variant: p === page ? 'outline' : 'ghost', size: 'icon' })}>${p}</a>
+                <a href=${pageHref(query, p)} aria-current=${p === page ? 'page' : nothing} class=${buttonClass({ variant: p === page ? 'outline' : 'ghost', size: 'icon' })}>${p}</a>
               </li>`)}
             </ul>
           </nav>`

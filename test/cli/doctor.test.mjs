@@ -886,7 +886,7 @@ test('readDoctorPolicy keeps well-formed entries and reports the rest separately
       doctor: {
         gate: {
           UNMARKED_ASSET_LINKS: 'error',
-          ELISION_CARRIERS: 'off',
+          ROUTE_BROWSER_CODE: 'off',
           NOT_A_REAL_CODE: 'error',
           ENV_DRIFT: 'fatal',
           NODE_VERSION: 3,
@@ -895,7 +895,7 @@ test('readDoctorPolicy keeps well-formed entries and reports the rest separately
     },
   }));
   const p = readDoctorPolicy(dir);
-  assert.deepEqual(p.gate, { UNMARKED_ASSET_LINKS: 'error', ELISION_CARRIERS: 'off' });
+  assert.deepEqual(p.gate, { UNMARKED_ASSET_LINKS: 'error', ROUTE_BROWSER_CODE: 'off' });
   assert.deepEqual(p.unknownCodes, ['NOT_A_REAL_CODE']);
   assert.deepEqual(
     p.badSeverities.map((b) => b.code).sort(),
@@ -968,7 +968,7 @@ function assetLinkFixture(gate) {
   write(dir, 'app/layout.ts', [
     "import { html } from '@webjsdev/core';",
     'export default function Layout({ children }) {',
-    '  return html`<html><head><link rel="stylesheet" href="/public/app.css"></head><body>${children}</body></html>`;',
+    '  return html`<html><head><link rel="stylesheet" href="/app.css"></head><body>${children}</body></html>`;',
     '}',
   ].join('\n'));
   return dir;
@@ -1232,59 +1232,48 @@ test('vendor-gitignore: ignores leaked GIT_WORK_TREE/GIT_DIR (worktree pre-commi
 });
 
 // ---------------------------------------------------------------------------
-// Page/layout elision advisory (#646): name why a page/layout ships.
+// Route-module advisory (#1686): a page, layout or boundary runs only on the
+// server, so code in one that looks meant for the browser does nothing there.
 // ---------------------------------------------------------------------------
-const CARRIER_CHECK = 'Page/layout elision (carrier hygiene)';
+const ROUTE_CHECK = 'Route modules (browser code that runs only on the server)';
 
-test('a page pinned by a client-effecting non-component WARNS and names the blocker', async () => {
+test('a page side-effect-importing a helper that touches the document WARNS, naming both', async () => {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
-  // The page is a pure carrier EXCEPT it side-effect-imports a util that
-  // touches a browser global at module load, so it ships whole.
   write(dir, 'app/page.js',
     `import { html } from '@webjsdev/core';\nimport '../lib/track.js';\nexport default () => html\`<p>hi</p>\`;\n`);
   write(dir, 'lib/track.js', `document.title = 'set at module load';\nexport const y = 1;\n`);
 
   const results = await runDoctorChecks(dir, baseOpts());
-  const r = byName(results, CARRIER_CHECK);
-  assert.equal(r.status, 'warn', 'a shipping page is a warn advisory');
-  assert.match(r.message, /app\/page\.js/, 'names the page that ships');
-  assert.match(r.message, /lib\/track\.js/, 'names the client-effecting blocker');
-  assert.ok(r.fix, 'offers an actionable fix line');
+  const r = byName(results, ROUTE_CHECK);
+  assert.equal(r.status, 'warn', 'browser-meant code in a page is a warn advisory');
+  assert.equal(r.code, 'ROUTE_BROWSER_CODE');
+  assert.match(r.message, /app\/page\.js/, 'names the page');
+  assert.match(r.message, /\.\.\/lib\/track\.js/, 'names the side-effect import');
+  assert.match(r.message, /runs only on the server/);
+  assert.match(r.fix, /component/, 'offers an actionable fix line');
   // Advisory only: it must NOT make doctor hard-fail.
   assert.ok(!results.some((x) => x.status === 'fail'), 'the advisory never produces a hard fail');
 });
 
-test('an inert app passes the carrier check (no advisory)', async () => {
+test('a static app passes the route-module check (no advisory)', async () => {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
   write(dir, 'app/page.js',
     `import { html } from '@webjsdev/core';\nexport default () => html\`<p>static</p>\`;\n`);
 
   const results = await runDoctorChecks(dir, baseOpts());
-  assert.equal(byName(results, CARRIER_CHECK).status, 'pass', 'a static page is elided, nothing to advise');
-});
-
-test('elision disabled (webjs.elide=false) skips the carrier advisory', async () => {
-  const dir = tmpDir();
-  write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module', webjs: { elide: false } }));
-  write(dir, 'app/page.js',
-    `import { html } from '@webjsdev/core';\nimport '../lib/track.js';\nexport default () => html\`<p>hi</p>\`;\n`);
-  write(dir, 'lib/track.js', `document.title = 'x';\nexport const y = 1;\n`);
-
-  const results = await runDoctorChecks(dir, baseOpts());
-  assert.equal(byName(results, CARRIER_CHECK).status, 'pass', 'opted-out apps ship everything by design, so no advice');
+  assert.equal(byName(results, ROUTE_CHECK).status, 'pass', 'a static page holds no browser code, nothing to advise');
 });
 
 // ---------------------------------------------------------------------------
-// Component elision verdict (#1308): the OTHER direction. The carrier check
-// above reports the benign over-ship; this one reports what was DROPPED, which
-// is where a wrong verdict silently costs an app its interactivity.
+// Orphan components (#1308): a component class with no literal-tag
+// registration is invisible to the scanner, so it is never booted.
 // ---------------------------------------------------------------------------
-const COMPONENT_CHECK = 'Component elision (what the browser drops)';
+const ORPHAN_CHECK = 'Components (orphan classes the scanner cannot see)';
 
-/** A page rendering one display-only component, which the analyser elides. */
-function elidedComponentApp(extraPkg = {}) {
+/** A page rendering one registered component. */
+function registeredComponentApp(extraPkg = {}) {
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module', ...extraPkg }));
   write(dir, 'components/badge.js',
@@ -1294,22 +1283,15 @@ function elidedComponentApp(extraPkg = {}) {
   return dir;
 }
 
-test('a healthy app PASSES and the message carries the elided inventory', async () => {
-  // An elided component is the DESIRED outcome, so this must never warn about
-  // one: a check that fires on every healthy app trains the reader to skip
-  // doctor output entirely. The inventory rides the passing message instead,
-  // which is what makes the check a discovery surface.
-  const r = byName(await runDoctorChecks(elidedComponentApp(), baseOpts()), COMPONENT_CHECK);
+test('a healthy app PASSES the orphan check', async () => {
+  const r = byName(await runDoctorChecks(registeredComponentApp(), baseOpts()), ORPHAN_CHECK);
   assert.equal(r.status, 'pass');
-  assert.match(r.message, /1 of 1 component module\(s\) are elided/);
-  assert.match(r.message, /my-badge/, 'names the tag the browser never downloads');
-  assert.match(r.message, /webjs elision/, 'points at the detail surface');
+  assert.match(r.message, /literal tag/);
 });
 
 test('an orphan class WARNS, names the class and file, and never fails', async () => {
-  // The one always-wrong condition: a class registered with a computed tag is
-  // invisible to the scanner, so it gets no elision verdict at all
-  // and `static interactive = true` cannot rescue it.
+  // A class registered with a computed tag is invisible to the scanner, so it
+  // is never booted and never preloaded.
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
   write(dir, 'components/dyn.js',
@@ -1318,21 +1300,17 @@ test('an orphan class WARNS, names the class and file, and never fails', async (
     `import { html } from '@webjsdev/core';\nimport '../components/dyn.js';\nexport default () => html\`<p>hi</p>\`;\n`);
 
   const results = await runDoctorChecks(dir, baseOpts());
-  const r = byName(results, COMPONENT_CHECK);
+  const r = byName(results, ORPHAN_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /DynBadge/, 'names the class');
   assert.match(r.message, /components\/dyn\.js/, 'names the file');
-  assert.match(r.message, /static interactive = true. cannot rescue/, 'says the override does not help');
   assert.ok(r.fix, 'offers an actionable fix line');
   assert.ok(!results.some((x) => x.status === 'fail'), 'this check never hard-fails');
 });
 
 test('an orphan with NO registration call at all is reported the same way', async () => {
-  // `findOrphanComponents` reports TWO shapes under one name, and this is the
-  // ORIGINAL one the dev server has always warned about (a class someone
-  // forgot to register). The computed-tag shape is the other. The message must
-  // fit both, or a plain forgot-to-register class gets diagnosed with a cause
-  // it does not have.
+  // `findOrphanComponents` reports TWO shapes under one name: a class someone
+  // forgot to register, and a computed tag. The message must fit both.
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({ name: 'x', type: 'module' }));
   write(dir, 'components/unreg.js',
@@ -1340,7 +1318,7 @@ test('an orphan with NO registration call at all is reported the same way', asyn
   write(dir, 'app/page.js',
     `import { html } from '@webjsdev/core';\nimport '../components/unreg.js';\nexport default () => html\`<p>hi</p>\`;\n`);
 
-  const r = byName(await runDoctorChecks(dir, baseOpts()), COMPONENT_CHECK);
+  const r = byName(await runDoctorChecks(dir, baseOpts()), ORPHAN_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /Unregistered/);
   assert.match(r.message, /no registration call at all/,
@@ -1348,27 +1326,18 @@ test('an orphan with NO registration call at all is reported the same way', asyn
   assert.match(r.fix, /Register it with a literal tag/);
 });
 
-test('elision disabled reports pass and names the switch', async () => {
-  const r = byName(await runDoctorChecks(elidedComponentApp({ webjs: { elide: false } }), baseOpts()), COMPONENT_CHECK);
-  assert.equal(r.status, 'pass');
-  assert.match(r.message, /elision is disabled/);
-  assert.match(r.message, /WEBJS_ELIDE/);
-});
-
-test('the check carries the stable code ELISION_COMPONENTS and is gateable', async () => {
+test('the check carries the stable code ORPHAN_COMPONENTS and is gateable', async () => {
   // `webjs.doctor.gate` (#1257) addresses a check by its stable code, and
   // `readDoctorPolicy` rejects an UNKNOWN code as a hard config error, so this
-  // is also the counterfactual for the DOCTOR_CODES entry: drop that entry and
-  // the gate below stops being accepted.
-  const r = byName(await runDoctorChecks(elidedComponentApp(), baseOpts()), COMPONENT_CHECK);
-  assert.equal(r.code, 'ELISION_COMPONENTS');
+  // is also the counterfactual for the DOCTOR_CODES entry.
+  const r = byName(await runDoctorChecks(registeredComponentApp(), baseOpts()), ORPHAN_CHECK);
+  assert.equal(r.code, 'ORPHAN_COMPONENTS');
 
   // Gate the case that actually FIRES: a passing check contributes `pass`
-  // whatever the gate says (a check that did not fire contributes nothing), so
-  // only the orphan warning can demonstrate the clamp.
+  // whatever the gate says, so only the orphan warning can demonstrate it.
   const dir = tmpDir();
   write(dir, 'package.json', JSON.stringify({
-    name: 'x', type: 'module', webjs: { doctor: { gate: { ELISION_COMPONENTS: 'off' } } },
+    name: 'x', type: 'module', webjs: { doctor: { gate: { ORPHAN_COMPONENTS: 'off' } } },
   }));
   write(dir, 'components/dyn.js',
     `import { WebComponent, html } from '@webjsdev/core';\nconst TAG = 'dyn-' + 'badge';\nexport class DynBadge extends WebComponent {\n  render() { return html\`<span>x</span>\`; }\n}\nDynBadge.register(TAG);\n`);
@@ -1377,11 +1346,11 @@ test('the check carries the stable code ELISION_COMPONENTS and is gateable', asy
 
   const policy = readDoctorPolicy(dir);
   assert.deepEqual(policy.malformed, [], 'a known code is accepted, so the DOCTOR_CODES entry is present');
-  assert.deepEqual(policy.unknownCodes ?? [], [], 'ELISION_COMPONENTS is a known code');
-  assert.equal(policy.gate.ELISION_COMPONENTS, 'off');
+  assert.deepEqual(policy.unknownCodes ?? [], [], 'ORPHAN_COMPONENTS is a known code');
+  assert.equal(policy.gate.ORPHAN_COMPONENTS, 'off');
 
   const cli = runCliArgs(dir, ['--json']);
-  const gated = JSON.parse(cli.stdout).results.find((x) => x.code === 'ELISION_COMPONENTS');
+  const gated = JSON.parse(cli.stdout).results.find((x) => x.code === 'ORPHAN_COMPONENTS');
   assert.equal(gated.status, 'warn', 'the check still FOUND the orphan');
   assert.equal(gated.severity, 'off', 'but the gate silences what it contributes');
 });
@@ -1503,7 +1472,7 @@ test('freshness advisory degrades to a capped warning when the reader is unavail
 
 // ---------------------------------------------------------------------------
 // Unmarked stylesheet links (#1095). An advisory over the author's SOURCE: a
-// page/layout that hand-writes `<link rel="stylesheet" href="/public/…">`
+// page/layout that hand-writes `<link rel="stylesheet" href="/…">`
 // without `asset()` serves it at an un-versioned url, so a CDN keeps the
 // pre-deploy bytes for the whole TTL. Scoped tightly on purpose, so the
 // negative cases below are the real contract: a cross-origin sheet, an icon,
@@ -1517,14 +1486,14 @@ test('asset-link advisory WARNs on a page/layout stylesheet link missing asset()
   write(dir, 'app/layout.ts', [
     "import { html } from '@webjsdev/core';",
     'export default function Layout({ children }) {',
-    '  return html`<link rel="stylesheet" href="/public/tailwind.css">${children}`;',
+    '  return html`<link rel="stylesheet" href="/tailwind.css">${children}`;',
     '}',
   ].join('\n'));
   const results = await runDoctorChecks(dir, baseOpts());
   const r = byName(results, ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /app\/layout\.ts:3/, 'names the file and line');
-  assert.match(r.message, /\/public\/tailwind\.css/);
+  assert.match(r.message, /\/tailwind\.css/);
   assert.match(r.fix, /asset\(/, 'the fix names the helper');
   assert.equal(results.filter((x) => x.status === 'fail').length, 0, 'advisory only, never a hard fail');
 });
@@ -1534,7 +1503,7 @@ test('asset-link advisory PASSES when the href is wrapped in asset()', async () 
   write(dir, 'app/layout.ts', [
     "import { html, asset } from '@webjsdev/core';",
     'export default function Layout({ children }) {',
-    "  return html`<link rel=\"stylesheet\" href=${asset('/public/tailwind.css')}>${children}`;",
+    "  return html`<link rel=\"stylesheet\" href=${asset('/tailwind.css')}>${children}`;",
     '}',
   ].join('\n'));
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
@@ -1548,8 +1517,8 @@ test('asset-link advisory leaves a cross-origin stylesheet, an icon, and a prelo
     'export default function Layout({ children }) {',
     '  return html`',
     '    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=X">',
-    '    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">',
-    '    <link rel="preload" href="/public/font.woff2" as="font" crossorigin>',
+    '    <link rel="icon" href="/favicon.svg" type="image/svg+xml">',
+    '    <link rel="preload" href="/font.woff2" as="font" crossorigin>',
     '    ${children}`;',
     '}',
   ].join('\n'));
@@ -1570,8 +1539,8 @@ test('asset-link advisory PASSES when there is no app/ directory', async () => {
 
 test('asset-link advisory reports every occurrence across pages and layouts', async () => {
   const dir = tmpDir();
-  write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/public/a.css">`;');
-  write(dir, 'app/blog/page.ts', 'export default () => `<link rel="stylesheet" href="/public/b.css">`;');
+  write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/a.css">`;');
+  write(dir, 'app/blog/page.ts', 'export default () => `<link rel="stylesheet" href="/b.css">`;');
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /a\.css/);
@@ -1590,8 +1559,8 @@ test('asset-link advisory does not flag rel="stylesheet" appearing inside anothe
     "import { html } from '@webjsdev/core';",
     'export default function Layout({ children }) {',
     '  return html`',
-    '    <link rel="preload" as="style" href="/public/app.css" onload="this.rel=\'stylesheet\'">',
-    '    <link data-rel="stylesheet" rel="icon" href="/public/favicon.svg">',
+    '    <link rel="preload" as="style" href="/app.css" onload="this.rel=\'stylesheet\'">',
+    '    <link data-rel="stylesheet" rel="icon" href="/favicon.svg">',
     '    ${children}`;',
     '}',
   ].join('\n'));
@@ -1601,7 +1570,7 @@ test('asset-link advisory does not flag rel="stylesheet" appearing inside anothe
 
 test('asset-link advisory still flags an unmarked sheet written in uppercase', async () => {
   const dir = tmpDir();
-  write(dir, 'app/layout.ts', 'export default () => `<LINK REL="stylesheet" HREF="/public/up.css">`;');
+  write(dir, 'app/layout.ts', 'export default () => `<LINK REL="stylesheet" HREF="/up.css">`;');
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn', 'HTML tag and attribute names are case-insensitive');
   assert.match(r.message, /up\.css/);
@@ -1611,7 +1580,7 @@ test('asset-link advisory tolerates a > inside a quoted attribute value', async 
   const dir = tmpDir();
   // A quote-unaware tag scan would end the tag at the `>` in the title and miss
   // the href entirely (the #406 class of bug in the SSR hoist scanner).
-  write(dir, 'app/layout.ts', 'export default () => `<link title="a > b" rel="stylesheet" href="/public/q.css">`;');
+  write(dir, 'app/layout.ts', 'export default () => `<link title="a > b" rel="stylesheet" href="/q.css">`;');
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /q\.css/);
@@ -1626,8 +1595,8 @@ test('asset-link advisory does not raise a warning asset() could never clear', a
   // adopted asset() will already have written.
   write(dir, 'app/layout.ts', [
     'export default () => `',
-    '  <link rel="stylesheet" href="/public/app.css?v=3">',
-    '  <link rel="stylesheet" href="/public/../db/app.db">`;',
+    '  <link rel="stylesheet" href="/app.css?v=3">',
+    '  <link rel="stylesheet" href="/../db/app.db">`;',
   ].join('\n'));
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'pass', 'only advise a fix that actually works');
@@ -1636,26 +1605,26 @@ test('asset-link advisory does not raise a warning asset() could never clear', a
 test('asset-link advisory honours webjs.basePath', async () => {
   const dir = tmpDir();
   // Under a sub-path deploy the author writes the prefix themselves
-  // (`asset('/myapp/public/x.css')`), so a check that only knows `/public/`
+  // (`asset('/myapp/x.css')`), so a check that only knows `/public/`
   // would be silently inert for exactly the apps with extra ceremony to forget.
   write(dir, 'package.json', JSON.stringify({ name: 'x', webjs: { basePath: '/myapp' } }));
-  write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/myapp/public/app.css">`;');
+  write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/myapp/app.css">`;');
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
-  assert.match(r.message, /\/myapp\/public\/app\.css/);
+  assert.match(r.message, /\/myapp\/app\.css/);
 });
 
 test('asset-link advisory ignores a commented-out tag but keeps line numbers accurate', async () => {
   const dir = tmpDir();
   write(dir, 'app/layout.ts', [
     'export default () => `',
-    '  <!-- <link rel="stylesheet" href="/public/old.css"> -->',
-    '  <link rel="stylesheet" href="/public/live.css">`;',
+    '  <!-- <link rel="stylesheet" href="/old.css"> -->',
+    '  <link rel="stylesheet" href="/live.css">`;',
   ].join('\n'));
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.doesNotMatch(r.message, /old\.css/, 'a commented-out tag emits nothing');
-  assert.match(r.message, /app\/layout\.ts:3 href="\/public\/live\.css"/, 'blanking comments must not shift line numbers');
+  assert.match(r.message, /app\/layout\.ts:3 href="\/live\.css"/, 'blanking comments must not shift line numbers');
 });
 
 test('asset-link advisory normalizes webjs.basePath the way the framework does', async () => {
@@ -1665,7 +1634,7 @@ test('asset-link advisory normalizes webjs.basePath the way the framework does',
   for (const form of ['myapp', '/myapp', '/myapp/']) {
     const dir = tmpDir();
     write(dir, 'package.json', JSON.stringify({ name: 'x', webjs: { basePath: form } }));
-    write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/myapp/public/app.css">`;');
+    write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/myapp/app.css">`;');
     const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
     assert.equal(r.status, 'warn', `basePath ${JSON.stringify(form)} should normalize to /myapp`);
   }
@@ -1673,12 +1642,12 @@ test('asset-link advisory normalizes webjs.basePath the way the framework does',
 
 test('asset-link advisory fails safe on a basePath that is not a plain path prefix', async () => {
   // normalizeBasePath rejects these to '' rather than stripping them, so the
-  // check must fall back to requiring a literal /public/ rather than trusting
+  // check must fall back to requiring a literal / rather than trusting
   // an origin-escaping prefix.
   for (const bad of ['//evil.example', 'https://evil.example', '../up', 'has space']) {
     const dir = tmpDir();
     write(dir, 'package.json', JSON.stringify({ name: 'x', webjs: { basePath: bad } }));
-    write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/public/app.css">`;');
+    write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/app.css">`;');
     const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
     assert.equal(r.status, 'warn', `basePath ${JSON.stringify(bad)} must fail safe to no base path`);
   }
@@ -1686,13 +1655,13 @@ test('asset-link advisory fails safe on a basePath that is not a plain path pref
 
 test('asset-link advisory decodes the href before judging it, as resolveAssetUrl does', async () => {
   const encodedTraversal = tmpDir();
-  // Decodes to /public/../db/app.db, which resolveAssetUrl refuses, so warning
+  // Decodes to /../db/app.db, which resolveAssetUrl refuses, so warning
   // here would be a warning asset() can never clear.
-  write(encodedTraversal, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/public/%2e%2e/db/app.db">`;');
+  write(encodedTraversal, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/%2e%2e/db/app.db">`;');
   assert.equal(byName(await runDoctorChecks(encodedTraversal, baseOpts()), ASSET_LINK_CHECK).status, 'pass');
 
   const encodedPublic = tmpDir();
-  // Decodes to /public/app.css, which resolveAssetUrl DOES fingerprint, so
+  // Decodes to /app.css, which resolveAssetUrl DOES fingerprint, so
   // skipping it would be a silent miss.
   write(encodedPublic, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/%70ublic/app.css">`;');
   assert.equal(byName(await runDoctorChecks(encodedPublic, baseOpts()), ASSET_LINK_CHECK).status, 'warn');
@@ -1702,15 +1671,15 @@ test('asset-link advisory flags an href carrying only a #fragment', async () => 
   // resolveAssetUrl splits the fragment and still fingerprints, so this one IS
   // fixable and must be reported (unlike a query, which it refuses).
   const dir = tmpDir();
-  write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/public/app.css#a">`;');
+  write(dir, 'app/layout.ts', 'export default () => `<link rel="stylesheet" href="/app.css#a">`;');
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
 });
 
 test('asset-link advisory skips _private folders the router never routes', async () => {
   const dir = tmpDir();
-  write(dir, 'app/_scratch/page.ts', 'export default () => `<link rel="stylesheet" href="/public/dead.css">`;');
-  write(dir, 'app/real/page.ts', 'export default () => `<link rel="stylesheet" href="/public/live.css">`;');
+  write(dir, 'app/_scratch/page.ts', 'export default () => `<link rel="stylesheet" href="/dead.css">`;');
+  write(dir, 'app/real/page.ts', 'export default () => `<link rel="stylesheet" href="/live.css">`;');
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.doesNotMatch(r.message, /dead\.css/, 'a _private route is never rendered');
@@ -1724,15 +1693,15 @@ test('asset-link advisory ignores a tag commented out with JS comments', async (
   // is the un-clearable advice this check must never give.
   write(dir, 'app/layout.ts', [
     'export default () => {',
-    '  // <link rel="stylesheet" href="/public/line.css">',
-    '  /* <link rel="stylesheet" href="/public/block.css"> */',
-    '  return `<link rel="stylesheet" href="/public/live.css">`;',
+    '  // <link rel="stylesheet" href="/line.css">',
+    '  /* <link rel="stylesheet" href="/block.css"> */',
+    '  return `<link rel="stylesheet" href="/live.css">`;',
     '};',
   ].join('\n'));
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.doesNotMatch(r.message, /line\.css|block\.css/, 'a commented-out tag emits nothing');
-  assert.match(r.message, /app\/layout\.ts:4 href="\/public\/live\.css"/, 'line numbers must survive blanking');
+  assert.match(r.message, /app\/layout\.ts:4 href="\/live\.css"/, 'line numbers must survive blanking');
 });
 
 test('asset-link advisory does not mistake a https:// url for a comment', async () => {
@@ -1740,7 +1709,7 @@ test('asset-link advisory does not mistake a https:// url for a comment', async 
   write(dir, 'app/layout.ts', [
     'export default () => `',
     '  <link rel="stylesheet" href="https://cdn.example/x.css">',
-    '  <link rel="stylesheet" href="/public/after.css">`;',
+    '  <link rel="stylesheet" href="/after.css">`;',
   ].join('\n'));
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
@@ -1752,8 +1721,8 @@ test('asset-link advisory covers the boundary modules, not just page and layout'
   // global-error renders its OWN doctype/html/head and is returned verbatim with
   // no framework head splice, so it is the likeliest place outside the root
   // layout to hand-write a stylesheet link. error/not-found always ship too.
-  write(dir, 'app/global-error.ts', 'export default () => `<html><head><link rel="stylesheet" href="/public/ge.css"></head></html>`;');
-  write(dir, 'app/not-found.ts', 'export default () => `<link rel="stylesheet" href="/public/nf.css">`;');
+  write(dir, 'app/global-error.ts', 'export default () => `<html><head><link rel="stylesheet" href="/ge.css"></head></html>`;');
+  write(dir, 'app/not-found.ts', 'export default () => `<link rel="stylesheet" href="/nf.css">`;');
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.match(r.message, /ge\.css/);
@@ -1764,11 +1733,11 @@ test('asset-link advisory scans global-error only at the app root, as the router
   const nested = tmpDir();
   // router.js registers global-error / global-not-found only when dir === '.',
   // so a nested one is never in the route table and never renders.
-  write(nested, 'app/admin/global-error.ts', 'export default () => `<link rel="stylesheet" href="/public/dead.css">`;');
+  write(nested, 'app/admin/global-error.ts', 'export default () => `<link rel="stylesheet" href="/dead.css">`;');
   assert.equal(byName(await runDoctorChecks(nested, baseOpts()), ASSET_LINK_CHECK).status, 'pass');
 
   const root = tmpDir();
-  write(root, 'app/global-error.ts', 'export default () => `<link rel="stylesheet" href="/public/ge.css">`;');
+  write(root, 'app/global-error.ts', 'export default () => `<link rel="stylesheet" href="/ge.css">`;');
   assert.equal(byName(await runDoctorChecks(root, baseOpts()), ASSET_LINK_CHECK).status, 'warn');
 });
 
@@ -1777,9 +1746,9 @@ test('asset-link advisory does not treat a // inside an attribute value as a com
   // check targets. A flat `//` comment matcher blanks the rest of that line and
   // makes the scan silently inert there.
   for (const [label, markup] of [
-    ['protocol-relative sheet', '<link rel="stylesheet" href="//cdn.example/x.css"><link rel="stylesheet" href="/public/a.css">'],
-    ['preconnect', '<link rel="preconnect" href="//fonts.example"><link rel="stylesheet" href="/public/a.css">'],
-    ['// inside a data attribute', '<link data-x="a//b" rel="stylesheet" href="/public/a.css">'],
+    ['protocol-relative sheet', '<link rel="stylesheet" href="//cdn.example/x.css"><link rel="stylesheet" href="/a.css">'],
+    ['preconnect', '<link rel="preconnect" href="//fonts.example"><link rel="stylesheet" href="/a.css">'],
+    ['// inside a data attribute', '<link data-x="a//b" rel="stylesheet" href="/a.css">'],
   ]) {
     const dir = tmpDir();
     write(dir, 'app/layout.ts', 'export default () => `' + markup + '`;');
@@ -1796,7 +1765,7 @@ test('asset-link advisory survives nested html`` templates in ${} holes', async 
   const sameLine = tmpDir();
   write(sameLine, 'app/layout.ts', [
     'export default ({ nav }) => html`',
-    '  <nav>${nav.map(n => html`<a href=//${n.host}>x</a>`)}</nav><link rel="stylesheet" href="/public/app.css">`;',
+    '  <nav>${nav.map(n => html`<a href=//${n.host}>x</a>`)}</nav><link rel="stylesheet" href="/app.css">`;',
   ].join('\n'));
   assert.equal(
     byName(await runDoctorChecks(sameLine, baseOpts()), ASSET_LINK_CHECK).status,
@@ -1808,7 +1777,7 @@ test('asset-link advisory survives nested html`` templates in ${} holes', async 
   write(apostrophe, 'app/layout.ts', [
     'export default ({ rows }) => html`',
     "  <table>${rows.map(r => html`<td>it's ${r}</td>`)}</table>",
-    '  // <link rel="stylesheet" href="/public/dead.css">',
+    '  // <link rel="stylesheet" href="/dead.css">',
     '`;',
   ].join('\n'));
   assert.equal(
@@ -1825,14 +1794,14 @@ test('asset-link advisory ignores a tag inside a multi-line block comment', asyn
   const dir = tmpDir();
   write(dir, 'app/layout.ts', [
     '/*',
-    '  const legacy = html`<link rel="stylesheet" href="/public/legacy.css">`;',
+    '  const legacy = html`<link rel="stylesheet" href="/legacy.css">`;',
     '*/',
-    'export default () => html`<link rel="stylesheet" href="/public/live.css">`;',
+    'export default () => html`<link rel="stylesheet" href="/live.css">`;',
   ].join('\n'));
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
   assert.doesNotMatch(r.message, /legacy\.css/, 'a block-commented tag emits nothing');
-  assert.match(r.message, /app\/layout\.ts:4 href="\/public\/live\.css"/);
+  assert.match(r.message, /app\/layout\.ts:4 href="\/live\.css"/);
 });
 
 test('asset-link advisory is not confused by balanced CSS comments in a style block', async () => {
@@ -1842,7 +1811,7 @@ test('asset-link advisory is not confused by balanced CSS comments in a style bl
   write(dir, 'app/layout.ts', [
     'export default () => html`',
     '  <style>/* tokens */ :root { --a: 1 } /* end */</style>',
-    '  <link rel="stylesheet" href="/public/after.css">`;',
+    '  <link rel="stylesheet" href="/after.css">`;',
   ].join('\n'));
   const r = byName(await runDoctorChecks(dir, baseOpts()), ASSET_LINK_CHECK);
   assert.equal(r.status, 'warn');
@@ -2091,4 +2060,24 @@ test('app-icon: warns on the placeholder; passes on an own icon', () => {
   assert.match(r.fix, /legible at 16px/);
   writeFileSync(join(app, 'app', 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><circle r="8"/></svg>');
   assert.equal(checkAppIcon(app).status, 'pass', 'an own icon passes');
+});
+
+// JSX_ROUTE_FILES: a routing file written as .tsx / .jsx (Next's default) is
+// never loaded, so the route silently does not exist. Doctor fails on it.
+const { checkJsxRouteFiles } = await import(resolve(CLI_LIB_DIR, 'doctor', 'probes', 'jsx-route-files.js'));
+
+test('jsx-route-files: fails on a .tsx routing file; ignores components and private folders', () => {
+  const app = mkdtempSync(join(tmpdir(), 'webjs-doctor-jsx-'));
+  cleanup.push(app);
+  assert.equal(checkJsxRouteFiles(app).status, 'pass', 'no app/ directory');
+  mkdirSync(join(app, 'app', 'blog'), { recursive: true });
+  mkdirSync(join(app, 'app', '_drafts'), { recursive: true });
+  writeFileSync(join(app, 'app', 'blog', 'card.tsx'), 'export {}');
+  writeFileSync(join(app, 'app', '_drafts', 'page.tsx'), 'export {}');
+  assert.equal(checkJsxRouteFiles(app).status, 'pass', 'a non-routing .tsx and a private folder are ignored');
+  writeFileSync(join(app, 'app', 'blog', 'page.tsx'), 'export default () => <h1/>');
+  const r = checkJsxRouteFiles(app);
+  assert.equal(r.status, 'fail');
+  assert.match(r.message, /app\/blog\/page\.tsx/);
+  assert.match(r.fix, /\.ts/);
 });

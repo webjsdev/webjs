@@ -4,7 +4,7 @@
  *
  * "Build" here is the word in its no-build sense, the one `data-webjs-build`
  * already uses: the analysis generation of a RUNNING process (its route table,
- * module graph, elision verdict, importmap, asset hashes), which changes on a
+ * module graph, component frontiers, importmap, asset hashes), which changes on a
  * deploy or a dev rebuild. Nothing is compiled, bundled, or written to disk.
  *
  * A production page render recomputed several values on every request that

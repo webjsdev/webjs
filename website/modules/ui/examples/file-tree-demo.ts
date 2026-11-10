@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { collapsibleClass, collapsibleContentClass } from '#modules/ui/components/collapsible.ts';
@@ -62,7 +62,7 @@ function FileTreeNode(node: FileNode): unknown {
   }
   const current = selected === node.path;
   return html`
-    <button type="button" aria-current=${current ? 'true' : null} data-slot="button" data-variant="ghost" data-size="sm" class=${cn(buttonClass({ variant: 'ghost', size: 'sm' }), 'w-full justify-start font-normal', current && 'bg-accent text-accent-foreground')}>
+    <button type="button" aria-current=${current ? 'true' : nothing} data-slot="button" data-variant="ghost" data-size="sm" class=${cn(buttonClass({ variant: 'ghost', size: 'sm' }), 'w-full justify-start font-normal', current && 'bg-accent text-accent-foreground')}>
       ${FileIcon()}
       ${node.name}
     </button>

@@ -33,7 +33,7 @@
  */
 
 import { hashFile, RPC_CONTENT_TYPE } from './actions.js';
-import { FORM_ACTION_FIELD } from '@webjsdev/core';
+import { FORM_ACTION_FIELD, redirect } from '@webjsdev/core';
 import { getSerializer } from './serializer.js';
 import { join, sep } from 'node:path';
 
@@ -269,15 +269,56 @@ function findForms(html) {
   return out;
 }
 
+/**
+ * The submittable field names a form carries, `[]` suffixes dropped, the
+ * framework's own `__webjs_action` left out.
+ * @param {string} form
+ * @returns {string[]}
+ */
+function formFieldNames(form) {
+  const names = new Set();
+  for (const m of form.matchAll(/<(?:input|select|textarea|button)\b[^>]*?\bname\s*=\s*["']([^"']+)["']/gi)) {
+    if (m[1] !== '__webjs_action') names.add(m[1].replace(/\[\]$/, ''));
+  }
+  return [...names];
+}
+
 export async function submitForm(handle, path, fields = {}, opts = {}) {
   const getInit = opts.cookies ? withCookies({}, opts.cookies) : {};
   const page = await testRequest(handle, path, getInit);
   const html = await page.text();
 
   const forms = findForms(html);
-  const candidates = opts.match
+  // Without `match`, a bound form is the one a test means: a layout's plain
+  // form (a logout POST, a search GET) often comes first on the page, and
+  // picking it reported the page's real form as unbound.
+  const isBound = (/** @type {string} */ f) => /name="__webjs_action"/.test(f);
+  let candidates = opts.match
     ? forms.filter((f) => (opts.match instanceof RegExp ? opts.match.test(f) : f.includes(opts.match)))
-    : forms;
+    : (forms.some(isBound) ? forms.filter(isBound) : forms);
+  // Several candidates and no `index`: the form a test means is the one whose
+  // fields it is filling in (a layout's logout form beside a page's task form).
+  // When the field names do not single one out, refuse rather than post the
+  // first, which used to submit a logout silently and pass a later assertion.
+  if (candidates.length > 1 && opts.index === undefined) {
+    const keys = typeof fields.keys === 'function' ? [...new Set(fields.keys())] : Object.keys(fields);
+    const wanted = keys.map((k) => k.replace(/\[\]$/, ''));
+    const covering = candidates.filter((f) => {
+      const names = new Set(formFieldNames(f));
+      return wanted.every((k) => names.has(k));
+    });
+    if (covering.length !== 1) {
+      const list = candidates
+        .map((f) => `  ${f.slice(0, f.indexOf('>') + 1)} fields: ${formFieldNames(f).join(', ') || '(none)'}`)
+        .join('\n');
+      throw new Error(
+        `submitForm: ${candidates.length} ${opts.match ? 'matching' : 'bound'} forms on ${path}, and the submitted `
+        + `fields (${wanted.join(', ') || 'none'}) ${covering.length ? 'fit more than one' : 'fit none of them'}. `
+        + `Pick one with { match: 'name="title"' } or { index: N }:\n${list}`,
+      );
+    }
+    candidates = covering;
+  }
   const form = candidates[opts.index || 0];
   if (!form) {
     throw new Error(
@@ -287,30 +328,44 @@ export async function submitForm(handle, path, fields = {}, opts = {}) {
   }
   const id = form.match(/name="__webjs_action"\s+value="([^"]*)"/);
   if (!id) {
+    const openTag = form.slice(0, form.indexOf('>') + 1);
     throw new Error(
-      `submitForm: the <form> on ${path} carries no __webjs_action field, so it `
-      + 'is not bound to a server action. Write it as `<form action=${myAction}>` '
-      + 'with the action imported from a `use server` module.',
+      `submitForm: the <form> on ${path} it picked (${openTag}) carries no __webjs_action `
+      + 'field, so it is not bound to a server action. Write it as `<form action=${myAction}>` '
+      + 'with the action imported from a `use server` module, or pick another form with '
+      + '{ match } / { index }.',
     );
   }
 
-  const body = new URLSearchParams();
-  body.set(FORM_ACTION_FIELD, id[1]);
-  const entries = fields instanceof URLSearchParams || fields instanceof FormData
+  const entries = [...(fields instanceof URLSearchParams || fields instanceof FormData
     ? fields.entries()
-    : Object.entries(fields);
+    : Object.entries(fields))];
+  // A File or Blob value posts multipart, the way a browser submits a file
+  // input; anything else posts URL-encoded.
+  const isBlob = (/** @type {unknown} */ v) => typeof Blob !== 'undefined' && v instanceof Blob;
+  const multipart = entries.some(([, v]) => isBlob(v) || (Array.isArray(v) && v.some(isBlob)));
+  const body = multipart ? new FormData() : new URLSearchParams();
+  body.set(FORM_ACTION_FIELD, id[1]);
+  /** @param {string} k @param {unknown} v */
+  const add = (k, v) => {
+    if (multipart && isBlob(v)) /** @type {FormData} */ (body).append(k, /** @type {Blob} */ (v));
+    else body.append(k, String(v));
+  };
   // An array value posts once per element, the way a checkbox group submits,
   // so a test can exercise the `name[]` convention (#1664).
   for (const [k, v] of entries) {
-    if (Array.isArray(v)) for (const item of v) body.append(k, String(item));
-    else body.append(k, String(v));
+    if (Array.isArray(v)) for (const item of v) add(k, item);
+    else add(k, v);
   }
 
-  const init = {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', ...(opts.headers || {}) },
-    body: body.toString(),
-  };
+  // A FormData body sets its own multipart content type with the boundary.
+  const init = multipart
+    ? { method: 'POST', headers: { ...(opts.headers || {}) }, body }
+    : {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...(opts.headers || {}) },
+      body: body.toString(),
+    };
   return await testRequest(
     handle,
     opts.submitPath || path,
@@ -405,6 +460,14 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
   const res = await testRequest(handle, endpoint, { method: 'POST', headers, body });
 
   const text = await res.text();
+  // redirect() in the action: rethrow the sentinel, as the generated client
+  // stub rejects with it (the browser navigates instead of returning).
+  const rd = res.headers.get('x-webjs-redirect');
+  if (rd) {
+    const cut = rd.lastIndexOf(';');
+    const type = rd.slice(cut + 1) === 'replace' ? 'replace' : 'push';
+    redirect(cut === -1 ? rd : rd.slice(0, cut), type);
+  }
   const ct = res.headers.get('content-type') || '';
   let parsed;
   if (ct.includes(RPC_CONTENT_TYPE)) parsed = serializer.deserialize(text);

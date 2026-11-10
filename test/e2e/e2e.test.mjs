@@ -33,9 +33,6 @@ const ROOT = resolve(__dirname, '..', '..');
 const BLOG_DIR = resolve(ROOT, 'examples', 'blog');
 
 let browser, page, serverProcess, baseUrl;
-// A second blog instance with elision forced OFF (WEBJS_ELIDE=0), for the
-// differential elision test that asserts on-vs-off observable parity.
-let offPage, offServerProcess, offBaseUrl;
 
 /**
  * Find a free port by binding to 0 and releasing.
@@ -73,25 +70,6 @@ function blogRuntimeExec() {
 // `module.registerHooks`. As of #529 seeding installs on Bun too (a `Bun.plugin`
 // onLoad), so a shipping async component seeds and does NOT re-fetch on hydration
 // on either runtime, and these tests now run on both.
-
-/**
- * Runtime flags that load `file` into the SERVER process before it boots, in
- * whichever runtime `blogRuntimeExec` picked. Passed as argv rather than
- * NODE_OPTIONS because Bun ignores that variable outright, so a fixture wired
- * through it would silently do nothing on the Bun e2e job.
- *
- * The two flags are not symmetric, so do not reason from the Node side:
- * `node --preload` is a hard `bad option` error, while `bun --import`
- * currently works as an alias. Selecting per runtime anyway is what keeps this
- * from depending on Bun continuing to accept a Node spelling.
- * @param {string} file  absolute path to an ES module
- * @returns {string[]}
- */
-function preloadArgs(file) {
-  return (process.env.WEBJS_E2E_RUNTIME || '').toLowerCase() === 'bun'
-    ? ['--preload', file]
-    : ['--import', file];
-}
 
 /**
  * Start the blog example dev server and wait until it's ready.
@@ -339,8 +317,8 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
 
       // A same-origin FULL document load, which is exactly what an unintercepted
       // click produces. The destination must be a route that SHIPS the runtime:
-      // the report comes from the router's own boot, so a fully elided page has
-      // nothing running to report with (and no router that could have been
+      // the report comes from the router's own boot, so a page with no
+      // component has nothing running to report with (and no router that could have been
       // missed either).
       await Promise.all([
         p.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
@@ -1873,15 +1851,15 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   });
 
   // ---------------------------------------------------------------------------
-  // Display-only component elision (the network probe)
+  // Every component ships (the network probe, #1686)
   //
   //   <build-stamp> is purely presentational (static markup, no events,
-  //   props, hooks, or slot), so its import is stripped from the served
-  //   page source and the browser must never download its module. The
-  //   interactive <my-counter> on the same page must still be fetched.
+  //   props, hooks, or slot). As in Lit, a component module is the browser's
+  //   to load whatever it renders, so the browser downloads it next to the
+  //   interactive <my-counter> on the same page.
   // ---------------------------------------------------------------------------
 
-  test('display-only component module is never downloaded; interactive one is', async () => {
+  test('a display-only component module is downloaded like an interactive one (#1686)', async () => {
     /** @type {string[]} */
     const requested = [];
     const onRequest = (req) => requested.push(req.url());
@@ -1903,81 +1881,14 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     const built = requested.some((u) => /\/components\/build-stamp\.(ts|js)/.test(u));
     const counter = requested.some((u) => /\/components\/counter\.(ts|js)/.test(u));
 
-    // The home page renders <build-stamp> correctly without its JS.
+    // The home page renders <build-stamp> in the first paint, before its JS.
     const stampText = await page.evaluate(
       () => document.querySelector('build-stamp')?.textContent?.trim() || '',
     );
     assert.ok(stampText.includes('no-build'), 'build-stamp SSR content is present');
 
-    assert.equal(built, false, 'display-only build-stamp module must NOT be downloaded');
+    assert.equal(built, true, 'display-only build-stamp module ships like any component');
     assert.equal(counter, true, 'interactive counter module must be downloaded');
-  });
-
-  test('a display-only component observed via whenDefined IS downloaded (#169)', async () => {
-    // Counterpart to the build-stamp probe above. <observed-badge> is just as
-    // display-only, but the /observed route imports a module that calls
-    // customElements.whenDefined('observed-badge'). That observation forces
-    // the badge to ship (eliding it would leave whenDefined unresolved), so
-    // the browser MUST download its module. The unobserved build-stamp is the
-    // negative control (proven not downloaded by the test above).
-    /** @type {string[]} */
-    const requested = [];
-    const onRequest = (req) => requested.push(req.url());
-    page.on('request', onRequest);
-    try {
-      await page.setCacheEnabled(false);
-      await page.goto(`${baseUrl}/observed`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await sleep(3000);
-    } finally {
-      page.off('request', onRequest);
-      await page.setCacheEnabled(true);
-    }
-
-    const badgeFetched = requested.some((u) => /\/components\/observed-badge\.(ts|js)/.test(u));
-    const badgeText = await page.evaluate(
-      () => document.querySelector('observed-badge')?.textContent?.trim() || '',
-    );
-
-    assert.match(badgeText, /observed badge/i, 'observed-badge SSR content is present');
-    assert.equal(badgeFetched, true,
-      'an observed display-only component module MUST be downloaded (forced to ship)');
-  });
-
-  test('static interactive = true forces a display-only module onto the wire (#1308)', async () => {
-    // The OTHER route to a ship, on the same page as the observation probe.
-    // <forced-badge> is display-only in every respect (static markup, no
-    // events, no reactive props, no lifecycle hook, light DOM); the one thing
-    // keeping it on the wire is the author's `static interactive = true`.
-    // Until now that override's only coverage stopped at the analyser
-    // returning a boolean, and nothing proved the boot script honours it.
-    //
-    // build-stamp on the SAME run is the negative control: without it this
-    // assertion would also pass if elision had stopped working entirely.
-    /** @type {string[]} */
-    const requested = [];
-    const onRequest = (req) => requested.push(req.url());
-    page.on('request', onRequest);
-    try {
-      await page.setCacheEnabled(false);
-      await page.goto(`${baseUrl}/observed`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await sleep(3000);
-    } finally {
-      page.off('request', onRequest);
-      await page.setCacheEnabled(true);
-    }
-
-    const forcedFetched = requested.some((u) => /\/components\/forced-badge\.(ts|js)/.test(u));
-    const stampFetched = requested.some((u) => /\/components\/build-stamp\.(ts|js)/.test(u));
-    const forcedText = await page.evaluate(
-      () => document.querySelector('forced-badge')?.textContent?.trim() || '',
-    );
-
-    // The progressive-enhancement half: the markup is in the first paint.
-    assert.match(forcedText, /forced badge/i, 'forced-badge SSR content is present');
-    assert.equal(forcedFetched, true,
-      'static interactive = true MUST keep the module on the wire');
-    assert.equal(stampFetched, false,
-      'negative control: an unoverridden display-only module is still elided on this run');
   });
 
   test('willUpdate-derived state and reflected props are in the SSR HTML before JS (#217)', async () => {
@@ -2043,64 +1954,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   });
 
   // ---------------------------------------------------------------------------
-  // Vendor-package elision (the network probe for #170)
-  //
-  //   <vendor-badge> is display-only and its ONLY non-core dependency is
-  //   the `dayjs` npm package (a binding import, not an interactivity
-  //   signal). Because the component is elided, the bare-import scan skips
-  //   its file, so dayjs never enters the importmap and the browser never
-  //   fetches it from the CDN. The badge's dayjs-formatted text is still
-  //   SSR'd. Mirrors the <build-stamp> probe one section up.
-  // ---------------------------------------------------------------------------
-
-  test('vendor package used only by a display-only component is never fetched (#170)', async () => {
-    /** @type {string[]} */
-    const requested = [];
-    const onRequest = (req) => requested.push(req.url());
-    page.on('request', onRequest);
-    try {
-      // Cache disabled so a real dayjs fetch would hit the network and show
-      // up in the log. Settle on a fixed delay after domcontentloaded (the
-      // chat WebSocket keeps the connection open, so networkidle is unusable)
-      // long enough for the boot script to walk the import graph.
-      await page.setCacheEnabled(false);
-      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await sleep(3000);
-    } finally {
-      page.off('request', onRequest);
-      await page.setCacheEnabled(true);
-    }
-
-    // dayjs resolves to a jspm.io CDN URL when it is in the importmap. If the
-    // package were shipped, the browser would fetch a URL containing 'dayjs'.
-    const dayjsFetched = requested.some((u) => /dayjs/i.test(u));
-    // The badge's import is stripped from the served page source, so its
-    // module is never downloaded either.
-    const badgeFetched = requested.some((u) => /\/components\/vendor-badge\.(ts|js)/.test(u));
-
-    // The home page renders <vendor-badge> correctly without its JS: the
-    // dayjs-formatted date is computed server-side and inlined.
-    const badgeText = await page.evaluate(
-      () => document.querySelector('vendor-badge')?.textContent?.trim() || '',
-    );
-    assert.match(badgeText, /released\b/i, 'vendor-badge SSR content is present');
-    assert.match(badgeText, /\b2026\b/, 'vendor-badge dayjs-formatted year is SSR-rendered');
-
-    // The served importmap has no entry for dayjs (pruned because the only
-    // importer is elided and the map is resolved live, not from a pin file).
-    const hasDayjsEntry = await page.evaluate(() => {
-      const s = document.querySelector('script[type="importmap"]');
-      if (!s) return false;
-      const map = JSON.parse(s.textContent);
-      return Object.keys(map.imports || {}).some((k) => /dayjs/i.test(k));
-    });
-
-    assert.equal(dayjsFetched, false, 'dayjs (used only by an elided component) must NOT be fetched');
-    assert.equal(badgeFetched, false, 'display-only vendor-badge module must NOT be downloaded');
-    assert.equal(hasDayjsEntry, false, 'dayjs must NOT have an importmap entry');
-  });
-
-  // ---------------------------------------------------------------------------
   // Inert-route zero-JS probe (#170)
   //
   //   /static-info is a fully-static page (no custom elements, events,
@@ -2151,51 +2004,38 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.equal(themeToggleInBoot, true, 're-emitted component loads core, which auto-enables the router (SPA nav intact)');
   });
 
-  test('a bare async-render leaf is elided: its module is never fetched, JS-off + JS-on render it (#474)', async () => {
+  test('a bare async-render leaf renders JS-off and JS-on without errors (#474)', async () => {
     // JS-OFF: the raw SSR HTML must already contain the async-baked quote
-    // (progressive-enhancement-safe; the elided module is never needed to read).
+    // (progressive-enhancement-safe; the module is never needed to read).
     const rawHtml = await fetch(baseUrl + '/async-leaf').then((r) => r.text());
     assert.ok(
       /What you read is what runs\./.test(rawHtml),
       'the bare-async leaf data is in the raw SSR HTML (JS-off readable)',
     );
-    assert.ok(
-      !/components\/inline-quote\.(ts|js)/.test(rawHtml),
-      'the elided leaf module is not even referenced (no import, no modulepreload) in the served HTML',
-    );
 
-    // JS-ON: load with a real browser, probe the network, and prove the
-    // inline-quote module is NEVER downloaded while the quote is on screen and
-    // no script errors fire.
-    /** @type {string[]} */
-    const requested = [];
+    // JS-ON: load with a real browser and prove the quote stays on screen
+    // through hydration and no script errors fire.
     /** @type {string[]} */
     const errors = [];
-    const onRequest = (req) => requested.push(req.url());
     const onError = (e) => errors.push(e.message);
-    page.on('request', onRequest);
     page.on('pageerror', onError);
     try {
       await page.setCacheEnabled(false);
       await page.goto(`${baseUrl}/async-leaf`, { waitUntil: 'domcontentloaded', timeout: 15000 });
       await sleep(2000);
     } finally {
-      page.off('request', onRequest);
       page.off('pageerror', onError);
       await page.setCacheEnabled(true);
     }
-    const moduleFetched = requested.some((u) => /components\/inline-quote\.(ts|js)/.test(u));
     const onScreen = await page.evaluate(() => document.body.innerText.includes('What you read is what runs.'));
-    assert.equal(moduleFetched, false, 'the elided bare-async leaf module must NOT be downloaded by the browser');
-    assert.ok(onScreen, 'the elided leaf renders its async-baked content with JS on');
-    assert.deepEqual(errors, [], `no page errors on the elided leaf route; got ${JSON.stringify(errors)}`);
+    assert.ok(onScreen, 'the leaf renders its async-baked content with JS on');
+    assert.deepEqual(errors, [], `no page errors on the leaf route; got ${JSON.stringify(errors)}`);
   });
 
-  test('a streamed bare-async component (slow-fact) is elided while its interactive sibling (async-greeting) ships (#474)', async () => {
+  test('a streamed bare-async component (slow-fact) and its interactive sibling (async-greeting) both ship (#474)', async () => {
     // /stream-demo wraps <slow-fact> (bare async, light DOM) in <webjs-suspense>
-    // and renders <async-greeting> (async + @click). Under #474 the slow-fact
-    // module is elided (its streamed light-DOM content needs no JS to display),
-    // while async-greeting ships (the @click is a client signal). Probe both.
+    // and renders <async-greeting> (async + @click). Every component ships, so
+    // both modules load, and the streamed content displays either way.
     /** @type {string[]} */
     const requested = [];
     const onRequest = (req) => requested.push(req.url());
@@ -2215,335 +2055,10 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
     const slowFactFetched = requested.some((u) => /components\/slow-fact\.(ts|js)/.test(u));
     const greetingFetched = requested.some((u) => /components\/async-greeting\.(ts|js)/.test(u));
-    assert.equal(slowFactFetched, false, 'the elided bare-async slow-fact module must NOT be downloaded');
-    assert.equal(greetingFetched, true, 'the interactive async-greeting module (it has @click) MUST ship');
-    // The streamed content is present despite the module being elided.
+    assert.equal(slowFactFetched, true, 'the bare-async slow-fact module ships like any component');
+    assert.equal(greetingFetched, true, 'the interactive async-greeting module ships');
     const factOnScreen = await page.evaluate(() => document.body.innerText.includes('The answer is 42'));
-    assert.ok(factOnScreen, 'the streamed slow-fact content displays without its module (light-DOM HTML)');
-  });
-
-  // --- Differential elision: ON vs OFF must be observably identical (#181) ---
-  //
-  // `page` runs the default (elision ON) blog; `offPage` runs a SECOND blog
-  // instance with WEBJS_ELIDE=0 (everything ships). The invariant is that
-  // removing the elided JS never changes what the user sees or can do, so a
-  // real browser must render the same DOM and behave the same on both. The
-  // SAFE direction (over-ship) is invisible here; only the DANGEROUS
-  // direction (a needed module wrongly dropped, blanking content or breaking
-  // an interaction) makes these fail. This is the layer that would have
-  // caught the build-stamp regression instantly.
-  //
-  // The off-server lives in this nested describe (started lazily, torn down
-  // right after) rather than the suite-wide setup, so the rest of the e2e
-  // suite never pays for a second always-on dev server. Running two servers
-  // for the whole run added enough load to tip timing-sensitive tests into
-  // 5s waitFor timeouts.
-  describe('differential elision (#181)', () => {
-    before(async () => {
-      const offPort = await freePort();
-      offBaseUrl = `http://localhost:${offPort}`;
-      // The OFF server resolves its vendors from this repo, not the public
-      // internet (#1228). Elision ON drops `components/vendor-badge.ts`, the
-      // blog's only vendor consumer, so the ON server never calls jspm and the
-      // ON page never fetches from a CDN. OFF ships that component, which puts
-      // a blocking `api.jspm.io/generate` POST on the server's cold first
-      // request AND a `https://ga.jspm.io/...` module fetch inside
-      // `app/page.ts`'s graph. A module graph instantiates as a unit, so either
-      // one failing means `app/page.ts` never evaluates and NOTHING it imports
-      // registers, including the counter these tests drive. That is what redded
-      // this block on and off from 2026-08-02, reported as an elision defect
-      // when it was CDN reachability. Stubbing the API call closes both holes,
-      // since the URL the browser fetches is whatever that map says.
-      offServerProcess = await startBlog(
-        offPort,
-        { WEBJS_ELIDE: '0' },
-        preloadArgs(resolve(ROOT, 'test', 'e2e', 'fixtures', 'stub-jspm.mjs')),
-      );
-      offPage = await browser.newPage();
-
-      // No browser-side warmup here on purpose. An earlier revision navigated
-      // offPage twice before the tests, to pay the cold dev server's on-demand
-      // transform cost off the clock. Two things killed that idea. Its premise
-      // was wrong: module scripts are deferred and DOMContentLoaded waits for
-      // deferred scripts, so goto(domcontentloaded) already absorbs the whole
-      // module graph and there is no residual for a warmup to remove (measured
-      // with a 4s delay injected on the counter module, goto took 4076ms and
-      // the element was upgraded by the time it returned). And it correlated
-      // with CI failures on the pushes that carried it. That attribution did
-      // NOT hold up: the same failure recurred without the warmup, and the
-      // cause turned out to be the vendor fetch above (#1228), not the warmup.
-      // What stands is the narrower point, that driving extra navigations
-      // through the page under test buys nothing measurable and changes
-      // browser-side state the assertions then depend on.
-    });
-
-    after(async () => {
-      if (offPage) await offPage.close();
-      if (offServerProcess) {
-        offServerProcess.kill('SIGTERM');
-        await new Promise((r) => { offServerProcess.on('exit', r); setTimeout(r, 3000); });
-      }
-    });
-
-    // Snapshot the observable content of <main>: visible text and the ordered
-    // tag structure, with the two things that are not a function of elision
-    // held out.
-    //
-    // 1. The wall-clock, which ticks between the two snapshots. Both the
-    //    12-hour and 24-hour renderings are matched, since which one appears
-    //    depends on the runner's default locale.
-    //
-    // 2. Everything INSIDE <chat-box>. The element itself stays in the tag
-    //    list, so a chat-box that failed to render at all is still caught, but
-    //    its contents are dropped wholesale.
-    //
-    //    That is a blunt cut and it is deliberate. chat-box's pane is a live
-    //    websocket feed, and the two pages hold sockets to two DIFFERENT
-    //    servers: the OFF server is created privately in this block, the ON
-    //    server is shared with the whole suite. Every join and leave on either
-    //    appends a line with no counterpart on the other, and a reconnect
-    //    appends another. Those are independent populations, so no amount of
-    //    waiting converges them. Earlier revisions tried to keep the status
-    //    header while excluding just the pane, which needs the pane identified
-    //    by content or position inside markup that carries neither an id nor a
-    //    data hook; that machinery went wrong repeatedly under review and is
-    //    not worth its weight for a widget this block is not testing.
-    //
-    //    The cost is explicit: chat-box's own hydration and its header/form
-    //    structure are no longer covered here. The counter still covers
-    //    hydration on both sides, which is what this block is for.
-    const observableMain = (pg) => pg.evaluate(() => {
-      const main = document.querySelector('main') || document.body;
-      // Clone so the live DOM is untouched and a later snapshot of the same
-      // page still sees the real thing.
-      const copy = /** @type {HTMLElement} */ (main.cloneNode(true));
-      for (const box of copy.querySelectorAll('chat-box')) box.replaceChildren();
-      const text = (copy.textContent || '')
-        .replace(/\d{1,2}:\d{2}:\d{2}\s?[AP]M/gi, 'TIME')
-        .replace(/\d{1,2}:\d{2}:\d{2}/g, 'TIME')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const tags = [...copy.querySelectorAll('*')].map((el) => el.tagName.toLowerCase());
-      return { text, tags };
-    });
-
-
-    /**
-     * Wait until the page has actually hydrated, instead of sleeping and hoping.
-     *
-     * The counter is ONE of the page's interactive components, not all of
-     * them: <chat-box> is inside <main> too, and <theme-toggle> is in the root
-     * layout. So this is a wait for the component the assertions drive, not a
-     * whole-page hydration barrier. chat-box is not waited on because its
-     * contents are excluded from the snapshot entirely (see observableMain).
-     *
-     * The signal is that the ELEMENT INSTANCE has been upgraded, tested with
-     * `instanceof` against the registered constructor. Nothing weaker works
-     * here, because SSR already emits the counter's full inner markup:
-     *
-     *     <my-counter count="3" data-wj-host><!--webjs-hydrate-->
-     *       <button aria-label="Decrement">...<output>3</output>
-     *       <button aria-label="Increment">...
-     *
-     * So the host, the output and both buttons exist before a single line of
-     * JavaScript has run. Waiting on any of them is waiting on the server's
-     * HTML, which is always already true, and a click at that point lands on a
-     * real button with no listener attached and is silently swallowed. Before
-     * upgrade the element is a plain HTMLElement; only after it is an instance
-     * of the registered class, which is the first moment the `@click` binding
-     * exists. `my-counter` is a LIGHT-DOM component, so there is no shadow root
-     * to look inside for a different answer.
-     * @param {import('puppeteer-core').Page} p
-     * @param {string} which  'ON' or 'OFF', named in the failure message
-     */
-    const waitForHydration = async (p, which) => {
-      try {
-        await p.waitForFunction(() => {
-          const C = customElements.get('my-counter');
-          return !!(C && document.querySelector('my-counter') instanceof C);
-        }, { timeout: 15000, polling: 50 });
-      } catch (waitErr) {
-        // Say what failed and what it most likely means. A bare puppeteer
-        // "Waiting failed: 15000ms exceeded" names neither the page nor the
-        // condition, which is the same diagnostic dead end the old off-by-one
-        // counter assertion was. Report what is actually on the page.
-        //
-        // Only a genuine timeout is evidence about hydration. waitForFunction
-        // also rejects for reasons that say nothing about it (a detached frame,
-        // a target crash, a navigation mid-wait), so those are rethrown as
-        // themselves rather than relabelled as a suspected elision defect.
-        if (!/timeout|Waiting failed/i.test(String(waitErr && waitErr.message))) throw waitErr;
-        const state = await p.evaluate(() => {
-          const C = customElements.get('my-counter');
-          // A module graph instantiates as a unit, so when define never runs
-          // the usual reason is that ONE member of the graph did not load and
-          // took every other member down with it, including modules that
-          // fetched fine. Name the candidates instead of leaving the next
-          // reader to guess: anything the page fetched from another origin
-          // (#1228 was exactly this, a vendor module from a CDN), and anything
-          // that came back an error. `responseStatus` is 0 for an opaque or
-          // failed cross-origin fetch, so it is reported only when readable.
-          const suspects = performance.getEntriesByType('resource')
-            .filter((e) => {
-              const crossOrigin = !e.name.startsWith(location.origin) && /^https?:/.test(e.name);
-              return crossOrigin || (typeof e.responseStatus === 'number' && e.responseStatus >= 400);
-            })
-            .map((e) => `${typeof e.responseStatus === 'number' && e.responseStatus ? e.responseStatus : 'status unknown'} ${e.name}`);
-          return {
-            defined: !!C,
-            host: !!document.querySelector('my-counter'),
-            upgraded: !!(C && document.querySelector('my-counter') instanceof C),
-            suspects,
-          };
-        }).catch(() => null);
-        // Never print an unobserved state as a fact. When the probe itself
-        // fails there is nothing to report, and asserting "define DID NOT run"
-        // from a null reading would send the next reader after the wrong bug.
-        const detail = state
-          ? `customElements.define ${state.defined ? 'ran' : 'DID NOT run'}, `
-            + `host ${state.host ? 'present' : 'absent'}, `
-            + `instance ${state.upgraded ? 'upgraded' : 'NOT upgraded'}`
-            // What can produce a missing define depends on WHICH page this is,
-            // so do not offer the OFF page a cause that cannot happen there.
-            // The OFF server runs with WEBJS_ELIDE=0, which empties the
-            // elidable sets wholesale, so elision drops nothing and the only
-            // remaining cause is the page's module graph never evaluating.
-            // Offering elision there as a coequal possibility would re-suggest
-            // the exact misreading #1228 was.
-            + (state.defined
-              ? ''
-              : `. The graph did not evaluate: a member of it failed to load, or one threw at module scope. Either aborts `
-                + 'the WHOLE graph, so the component\'s own module never runs even though it fetched fine.'
-                + (which === 'OFF'
-                  ? ' Elision is not a candidate here, since this server runs with WEBJS_ELIDE=0 and drops nothing.'
-                  : ' The other possibility on this page is elision wrongly dropping the component, in which case its module'
-                    + ' was never in the graph at all.')
-                + ' Off-origin or failed resources on the page: '
-                + (state.suspects.length ? state.suspects.join(', ') : 'none'))
-          : 'the page could not be probed for its state, so nothing is known beyond the timeout';
-        throw new Error(`${which} page never upgraded <my-counter> within 15s (${detail}).`);
-      }
-    };
-
-    // The guard on the wiring in this block's before(). Everything below
-    // assumes the OFF server resolved its vendors from this repo rather than
-    // over the internet, and nothing else checks that: the fixture's own unit
-    // tests exercise it in isolation and never touch `preloadArgs`,
-    // `startBlog`, or a running server. So without this, deleting the
-    // `preloadArgs(...)` argument, renaming Bun's `--preload`, or moving the
-    // fixture leaves every test green while quietly restoring the live-CDN
-    // dependency, and this block goes back to being intermittently red months
-    // later, which is the failure #1228 was.
-    //
-    // The importmap is the right thing to read because it is where the two
-    // paths diverge: the stub answers the server's resolve, so a `data:` target
-    // can only have come from it, and an `https://` one can only mean the real
-    // API answered. The ON-side test for #170 reads the map the same way.
-    test('the OFF server resolved its vendor from the repo, not from a CDN', async () => {
-      await offPage.goto(`${offBaseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      const dayjsTarget = await offPage.evaluate(() => {
-        const s = document.querySelector('script[type="importmap"]');
-        if (!s) return null;
-        const map = JSON.parse(s.textContent);
-        const key = Object.keys(map.imports || {}).find((k) => /^dayjs$/i.test(k));
-        return key ? map.imports[key] : null;
-      });
-      // Absent is a failure too, not a pass: the OFF build ships vendor-badge,
-      // so an importmap with no dayjs entry is the unresolved-bare-specifier
-      // case that kills the whole page graph.
-      assert.ok(dayjsTarget, 'the OFF page must carry an importmap entry for dayjs');
-      assert.match(
-        dayjsTarget,
-        /^data:/,
-        `the OFF server must resolve dayjs locally via the stub, got ${dayjsTarget}. `
-        + 'The stub is loaded by the preloadArgs() argument in this block\'s before().',
-      );
-    });
-
-    test('the mixed page renders identically on vs off', async () => {
-      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await offPage.goto(`${offBaseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await waitForHydration(page, 'ON');
-      await waitForHydration(offPage, 'OFF');
-      const onSnap = await observableMain(page);
-      const offSnap = await observableMain(offPage);
-      // The display-only badges (build-stamp, vendor-badge, muted-text) are
-      // elided ON and shipped OFF, yet their rendered output must match: that
-      // identity is exactly why they are safe to elide.
-      assert.deepEqual(onSnap.tags, offSnap.tags,
-        'post-hydration tag structure of <main> must match on vs off');
-      assert.equal(onSnap.text, offSnap.text,
-        'post-hydration visible text of <main> must match on vs off');
-    });
-
-    test('the interactive counter behaves identically on vs off', async () => {
-      // The counter is interactive, so it ships in BOTH builds and MUST work
-      // in both. If elision ever wrongly dropped its module on the ON side,
-      // the ON counter would not increment and this assertion fails: the live
-      // guard for the dangerous direction.
-      await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await offPage.goto(`${offBaseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await waitForHydration(page, 'ON');
-      await waitForHydration(offPage, 'OFF');
-
-      const onSeed = await getCounterValue(page);
-      assert.equal(onSeed, await getCounterValue(offPage),
-        'counter seeds to the same value on vs off');
-      await clickCounterButton(page, 'Increment');
-      await clickCounterButton(offPage, 'Increment');
-      // The click sets a reactive property, and that re-render is batched to a
-      // microtask, so the new value is NOT readable synchronously. Wait for it
-      // to land on both sides rather than sleeping a guessed interval.
-      //
-      // A failure here is REPORTED, not swallowed. Discarding it would leave
-      // the run to fall through to the on-vs-off assertion below and fail as
-      // `on=4, off=3`, which is precisely the misleading message this block is
-      // supposed to stop producing: it names a counter mismatch when what
-      // actually happened is that one side never applied its click. This wait
-      // knows which side it was and what the value got stuck on, so it says so.
-      const settled = async (p, which) => {
-        try {
-          await p.waitForFunction(
-            // Every hop optional-chained: a missing <output> must make the
-            // predicate FALSE (so the wait times out and reports which side
-            // stalled), not throw a TypeError that the handler below cannot
-            // recognise as a timeout and rethrows raw, unlabelled.
-            (want) => parseInt(document.querySelector('my-counter')?.querySelector('output')?.textContent?.trim() ?? '', 10) === want,
-            { timeout: 10000, polling: 25 },
-            onSeed + 1,
-          );
-        } catch (err) {
-          if (!/timeout|Waiting failed/i.test(String(err && err.message))) throw err;
-          const got = await getCounterValue(p).catch(() => null);
-          throw new Error(
-            `${which} counter never reached ${onSeed + 1} within 10s of the click (still ${got}). `
-            + 'The click did not take effect on that side.',
-          );
-        }
-      };
-      await settled(page, 'ON');
-      await settled(offPage, 'OFF');
-      const onAfter = await getCounterValue(page);
-      const offAfter = await getCounterValue(offPage);
-      assert.equal(onAfter, offAfter, `counter increments identically on vs off (on=${onAfter}, off=${offAfter})`);
-      assert.equal(onAfter, 4, `counter incremented from its seed (got ${onAfter})`);
-    });
-
-    test('the fully-static route renders identically on vs off', async () => {
-      // This route ships no component of its OWN (its page module is dropped),
-      // but it is not JS-free: the boot re-emits the root layout's
-      // theme-toggle, which loads @webjsdev/core and enables the client router
-      // (see the docstring on examples/blog/app/static-info/page.ts). Nothing
-      // inside <main> depends on that, which is the scope this asserts on, so
-      // there is no component here to poll for and `load` (every subresource
-      // settled) is the real condition the old sleep stood in for.
-      await page.goto(`${baseUrl}/static-info`, { waitUntil: 'load', timeout: 30000 });
-      await offPage.goto(`${offBaseUrl}/static-info`, { waitUntil: 'load', timeout: 30000 });
-      const onSnap = await observableMain(page);
-      const offSnap = await observableMain(offPage);
-      assert.deepEqual(onSnap.tags, offSnap.tags, 'static route tag structure must match on vs off');
-      assert.equal(onSnap.text, offSnap.text, 'static route visible text must match on vs off');
-    });
+    assert.ok(factOnScreen, 'the streamed slow-fact content displays');
   });
 
   test('prefetch: hovering an internal link warms the cache; the click consumes it via SPA swap (no second fetch)', async () => {
@@ -3263,9 +2778,9 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       // Real post content from the SSR'd HTML (seeded posts).
       assert.match(html, /Hello, webjs|Zero build steps|Web components first/,
         'post content must be server-rendered and readable with JS off');
-      // The display-only build-stamp renders its SSR markup even though its
-      // module never ships (criterion: a display-only component renders).
-      assert.match(html, /zero JS shipped for this badge/,
+      // The display-only build-stamp renders its SSR markup with no JS running
+      // (criterion: a display-only component renders).
+      assert.match(html, /served as written/,
         'a display-only component must render its SSR markup with JS off');
     });
 

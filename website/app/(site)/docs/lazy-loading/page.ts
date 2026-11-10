@@ -28,6 +28,7 @@ export default function LazyLoading() {
     <code-block>import { WebComponent, html, css } from '@webjsdev/core';
 
 class HeavyChart extends WebComponent {
+  static shadow = true;   // static styles apply inside a shadow root
   static lazy = true;  // ← module loaded on scroll, not on page load
   static styles = css${'`'}:host { display: block; min-height: 400px; }${'`'};
 

@@ -14,7 +14,7 @@ export default async function Dashboard() {
     </div>
     <div class="${cardClass()} p-6">
       <h2 class="text-lg font-semibold text-foreground m-0 mb-1">Welcome, ${user?.name || user?.email}!</h2>
-      <p class="text-sm text-muted-foreground m-0">This route is gated by middleware.ts. Promote it into your product, or drop the whole auth card with gallery:clear.</p>
+      <p class="text-sm text-muted-foreground m-0">This route is gated by middleware.ts, so only a signed-in visitor reaches it.</p>
     </div>
   `;
 }

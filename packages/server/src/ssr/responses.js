@@ -1,4 +1,5 @@
-import { cspNonce, renderToString } from '@webjsdev/core';
+import { cspNonce, renderToString, isRedirect } from '@webjsdev/core';
+import { headerSafeLocation } from '../redirect-location.js';
 import { BUFFERED_MARKER, STREAM_MARKER } from '../conditional-get.js';
 import { publishedBuildId, appSourceId } from '../importmap.js';
 import { escapeAttr, escapeHtml } from './escape.js';
@@ -82,7 +83,22 @@ export function htmlResponse(html, status, req, url, metadata) {
   // which is what keeps the router's partial responses cheap (#1140).
   // See conditional-get.js.
   headers.set(BUFFERED_MARKER, '1');
-  return new Response(html, { status, headers });
+  return new Response(noindexErrorPage(html, status), { status, headers });
+}
+
+/**
+ * A 404, 403 or 401 page is not something to index, so, as Next.js does for
+ * every not-found page (#1686), it carries `<meta name="robots"
+ * content="noindex">` unless the app set robots metadata itself. Inserted
+ * before `</head>`, so a boundary inside the layouts and a `global-not-found`
+ * that writes its own document are covered alike.
+ * @param {string} html @param {number} status
+ */
+export function noindexErrorPage(html, status) {
+  if (status !== 404 && status !== 403 && status !== 401) return html;
+  if (typeof html !== 'string' || /<meta\s[^>]*name=["']?robots/i.test(html)) return html;
+  const at = html.indexOf('</head>');
+  return at < 0 ? html : html.slice(0, at) + '<meta name="robots" content="noindex">' + html.slice(at);
 }
 
 /**
@@ -99,8 +115,10 @@ export function htmlResponse(html, status, req, url, metadata) {
  * @param {Record<string, any>} [metadata]
  * @param {string} [nonce]
  * @param {boolean} [dev]  dev surfaces a streamed-boundary error message; prod stays silent
+ * @param {(e: unknown) => Promise<string | null>} [accessFallback] the markup of the
+ *   nearest not-found / forbidden / unauthorized boundary for such a throw, else null
  */
-export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce, dev) {
+export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, metadata, nonce, dev, accessFallback) {
   const encoder = new TextEncoder();
   const headers = new Headers({ 'content-type': 'text/html; charset=utf-8' });
   // Default: no caching. Pages are dynamic by default: the developer
@@ -137,6 +155,7 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
       // still arriving" and would block its progressive swap until the slow
       // boundary (#473). The comment is inert for the native initial-load parse.
       controller.enqueue(encoder.encode(prefix + bodyHtml + '<!--wj-stream-shell-->'));
+      let noindexSent = /<meta\s[^>]*name=["']?robots/i.test(prefix);
       try {
         // Loop: resolve all currently-pending promises in parallel; nested
         // Suspense inside resolved content adds more pending entries.
@@ -160,6 +179,22 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
                 for (const n of sub.pending) ctx.pending.push(n);
                 return { id: p.id, html };
               } catch (e) {
+                // A redirect() thrown inside a streamed boundary arrives after
+                // the 200 is sent, so it becomes a client redirect, as Next.js
+                // does (#1686): a marker the soft-navigation path follows, plus
+                // a refresh and a script for a first load (below).
+                if (isRedirect(e)) {
+                  const to = headerSafeLocation(/** @type {any} */ (e).url);
+                  return { id: p.id, html: `<meta data-webjs-redirect="${escapeAttr(to)}">`, redirect: to };
+                }
+                // notFound() / forbidden() / unauthorized() after the 200 went
+                // out: the nearest boundary renders in place of the streamed
+                // content and the page is marked noindex, as Next.js documents
+                // ("keeps its 200 status. Next.js adds a noindex tag", #1686).
+                if (accessFallback) {
+                  const fb = await accessFallback(e);
+                  if (fb !== null) return { id: p.id, html: fb, noindex: true };
+                }
                 // Match the SSR error-isolation policy (render-server.js's
                 // defaultSSRErrorTemplate): dev surfaces the message so the
                 // failure is obvious, prod stays SILENT so no internal detail
@@ -171,6 +206,14 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
             })
           );
           for (const r of settled) {
+            if (r.noindex && !noindexSent) {
+              noindexSent = true;
+              const n = nonce ? ` nonce="${escapeAttr(nonce)}"` : '';
+              controller.enqueue(encoder.encode(
+                `<meta name="robots" content="noindex">` +
+                `<script${n}>document.head.insertAdjacentHTML('beforeend','<meta name="robots" content="noindex">')</script>`,
+              ));
+            }
             // Emit just the <template>: the MutationObserver-based resolver
             // in the boot script detects it and swaps it into the placeholder.
             // Falls back to the __webjsResolve global for browsers without MO.
@@ -181,9 +224,13 @@ export function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req
             // <script> is here for legacy / extremely-restrictive
             // environments. Either way it must be nonce-signed.
             const scriptNonce = nonce ? ` nonce="${escapeAttr(nonce)}"` : '';
+            const go = r.redirect
+              ? `<meta http-equiv="refresh" content="0;url=${escapeAttr(r.redirect)}">`
+                + `<script${scriptNonce}>location.replace(${JSON.stringify(r.redirect).replace(/</g, '\\u003c')})</script>`
+              : '';
             const chunk =
               `<template data-webjs-resolve="${r.id}">${r.html}</template>` +
-              `<script${scriptNonce}>window.__webjsResolve&&__webjsResolve("${r.id}")</script>`;
+              `<script${scriptNonce}>window.__webjsResolve&&__webjsResolve("${r.id}")</script>` + go;
             controller.enqueue(encoder.encode(chunk));
           }
         }

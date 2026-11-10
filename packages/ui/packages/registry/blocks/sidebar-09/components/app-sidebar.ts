@@ -14,7 +14,7 @@
  *
  * The data below is sample data. Replace it with your own.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import { labelClass } from '../../../components/label.ts';
@@ -57,7 +57,7 @@ const data: {
   user: {
     name: 'vivek',
     email: 'vivek@example.com',
-    avatar: 'https://webjs.dev/public/avatars/vivek.jpg',
+    avatar: 'https://webjs.dev/avatars/vivek.jpg',
   },
   navMain: [
     { title: 'Inbox', url: '#', icon: InboxIcon, isActive: true },
@@ -166,7 +166,7 @@ export function appSidebar() {
               <ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
                 ${data.navMain.map((item) => html`
                   <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
-                    <a href=${item.url} title=${item.title} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${item === active ? 'true' : 'false'} aria-current=${item === active ? 'page' : null} class=${cn(sidebarMenuButtonClass(), 'px-2.5 md:px-2')}>
+                    <a href=${item.url} title=${item.title} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${item === active ? 'true' : 'false'} aria-current=${item === active ? 'page' : nothing} class=${cn(sidebarMenuButtonClass(), 'px-2.5 md:px-2')}>
                       ${item.icon()}
                       <span>${item.title}</span>
                     </a>

@@ -220,7 +220,7 @@ export type WebjsDoctorSeverity = 'off' | 'warn' | 'error';
 export interface WebjsDoctorConfig {
   /**
    * Per-check severity, keyed by the stable doctor code (`NODE_VERSION`,
-   * `UNMARKED_ASSET_LINKS`, `ELISION_CARRIERS`, and so on; `webjs doctor --json`
+   * `UNMARKED_ASSET_LINKS`, `ROUTE_BROWSER_CODE`, and so on; `webjs doctor --json`
    * carries the code on every result). A code with no entry keeps its default:
    * `error` for a hard toolchain failure, `warn` otherwise. This is how CI gates
    * on a chosen subset without `--strict` making every warning fatal.
@@ -277,13 +277,6 @@ export interface WebjsCspConfig {
  * Next.js superset.
  */
 export interface WebjsConfig {
-  /**
-   * Display-only and inert-route dead-JS elision switch. Default `true`.
-   * Set to `false` to ship every module's JS app-wide. The `WEBJS_ELIDE`
-   * env override wins over this.
-   */
-  elide?: boolean;
-
   /**
    * SSR action-result seeding switch (#472). Default `true`. When on, a
    * `'use server'` action's SSR result is serialized into the page so an

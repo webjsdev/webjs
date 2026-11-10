@@ -92,9 +92,9 @@ class MyCounter extends WebComponent({ count: Number }) {
 MyCounter.register('my-counter');
 ```
 
-The factory declares the reactive property and types `this.count` for you, with no decorator and no separate `declare` field. The agent learns it from `AGENTS.md` and writes it correctly thereafter.
+The factory declares the reactive property and types `this.count` for you, with no decorator and no separate `declare` field. Lit's own decorator-free spelling, a `static properties` block with a `declare` line per prop, works too, so an agent that writes it from Lit habit is also right.
 
-If WebJs depended on lit, we would carry the decorator path as the "main" pattern in lit's docs and have to constantly fight the divergence. By owning the runtime, the factory is the only pattern.
+If WebJs depended on lit, we would carry the decorator path as the "main" pattern in lit's docs and have to constantly fight the divergence. By owning the runtime, the only thing left out is the decorator itself.
 
 ## 3. The AI agent reads node_modules
 

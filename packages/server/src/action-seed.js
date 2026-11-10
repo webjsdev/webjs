@@ -64,7 +64,7 @@ import * as nodeModule from 'node:module';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { stringify } from '@webjsdev/core';
+import { stringify, installActionBind } from '@webjsdev/core';
 import { hashFile } from './actions.js';
 import { isStreamable } from './action-stream.js';
 import { serverRuntime } from './listener-core.js';
@@ -107,6 +107,28 @@ const _flags = shared('action-seed-flags', () => ({ seedEnabled: false, devMode:
  * @type {WeakMap<Function, { file: string, fnName: string }[]>}
  */
 const _identity = shared('action-identity', () => new WeakMap());
+/** The function each seed Proxy wraps, so its source can still be read
+ * (`Function.prototype.toString` on a Proxy is native code). */
+const _originals = shared('action-originals', () => new WeakMap());
+
+/** The property a facade's exported wrapper reads its real action through. */
+const ORIGINAL = Symbol.for('webjs.action.original');
+
+/**
+ * The action function itself, behind a facade's exported wrapper or a seed
+ * Proxy, or `fn` when it is neither. Used to read the action's own source,
+ * which neither wrapper carries (#1686).
+ * @param {Function} fn
+ * @returns {Function}
+ */
+export function originalAction(fn) {
+  /** @type {any} */
+  const f = fn;
+  let inner;
+  try { inner = f[ORIGINAL]; } catch { inner = undefined; }
+  if (typeof inner === 'function') return inner;
+  return _originals.get(fn) ?? fn;
+}
 
 /** Memoized `absPath -> hash` so a hot action call does not re-hash per call. */
 const _hashCache = shared('action-hash-cache', () => new Map());
@@ -267,6 +289,10 @@ async function assertDeterministic(prev, next, hash, fnName) {
  */
 export function __actionWrap(file, fnName, orig) {
   if (typeof orig !== 'function') return orig;
+  // `action.bind(null, id)` keeps the identity, so the bound function can be
+  // bound to a form (Next.js's way to pass an extra argument). Installed on the
+  // target, so the seed Proxy below forwards it too.
+  installActionBind(orig);
   // APPEND, defining module first. A barrel is faceted too and its body runs
   // AFTER the module it re-exports from, so the first registration is the
   // defining one: the module that also carries `validate` / `middleware` /
@@ -281,6 +307,7 @@ export function __actionWrap(file, fnName, orig) {
   _identity.set(orig, list);
   if (!_flags.seedEnabled) return orig;
   const wrapped = seedProxy(file, fnName, orig);
+  _originals.set(wrapped, orig);
   // The wrapper is a fresh object every time, so it shares the TARGET's list
   // rather than starting one of its own.
   _identity.set(wrapped, list);
@@ -552,6 +579,17 @@ function buildFacade(origUrl, absPath, exports) {
     out += `  const fn = ${v} || (${v} = __w(${file}, ${k}, __orig[${k}]));\n`;
     out += `  return typeof fn === 'function' ? fn.apply(this, args) : fn;\n`;
     out += `}\n`;
+    // Keep the action's declared arity: a form-bound action declaring
+    // `(prevState, formData)` is told apart by `fn.length` (Next's
+    // useActionState contract), and the rest-args wrapper reports 0. It is a
+    // GETTER, read when the dispatcher asks: a circular import can run this
+    // facade before the real module, while a `const` action is still in TDZ,
+    // and a value captured then would freeze the arity at 0.
+    out += `try { Object.defineProperty(${n}, 'length', { configurable: true, get() { try { return (__orig[${k}] && __orig[${k}].length) || 0; } catch { return 0; } } }); } catch {}\n`;
+    // The real function, for reading its source (`originalAction`): the
+    // dispatcher counts DECLARED parameters, which `length` undercounts at a
+    // default (#1686). A getter for the same TDZ reason as `length`.
+    out += `try { Object.defineProperty(${n}, Symbol.for('webjs.action.original'), { configurable: true, get() { try { return __orig[${k}]; } catch { return undefined; } } }); } catch {}\n`;
     out += `__w(${file}, ${k}, ${n});\n`;
   }
   for (const n of exports.valNames) {

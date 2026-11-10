@@ -30,7 +30,7 @@ export default function OptimisticUI() {
     </ul>
 
     <p>
-      Both are client-only, because both do client work (the declarative form calls <code>host.requestUpdate()</code>, the imperative form writes a signal). A component that imports <code>optimistic</code> is therefore never elided as a display-only component, and its module always ships to the browser. See <a href="/docs/elision">Display-Only Elision</a>.
+      Both are client-only, because both do client work (the declarative form calls <code>host.requestUpdate()</code>, the imperative form writes a signal). A component that imports <code>optimistic</code> ships to the browser, as every component in an ordinary file does.
     </p>
 
     <h2>Declarative: <code>optimistic(host, { source, update })</code></h2>
@@ -192,7 +192,7 @@ LikeButton.register('like-button');</code-block>
     </p>
 
     <p>
-      One sharp edge is worth knowing. That second check tests <code>result.success === false</code> exactly, which is stricter than the general <code>ActionResult</code> failure rule described in <a href="/docs/server-actions">Server Actions</a>, where a bare <code>fieldErrors</code> or <code>error</code> key also counts as failure. An action that returns <code>{ fieldErrors: { ... } }</code> and omits <code>success</code> therefore leaves the optimistic value in place. Return an explicit <code>success: false</code> from any action you drive this way, which is the shape to write regardless.
+      One sharp edge is worth knowing. That second check tests <code>result.success === false</code> exactly, which is stricter than the general <code>ActionResult</code> failure rule described in <a href="/docs/server-actions">Server Actions</a>, where a bare <code>fieldErrors</code>, <code>error</code> or <code>errors</code> key also counts as failure. An action that returns <code>{ fieldErrors: { ... } }</code> and omits <code>success</code> therefore leaves the optimistic value in place. Return an explicit <code>success: false</code> from any action you drive this way, which is the shape to write regardless.
     </p>
 
     <h2>When optimistic UI is appropriate</h2>

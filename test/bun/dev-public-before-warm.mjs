@@ -128,11 +128,11 @@ try {
   // fetched AFTER it is still 503; without the hoist the css itself blocks on
   // `ensureReady()`, so by the time it returns the analysis is done and the
   // same ready fetch reads 200, failing the assertion below.
-  const css = await fetch(`${BASE}/public/a.css`);
+  const css = await fetch(`${BASE}/a.css`);
   const cssBody = await css.text();
   const ready = await fetch(`${BASE}/__webjs/ready`);
-  assert.equal(css.status, 200, `/public/a.css was not served cold on ${runtime}\n--- server log ---\n${log}`);
-  assert.equal(cssBody, 'body{color:red}\n', `/public/a.css served the wrong bytes on ${runtime}`);
+  assert.equal(css.status, 200, `/a.css was not served cold on ${runtime}\n--- server log ---\n${log}`);
+  assert.equal(cssBody, 'body{color:red}\n', `/a.css served the wrong bytes on ${runtime}`);
   assert.equal(
     ready.status, 503,
     `the analysis had already completed before the CSS was served on ${runtime}, so the hoist is not doing its job\n--- server log ---\n${log}`,

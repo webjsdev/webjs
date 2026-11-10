@@ -6,18 +6,21 @@ import {
 } from '../js-scan.js';
 import {
   checkComponentsHaveRegister,
-  checkNoStaticProperties,
   checkNoSignalFieldAssignment,
   checkReactivePropsNoClassField,
   checkArrayPropUsesArrayType,
   checkNoBrowserGlobalsInRender,
   checkNoShadowedNativeMember,
+  checkShadowOnlyStatics,
 } from './rules-components.js';
 import {
-  checkNoRedirectInApiRoute,
   checkNoInterpolationInRawTextElement,
   checkNoServerEnvInComponents,
+  checkNoNextRuntimeGuard,
+  checkNoNextUrl,
   checkShellInNonRootLayout,
+  checkAppLayout,
+  checkNoJsxAttributes,
 } from './rules-routing.js';
 import {
   checkErasableTypescriptOnly,
@@ -27,15 +30,20 @@ import {
   checkUseServerNeedsExtension,
   checkUseServerExportsCallable,
   checkOneActionPerConfiguredFile,
+  checkNoInlineUseServer,
 } from './rules-actions.js';
 import {
   checkTagNameHasHyphen,
   checkNoDuplicateTag,
 } from './rules-registry.js';
 import { checkServerImportInBrowserModule } from './runner-support.js';
+import { checkRouteModuleBoundaries } from './rules-route-modules.js';
+import { checkNoConflictingRoutes } from './rules-routes.js';
 import {
   checkNoMissingLocalImport,
   checkFormActionNotAGetAction,
+  checkCoreImportsExist,
+  checkNoForeignFrameworkImport,
 } from './rules-imports.js';
 
 /**
@@ -90,26 +98,34 @@ export async function checkConventions(appDir) {
   }
 
   checkComponentsHaveRegister(files, violations);
-  checkNoStaticProperties(files, violations);
   checkNoSignalFieldAssignment(files, violations);
   checkReactivePropsNoClassField(files, violations);
   checkArrayPropUsesArrayType(files, violations);
   checkNoBrowserGlobalsInRender(files, violations);
   checkNoShadowedNativeMember(files, violations);
-  checkNoRedirectInApiRoute(files, violations);
+  checkShadowOnlyStatics(files, violations);
   checkNoInterpolationInRawTextElement(files, violations);
-  checkNoServerEnvInComponents(files, violations);
   checkShellInNonRootLayout(files, violations);
   await checkErasableTypescriptOnly(appDir, violations);
   await checkNoNonErasableTypescript(appDir, violations);
   checkUseServerNeedsExtension(files, violations);
   checkUseServerExportsCallable(files, violations);
   checkOneActionPerConfiguredFile(files, violations);
+  checkNoInlineUseServer(files, violations);
   checkTagNameHasHyphen(files, violations);
   await checkNoDuplicateTag(appDir, files, violations);
-  await checkServerImportInBrowserModule(appDir, violations);
+  await checkNoConflictingRoutes(appDir, violations);
+  const browser = await checkServerImportInBrowserModule(appDir, violations);
+  checkNoServerEnvInComponents(files, violations, browser.shipped, browser.routeFiles);
+  checkRouteModuleBoundaries(appDir, files, violations, browser);
+  checkNoNextRuntimeGuard(files, violations);
+  checkNoNextUrl(files, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
+  checkCoreImportsExist(appDir, files, violations);
+  checkNoForeignFrameworkImport(files, violations);
+  checkNoJsxAttributes(files, violations);
+  await checkAppLayout(appDir, violations);
 
   return violations;
 }

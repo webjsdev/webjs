@@ -68,7 +68,7 @@ export default async function body(toc: TocEntry[]) {
     ${heading(toc, 2, 'AI SDK')}
     <p>Render each <code>reasoning</code> part as a line. It starts as a plain trace line and becomes a trace collapsible once text arrives, so there is nothing to open before the model has written anything. It is open while the model thinks and renders closed once it finishes. Because the row is a native <code>&lt;details&gt;</code>, a person who opens or closes it keeps their choice until the component renders that row again. See <a href="/ui/docs/components/trace#open-state">Open State</a>, and <a href="/ui/docs/helpers/ai-sdk">AI SDK</a> for streaming the parts from a server action.</p>
     ${codeFigure(`function reasoningLine(text: string, running: boolean) {
-  const line = html\`<span data-slot="trace-line" data-status=\${running ? 'running' : null} class=\${traceLineClass()}>
+  const line = html\`<span data-slot="trace-line" data-status=\${running ? 'running' : nothing} class=\${traceLineClass()}>
     <span data-slot="trace-icon" aria-hidden="true" class=\${traceIconClass()}>
       \${running ? LoaderCircleIcon('animate-spin') : CircleCheckIcon()}
     </span>

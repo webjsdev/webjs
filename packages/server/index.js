@@ -2,7 +2,7 @@ export { startServer, createRequestHandler } from './src/dev.js';
 export { assertNodeVersion, checkNodeVersion, requiredNodeMajor, parseMajor, parseRequiredMajor } from './src/node-version.js';
 export { validateEnv, formatEnvErrors, loadEnvSchema, applyEnvValidation } from './src/env-schema.js';
 export { setOnError, runInstrumentation } from './src/instrumentation.js';
-export { buildRouteTable, matchPage, matchApi } from './src/router.js';
+export { buildRouteTable, matchPage, matchApi, staticPageRoutes } from './src/router.js';
 export { generateRouteTypes } from './src/route-types.js';
 export { ssrPage, ssrNotFound } from './src/ssr.js';
 export { handleApi } from './src/api.js';
@@ -43,9 +43,8 @@ export {
 } from './src/vendor.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
-export { analyzeAppElision } from './src/elision-report.js';
+export { analyzeRouteModules } from './src/route-report.js';
 export { regenerateOutputs, regenerateStatus } from './src/dev-regenerate.js';
-export { maskJsSet, staticPageRoutes } from './src/elision-differential.js';
 export { headers, cookies, getRequest, withRequest, cspNonce, requestId } from './src/context.js';
 export { defaultLogger } from './src/logger.js';
 export { rateLimit, parseWindow, clientIp, stampRemoteIp } from './src/rate-limit.js';
@@ -65,8 +64,13 @@ export { stream, streamResponse, acceptsStream, STREAM_MIME } from './src/stream
 export { attachWebSocket } from './src/websocket.js';
 export { getSerializer, setSerializer, defaultSerializer } from './src/serializer.js';
 
+// Next.js's navigation helpers (`next/navigation`), the same functions
+// `@webjsdev/core` exports, so a server action or route handler can import
+// them from the server package as well. (#1686)
+export { notFound, forbidden, unauthorized, redirect, permanentRedirect } from '@webjsdev/core';
+
 // Auth (NextAuth-style)
-export { createAuth, Credentials, Google, GitHub } from './src/auth.js';
+export { createAuth, Credentials, Google, GitHub, AuthError, CredentialsSignin } from './src/auth.js';
 
 // Test harness helpers (issue #267): thin builders over handle()
 export {

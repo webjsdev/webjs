@@ -70,7 +70,7 @@ test('the Sidebar page\'s View RTL Sidebar opens the right-to-left sidebar full 
   const view = await res.text();
   assert.match(view, /<example-bind class="relative block" dir="rtl" lang="ar"/, 'it reads right to left, in Arabic by default');
   assert.match(view, /<ui-sidebar collapsible="icon" side="right"/, 'with the sidebar on the right');
-  assert.match(view, /<link rel="stylesheet" href="\/public\/rtl-fonts\.css[^"]*"/, 'and the Arabic and Hebrew faces');
+  assert.match(view, /<link rel="stylesheet" href="\/rtl-fonts\.css[^"]*"/, 'and the Arabic and Hebrew faces');
   // The language selector is a GET form the frame lets through, so it works with JS off.
   assert.match(view, /<form method="get" data-view-submit[^>]*>/);
   assert.match(view, /<select id="sidebar-rtl-language" name="lang" data-autosubmit/);

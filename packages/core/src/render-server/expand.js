@@ -1,7 +1,7 @@
-import { stylesToString, isCSS } from '../css.js';
+import { stylesToString, finalizeStyles, lightDomStylesMessage } from '../css.js';
 import { unsafeHTML } from '../directives.js';
 import { escapeAttr } from '../escape.js';
-import { defaultSSRErrorTemplate, browserMemberHint } from './errors.js';
+import { defaultSSRErrorTemplate, browserMemberHint, isProd } from './errors.js';
 import {
   applyAttrsToInstance, consumePropAttrs, parseAttrs, seedServerAttrs,
   withHostMarker,
@@ -45,6 +45,7 @@ const NON_BLANK = /\S/;
 export function beginComponent(w, tag, Cls, opening, attrs) {
   if (w.ctx && w.ctx.usedComponents) w.ctx.usedComponents.add(tag);
   const isShadow = Cls.shadow === true;
+  if (!isShadow) reportLightDomStyles(w, tag, Cls);
   const frame = {
     kind: 'component', tag, Cls, isShadow, instance: null, opening, tpl: undefined,
     pending: /** @type {Promise<unknown> | null} */ (null), presentAttrNames: /** @type {Set<string> | null} */ (null),
@@ -142,7 +143,7 @@ export async function finishComponent(w, frame, children) {
         // Native <slot> stays as-is in the DSD template: the browser projects
         // the host's light children natively. The authored children stay in
         // place after the template, and the source end tag is kept.
-        return `${frame.opening}<template shadowrootmode="open">${styleString(Cls)}${inner}</template>${children}${frame.closeText}`;
+        return `${frame.opening}${dsdOpenTag(Cls)}${styleString(Cls)}${inner}</template>${children}${frame.closeText}`;
       }
       if (!NON_BLANK.test(inner)) {
         // An empty rendered template (a decorator component with no render(),
@@ -169,10 +170,12 @@ export async function finishComponent(w, frame, children) {
 async function renderOwnTemplate(w, frame, children) {
   const owner = w.owner;
   w.owner = frame.isShadow ? null : { tag: frame.tag, partition: partitionChildren(children, frame.segments), consumed: null };
+  w.componentDepth = (w.componentDepth || 0) + 1;
   try {
     return await w.capture(() => w.value(frame.tpl));
   } finally {
     w.owner = owner;
+    w.componentDepth -= 1;
   }
 }
 
@@ -204,11 +207,53 @@ function partitionChildren(children, segments) {
   return groups;
 }
 
-function styleString(Cls) {
-  const rawStyles = Cls.styles;
-  const styleList = Array.isArray(rawStyles) ? rawStyles : rawStyles && isCSS(rawStyles) ? [rawStyles] : [];
-  return stylesToString(styleList);
+/**
+ * The Declarative Shadow DOM opening tag for a shadow component, carrying
+ * Lit's `static shadowRootOptions` as the template attributes the HTML parser
+ * maps onto `attachShadow()`: the mode, `delegatesFocus`, `clonable` and
+ * `serializable`. The common case (no options) is the constant open tag.
+ * @param {any} Cls
+ * @returns {string}
+ */
+export function dsdOpenTag(Cls) {
+  const o = Cls.shadowRootOptions;
+  if (!o) return OPEN_DSD;
+  const mode = o.mode === 'closed' ? 'closed' : 'open';
+  if (mode === 'open' && !o.delegatesFocus && !o.clonable && !o.serializable) return OPEN_DSD;
+  return `<template shadowrootmode="${mode}"` +
+    (o.delegatesFocus ? ' shadowrootdelegatesfocus' : '') +
+    (o.clonable ? ' shadowrootclonable' : '') +
+    (o.serializable ? ' shadowrootserializable' : '') + '>';
 }
+const OPEN_DSD = '<template shadowrootmode="open">';
+
+function styleString(Cls) {
+  // `elementStyles` is the class's finalized list (Lit's `finalizeStyles`);
+  // a class not built on WebComponent has none, so flatten its styles here.
+  return stylesToString(Cls.elementStyles ?? finalizeStyles(Cls.styles));
+}
+
+/** Light-DOM classes already reported for `static styles`. @type {WeakSet<Function>} */
+const REPORTED_LIGHT_STYLES = new WeakSet();
+
+/**
+ * A light-DOM component's `static styles` never apply (there is no shadow
+ * root to adopt them into). Report it once per class in dev, on the server,
+ * so the cause shows up in the terminal as well as the browser console.
+ * @param {import('./walk.js').Walker} w
+ * @param {string} tag
+ * @param {any} Cls
+ */
+function reportLightDomStyles(w, tag, Cls) {
+  if (!Cls.styles || REPORTED_LIGHT_STYLES.has(Cls)) return;
+  const dev = w.dev === undefined ? !isProd() : !!w.dev;
+  if (!dev) return;
+  REPORTED_LIGHT_STYLES.add(Cls);
+  console.error(lightDomStylesMessage(tag));
+}
+
+/** Key of the hook the server installs to hear about isolated component failures. */
+const COMPONENT_ERROR_HOOK = Symbol.for('webjs.ssr.componentError');
 
 /**
  * Per-component error isolation (#469). The element renders a
@@ -230,20 +275,28 @@ async function errorState(w, frame) {
   } else {
     console.error(`[webjs] SSR failed for <${tag}>:`, e);
   }
+  // The page still renders (the failure is isolated to this element), so the
+  // server hears about it only through this hook: @webjsdev/server installs it
+  // and routes it to the current request's dev status.
+  const report = /** @type {any} */ (globalThis)[COMPONENT_ERROR_HOOK];
+  if (typeof report === 'function') {
+    try { report(tag, e); } catch { /* a reporting failure must not affect the render */ }
+  }
   const err = e instanceof Error ? e : new Error(String(e));
   let errorInner = '';
   try {
     let errTpl;
     if (instance && typeof instance.renderError === 'function') errTpl = instance.renderError(err);
     if (errTpl === undefined) errTpl = defaultSSRErrorTemplate(tag, err, w.dev);
-    errorInner = await w.capture(() => w.value(errTpl));
+    w.componentDepth = (w.componentDepth || 0) + 1;
+    try { errorInner = await w.capture(() => w.value(errTpl)); } finally { w.componentDepth -= 1; }
   } catch (renderErrorThrew) {
     console.error(`[webjs] renderError() for <${tag}> also threw:`, renderErrorThrew);
     errorInner = '';
   }
   let opening = frame.opening;
   if (!isShadow) opening = withHostMarker(opening);
-  if (isShadow) return `${opening}<template shadowrootmode="open">${styleString(Cls)}${errorInner}</template>`;
+  if (isShadow) return `${opening}${dsdOpenTag(Cls)}${styleString(Cls)}${errorInner}</template>`;
   return `${opening}<!--webjs-hydrate-->${errorInner}</${tag}>`;
 }
 

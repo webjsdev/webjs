@@ -1,14 +1,14 @@
 /**
- * Tests for #272 (updated in #969): the recipe content (the canonical recipes +
- * the persistence anti-pattern) now lives in the WebJs skill, not the retired
- * .agents/skills/webjs/references/data-and-actions.md, plus the deployment-doc Postgres connection-pool section.
+ * Tests for #272 (updated in #969, and again when the agent skill was replaced
+ * by the brief): the canonical recipes are now the brief itself (routing, server
+ * actions, components) plus the scaffold AGENTS.md's persistence rule, and the
+ * deployment doc carries the Postgres connection-pool section.
  */
-import { test, before } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { createRequestHandler } from '@webjsdev/server';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -16,23 +16,15 @@ const ROOT = resolve(__dirname, '..', '..');
 // The docs are served by the marketing app at webjs.dev/docs.
 const DOCS_DIR = resolve(ROOT, 'website');
 
-test('the skill carries the canonical recipes and the persistence rule (recipes.md was retired into the skill)', async () => {
-  const skill = await readFile(resolve(ROOT, '.agents', 'skills', 'webjs', 'SKILL.md'), 'utf8');
-  // The common recipes (a page, a server action, an interactive component, a
-  // dynamic route) live in the skill's Canonical Patterns, distributed from the
-  // retired recipes.md.
-  for (const p of ['A page', 'A server action', 'An interactive component']) {
-    assert.ok(skill.includes(p), `SKILL.md must include the "${p}" pattern`);
+test('the brief and the scaffold AGENTS.md carry the canonical recipes and the persistence rule', async () => {
+  const { BRIEF } = await import(resolve(ROOT, 'packages', 'mcp', 'src', 'brief.js'));
+  // A page, a dynamic route, a server action, an interactive component.
+  for (const p of ['app/page.ts', '[param]', "'use server'", 'WebComponent']) {
+    assert.ok(BRIEF.includes(p), `the brief must name ${p}`);
   }
-  assert.ok(/dynamic route/i.test(skill), 'SKILL.md covers a dynamic route');
-  // Schema-first + the data layer.
-  const data = await readFile(resolve(ROOT, '.agents', 'skills', 'webjs', 'references', 'data-and-actions.md'), 'utf8');
-  assert.ok(/schema\.server\.ts/.test(skill + data), 'covers the Drizzle schema');
-  assert.ok(/queries\/|actions\//.test(data), 'covers one-file-per query/action');
-  // The persistence anti-pattern (never JSON files) lives in the root AGENTS.md.
-  const agents = await readFile(resolve(ROOT, 'AGENTS.md'), 'utf8');
-  assert.ok(/NEVER use JSON files|never JSON files/i.test(agents), 'AGENTS.md warns against JSON-file persistence');
-  void existsSync;
+  const scaffold = await readFile(resolve(ROOT, 'packages', 'cli', 'templates', 'AGENTS.md'), 'utf8');
+  // The persistence anti-pattern (never JSON files).
+  assert.ok(/never in a JSON file/i.test(scaffold), 'the scaffold AGENTS.md warns against JSON-file persistence');
 });
 
 test('the deployment doc documents Postgres connection pooling', async () => {

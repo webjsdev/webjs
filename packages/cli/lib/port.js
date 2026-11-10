@@ -13,32 +13,28 @@
  * one implementation and the logic is unit-testable without spawning a
  * server.
  */
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseEnv } from 'node:util';
+import { loadEnvFiles } from './env-files.js';
 
 /**
- * Load `<appDir>/.env` into `process.env`, guarded exactly like the server's
- * own `loadAppEnv` (`packages/server/src/dev.js`): only on a Node with the
- * built-in `process.loadEnvFile`, and swallowing a missing or malformed file.
+ * Load the app's env files into `process.env` in Next.js's order
+ * (`.env.$mode.local`, `.env.local`, `.env.$mode`, `.env`; see env-files.js),
+ * where the mode follows `NODE_ENV` (`test`, `production`, else
+ * `development`). The dev and start commands set `NODE_ENV` first when it is
+ * unset, so `webjs start` reads `.env.production`.
  *
- * Node's `loadEnvFile` does NOT override a var already present in
- * `process.env`, so a real shell-exported `PORT=NNNN npm run dev` still wins
- * over the file. That "shell beats file" precedence is intentional and
- * matches what the server does after its own load.
+ * A key already in `process.env` is never overwritten, so a real
+ * shell-exported `PORT=NNNN npm run dev` still wins over a file.
  *
  * @param {string} appDir
+ * @returns {string[]} the files read
  */
 export function loadAppEnv(appDir) {
-  try {
-    if (typeof process.loadEnvFile === 'function') {
-      process.loadEnvFile(join(appDir, '.env'));
-    }
-  } catch {
-    // No .env, malformed file, or a Node without loadEnvFile. Fall through
-    // silently: the app may not need any env vars, or they may be set via
-    // the shell.
-  }
+  const nodeEnv = process.env.NODE_ENV;
+  const mode = nodeEnv === 'test' ? 'test' : nodeEnv === 'production' ? 'production' : 'development';
+  return loadEnvFiles(appDir, mode);
 }
 
 /**
@@ -48,10 +44,12 @@ export function loadAppEnv(appDir) {
  * child restarted for a `.env` edit loads the EDITED file (a loaded variable is
  * never overridden). Node gives the CLI exactly the shell's env until
  * `loadAppEnv` runs, but Bun loads the app's `.env` files into `process.env`
- * before any code runs, so on Bun the snapshot already holds the values from
- * before the edit and the restarted child kept them. So on Bun each key whose
- * value is exactly what `.env`, `.env.<NODE_ENV>` or `.env.local` sets is
- * dropped, and the child's own Bun reads the files fresh. A shell variable
+ * before any code runs (the CLI parent is not started with `--no-env-file`), so
+ * on Bun the snapshot already holds the values from before the edit and the
+ * restarted child kept them. So on Bun each key whose value is exactly what
+ * `.env`, `.env.<NODE_ENV>` or `.env.local` (Bun's own auto-load set) sets is
+ * dropped, and the child, which runs with `--no-env-file`, reads the files
+ * fresh through `loadAppEnv` in Next's order. A shell variable
  * that happens to equal the file's value is dropped too, which changes
  * nothing, since the file supplies the same value.
  *
@@ -120,5 +118,52 @@ export async function failFastOnPortInUse(started, io = {}) {
       return exit(PORT_IN_USE_EXIT_CODE);
     }
     throw e;
+  }
+}
+
+/**
+ * Where a running `webjs dev` records the port it serves on (#1686), so
+ * `webjs status` finds a server started with `--port 8910` without being told
+ * again. An agent starts the dev server on a port of its choosing and then
+ * runs `webjs status` after each edit; with the 8080 default it booted a
+ * second, in-process copy instead of reporting on the server that was up.
+ */
+const DEV_SERVER_FILE = join('.webjs', 'dev-server.json');
+
+/**
+ * Record this process as the app's dev server on `port`, removed again on
+ * exit. Best effort: a read-only app directory only loses the convenience. A
+ * process killed by a signal skips its exit handler and leaves the record
+ * behind, which `recordedDevPort` ignores once that pid is gone.
+ * @param {string} cwd the app root
+ * @param {number} port
+ */
+export function recordDevPort(cwd, port) {
+  const file = join(cwd, DEV_SERVER_FILE);
+  try {
+    mkdirSync(join(cwd, '.webjs'), { recursive: true });
+    writeFileSync(file, JSON.stringify({ port, pid: process.pid }) + '\n');
+  } catch {
+    return;
+  }
+  process.once('exit', () => {
+    try {
+      if (JSON.parse(readFileSync(file, 'utf8')).pid === process.pid) rmSync(file, { force: true });
+    } catch { /* gone already */ }
+  });
+}
+
+/**
+ * The port a still-running `webjs dev` recorded for this app, or null.
+ * @param {string} cwd
+ * @returns {number | null}
+ */
+export function recordedDevPort(cwd) {
+  try {
+    const { port, pid } = JSON.parse(readFileSync(join(cwd, DEV_SERVER_FILE), 'utf8'));
+    process.kill(pid, 0);
+    return Number.isInteger(port) ? port : null;
+  } catch {
+    return null;
   }
 }

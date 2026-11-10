@@ -59,14 +59,10 @@
  * it); read assigned content from `slotchange` or after a microtask.
  *
  * Live writes need the component's JS on the page. Interception + sensors
- * install in connectedCallback, so a component the framework ELIDES (a
- * display-only slotted wrapper with no client signal) ships no JS and its
- * post-mount native writes are inert, like anything on an elided component.
- * A component that is actually interacted with ships (a client module
- * references its tag); for an imperative consumer reaching it through a
- * string selector the analyser cannot see, force the ship with
- * `static interactive = true`. Shadow components always ship (the DSD
- * carve-out), so this is the one place elision, not slots, sets the boundary.
+ * install in connectedCallback, so a server-only component (one in a
+ * `*.server.ts` file) ships no JS and its post-mount native writes are inert,
+ * like anything else on a server-only component. Every component in an
+ * ordinary file ships (#1686), so it always has them.
  *
  * Polyfill safety. Every prototype patch checks for the `data-webjs-light`
  * attribute and falls through to native otherwise, so real shadow-DOM slots

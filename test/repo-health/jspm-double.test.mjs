@@ -5,8 +5,7 @@
  * required CI job, and it is the kind of thing that can rot silently: a double
  * that answers the wrong shape makes the vendor tests pass for the wrong
  * reason, which is strictly worse than the live dependency it replaced. So the
- * contract it owes `packages/server/src/vendor.js` is pinned here, in the same
- * spirit as `e2e-vendor-stub.test.mjs` pins #1229's fixture.
+ * contract it owes `packages/server/src/vendor.js` is pinned here.
  *
  * Three properties carry most of the weight.
  *

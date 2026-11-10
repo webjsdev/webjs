@@ -155,7 +155,7 @@ describe('E2E: a dev edit never paints a new class without its rule (#1535)', {
         const frames2 = await page.evaluate(() => JSON.parse(window.name || '[]'));
         const unstyled2 = frames2.filter((f) => f.text === 'GREEN' && f.color !== 'rgb(0, 128, 0)');
         assert.equal(unstyled2.length, 0, `second edit: ${unstyled2.length} unstyled frame(s)`);
-        const sheets = await page.evaluate(() => document.querySelectorAll('link[rel~="stylesheet"][href*="/public/app.css"]').length);
+        const sheets = await page.evaluate(() => document.querySelectorAll('link[rel~="stylesheet"][href*="/app.css"]').length);
         assert.equal(sheets, 1, 'exactly one link to the stylesheet is left');
       } finally {
         await page.close();

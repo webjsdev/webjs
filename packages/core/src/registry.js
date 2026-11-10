@@ -158,6 +158,9 @@ if (!isBrowser) {
  * @param {typeof import('./component.js').WebComponent} cls
  */
 export function register(tag, cls) {
+  // Lit's `finalize()`, so the class's metadata is ready before the first
+  // instance (a class not built on WebComponent has none).
+  if (typeof (/** @type {any} */ (cls)).finalize === 'function') /** @type {any} */ (cls).finalize();
   if (isBrowser) {
     /** @type any */ (customElements).define(tag, cls);
   } else {

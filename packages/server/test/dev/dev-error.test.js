@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -88,4 +88,44 @@ test('buildDevErrorFrame carries an explicit url onto the frame, and null withou
   // An empty string is not a url, and must not become one the gate compares
   // against (every real path starts with `/`).
   assert.equal(buildDevErrorFrame(new Error('boom'), { url: '' }).url, null);
+});
+
+test('parseStackLocation ignores a runtime-internal frame', () => {
+  const stack = 'SyntaxError: x\n    at compileSourceTextModule (node:internal/modules/esm/utils:355:16)';
+  assert.equal(parseStackLocation(stack, '/app'), null);
+});
+
+test('a parse failure with no location is traced to the decorator in the app source', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wj-dec-'));
+  mkdirSync(join(dir, 'components'), { recursive: true });
+  writeFileSync(join(dir, 'components', 'el.ts'), 'export class El {\n  @query("#x") el;\n}\n');
+  const err = new SyntaxError('Invalid or unexpected token');
+  err.stack = 'SyntaxError: Invalid or unexpected token\n    at compileSourceTextModule (node:internal/modules/esm/utils:355:16)';
+  const frame = buildDevErrorFrame(err, { kind: 'render', appDir: dir });
+  rmSync(dir, { recursive: true, force: true });
+  assert.match(frame.file || '', /components[/\\]el\.ts$/);
+  assert.equal(frame.line, 2);
+  assert.match(frame.hint || '', /this\.renderRoot\.querySelector/);
+});
+
+test("Node's uncaught parse header locates the file", () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wj-dec-'));
+  const file = join(dir, 'd.ts');
+  writeFileSync(file, 'export class A {\n  @property() x = 1;\n}\n');
+  const err = new SyntaxError('Invalid or unexpected token');
+  err.stack = `file://${file}:2\n  @property() x = 1;\n  ^\n\nSyntaxError: Invalid or unexpected token\n    at compileSourceTextModule (node:internal/modules/esm/utils:355:16)`;
+  const frame = buildDevErrorFrame(err, { kind: 'render' });
+  rmSync(dir, { recursive: true, force: true });
+  assert.equal(frame.file, file);
+  assert.equal(frame.line, 2);
+  assert.match(frame.hint || '', /static properties/);
+});
+
+test('a missing core export (Node or Bun wording) gets the core-imports-exist fix', () => {
+  const node = new SyntaxError("The requested module '/x/node_modules/@webjsdev/core/index.js' does not provide an export named 'LitElement'");
+  assert.match(buildDevErrorFrame(node).hint || '', /WebComponent/);
+  const bun = new SyntaxError("Export named 'PropertyDeclaration' not found in module '/x/packages/core/index.js'.");
+  assert.match(buildDevErrorFrame(bun).hint || '', /import type \{ PropertyDeclaration \}/);
+  const other = new SyntaxError("The requested module 'left-pad' does not provide an export named 'x'");
+  assert.equal(buildDevErrorFrame(other).hint, null);
 });

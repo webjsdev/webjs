@@ -7,13 +7,16 @@ test('headers() and cookies() are bound to the in-flight request', async () => {
   const req = new Request('http://x/', {
     headers: { 'x-flag': 'on', cookie: 'a=1; b=two' },
   });
-  await withRequest(req, () => {
+  await withRequest(req, async () => {
     assert.equal(headers().get('x-flag'), 'on');
     const c = cookies();
-    assert.equal(c.get('a'), '1');
-    assert.equal(c.get('b'), 'two');
+    assert.deepEqual(c.get('a'), { name: 'a', value: '1' });
+    assert.equal(c.get('b')?.value, 'two');
+    assert.equal(c.get('zzz'), undefined);
     assert.ok(c.has('a') && !c.has('zzz'));
-    assert.deepEqual(c.entries(), [['a', '1'], ['b', 'two']]);
+    assert.equal(c.size, 2);
+    assert.deepEqual(c.getAll(), [{ name: 'a', value: '1' }, { name: 'b', value: 'two' }]);
+    assert.equal((await cookies()).get('a')?.value, '1', 'awaitable (Next 15)');
     assert.strictEqual(getRequest(), req);
   });
 });

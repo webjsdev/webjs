@@ -33,8 +33,8 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     const p = pkg(appDir);
 
     // The long-running server scripts force --bun (the shebang gotcha).
-    assert.equal(p.scripts.dev, 'bun --bun webjs dev');
-    assert.equal(p.scripts.start, 'bun --bun webjs start');
+    assert.equal(p.scripts.dev, 'bun --bun --no-env-file webjs dev');
+    assert.equal(p.scripts.start, 'bun --bun --no-env-file webjs start');
     // The test runner stays plain webjs (it shells `node --test`).
     assert.equal(p.scripts.test, 'webjs test');
     assert.equal(p.scripts.check, 'webjs check');
@@ -142,28 +142,13 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
   try {
     await scaffoldApp('bunapp', cwd, { template: 'full-stack', runtime: 'bun' });
     const appDir = join(cwd, 'bunapp');
-    for (const f of ['AGENTS.md', 'CLAUDE.md', '.agents/rules/workflow.md']) {
+    for (const f of ['AGENTS.md', 'CLAUDE.md']) {
       const md = read(appDir, f);
       assert.doesNotMatch(md, /\bnpm run /, `${f} should not contain "npm run"`);
       assert.doesNotMatch(md, /\bnpx /, `${f} should not contain "npx "`);
     }
     const agents = read(appDir, 'AGENTS.md');
-    assert.match(agents, /bun --bun run dev/);
-    // The injected template playbook (#1076) is bunified too: the substitution
-    // runs BEFORE bunifyProse, so the playbook's commands arrive in bun form.
-    assert.match(agents, /bun run check/, 'playbook check command is bunified');
-    assert.match(agents, /bunx webjsdev ui add/, 'playbook ui add is bunified');
-
-    // The copied agent skill is bunified as well (#1076): its references carry
-    // runnable commands, so a bun app's skill must not instruct npm. The one
-    // exception is references/runtime.md, the deliberate node-vs-bun command
-    // matrix, which keeps its npm column (the counterfactual that the
-    // exclusion works).
-    const skillTesting = read(appDir, '.agents/skills/webjs/references/testing.md');
-    assert.doesNotMatch(skillTesting, /\bnpm run /, 'skill testing.md is bunified');
-    assert.match(skillTesting, /bun run test/, 'skill testing.md shows bun commands');
-    const skillRuntime = read(appDir, '.agents/skills/webjs/references/runtime.md');
-    assert.match(skillRuntime, /npm install/, 'runtime.md keeps its npm column (matrix preserved)');
+    assert.match(agents, /bunx w[e]bjs check/, 'the brief check command is bunified');
 
     // The starter test files' header comments are bun-ified too (no npm/npx).
     const browserTest = read(appDir, 'test/hello/browser/hello.test.js');
@@ -176,7 +161,7 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
   }
 });
 
-test('bun scaffold: the ui-kit hint, gallery reset, hook and env hints use bun (#1527)', async () => {
+test('bun scaffold: the ui-kit hint, hook and env hints use bun (#1527)', async () => {
   const cwd = await tempCwd();
   const lines = [];
   const log = console.log, err = console.error;
@@ -187,9 +172,6 @@ test('bun scaffold: the ui-kit hint, gallery reset, hook and env hints use bun (
     const banner = lines.join('\n');
     assert.match(banner, /bunx webjsdev ui add <name>/, 'the closing banner names bunx');
     assert.doesNotMatch(banner, /npx webjsdev/);
-    const clear = read(appDir, 'scripts/clear-gallery.mjs');
-    assert.match(clear, /bunx webjsdev ui add <name>/);
-    assert.doesNotMatch(clear, /npx webjsdev/, 'the reset script and the layout it writes say bunx');
     assert.doesNotMatch(read(appDir, '.hooks/pre-commit'), /npm run /);
     assert.doesNotMatch(read(appDir, '.gitignore'), /npm run /);
     assert.match(read(appDir, '.env.example'), /# Generate: bun -e /);
@@ -208,7 +190,7 @@ test('bun scaffold works across both templates', async () => {
       await scaffoldApp('app', cwd, { template, runtime: 'bun' });
       const appDir = join(cwd, 'app');
       const p = pkg(appDir);
-      assert.equal(p.scripts.dev, 'bun --bun webjs dev', `${template}: dev script`);
+      assert.equal(p.scripts.dev, 'bun --bun --no-env-file webjs dev', `${template}: dev script`);
       const df = read(appDir, 'Dockerfile');
       assert.match(df, /FROM oven\/bun:1/, `${template}: pure oven/bun base`);
       assert.match(df, /CMD \["bun", "--bun", "run", "start"\]/, `${template}: serves on bun`);
@@ -227,7 +209,7 @@ test('bun is auto-detected from npm_config_user_agent (no explicit flag)', async
   try {
     // No runtime opt: detection picks bun because the invoking PM is bun.
     await scaffoldApp('detected', cwd, { template: 'full-stack' });
-    assert.equal(pkg(join(cwd, 'detected')).scripts.dev, 'bun --bun webjs dev');
+    assert.equal(pkg(join(cwd, 'detected')).scripts.dev, 'bun --bun --no-env-file webjs dev');
   } finally {
     if (prev === undefined) delete process.env.npm_config_user_agent;
     else process.env.npm_config_user_agent = prev;
@@ -256,9 +238,8 @@ test('node mode (default) is unchanged: no bun flavor leaks in', async () => {
     assert.match(read(appDir, 'Dockerfile'), /FROM node:24-alpine/);
     assert.match(read(appDir, 'compose.yaml'), /test: \["CMD", "node", "-e"/);
     assert.match(read(appDir, '.github/workflows/ci.yml'), /actions\/setup-node/);
-    assert.match(read(appDir, 'AGENTS.md'), /npm run dev/);
     // #1527 counterfactual: the node app keeps its npx / node spellings.
-    assert.match(read(appDir, 'scripts/clear-gallery.mjs'), /npx webjsdev ui add/);
+    assert.match(read(appDir, 'AGENTS.md'), /npx w[e]bjs check/);
     assert.match(read(appDir, '.env.example'), /# Generate: node -e /);
     assert.match(read(appDir, '.hooks/pre-commit'), /npm run ci/);
   } finally {

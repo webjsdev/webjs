@@ -2,6 +2,7 @@ import { MARKER } from '../html.js';
 import { BINDING_PREFIXES, isBindingPrefix } from '../binding-prefixes.js';
 import { isSubmitterReflectedProp } from '../form-action.js';
 import { LIGHT_SLOT_ATTR } from '../slot.js';
+import { assertNoJsxIsms } from '../jsx-guard.js';
 
 /** @type {WeakMap<TemplateStringsArray | string[], { templateEl: HTMLTemplateElement, parts: PartDescriptor[], formActions: FormActionRecord[] | null }>} */
 export const templateCache = new WeakMap();
@@ -12,6 +13,12 @@ export const templateCache = new WeakMap();
  */
 export const submitterActionBindings = new WeakMap();
 export const INSTANCE = Symbol.for('webjs.instance');
+/** Elements whose content the HTML parser reads as text, never markup. */
+const RAW_TEXT_TAGS = new Set(['script', 'style', 'textarea', 'title']);
+/** HTML's own whitespace; `\s` would also match U+00A0, which is attribute text. */
+const HTML_WS = /[ \t\n\f\r]/;
+/** Delimits a raw-text hole's index; a private-use character no parser alters. */
+const RAW_SENTINEL = '\uE000';
 
 /**
  * @typedef {{
@@ -37,7 +44,7 @@ export const INSTANCE = Symbol.for('webjs.instance');
  *   | { kind: 'event', el: Element, name: string, handler: (EventListenerOrEventListenerObject & AddEventListenerOptions) | null, eventHost?: object, dispatcher: (e: Event) => void }
  *   | { kind: 'prop', el: Element, name: string }
  *   | { kind: 'bool', el: Element, name: string }
- *   | { kind: 'element', el: Element, lastTarget?: any }
+ *   | { kind: 'element', el: Element, lastTarget?: any, refHost?: object }
  *   | { kind: 'slot', slotEl: HTMLSlotElement, applied: boolean }
  *   | { kind: 'noop' }
  * } BoundPart
@@ -48,6 +55,14 @@ export function compile(tr) {
   const { strings } = tr;
   let cached = templateCache.get(strings);
   if (cached) return cached;
+  // Only a tagged template's own strings array carries `raw`, so a template
+  // result that arrived as data (JSON with the `_$webjs` brand) is refused
+  // rather than parsed as markup, lit's `trustFromTemplateString` check.
+  if (!Array.isArray(strings) || !Object.prototype.hasOwnProperty.call(strings, 'raw')) {
+    throw new Error('[webjs] refusing to render a template result whose strings are not a tagged template\'s (a TemplateResult built from data, not by html``).');
+  }
+  // `className=`, `htmlFor=`, `<Link>`: JSX that HTML silently ignores.
+  assertNoJsxIsms(strings);
 
   /** @type {PartDescriptor[]} */
   const parts = [];
@@ -60,7 +75,15 @@ export function compile(tr) {
   /** @type {{ name: string, firstPartIdx: number } | null} */
   let mixedAttr = null;
   let currentTag = '';
+  let closingTag = false;
   let rawTail = '';
+  // The content state a start tag's `>` opens: raw text for `script` / `style`
+  // / `textarea` / `title`, whose content the HTML parser never reads as markup,
+  // whichever attribute state the tag ended in (lit's `rawTextElement`).
+  const afterTag = () => {
+    rawTail = '';
+    return (!closingTag && RAW_TEXT_TAGS.has(currentTag)) ? 'rawtext' : 'text';
+  };
 
   for (let i = 0; i < strings.length; i++) {
     const s = strings[i];
@@ -74,18 +97,23 @@ export function compile(tr) {
         case 'tag-open':
           html += c;
           if (c === '!') state = 'bang-1';
-          else if (c === '/') { state = 'tag-name'; currentTag = ''; }
-          else if (/[a-zA-Z]/.test(c)) { state = 'tag-name'; currentTag = c.toLowerCase(); }
+          else if (c === '/') { state = 'tag-name'; currentTag = ''; closingTag = true; }
+          else if (/[a-zA-Z]/.test(c)) { state = 'tag-name'; currentTag = c.toLowerCase(); closingTag = false; }
           else state = 'text';
           break;
         case 'bang-1':
           html += c;
-          state = c === '-' ? 'bang-dash' : 'tag-name';
+          state = c === '-' ? 'bang-dash' : 'bogus';
           break;
         case 'bang-dash':
           html += c;
           if (c === '-') { state = 'comment'; commentDashes = 0; }
-          else state = 'tag-name';
+          else state = 'bogus';
+          break;
+        case 'bogus':
+          // A bogus comment (`<!x ...>`, `</ ...>`) runs to the next `>`.
+          html += c;
+          if (c === '>') state = 'text';
           break;
         case 'comment':
           html += c;
@@ -95,18 +123,15 @@ export function compile(tr) {
           break;
         case 'tag-name':
           html += c;
-          if (c === '>') {
-            state = (currentTag === 'script' || currentTag === 'style') ? 'rawtext' : 'text';
-            if (state === 'rawtext') rawTail = '';
-          } else if (/\s/.test(c)) state = 'in-tag';
+          if (closingTag && currentTag === '' && c !== '>' && !/[a-zA-Z]/.test(c)) state = 'bogus';
+          else if (c === '>') state = afterTag();
+          else if (HTML_WS.test(c)) state = 'in-tag';
           else currentTag += c.toLowerCase();
           break;
         case 'in-tag':
           html += c;
-          if (c === '>') {
-            state = (currentTag === 'script' || currentTag === 'style') ? 'rawtext' : 'text';
-            if (state === 'rawtext') rawTail = '';
-          } else if (!/\s/.test(c) && c !== '/') {
+          if (c === '>') state = afterTag();
+          else if (!HTML_WS.test(c) && c !== '/') {
             state = 'attr-name';
             attrName = c;
             attrStart = html.length - 1;
@@ -114,8 +139,10 @@ export function compile(tr) {
           break;
         case 'rawtext':
           html += c;
-          rawTail = (rawTail + c.toLowerCase()).slice(-9);
-          if (rawTail.endsWith('</script>') || rawTail.endsWith('</style>')) {
+          // Only the element's OWN end tag closes it: a `</style>` inside a
+          // `<script>` is script text.
+          rawTail = (rawTail + c.toLowerCase()).slice(-(currentTag.length + 3));
+          if (rawTail === `</${currentTag}>`) {
             state = 'text';
             rawTail = '';
             currentTag = '';
@@ -123,19 +150,28 @@ export function compile(tr) {
           break;
         case 'attr-name':
           if (c === '=') { state = 'after-eq'; html += c; }
-          else if (/\s/.test(c)) { state = 'in-tag'; attrName = ''; html += c; }
-          else if (c === '>') { state = 'text'; attrName = ''; html += c; }
+          else if (HTML_WS.test(c)) { state = 'after-name'; html += c; }
+          else if (c === '>') { state = afterTag(); attrName = ''; html += c; }
           else { attrName += c; html += c; }
+          break;
+        case 'after-name':
+          // Whitespace between a name and its `=` (`abc = ${x}`), as the HTML
+          // tokenizer allows.
+          html += c;
+          if (c === '=') state = 'after-eq';
+          else if (c === '>') { state = afterTag(); attrName = ''; }
+          else if (c === '/') { state = 'in-tag'; attrName = ''; }
+          else if (!HTML_WS.test(c)) { state = 'attr-name'; attrName = c; attrStart = html.length - 1; }
           break;
         case 'after-eq':
           if (c === '"' || c === "'") { state = 'attr-quoted'; attrQuote = c; html += c; }
-          else if (/\s/.test(c)) { state = 'in-tag'; attrName = ''; html += c; }
-          else if (c === '>') { state = 'text'; attrName = ''; html += c; }
+          else if (HTML_WS.test(c)) { html += c; }
+          else if (c === '>') { state = afterTag(); attrName = ''; html += c; }
           else { state = 'attr-unquoted'; html += c; }
           break;
         case 'attr-unquoted':
-          if (/\s/.test(c)) { state = 'in-tag'; attrName = ''; html += c; }
-          else if (c === '>') { state = 'text'; attrName = ''; html += c; }
+          if (HTML_WS.test(c)) { state = 'in-tag'; attrName = ''; html += c; }
+          else if (c === '>') { state = afterTag(); attrName = ''; html += c; }
           else html += c;
           break;
         case 'attr-quoted':
@@ -144,8 +180,10 @@ export function compile(tr) {
           break;
         case 'skip-attr':
           // Consume mixed-attribute chars without appending to html.
-          // The attribute was replaced with a sentinel on the first hole.
-          if (c === attrQuote) {
+          // The attribute was replaced with a sentinel on the first hole. An
+          // UNQUOTED value (`attrQuote` empty, `a=x${y}` or `a=${x}${y}`) ends
+          // at whitespace, `>` or `/>`, as the HTML tokenizer ends it.
+          if (attrQuote === '' ? (HTML_WS.test(c) || c === '>' || (c === '/' && s[j + 1] === '>')) : c === attrQuote) {
             // Closing quote: finalize the attr-mixed part.
             if (mixedAttr) {
               const idx0 = mixedAttr.firstPartIdx;
@@ -160,13 +198,17 @@ export function compile(tr) {
               // statics[n] = prefix of strings[last+1] up to closing quote
               const statics = [];
               const s0 = strings[group[0]];
-              const qp = s0.lastIndexOf(attrQuote);
-              statics.push(qp >= 0 ? s0.slice(qp + 1) : s0);
+              if (attrQuote === '') {
+                statics.push(s0.slice(s0.lastIndexOf('=') + 1).trimStart());
+              } else {
+                const qp = s0.lastIndexOf(attrQuote);
+                statics.push(qp >= 0 ? s0.slice(qp + 1) : s0);
+              }
               for (let k = 1; k < group.length; k++) {
                 statics.push(strings[group[k]]);
               }
               const sLast = strings[group[group.length - 1] + 1];
-              const eq = sLast.indexOf(attrQuote);
+              const eq = attrQuote === '' ? j : sLast.indexOf(attrQuote);
               statics.push(eq >= 0 ? sLast.slice(0, eq) : sLast);
 
               const specialized = isBindingPrefix(mixedAttr.name[0]);
@@ -191,8 +233,11 @@ export function compile(tr) {
               }
               mixedAttr = null;
             }
-            state = 'in-tag';
             attrName = '';
+            // A quoted value's closing quote was consumed with it; an unquoted
+            // value's terminator is markup and is kept.
+            if (attrQuote === '') html += c;
+            state = (attrQuote === '' && c === '>') ? afterTag() : 'in-tag';
           }
           break;
       }
@@ -209,28 +254,38 @@ export function compile(tr) {
         continue;
       }
       if (state === 'rawtext') {
-        // Inside <script>/<style>: per-render interpolation isn't supported;
-        // the compile cache would lock in whatever was first rendered. The
-        // hole is dropped and authors should set body text via a child part
-        // outside the raw-text container, or inline style/script directly.
+        // Inside <script> / <style> / <textarea> / <title> the parser reads a
+        // comment marker as text, so the hole leaves a text sentinel that
+        // `splitRawTextSentinels` turns into a marker comment after parsing.
+        // It is then an ordinary child part committing text nodes, which is
+        // what lit does and what SSR's raw-text hole emits.
         rawTail = '';
-        parts.push({ kind: 'noop', path: [] });
+        html += `${RAW_SENTINEL}${partIdx}${RAW_SENTINEL}`;
+        parts.push({ kind: 'child', path: [] });
         continue;
       }
+      // An unquoted value that goes on after its hole (`a=${x}${y}`,
+      // `a=${x}px`) is interpolated, like a quoted one.
+      const next = strings[i + 1];
+      const unquotedGoesOn = state === 'after-eq'
+        && (next === '' ? i + 1 < strings.length - 1 : !/^([ \t\n\f\r]|>|\/>)/.test(next));
       if (state === 'text') {
         // Child hole: insert a comment marker. Use bracketed markers so we can
         // later walk all comments and find ours without ambiguity.
         html += `<!--${MARKER}${partIdx}-->`;
         parts.push({ kind: 'child', path: [] });
-      } else if (state === 'in-tag') {
-        // Element-position hole: `<tag ${expr}>`. Used by the `ref` directive
+      } else if (state === 'in-tag' || state === 'after-name') {
+        // Element-position hole: `<tag ${expr}>`, also after a bare attribute
+        // (`<input disabled ${expr}>`). Used by the `ref` directive
         // (and any future element-bound directive). Emit a sentinel attribute
         // on the current open tag; at bind time the attribute is stripped
         // and the element is captured into the part.
         const sentinel = `data-${MARKER}${partIdx}`;
         html += `${sentinel}=""`;
         parts.push({ kind: 'element', path: [] });
-      } else if (state === 'after-eq') {
+        state = 'in-tag';
+        attrName = '';
+      } else if (state === 'after-eq' && !unquotedGoesOn) {
         const prefix = attrName[0];
         const name = attrName.slice(1);
         if (isBindingPrefix(prefix)) {
@@ -249,34 +304,42 @@ export function compile(tr) {
         }
         state = 'in-tag';
         attrName = '';
-      } else if (state === 'attr-quoted' || state === 'attr-unquoted') {
+      } else if (state === 'attr-quoted' || state === 'attr-unquoted' || state === 'after-eq') {
         // First hole inside a quoted attribute value: start mixed-attr tracking.
         // Replace the entire attribute with a sentinel (same as regular attr).
+        if (state !== 'attr-quoted') attrQuote = '';
         html = html.slice(0, attrStart);
         const sentinel = `data-${MARKER}${partIdx}`;
         html += `${sentinel}=""`;
         mixedAttr = { name: attrName, firstPartIdx: partIdx };
         parts.push({ kind: 'noop', path: [] }); // patched to attr-mixed at close-quote
         state = 'skip-attr';
-      } else if (state === 'skip-attr') {
-        // Subsequent hole in the same mixed attribute.
+      } else {
+        // `skip-attr`: a later hole in the same mixed attribute. Any other
+        // state is a hole where no binding can sit (a tag name, `</div ${x}>`):
+        // it binds nothing, as in lit's production build, and still takes its
+        // index so every later part keeps its own.
         parts.push({ kind: 'noop', path: [] });
       }
     }
   }
 
   const templateEl = document.createElement('template');
-  if (tr.svg) {
-    // An svg`` fragment is parsed inside an <svg> wrapper so its elements
-    // land in the SVG namespace, then the wrapper is unwrapped BEFORE the
-    // slot and path walks, so every recorded path is relative to the
-    // fragment's own root, as it is for an html`` template (lit does the same).
-    templateEl.innerHTML = `<svg>${html}</svg>`;
+  if (tr.svg || tr.mathml) {
+    // An svg`` (or mathml``) fragment is parsed inside an <svg> (or <math>)
+    // wrapper so its elements land in that namespace, then the wrapper is
+    // unwrapped BEFORE the slot and path walks, so every recorded path is
+    // relative to the fragment's own root, as it is for an html`` template
+    // (lit does the same).
+    const wrapTag = tr.svg ? 'svg' : 'math';
+    templateEl.innerHTML = `<${wrapTag}>${html}</${wrapTag}>`;
     const wrapper = /** @type {Element} */ (templateEl.content.firstChild);
     wrapper.replaceWith(...wrapper.childNodes);
   } else {
     templateEl.innerHTML = html;
   }
+
+  if (html.includes(RAW_SENTINEL)) splitRawTextSentinels(templateEl.content);
 
   // Mark every <slot> in the template for framework projection and
   // register a SLOT part for each so the slot-apply step can find them on
@@ -293,6 +356,38 @@ export function compile(tr) {
   cached = { templateEl, parts, formActions };
   templateCache.set(strings, cached);
   return cached;
+}
+
+/**
+ * Replace each raw-text hole's sentinel with a `wjm-<idx>` marker comment, so
+ * the path walk records it as a child part. A comment inside `<script>` or
+ * `<textarea>` is a DOM child the element's text (`textContent`, `.text`,
+ * `.value`) ignores, which is how lit anchors a raw-text binding too.
+ *
+ * @param {DocumentFragment} root
+ */
+function splitRawTextSentinels(root) {
+  /** @type {Text[]} */
+  const hits = [];
+  /** @param {Node} node */
+  const collect = (node) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === 3) { if (/** @type {Text} */ (child).data.includes(RAW_SENTINEL)) hits.push(/** @type {Text} */ (child)); }
+      else collect(child);
+    }
+  };
+  collect(root);
+  for (const text of hits) {
+    const pieces = text.data.split(RAW_SENTINEL);
+    /** @type {Node[]} */
+    const nodes = [];
+    // pieces alternate text, index, text, index, ..., text
+    for (let k = 0; k < pieces.length; k++) {
+      if (k % 2) nodes.push(document.createComment(`${MARKER}${pieces[k]}`));
+      else if (pieces[k]) nodes.push(document.createTextNode(pieces[k]));
+    }
+    text.replaceWith(...nodes);
+  }
 }
 
 /**

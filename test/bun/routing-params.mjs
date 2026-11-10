@@ -40,4 +40,27 @@ assert.equal(Object.getOwnPropertyDescriptor(params, 'then')?.enumerable, false)
 const resolved = await Promise.resolve({ ...params });
 assert.deepEqual(resolved, { id: '7', slug: 'hello' });
 
+// Catch-all params are string[] (Next parity): a required one splits the tail,
+// an empty optional one omits its key, an empty required one does not match.
+{
+  const { buildRouteTable, matchPage } = await import('../../packages/server/src/router.js');
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'wj-catchall-'));
+  try {
+    for (const d of ['app/docs/[...slug]', 'app/opt/[[...rest]]']) {
+      mkdirSync(join(dir, d), { recursive: true });
+      writeFileSync(join(dir, d, 'page.js'), 'export default () => 1;\n');
+    }
+    const t = await buildRouteTable(dir);
+    assert.deepEqual(matchPage(t, '/docs/a/b c').params, { slug: ['a', 'b c'] });
+    assert.equal(matchPage(t, '/docs'), null);
+    assert.deepEqual(matchPage(t, '/opt').params, {});
+    assert.deepEqual(matchPage(t, '/opt/x').params, { rest: ['x'] });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 console.log(`OK  awaitable params/searchParams behave identically on ${runtime}`);

@@ -2,7 +2,7 @@
  * Unit tests for `resolveAssetUrl` (#1194), the server-side body behind the
  * isomorphic `asset()` helper. An author marks a url explicitly:
  *
- *   html`<link rel="stylesheet" href=${asset('/public/app.css')}>`
+ *   html`<link rel="stylesheet" href=${asset('/app.css')}>`
  *
  * and gets `?v=<content-hash>` in production, which the static route serves
  * `immutable` for a year, so a deploy that changes the file changes the url
@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import {
   setAssetRoots,
   clearAssetHashCache,
-  setElisionFingerprint,
+  setServeFingerprint,
   withAssetHash,
   resolveAssetUrl,
   assetHashFor,
@@ -56,44 +56,44 @@ afterEach(() => {
 });
 
 test('a public asset is fingerprinted', () => {
-  const out = resolveAssetUrl('/public/app.css');
-  assert.match(out, /^\/public\/app\.css\?v=[0-9a-f]+$/);
-  assert.equal(out, withAssetHash('/public/app.css'), 'agrees with the framework hash');
+  const out = resolveAssetUrl('/app.css');
+  assert.match(out, /^\/app\.css\?v=[0-9a-f]+$/);
+  assert.equal(out, '/app.css?v=' + assetHashFor(join(appDir, 'public', 'app.css')), 'the hash of public/app.css');
 });
 
 test('the hash changes when the bytes change', () => {
-  const before = resolveAssetUrl('/public/app.css');
+  const before = resolveAssetUrl('/app.css');
   writeFileSync(join(appDir, 'public', 'app.css'), 'body{color:blue}');
   clearAssetHashCache();
-  assert.notEqual(resolveAssetUrl('/public/app.css'), before);
+  assert.notEqual(resolveAssetUrl('/app.css'), before);
 });
 
-test('a public asset hash does not move with the elision verdict', () => {
-  // public/ lives under appDir, so the elision-fingerprint fold admits it
+test('a public asset hash does not move with the serve fingerprint', () => {
+  // public/ lives under appDir, so the serve-fingerprint fold admits it
   // unless excluded explicitly. That was inert while only module specifiers
   // were hashed; asset() routes public paths here. Without the exclusion a
-  // deploy that merely flips an UNRELATED component between elidable and
-  // interactive changes every marked asset url, so every visitor re-downloads
+  // deploy that merely flips an UNRELATED component's `static lazy` changes
+  // every marked asset url, so every visitor re-downloads
   // byte-identical files, which is the cost the hash exists to avoid.
   const seen = new Set();
   for (const fp of ['', 'verdict-a', 'verdict-b']) {
-    setElisionFingerprint(fp);
+    setServeFingerprint(fp);
     clearAssetHashCache();
-    seen.add(resolveAssetUrl('/public/app.css'));
+    seen.add(resolveAssetUrl('/app.css'));
   }
-  setElisionFingerprint('');
+  setServeFingerprint('');
   clearAssetHashCache();
   assert.equal(seen.size, 1, `the url must depend on bytes alone, saw: ${[...seen].join(' ')}`);
 });
 
-test('a core file hash does not move with the elision verdict either', () => {
+test('a core file hash does not move with the serve fingerprint either', () => {
   // Same bug as the public/ case, one directory over, and invisible in this
   // monorepo: a REAL install resolves core to <appDir>/node_modules/@webjsdev/
   // core, which IS under appDir, whereas the workspace symlink here lands
   // outside it. So the fold silently applied to core in every deployed app.
-  // Core is served verbatim (never elision-transformed), so folding buys
-  // nothing and would re-download the whole runtime on any deploy that merely
-  // flipped an unrelated component's elidability.
+  // Core is served verbatim (never rewritten), so folding buys nothing and
+  // would re-download the whole runtime on any deploy that merely flipped an
+  // unrelated component's `static lazy`.
   const realInstallCore = join(appDir, 'node_modules', '@webjsdev', 'core');
   mkdirSync(realInstallCore, { recursive: true });
   const coreFile = join(realInstallCore, 'webjs-core-browser.js');
@@ -102,11 +102,11 @@ test('a core file hash does not move with the elision verdict either', () => {
 
   const seen = new Set();
   for (const fp of ['', 'verdict-a', 'verdict-b']) {
-    setElisionFingerprint(fp);
+    setServeFingerprint(fp);
     clearAssetHashCache();
     seen.add(assetHashFor(coreFile));
   }
-  setElisionFingerprint('');
+  setServeFingerprint('');
   clearAssetHashCache();
   assert.equal(seen.size, 1, `core must hash over bytes alone, saw: ${[...seen].join(' ')}`);
 });
@@ -116,8 +116,8 @@ test('a fragment survives and the query precedes it', () => {
   // Appending naively would emit `/logo.svg#icon?v=H`, which requests the
   // file with NO query (losing immutable caching) and leaves a fragment that
   // matches no element id.
-  const out = resolveAssetUrl('/public/brand/logo.svg#icon');
-  assert.match(out, /^\/public\/brand\/logo\.svg\?v=[0-9a-f]+#icon$/);
+  const out = resolveAssetUrl('/brand/logo.svg#icon');
+  assert.match(out, /^\/brand\/logo\.svg\?v=[0-9a-f]+#icon$/);
 });
 
 test('a private file is never read, whatever the caller passes', () => {
@@ -141,7 +141,7 @@ test('a private file is never read, whatever the caller passes', () => {
 
 test('a traversal out of public/ is refused', () => {
   writeFileSync(join(appDir, '.env'), 'SECRET=1');
-  for (const p of ['/public/../.env', '/public/%2E%2E/.env', '/public/%2e%2e/.env']) {
+  for (const p of ['/../.env', '/%2E%2E/.env', '/%2e%2e/.env']) {
     assert.equal(resolveAssetUrl(p), p, `${p} must not escape public/`);
   }
 });
@@ -151,8 +151,8 @@ test('non-public, cross-origin, relative, and queried paths pass through', () =>
     'https://cdn.example.com/a.css',
     '//cdn.example.com/a.css',
     './a.css',
-    '/public/app.css?theme=dark',
-    '/public/missing.css',
+    '/app.css?theme=dark',
+    '/missing.css',
     '',
   ]) {
     assert.equal(resolveAssetUrl(p), p);
@@ -161,14 +161,14 @@ test('non-public, cross-origin, relative, and queried paths pass through', () =>
 
 test('a base path is stripped for resolution and kept on the url', () => {
   // Compose order matches withAssetHash: basePath first, then the hash.
-  const out = resolveAssetUrl('/base/public/app.css', '/base');
-  assert.match(out, /^\/base\/public\/app\.css\?v=[0-9a-f]+$/);
+  const out = resolveAssetUrl('/base/app.css', '/base');
+  assert.match(out, /^\/base\/app\.css\?v=[0-9a-f]+$/);
 });
 
 test('it is a no-op when fingerprinting is disabled', () => {
   // Dev never enables it, so dev output stays byte-identical.
   setAssetRoots({ appDir: '', coreDir: '', enabled: false });
-  assert.equal(resolveAssetUrl('/public/app.css'), '/public/app.css');
+  assert.equal(resolveAssetUrl('/app.css'), '/app.css');
 });
 
 /*
@@ -184,13 +184,13 @@ test('asset() returns the path unchanged with no provider (the browser case)', a
   // another copy of this file. The relative path pins it to this tree.
   const { asset, setAssetUrlProvider } = await import('../../../core/src/asset-url.js');
   setAssetUrlProvider(null);
-  assert.equal(asset('/public/app.css'), '/public/app.css');
+  assert.equal(asset('/app.css'), '/app.css');
 
   setAssetUrlProvider((p) => resolveAssetUrl(p));
-  assert.match(asset('/public/app.css'), /\?v=[0-9a-f]+$/);
+  assert.match(asset('/app.css'), /\?v=[0-9a-f]+$/);
 
   // A throwing provider must degrade to the plain path, never propagate.
   setAssetUrlProvider(() => { throw new Error('boom'); });
-  assert.equal(asset('/public/app.css'), '/public/app.css');
+  assert.equal(asset('/app.css'), '/app.css');
   setAssetUrlProvider(null);
 });

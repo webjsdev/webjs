@@ -118,8 +118,7 @@ try {
   mkdirSync(join(dir, 'components'), { recursive: true });
   writeFileSync(join(dir, 'app/layout.ts'), "import { html } from '@webjsdev/core';\nexport default ({ children }) => html`<div><header>A</header>${children}</div>`;\n");
   writeFileSync(join(dir, 'app/page.ts'), "import { html } from '@webjsdev/core';\nimport '../components/counter.ts';\nexport default () => html`<main>B<my-counter></my-counter></main>`;\n");
-  // Genuinely interactive (an `@click`), or elision drops it and it never
-  // enters the shipped closure the classifier reads.
+  // A component module, so it enters the shipped closure the classifier reads.
   writeFileSync(join(dir, 'components/counter.ts'), `
 import { WebComponent, html } from '@webjsdev/core';
 class Counter extends WebComponent({ count: Number }) {

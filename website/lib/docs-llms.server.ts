@@ -483,12 +483,9 @@ export async function renderDocsIndexSection(origin: string): Promise<string[]> 
  * Render /llms-full.txt: the FULL prose corpus. For each page emit a
  * `# <Title>` heading, its absolute URL, then the page's markdown body.
  *
- * DEPLOYMENT-SAFE SOURCING: the corpus is built from the
- * pages under `app/docs/**`, which always ship with the deployed app. We OPTIONALLY fold in the repo-root WebJs skill at
- * `.agents/skills/webjs/` (SKILL.md + references/) as extra enrichment,
- * but ONLY via a try/catch read that no-ops when the directory is absent
- * (a standalone deploy may not carry the monorepo root). The docs pages
- * always lead; the skill is a bonus that never breaks the deployed app.
+ * DEPLOYMENT-SAFE SOURCING: the corpus is built from the pages under
+ * `app/docs/**`, which always ship with the deployed app. The docs site is
+ * the canonical documentation, so nothing else is folded in.
  */
 export async function renderLlmsFull(req?: Request): Promise<string> {
   const origin = originFor(req);
@@ -516,38 +513,6 @@ export async function renderLlmsFull(req?: Request): Promise<string> {
     out.push('');
     out.push('---');
     out.push('');
-  }
-
-  // Optional enrichment from the monorepo WebJs skill. Wrapped so a
-  // standalone deployed docs app (no repo root) simply skips it.
-  try {
-    const skillRoot = join(APP_ROOT, '..', '.agents', 'skills', 'webjs');
-    const refsDir = join(skillRoot, 'references');
-    const files = (await readdir(refsDir)).filter((f) => f.endsWith('.md')).sort();
-    if (files.length) {
-      out.push('# Agent skill (supplementary, monorepo only)');
-      out.push('');
-      const skillMd = await readFile(join(skillRoot, 'SKILL.md'), 'utf8').catch(() => '');
-      if (skillMd) {
-        out.push('## .agents/skills/webjs/SKILL.md');
-        out.push('');
-        out.push(skillMd.trim());
-        out.push('');
-        out.push('---');
-        out.push('');
-      }
-      for (const f of files) {
-        const md = await readFile(join(refsDir, f), 'utf8');
-        out.push(`## references/${f}`);
-        out.push('');
-        out.push(md.trim());
-        out.push('');
-        out.push('---');
-        out.push('');
-      }
-    }
-  } catch {
-    /* skill absent in a standalone deploy: docs pages stand alone */
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';

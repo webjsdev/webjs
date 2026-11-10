@@ -40,7 +40,7 @@ That is the complete divergence surface, at the level a person actually hits it.
 A few of the entries, to give the shape of it:
 
 - **`'use client'` does nothing.** There is no server/client component split, [no RSC render tree, and no Flight protocol](/blog/server-actions-without-react-server-components). The boundary in WebJs runs between kinds of file, not kinds of component.
-- **Reactive properties are declared in a base-class factory**, `extends WebComponent({ count: Number })`, not with a `@property()` decorator or a `static properties` block. Each one becomes [a real accessor the constructor installs on the instance](/blog/building-on-javascript-not-around-it), which is why a class-field initializer silently replaces it and the re-renders stop.
+- **Reactive properties are declared without a decorator.** Lit's own `static properties` block works as written, and a base-class factory, `extends WebComponent({ count: Number })`, types them for you. Each one becomes [a real accessor the constructor installs on the instance](/blog/building-on-javascript-not-around-it), which is why a class-field initializer silently replaces it and the re-renders stop.
 - **Components render into [light DOM by default](/blog/light-dom-by-default)**, with shadow DOM one line away when you want it.
 - **`fetch()` in a page is the wrong tool.** You call a server action, imported like a normal function, and the import becomes a typed RPC stub.
 - **A browser global in a constructor or `render()` throws during SSR**, because SSR really does run those two and not the browser-only lifecycle hooks.
@@ -49,11 +49,11 @@ Read those five and a pattern shows up. Not one of them is a preference.
 
 # Every one of them was forced
 
-Take the reactive-property factory, the divergence people notice first because it is the most visible cosmetic difference from Lit.
+Take reactive properties, the divergence people notice first because it is the most visible cosmetic difference from Lit.
 
 Lit declares properties with a decorator. Decorators, in the TypeScript form that carries the metadata a framework needs, are not erasable syntax. WebJs has no build step, so types come off with Node's built-in stripper, which overwrites the type syntax with whitespace in place and refuses anything that is not pure erasure. A decorator that needs `emitDecoratorMetadata` cannot survive that, which means the decorator form is not available at any price, however much I might prefer the ergonomics.
 
-So the choice was never "decorator or factory". It was "keep the no-build guarantee or keep the familiar spelling", and no-build is load-bearing for everything else, including the stack traces that point at your real line numbers and the `node_modules` source that reads like source. The factory is what the constraint left standing.
+So the choice was never about taste. It was "keep the no-build guarantee or keep the decorator", and no-build is load-bearing for everything else, including the stack traces that point at your real line numbers and the `node_modules` source that reads like source. The decorator is the only part the constraint takes away. Lit's decorator-free spelling, a `static properties` block plus a `declare` line per prop, is plain JavaScript and erasable types, so it works unchanged, and the factory sits beside it as the shorter form.
 
 The others go the same way. Light DOM is the default because it is the *platform's* default, and a custom element that renders into light DOM is one that global CSS, Tailwind, `querySelector`, form association, and screen readers all treat as ordinary DOM. Not shipping an RSC split is not a gap, it is that WebJs does not have the problem the split solves, since components hydrate per element and pages never hydrate at all. The `.server.ts` boundary is a path-level fact the file router can enforce by refusing to serve the file, which an annotation inside a source file cannot be.
 
@@ -63,19 +63,11 @@ I am not claiming these are the only defensible answers. I am claiming each one 
 
 A short list of differences is only useful if you find out you crossed one. Twenty-four documented gotchas do nothing for a developer who never opens the file, so each divergence needs to announce itself at the moment the old habit fires.
 
-Write a `static properties` block from Lit muscle memory and the component throws immediately, with the migration in the message.
+Write a class field for a reactive property from habit, `count = 0`, and under modern class-field semantics that line runs after `super()` and replaces the accessor the framework installed. Nothing throws. The property just stops re-rendering, which looks exactly like your own bug, and you will go looking for it in your own code first.
 
-```
-Counter: `static properties` is no longer supported. Declare reactive
-properties via the factory instead: `class Counter extends WebComponent({
-count: Number })`. Use the `prop()` helper for options (`prop(Number,
-{ reflect: true })`) and set defaults in the constructor after `super()`.
-See https://webjs.dev/docs/components.
-```
+So `webjs check` names it instead. The violation points at the property, says the class field clobbers the reactive accessor, and gives the replacement, assigning `this.count = 0` inside the constructor after `super()`. The failure it replaces is the silent kind, which is what makes the rule worth having.
 
-It names your class, shows the replacement, and links the reference. The failure it replaces is the silent kind, which is what makes it worth the code. Reactivity that quietly stops working looks like your own bug, and you will go looking for it in your own code first.
-
-The static counterpart is `webjs check`, which today runs 20 correctness rules and nothing else. The bar for a rule is deliberately narrow. It has to catch code that is wrong to ship, a crash or a security leak or a reactive prop that silently stops re-rendering or a type-strip failure, and never a matter of preference. Preferences live in prose where they can be argued with. So a class field replacing a reactive accessor is a rule, and so is a server-only import reaching a module that genuinely ships to the browser. Where you put your files is not.
+That rule is one of a short list `webjs check` runs, correctness rules and nothing else. The bar for a rule is deliberately narrow. It has to catch code that is wrong to ship, a crash or a security leak or a reactive prop that silently stops re-rendering or a type-strip failure, and never a matter of preference. Preferences live in prose where they can be argued with. So a class field replacing a reactive accessor is a rule, and so is a server-only import reaching a module that genuinely ships to the browser. Where you put your files is not.
 
 The pattern is that the divergences are the things that carry enforcement. Familiar surfaces need no guardrail, since being right by default is what makes them familiar. The exceptions are where the throws and the check rules go.
 
@@ -103,6 +95,6 @@ That is the actual test. Not "has someone done this before" but "is the familiar
 
 A framework's identity is not a count of the concepts it invented. Plenty of frameworks with a great deal of original vocabulary are miserable to use, and their originality is the reason.
 
-What is mine is the judgment about where to spend. A no-build runtime that serves the file you wrote. A component model that leans on the real object model instead of covering it. A server boundary the file router enforces at the path level. Display-only components whose JavaScript is not sent at all. Those choices are connected, they hold together, and they cost me the ability to borrow in a few specific places, so I did not borrow there and I wrote down exactly where.
+What is mine is the judgment about where to spend. A no-build runtime that serves the file you wrote. A component model that leans on the real object model instead of covering it. A server boundary the file router enforces at the path level. Pages and server-only components whose JavaScript is never sent at all. Those choices are connected, they hold together, and they cost me the ability to borrow in a few specific places, so I did not borrow there and I wrote down exactly where.
 
 Everywhere else, you already know how to use this. That is not a shortcut I took. It is the feature I worked hardest on.

@@ -18,9 +18,8 @@
  * heuristic ("anything under `app/**` named `page.ts` can morph") is wrong in
  * both directions and neither failure is exotic:
  *
- * - A page that imports a client-effecting non-component util SHIPS WHOLE (the
- *   import-only rule in `component-elision.js`, #605 / #963). Editing it changes
- *   browser-bound JS, so it must reload despite being a page.
+ * - A page never ships (#1686), but a helper it imports may also be imported by
+ *   a component, which makes it browser-bound JS: editing it must reload.
  * - A helper under `modules/<feature>/utils/` imported by both a page and a
  *   component is a component edit by reachability, and its path says nothing.
  *

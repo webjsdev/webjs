@@ -10,7 +10,7 @@ import { buildModuleGraph, bareImports, dynamicBareImports } from '../../src/mod
  * A bare npm vendor specifier (`dayjs`, `@scope/pkg/sub`) is recorded as a
  * SEPARATE edge class (#754), parallel to the dynamic edges of #751. The static
  * app graph still only tracks relative + `#`-alias edges (so the auth gate /
- * elision are unchanged), but the exact bare specifier is kept so SSR can look
+ * boot frontier are unchanged), but the exact bare specifier is kept so SSR can look
  * it up in the vendor importmap and emit a `modulepreload` for the reached
  * vendor URL, flattening the cross-origin CDN waterfall. Builtins and protocol
  * specifiers are excluded; an html-template example import is masked out.
@@ -36,7 +36,7 @@ test('a bare vendor import is recorded as a bare edge, not a static edge', async
 
   const bare = bareImports(graph);
   assert.ok(bare.get(clock)?.has('dayjs'), 'recorded as a bare (vendor) edge');
-  // It is NOT a static graph edge (the gate / elision never resolve it locally).
+  // It is NOT a static graph edge (the gate / frontier never resolve it locally).
   assert.ok(!graph.get(clock), 'a file whose only import is a vendor has no static deps');
 });
 

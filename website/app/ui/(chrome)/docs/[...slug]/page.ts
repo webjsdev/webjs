@@ -10,11 +10,10 @@ import { docsPage, type TocEntry } from '#lib/ui/docs/page.ts';
  * (components, directory) take precedence over this one.
  */
 
-// A catch-all segment arrives as the list of path segments (route-types.js
-// types it string[]); the joined path is the DOC_PAGES key.
-async function pathOf(params: PageProps['params']): Promise<string> {
-  const s: string | readonly string[] | undefined = (await params).slug;
-  return Array.isArray(s) ? s.join('/') : typeof s === 'string' ? s : '';
+// A catch-all segment arrives as the list of path segments (string[], as in
+// Next); the joined path is the DOC_PAGES key.
+async function pathOf(params: PageProps<'/ui/docs/[...slug]'>['params']): Promise<string> {
+  return (await params).slug.join('/');
 }
 
 export async function generateMetadata({ params }: PageProps<'/ui/docs/[...slug]'>) {

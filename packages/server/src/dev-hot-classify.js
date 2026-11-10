@@ -226,9 +226,10 @@ export function primeHotBaselines(files, baselines, read) {
 /**
  * Walk each changed shipped file UP the shipped importer graph to the component
  * modules (the hot BOUNDARIES) that would have to be re-imported for the tab to
- * run the edit. A component module stops the walk; a route module (a page or
- * layout that ships) or a module nothing shipped imports means the edit has no
- * boundary and the page must reload. Every module the walk passes through on
+ * run the edit. A component module stops the walk; a browser entry that is not
+ * a component (`instrumentation-client`; a page or layout never ships, #1686)
+ * or a module nothing shipped imports means the edit has no boundary and the
+ * page must reload. Every module the walk passes through on
  * the way must have no module-scope side effect, because re-evaluating it would
  * run that effect a second time. Each boundary must still be hot-swappable
  * against the baseline signature the browser holds.
@@ -258,8 +259,9 @@ export async function findHotBoundaries(changed, ctx) {
     const f = /** @type {string} */ (queue.shift());
     if (seen.has(f)) continue;
     seen.add(f);
-    // A component module is a boundary before anything else: one an
-    // import-only page re-emits has no shipped importer, and is still one.
+    // A component module is a boundary before anything else: one the boot
+    // imports from a route module's frontier has no shipped importer, and is
+    // still one.
     if (ctx.componentFiles.has(f)) { boundaries.add(f); continue; }
     if (ctx.routeFiles.has(f)) return fail('no-hot-boundary', f);
     if (await ctx.sideEffectOf(f)) return fail('side-effect-module', f);

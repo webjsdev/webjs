@@ -4,8 +4,23 @@
  * This adds an offline fallback and an asset cache WITHOUT changing the
  * JavaScript-disabled baseline: with JS off no service worker registers, so
  * pages, links, and forms behave exactly as they do today. It is registered
- * explicitly (see the opt-in snippet in the skill's references/service-worker.md), never
- * automatically.
+ * explicitly, never automatically. To opt in, add this to the root layout's
+ * <head> (with a CSP enabled, stamp it with nonce="${cspNonce()}"):
+ *
+ *   <script>
+ *     if ('serviceWorker' in navigator) {
+ *       addEventListener('load', () => {
+ *         // Tie the worker version to the deploy via the importmap build id.
+ *         const tag = document.querySelector('script[type="importmap"]');
+ *         const build = (tag && tag.dataset.webjsBuild) || '';
+ *         navigator.serviceWorker.register('/sw.js' + (build ? '?v=' + build : ''));
+ *       });
+ *     }
+ *   </script>
+ *
+ * To opt out again, delete the snippet and ship
+ * navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()))
+ * for one release.
  *
  * Strategy:
  *   - Navigations are NETWORK-FIRST: always try the network so the user sees
@@ -20,7 +35,7 @@
  *     gets a new URL and the cache cannot serve stale bytes for those.
  *
  *     A public/ asset is the exception: its URL is fingerprinted only when you
- *     mark it with asset() (href=${asset('/public/app.css')}). An un-marked
+ *     mark it with asset() (href=${asset('/app.css')}). An un-marked
  *     public/ URL is stable across deploys, so this worker serves the CACHED
  *     copy and revalidates behind it, and the first load after a deploy shows
  *     the OLD bytes. The cache version below will not necessarily rescue you,

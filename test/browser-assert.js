@@ -15,10 +15,13 @@ export const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
   isOk: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
   notOk: (v, msg) => { if (v) throw new Error(msg || `Expected falsy, got ${v}`); },
+  oneOf: (v, list, msg) => { if (!list.includes(v)) throw new Error(msg || `Expected one of ${JSON.stringify(list)}, got ${JSON.stringify(v)}`); },
   isTrue: (v, msg) => { if (v !== true) throw new Error(msg || `Expected true, got ${v}`); },
   isFalse: (v, msg) => { if (v !== false) throw new Error(msg || `Expected false, got ${v}`); },
   isNaN: (v, msg) => { if (!Number.isNaN(v)) throw new Error(msg || `Expected NaN, got ${v}`); },
   isUndefined: (v, msg) => { if (v !== undefined) throw new Error(msg || `Expected undefined, got ${JSON.stringify(v)}`); },
+  isEmpty: (v, msg) => { if ((v.length ?? v.size ?? Object.keys(v).length) !== 0) throw new Error(msg || `Expected empty, got ${JSON.stringify(v)}`); },
+  instanceOf: (v, C, msg) => { if (!(v instanceof C)) throw new Error(msg || `Expected an instance of ${C && C.name}`); },
   isArray: (v, msg) => { if (!Array.isArray(v)) throw new Error(msg || `Expected array, got ${typeof v}`); },
   equal: (a, b, msg) => {
     if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
@@ -31,6 +34,15 @@ export const assert = {
   },
   notStrictEqual: (a, b, msg) => {
     if (a === b) throw new Error(msg || `Expected different references`);
+  },
+  // chai's `include`: membership in an array, or a substring of a string.
+  include: (haystack, needle, msg) => {
+    if (!haystack.includes(needle)) throw new Error(msg || `Expected ${JSON.stringify(haystack)} to include ${JSON.stringify(needle)}`);
+  },
+  // chai's `sameMembers`: the same elements, compared with `===`, in any order.
+  sameMembers: (a, b, msg) => {
+    const ok = a.length === b.length && a.every((x) => b.includes(x)) && b.every((x) => a.includes(x));
+    if (!ok) throw new Error(msg || `Expected the same members (${a.length} vs ${b.length} items)`);
   },
   match: (s, re, msg) => { if (!re.test(s)) throw new Error(msg || `Expected ${s} to match ${re}`); },
   deepEqual: (a, b, msg) => {

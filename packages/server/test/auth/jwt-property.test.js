@@ -25,24 +25,33 @@ test('round-trips claims for a range of payloads', async () => {
   ];
   for (const p of payloads) {
     const back = await decodeJwt(await encodeJwt(p, SECRET), SECRET);
-    assert.deepEqual(back, p, 'decode must return the exact signed claims');
+    // Encoding adds iat and jti, as Auth.js does (#1686); the rest is exact.
+    const { iat, jti, ...rest } = /** @type any */ (back);
+    assert.equal(typeof iat, 'number');
+    assert.equal(typeof jti, 'string');
+    assert.deepEqual(rest, p, 'decode must return the exact claims');
   }
 });
 
 test('every single-character tamper of any segment is rejected', async () => {
   const token = await encodeJwt({ sub: 'victim', role: 'user' }, SECRET);
-  const [h, p, s] = token.split('.');
-  // Probe a handful of positions in each of the three segments.
-  for (const [seg, idx] of [['h', h], ['p', p], ['s', s]].flatMap(([name, part]) =>
-    [0, Math.floor(part.length / 2), part.length - 1].map((i) => [name, i]))) {
-    const parts = [h, p, s];
-    const which = seg === 'h' ? 0 : seg === 'p' ? 1 : 2;
+  const parts = token.split('.');
+  // A compact JWE: header, (empty) key, iv, ciphertext, tag. Probe a handful
+  // of positions in every non-empty segment.
+  assert.equal(parts.length, 5);
+  for (let which = 0; which < parts.length; which++) {
     const part = parts[which];
-    const ch = part[idx] === 'A' ? 'B' : 'A';
-    parts[which] = part.slice(0, idx) + ch + part.slice(idx + 1);
-    const tampered = parts.join('.');
-    if (tampered === token) continue;
-    assert.equal(await decodeJwt(tampered, SECRET), null, `a tamper in segment ${seg}@${idx} must be rejected`);
+    if (!part) continue;
+    // Not the last character: its low bits can be base64 padding, so a swap
+    // there may decode to the very same bytes and is no tamper at all.
+    for (const idx of [0, Math.floor(part.length / 2), part.length - 2]) {
+      const copy = parts.slice();
+      const ch = part[idx] === 'A' ? 'B' : 'A';
+      copy[which] = part.slice(0, idx) + ch + part.slice(idx + 1);
+      const tampered = copy.join('.');
+      if (tampered === token) continue;
+      assert.equal(await decodeJwt(tampered, SECRET), null, `a tamper in segment ${which}@${idx} must be rejected`);
+    }
   }
 });
 
@@ -53,8 +62,11 @@ test('a token signed with a different secret is rejected', async () => {
 });
 
 test('an expired token is rejected; a future-dated one is accepted', async () => {
-  const expired = await encodeJwt({ sub: 'x', exp: Math.floor(Date.now() / 1000) - 1 }, SECRET);
+  const expired = await encodeJwt({ sub: 'x', exp: Math.floor(Date.now() / 1000) - 60 }, SECRET);
   assert.equal(await decodeJwt(expired, SECRET), null, 'an expired token must be rejected');
+  // Auth.js allows 15 seconds of clock skew on exp (#1686).
+  const skewed = await encodeJwt({ sub: 'x', exp: Math.floor(Date.now() / 1000) - 5 }, SECRET);
+  assert.ok(await decodeJwt(skewed, SECRET), 'within the 15s clock tolerance a token still verifies');
   const fresh = await encodeJwt({ sub: 'x', exp: Math.floor(Date.now() / 1000) + 60 }, SECRET);
   assert.ok(await decodeJwt(fresh, SECRET), 'a not-yet-expired token must verify');
 });

@@ -11,10 +11,11 @@ import { signIn } from '../auth.server.ts';
 //
 // A validation failure returns fieldErrors + values, which re-renders the SAME
 // page at 422 with the messages and the user's typed input preserved. On
-// success it signs the new user in: signIn returns a 302 Response carrying the
-// session cookie, and an action may return a Response, which the framework
-// honors verbatim. signIn lives in the server-only auth module, imported here
-// server-to-server, so it never reaches the browser.
+// success it signs the new user in the way Auth.js does in a Next action:
+// signIn sets the session cookie on the response and throws a redirect, which a
+// form action answers with a 303 to the dashboard. signIn lives in the
+// server-only auth module, imported here server-to-server, so it never reaches
+// the browser.
 export interface SignupInput {
   name?: string;
   email?: string;
@@ -37,5 +38,5 @@ export async function signup(input: SignupInput) {
     return { success: false as const, fieldErrors: { email: 'Email already registered' }, values, status: 409 };
   }
   await db.insert(users).values({ name, email, passwordHash: await hash(password) });
-  return signIn('credentials', { email, password }, { redirectTo: '/features/auth/dashboard' });
+  await signIn('credentials', { email, password }, { redirectTo: '/features/auth/dashboard' });
 }

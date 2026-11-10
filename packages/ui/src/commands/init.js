@@ -280,8 +280,8 @@ async function writeLibUtils(cwd, utilsAlias, registryUrl, overwrite) {
   }
 
   // The onBeforeCache() DOM helper lives in a SEPARATE module (#819) because
-  // it references `document`, so keeping it out of cn()'s file prevents the
-  // elision analyzer pinning every page that imports cn to the browser.
+  // it references `document`, so keeping it out of cn()'s file keeps cn()
+  // free of browser globals for the pages and layouts that import it.
   // Overlay components import it from `../lib/dom.ts`, so write it as a
   // sibling of the utils file, which lands it at lib/utils/dom.ts next to
   // cn.ts. `add` reads that same adjacency when it rewrites the import.

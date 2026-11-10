@@ -9,35 +9,34 @@ export default function Database() {
 
     <h2>What the scaffold gives you</h2>
     <code-block>db/
-  columns.server.ts      column helpers (the few bits that differ per dialect)
-  schema.server.ts       your models + relations
+  schema.server.ts       your models + relations, plain Drizzle
   connection.server.ts   opens the driver, exports \`db\`
   seed.server.ts         optional seed (run via \`webjs db seed\`)
   migrations/            generated SQL (committed)
 drizzle.config.ts        drizzle-kit config (root)</code-block>
-    <p>Only <code>db/columns.server.ts</code> and <code>db/connection.server.ts</code> are dialect-specific. <code>schema.server.ts</code>, your queries, and your actions are identical whether you run SQLite or Postgres.</p>
+    <p>The schema is plain Drizzle, written as Drizzle's own docs write it, so nothing WebJs-specific stands between you and the builders. The schema's column builders (<code>drizzle-orm/sqlite-core</code> or <code>drizzle-orm/pg-core</code>) and <code>db/connection.server.ts</code> are the dialect-specific parts; your queries and actions are identical whether you run SQLite or Postgres.</p>
 
     <h2>The schema</h2>
-    <p>Write models against the helpers in <code>db/columns.server.ts</code> (which re-export the raw Drizzle builders like <code>text</code> / <code>integer</code> plus thin helpers for the columns that differ across dialects: <code>table</code>, <code>pk</code>, <code>uuidPk</code>, <code>bool</code>, <code>createdAt</code>, <code>updatedAt</code>, <code>index</code>):</p>
-    <code-block>// db/schema.server.ts
+    <p>Write models with Drizzle's builders directly:</p>
+    <code-block>// db/schema.server.ts (SQLite)
 import { defineRelations } from 'drizzle-orm';
-import { table, pk, text, integer, createdAt, index } from './columns.server.ts';
+import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
 
-export const users = table('users', {
-  id: pk(),
+export const users = sqliteTable('users', {
+  id: integer().primaryKey({ autoIncrement: true }),
   email: text().notNull().unique(),
   name: text(),
-  createdAt: createdAt(),
+  createdAt: integer({ mode: 'timestamp_ms' }).notNull().defaultNow(),
 });
 
-export const posts = table('posts', {
-  id: pk(),
+export const posts = sqliteTable('posts', {
+  id: integer().primaryKey({ autoIncrement: true }),
   slug: text().notNull().unique(),
   title: text().notNull(),
   body: text().notNull(),
   authorId: integer().notNull().references(() => users.id, { onDelete: 'cascade' }),
-  createdAt: createdAt(),
-}, (t) => [index(t.authorId), index(t.createdAt)]);
+  createdAt: integer({ mode: 'timestamp_ms' }).notNull().defaultNow(),
+}, (t) => [index('posts_author_id_idx').on(t.authorId)]);
 
 export const relations = defineRelations({ users, posts }, (r) => ({
   users: { posts: r.many.posts({ from: r.users.id, to: r.posts.authorId }) },
@@ -45,7 +44,7 @@ export const relations = defineRelations({ users, posts }, (r) => ({
 }));
 
 export type Post = typeof posts.$inferSelect;</code-block>
-    <p>Column keys map to <code>snake_case</code> SQL automatically (no per-column name strings). A primary key is <code>pk()</code> (auto-increment integer, <code>id: number</code>) or <code>uuidPk()</code> (<code>id: string</code>). <code>createdAt()</code> defaults to now at the database level.</p>
+    <p>A column's SQL name is its key unless you give one (<code>integer('created_at', { mode: 'timestamp_ms' })</code>). <code>integer({ mode: 'timestamp_ms' })</code> reads and writes a JavaScript <code>Date</code>; plain <code>integer()</code> is a number. A JSON column is <code>text({ mode: 'json' }).$type&lt;T&gt;()</code> on SQLite and <code>jsonb().$type&lt;T&gt;()</code> on Postgres. A UUID key is <code>text().primaryKey().$defaultFn(() =&gt; crypto.randomUUID())</code> on SQLite and <code>uuid().primaryKey().defaultRandom()</code> on Postgres.</p>
 
     <h2>Migrations</h2>
     <p>Drizzle has no client to generate. <code>generate</code> turns your schema into SQL; <code>migrate</code> applies it.</p>
@@ -127,7 +126,7 @@ export default async function Home() {
     <h2>Switching to Postgres</h2>
     <p>Scaffold with the dialect you want:</p>
     <code-block>webjs create my-app --db postgres</code-block>
-    <p>That writes the Postgres variants of <code>db/columns.server.ts</code> and <code>db/connection.server.ts</code> (and the <code>pg</code> driver). The deploy files follow the dialect too: <code>compose.yaml</code> runs a <code>postgres:17-alpine</code> <code>db</code> service the app waits on (healthy before the boot-time migrate), and the generated CI workflow starts a Postgres service container, so <code>docker compose up</code> and the first CI run both work with no edits. Your <code>schema.server.ts</code>, queries, and actions are unchanged. To move an existing app, swap those two files for the Postgres variants and point <code>DATABASE_URL</code> at your Postgres instance. Migrations are generated per dialect, and runtime behaviour differs (case-sensitivity, constraints), so run your tests against the production engine before relying on a dev-SQLite / prod-Postgres setup. The generated <code>DATABASE_URL</code> names a lowercased, separator-folded form of the app name, so <code>MyApp</code> gets <code>myapp</code>, which is the same name Postgres folds an unquoted <code>CREATE DATABASE MyApp</code> to.</p>
+    <p>That writes the Postgres variants of <code>db/schema.server.ts</code> (<code>pgTable</code> from <code>drizzle-orm/pg-core</code>) and <code>db/connection.server.ts</code> (and the <code>pg</code> driver). The deploy files follow the dialect too: <code>compose.yaml</code> runs a <code>postgres:17-alpine</code> <code>db</code> service the app waits on (healthy before the boot-time migrate), and the generated CI workflow starts a Postgres service container, so <code>docker compose up</code> and the first CI run both work with no edits. Your <code>schema.server.ts</code>, queries, and actions are unchanged. To move an existing app, swap those two files for the Postgres variants and point <code>DATABASE_URL</code> at your Postgres instance. Migrations are generated per dialect, and runtime behaviour differs (case-sensitivity, constraints), so run your tests against the production engine before relying on a dev-SQLite / prod-Postgres setup. The generated <code>DATABASE_URL</code> names a lowercased, separator-folded form of the app name, so <code>MyApp</code> gets <code>myapp</code>, which is the same name Postgres folds an unquoted <code>CREATE DATABASE MyApp</code> to.</p>
 
     <h2>CLI</h2>
     <code-block>webjs db generate    # schema -> SQL migration (drizzle-kit generate)

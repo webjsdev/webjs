@@ -87,7 +87,7 @@ And if you ever want to opt out for a single import, just write a plain relative
 
 # It is the same map everywhere, so the server boundary still holds
 
-This is the part I like most. Because the alias is a real config value and not a build-time rewrite, WebJs can read the exact same map the runtime reads. The server expands `#*` when it walks your import graph, when it decides which files a browser is allowed to fetch (the auth gate), when it elides display-only components, and when it builds the browser importmap.
+This is the part I like most. Because the alias is a real config value and not a build-time rewrite, WebJs can read the exact same map the runtime reads. The server expands `#*` when it walks your import graph, when it decides which files a browser is allowed to fetch (the auth gate), when it works out which components a page loads, and when it builds the browser importmap.
 
 The practical payoff: a `#`-aliased `.server.ts` file still trips the server-only boundary. Importing `#db/connection.server.ts` into a client component is caught the same way importing `../../../db/connection.server.ts` would be. The alias is cosmetic to you and fully transparent to the framework. There is no seam where a nicer import path quietly loses a safety guarantee.
 

@@ -10,7 +10,7 @@
  * `components/preview-03/chat-card.ts`. Ported from shadcn/ui's preview-03,
  * where each card repeats this frame inline.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import { buttonClass } from '../../../components/button.ts';
 import {
@@ -51,12 +51,12 @@ export function chatItem(opts: {
 }) {
   return html`<ui-message-scroller-item
     hidden
-    message-id=${opts.id ?? null}
+    message-id=${opts.id ?? nothing}
     ?scroll-anchor=${!!opts.anchor}
     data-chat-turn=${opts.turn}
     data-chat-kind=${opts.kind}
-    data-chat-delay=${opts.delay ?? null}
-    data-chat-name=${opts.name ?? null}
+    data-chat-delay=${opts.delay ?? nothing}
+    data-chat-name=${opts.name ?? nothing}
   >${opts.content}</ui-message-scroller-item>`;
 }
 
@@ -71,7 +71,7 @@ export function chatMessage(opts: { role: 'user' | 'assistant'; align: 'start' |
 /** A marker in the transcript, a join or leave notice or a typing line. */
 export function chatMarker(opts: { text: string; variant?: 'default' | 'separator'; status?: boolean; icon?: unknown }) {
   const variant = opts.variant ?? 'default';
-  return html`<div data-slot="marker" data-variant=${variant} role=${opts.status ? 'status' : null} class=${markerClass({ variant })}>
+  return html`<div data-slot="marker" data-variant=${variant} role=${opts.status ? 'status' : nothing} class=${markerClass({ variant })}>
     ${opts.icon ? html`<span data-slot="marker-icon" class=${markerIconClass()}>${opts.icon}</span>` : ''}
     <span data-slot="marker-content" class=${markerContentClass()}>${opts.text}</span>
   </div>`;

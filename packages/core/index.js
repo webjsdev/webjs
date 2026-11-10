@@ -6,26 +6,31 @@
  * renderer is only reached on the server.
  */
 
-export { html, svg, isTemplate, MARKER } from './src/html.js';
-export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
+export { html, svg, mathml, isTemplate, MARKER } from './src/html.js';
+export { isServer } from './src/is-server.js';
+export { css, unsafeCSS, CSSResult, isCSS, adoptStyles, stylesToString } from './src/css.js';
 export { WebComponent, prop } from './src/component.js';
+export { defaultConverter, notEqual } from './src/converters.js';
 export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
-export { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
+export { notFound, redirect, permanentRedirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from './src/nav.js';
 export { cspNonce, setCspNonceProvider } from './src/csp-nonce.js';
 export { asset, setAssetUrlProvider } from './src/asset-url.js';
 // Form actions (#1155). `FORM_ACTION_FIELD` is the hidden field both renderers
 // emit and the server's form dispatcher reads; `setFormActionResolver` is the
 // server-only wiring that maps a real action function back to its identity.
-export { FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver } from './src/form-action.js';
+export {
+  FORM_ACTION_FIELD, FORM_ACTION_ID_KEY, setFormActionResolver,
+  installActionBind, bindActionId, splitActionId,
+} from './src/form-action.js';
 export { repeat, isRepeat } from './src/repeat.js';
 export { Suspense, isSuspense } from './src/suspense.js';
 export { connectWS } from './src/websocket-client.js';
 export { richFetch } from './src/rich-fetch.js';
 export {
-  stringify, parse,
+  stringify, stringifySync, parse,
   serialize, deserialize,
 } from './src/serialize.js';
 export { enableClientRouter, disableClientRouter, navigate, revalidate, refreshPage, loadFrame } from './src/router-client.js';
@@ -33,7 +38,7 @@ export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';
 
 // Signals (TC39 Stage-1 shape), also available via '@webjsdev/core/signals'
-export { signal, computed, effect, batch, isSignal, Signal } from './src/signal.js';
+export { signal, computed, effect, batch, isSignal, Signal, SignalWatcher } from './src/signal.js';
 
 // Optimistic-mutation helper (thin signal wrapper, rolls back on failure)
 export { optimistic } from './src/optimistic.js';
@@ -44,6 +49,9 @@ export { takeSeed, scanSeeds, seedStats, SEED_MISS } from './src/action-seed-cli
 // Client tag-cache coordinator for HTTP-verb actions (#488): tag-based
 // browser-cache eviction after a mutation. Inert server-side.
 export { markStale, registerKeyTags, consumeStale, parseTagHeader, fetchMark } from './src/action-cache-client.js';
+// Effects an RPC action response asks the browser for (revalidatePath's
+// in-place refresh), read by the generated action stub.
+export { applyActionRefresh, followActionRedirect } from './src/action-effects-client.js';
 // Client action-abort plumbing (#492): a superseded async render aborts its
 // in-flight action fetches. Inert server-side.
 export { setActiveActionSignal, activeActionSignal } from './src/action-abort-client.js';
@@ -60,14 +68,14 @@ export {
   unsafeHTML, isUnsafeHTML, live, isLive, keyed, isKeyed, guard, isGuard,
   templateContent, isTemplateContent, ref, isRef, createRef, cache, isCache,
   until, isUntil, asyncAppend, isAsyncAppend, asyncReplace, isAsyncReplace,
-  watch, isWatch,
+  watch, isWatch, unsafeSVG, unsafeMathML, when, choose, map, join, range,
 } from './src/directives.js';
 
 // Context Protocol, also available via '@webjsdev/core/context'
-export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from './src/context.js';
+export { createContext, ContextProvider, ContextConsumer, ContextRequestEvent, ContextProviderEvent, ContextRoot } from './src/context.js';
 
 // Task controller, also available via '@webjsdev/core/task'
-export { Task, TaskStatus } from './src/task.js';
+export { Task, TaskStatus, initialState, shallowArrayEquals, deepArrayEquals } from './src/task.js';
 
 export { nothing, noChange } from './src/sentinels.js';
 

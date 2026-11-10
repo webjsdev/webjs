@@ -72,13 +72,12 @@ const routeTable = (): Promise<RouteTable> => buildRouteTable(APP_ROOT);
 
 /**
  * What the /ui pages are built from: this app's source (its package.json
- * included, for the redirects), the kit's registry, the gallery's demo index,
- * and the agent skill /llms-full.txt appends. A root that is not there (a
- * standalone deploy) is skipped.
+ * included, for the redirects), the kit's registry, and the gallery's demo
+ * index. A root that is not there (a standalone deploy) is skipped.
  */
 const SOURCE_ROOTS = [
   'app', 'modules', 'lib', 'components', 'package.json',
-  '../packages/ui/packages/registry', '../gallery/modules/gallery', '../.agents/skills/webjs',
+  '../packages/ui/packages/registry', '../gallery/modules/gallery',
 ].map((p) => join(APP_ROOT, p));
 
 /**
@@ -576,7 +575,7 @@ export async function renderExamplesSection(origin: string): Promise<string[]> {
     '',
     'Working WebJs apps with their source open. Read one before writing the same thing yourself.',
     '',
-    `- [WebJs feature gallery](${GALLERY_URL}): one runnable, densely commented demo per framework feature, the same demos a new app is scaffolded with. Source: ${tree('gallery')}`,
+    `- [WebJs feature gallery](${GALLERY_URL}): one runnable, densely commented demo per framework feature. Source: ${tree('gallery')}`,
   ];
   for (const f of await galleryNav()) {
     lines.push(`- [${f.title}](${GALLERY_URL}${f.href}): ${f.blurb} Source: ${tree(`gallery/app${f.href}`)}`);

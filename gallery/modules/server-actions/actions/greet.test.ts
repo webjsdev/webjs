@@ -60,7 +60,7 @@ test('an authenticated greet reads the caller off the session via actionContext(
   const signupRes = await submitForm(app.handle, '/features/auth/signup', {
     name: 'Ada', email, password,
   });
-  if (signupRes.status !== 302) { t.skip('app deps/db not ready; run db:generate + db:migrate'); return; }
+  if (signupRes.status !== 303) { t.skip('app deps/db not ready; run db:generate + db:migrate'); return; }
   const { cookies } = await loginAndGetCookies(app.handle, { email, password });
 
   // With the session cookie the middleware sets the caller, and greet reads it.

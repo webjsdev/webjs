@@ -6,7 +6,7 @@
  *   - modules/ skeleton
  *   - components/ with a theme toggle
  *   - test/unit/ and test/e2e/ with example tests
- *   - CONVENTIONS.md, AGENTS.md, CLAUDE.md
+ *   - AGENTS.md, CLAUDE.md
  *   - package.json with WebJs deps + test scripts
  *   - tsconfig.json for editor support
  */
@@ -17,10 +17,10 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi, bunifyEnvExample } from './runtime-rewrite.js';
 import { postgresCompose, postgresCi } from './db-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
-import { isGalleryAppShellFile } from './gallery-shell-files.js';
 import { PLACEHOLDER_ICON_SVG, appManifest } from './app-icon.js';
 import { detectPackageManager } from './package-manager.js';
 
@@ -95,51 +95,18 @@ function resolveUiRegistryRoot() {
 const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 
 /**
- * Copy the example gallery (idiomatic, densely-commented working examples) into
- * the scaffolded app. Merges `templates/gallery/{app,modules}` over the app so
- * single-feature demos land under `app/features/<name>/`, whole example apps
- * under `app/examples/<name>/`, and their logic under `modules/<name>/`, the
- * app-thin + modules-logic split WebJs prescribes.
- *
- * Ships verbatim (no `{{APP_NAME}}` substitution): the examples are self-
- * contained and reference only `@webjsdev/*`, drizzle, `#db/*`, and each other.
- * The scaffold's own `app/page.ts` / `app/layout.ts` are written AFTER this and
- * are filtered out of the copy here (see GALLERY_APP_SHELL_FILES), so there is
- * no clobber. `cp` merges into existing `app/` and `modules/` dirs rather than
- * replacing them.
- *
- * The source is the canonical repo-root `gallery/` app in monorepo dev, and the
- * `templates/gallery/` copy `prepack` bundles into the tarball when installed
- * from npm. Both are filtered identically, so the two modes emit the same app.
- *
+ * Add kit components to a freshly initialised app through the kit's own CLI
+ * (`webjsui add`), so the files are byte for byte what an agent's
+ * `npx webjs ui add <name>` writes: baked for the app's style, imports
+ * rewritten to its cn() helper. Local-first, so it makes no network call.
  * @param {string} appDir
+ * @param {string[]} names
  */
-async function copyGallery(appDir) {
-  const bundledGallery = join(TEMPLATES, 'gallery');
-  const repoRootGallery = resolve(__dirname, '..', '..', '..', 'gallery');
-  const galleryDir = existsSync(bundledGallery) ? bundledGallery : repoRootGallery;
-  // `test` carries the auth card's real request-pipeline test (test/auth); it
-  // ships with the gallery and is pruned by gallery:clear alongside the card.
-  // The gallery's EXAMPLE design system (its class helpers) lives in its own
-  // module, modules/gallery/ui/, NOT in components/ui/: that is where
-  // `webjs ui add` writes, so a fresh app's `add dialog` (which pulls the kit's
-  // card and input) would otherwise overwrite the gallery's helpers and break
-  // the demos. gallery:clear removes it with modules/gallery. `components`
-  // carries nothing the scaffold does not write itself (the theme toggle is an
-  // app shell file), and is kept in the list for a gallery that adds one.
-  // `lib` merges the gallery's markup-chunk helpers (lib/utils/ui.ts) alongside
-  // the ui bootstrap's cn.ts/dom.ts (written earlier); gallery:clear removes just
-  // ui.ts. cp is recursive-merge, so the pre-written lib/utils/ files are kept.
-  for (const sub of ['app', 'modules', 'test', 'components', 'lib']) {
-    const srcSub = join(galleryDir, sub);
-    if (!existsSync(srcSub)) continue;
-    await cp(srcSub, join(appDir, sub), {
-      recursive: true,
-      // Skip the gallery's own app shell (root layout, home page, theme toggle,
-      // cn.ts). Those exist because gallery/ is a live app; the scaffold writes
-      // its own, with the app's displayName and the ui-registry cn.ts.
-      filter: (src) => !isGalleryAppShellFile(relative(galleryDir, src)),
-    });
+function addUiComponents(appDir, names) {
+  const bin = resolve(UI_REGISTRY_ROOT, '..', '..', 'bin', 'webjsui.js');
+  const r = spawnSync(process.execPath, [bin, 'add', ...names, '--cwd', appDir, '--yes', '--no-deps'], { encoding: 'utf8' });
+  if (r.status !== 0) {
+    throw new Error(`[webjs create] could not add ${names.join(', ')} from the UI kit: ${(r.stderr || r.stdout || '').trim()}`);
   }
 }
 
@@ -209,11 +176,11 @@ async function writeUiBootstrap(appDir) {
     join(UI_REGISTRY_ROOT, 'themes', 'index.css'), 'utf8',
   );
   await mkdir(join(appDir, 'styles'), { recursive: true });
-  await writeFile(join(appDir, 'styles', 'globals.css'), galleryTheme(css));
+  await writeFile(join(appDir, 'styles', 'globals.css'), scaffoldTheme(css));
 }
 
 /**
- * The gallery's palette and type, written INTO the kit's theme block rather
+ * The scaffold's palette and type, written INTO the kit's theme block rather
  * than onto :root in app/layout.ts. The block is what `webjs ui init --preset`
  * replaces, so a preset repaints a fresh app, and a token defined in the
  * layout (later in the cascade) would silently override every preset. The
@@ -224,41 +191,61 @@ async function writeUiBootstrap(appDir) {
  *
  * @param {string} css the kit's themes/index.css
  */
-function galleryTheme(css) {
+function scaffoldTheme(css) {
+  // The webjs.dev/ui palette (shadcn's site tokens, the `.ui-site` block in
+  // website/public/ui-input.css), light then dark, so a fresh app looks like
+  // the kit's own site. test/scaffolds/scaffold-ui-theme.test.js holds the
+  // two equal.
   const pairs = {
-    background: ['#ffffff', '#1e2226'],
-    foreground: ['#191c20', '#dee2e6'],
-    card: ['#f7f8fa', '#313539'],
-    'card-foreground': ['#191c20', '#dee2e6'],
-    popover: ['#ffffff', '#313539'],
-    'popover-foreground': ['#191c20', '#dee2e6'],
-    primary: ['#1e2226', '#dee2e6'],
-    'primary-foreground': ['#ffffff', '#1e2226'],
-    secondary: ['#eef0f2', '#363a3e'],
-    'secondary-foreground': ['#191c20', '#dee2e6'],
-    muted: ['#eef0f2', '#313539'],
-    'muted-foreground': ['#565c64', '#94989c'],
-    accent: ['#e9ebef', '#363a3e'],
-    'accent-foreground': ['#191c20', '#f7fbff'],
-    border: ['#e2e5e9', '#3d434b'],
-    input: ['#e2e5e9', '#34393e'],
-    ring: ['#8b9198', '#6b7075'],
+    background: ['oklch(1 0 0)', 'oklch(0.145 0 0)'],
+    foreground: ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    card: ['oklch(1 0 0)', 'oklch(0.205 0 0)'],
+    'card-foreground': ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    popover: ['oklch(1 0 0)', 'oklch(0.205 0 0)'],
+    'popover-foreground': ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    primary: ['oklch(0% 0 0)', 'oklch(0.922 0 0)'],
+    'primary-foreground': ['oklch(0.985 0 0)', 'oklch(0.205 0 0)'],
+    secondary: ['oklch(0.97 0 0)', 'oklch(0.269 0 0)'],
+    'secondary-foreground': ['oklch(0.205 0 0)', 'oklch(0.985 0 0)'],
+    muted: ['oklch(0.97 0 0)', 'oklch(0.269 0 0)'],
+    'muted-foreground': ['oklch(0.556 0 0)', 'oklch(0.708 0 0)'],
+    accent: ['oklch(0.97 0 0)', 'oklch(0.371 0 0)'],
+    'accent-foreground': ['oklch(0.205 0 0)', 'oklch(0.985 0 0)'],
+    destructive: ['oklch(0.577 0.245 27.325)', 'oklch(0.704 0.191 22.216)'],
+    'destructive-foreground': ['oklch(0.97 0.01 17)', 'oklch(0.58 0.22 27)'],
+    border: ['oklch(0.922 0 0)', 'oklch(1 0 0 / 10%)'],
+    input: ['oklch(0.922 0 0)', 'oklch(1 0 0 / 15%)'],
+    ring: ['oklch(0.708 0 0)', 'oklch(0.556 0 0)'],
+    sidebar: ['oklch(0.985 0 0)', 'oklch(0.205 0 0)'],
+    'sidebar-foreground': ['oklch(0% 0 0)', 'oklch(0.985 0 0)'],
+    'sidebar-primary': ['oklch(0.205 0 0)', 'oklch(0.488 0.243 264.376)'],
+    'sidebar-primary-foreground': ['oklch(0.985 0 0)', 'oklch(0.985 0 0)'],
+    'sidebar-accent': ['oklch(0.97 0 0)', 'oklch(0.269 0 0)'],
+    'sidebar-accent-foreground': ['oklch(0.205 0 0)', 'oklch(0.985 0 0)'],
+    'sidebar-border': ['oklch(0.922 0 0)', 'oklch(1 0 0 / 10%)'],
+    'sidebar-ring': ['oklch(0.708 0 0)', 'oklch(0.439 0 0)'],
   };
-  const mono = "'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
+  // The site's type: Geist for text and headings, Geist Mono for code.
+  const sans = "'Geist', ui-sans-serif, system-ui, sans-serif";
+  const mono = "'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
   let out = setThemeVars(css, ':root', Object.fromEntries(Object.entries(pairs).map(([k, v]) => [k, v[0]])));
   out = setThemeVars(out, '.dark', Object.fromEntries(Object.entries(pairs).map(([k, v]) => [k, v[1]])));
-  out = setThemeVars(out, '@theme inline', { 'font-sans': mono, 'font-mono': mono });
+  out = setThemeVars(out, ':root', { radius: '0.625rem' });
+  out = setThemeVars(out, '@theme inline', { 'font-sans': sans, 'font-mono': mono });
   return out.replace(/\s*$/, '\n') + `
 /* The app's own tokens, outside the theme block, so a preset leaves them in
    place. public/input.css maps them into utilities. */
 :root {
-  --border-strong: #ccd1d7;
+  /* The navbar height. The header is sized BY this token and nothing
+     measures it, so the offset in public/input.css cannot drift from it. */
+  --header-h: 3.5rem;
+  --border-strong: oklch(0.87 0 0);
   /* A translucent tint of the primary, so it follows every theme and preset. */
   --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
-  --font-display: 'Bricolage Grotesque', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Geist', ui-sans-serif, system-ui, sans-serif;
 }
 .dark {
-  --border-strong: #454b51;
+  --border-strong: oklch(1 0 0 / 20%);
 }
 `;
 }
@@ -355,16 +342,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     );
   }
   const isApi = template === 'api';
-  // The example gallery ships in the one UI template (not api, which has no UI),
-  // so the copyGallery gate below is !isApi. Auth is one of the gallery cards
-  // (app/features/auth + modules/auth), so a UI app ships a real, prunable auth
-  // baseline. `isFullStack` names the UI template for the parts that differ from
-  // api (the todos table + the passwordHash column the auth card needs).
-  const isFullStack = !isApi;
+  // The UI-only steps below are gated on !isApi (the api template has no UI).
 
   // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
-  // the schema/queries/actions are identical across dialects, only db/columns
-  // + db/connection + the driver dep differ.
+  // queries and actions are identical across dialects; the schema's column
+  // builders, db/connection and the driver dep differ.
   const dialect = opts.db || 'sqlite';
   const VALID_DIALECTS = ['sqlite', 'postgres'];
   if (!VALID_DIALECTS.includes(dialect)) {
@@ -462,15 +444,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // app runs the compiler under Bun (its image has no Node), a Node app runs
       // it directly.
       ...(isApi ? {} : { 'css:build': cssBuildCmd }),
-      // Shed the demo gallery / backend-features showcase to a clean, buildable
-      // base. The UI template runs clear-gallery.mjs; the api template runs
-      // clear-api-gallery.mjs (its showcase is app/api/features, not app/features).
-      'gallery:clear': (() => {
-        const script = isApi ? 'clear-api-gallery.mjs' : 'clear-gallery.mjs';
-        return isBun ? `bun scripts/${script}` : `node scripts/${script}`;
-      })(),
-      dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
-      start: isBun ? 'bun --bun webjs start' : 'webjs start',
+      dev: isBun ? 'bun --bun --no-env-file webjs dev' : 'webjs dev',
+      start: isBun ? 'bun --bun --no-env-file webjs start' : 'webjs start',
       test: 'webjs test',
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',
@@ -500,9 +475,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
       // Pinned EXACTLY (no caret): a caret on a prerelease still admits later
       // rc.N of 1.0.0, and the relations-v2 query API the scaffold is written and
-      // tested against is rc.3 (#562). An exact pin keeps generated apps
+      // tested against is rc.5 (#562). An exact pin keeps generated apps
       // deterministic instead of silently drifting to a newer rc.
-      'drizzle-orm': '1.0.0-rc.3',
+      'drizzle-orm': '1.0.0-rc.5',
       ...(dialect === 'postgres' ? { pg: '^8.13.0' } : {}),
       '@webjsdev/cli': 'latest',
       '@webjsdev/core': 'latest',
@@ -517,7 +492,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // isolated linker and pnpm link only declared packages, so leaving it
       // transitive (via @tailwindcss/cli) fails the compile with
       // `Can't resolve 'tailwindcss'`. The api template has no CSS.
-      'drizzle-kit': '1.0.0-rc.3',
+      'drizzle-kit': '1.0.0-rc.5',
       ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0', tailwindcss: '^4.1.0' }),
     },
     devDependencies: {
@@ -622,7 +597,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // added utility class has no backing rule, so the app renders unstyled
     // locally while prod is fine). `regenerate` instead recompiles ON REQUEST
     // when the output does not match its build record (or is missing): the
-    // framework rebuilds it before serving `/public/tailwind.css`, so there is
+    // framework rebuilds it before serving `/tailwind.css`, so there is
     // no watch process to die and no staleness window. Same `cssBuildCmd` as
     // prod, so dev and prod resolve classes identically (nothing to diverge).
     // `inputs` mirrors the
@@ -648,7 +623,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // Which doctor findings are FATAL is the app's own call (#1257), declared
       // here rather than in the CI workflow so `npm run doctor` locally and the
       // workflow step agree about what fails. UNMARKED_ASSET_LINKS starts at
-      // error because an un-versioned /public url is a real deploy-staleness
+      // error because an un-versioned public url is a real deploy-staleness
       // bug (it shipped a visible regression on webjs.dev) and the generated
       // layout already writes asset(), so a fresh app is green on day one.
       // Two checks are fatal with no entry here at all, NODE_VERSION and
@@ -731,6 +706,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // SYNTAX errors. Use a `const` object + union for enum-shaped
       // values; write fields + constructor assignments explicitly.
       erasableSyntaxOnly: true,
+      // Type-only imports must say `import type` (Lit's `PropertyValues`,
+      // a Drizzle row type). The type stripper erases only what is marked, so
+      // an unmarked type import survives into the served module and fails at
+      // load with "does not provide an export named"; this flag makes tsc
+      // report it at edit time instead.
+      verbatimModuleSyntax: true,
       // @webjsdev/intellisense (standalone, no Lit dependency) gives the editor,
       // inside html`` templates:
       //   • go-to-definition on custom-element tags, attributes, and CSS classes
@@ -743,6 +724,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         { name: '@webjsdev/intellisense' },
       ],
     },
+    // `db/**/*` is in so the schema and the connection are checked on their
+    // own, not only through a file that imports them (#1686: a driver type
+    // change in the connection passed typecheck because nothing included it).
+    //
     // `test/**/*` is in so `webjs typecheck` reads the tests you write, the
     // same way Next / Remix / Astro's generated configs do (#1299). A type
     // error in a test is then a gate failure rather than something a reviewer
@@ -759,22 +744,25 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       'components/**/*',
       'modules/**/*',
       'lib/**/*',
+      'db/**/*',
       'test/**/*',
       'middleware.js',
       'middleware.ts',
+      'proxy.ts',
+      'instrumentation.ts',
+      'instrumentation-client.ts',
+      'env.ts',
       '.webjs/routes.d.ts',
     ],
     exclude: ['node_modules', '.webjs/vendor', 'db/migrations'],
   }, null, 2) + '\n');
 
-  // --- Templates (AGENTS.md, CONVENTIONS.md, CLAUDE.md, test files, Claude hooks) ---
+  // --- Templates (AGENTS.md, CLAUDE.md, test files, Claude hooks) ---
 
   const templateFiles = [
-    // Single cross-agent source: AGENTS.md points at .agents/skills/webjs/; the
-    // .agents/rules workflow rules and the Claude enforcement hooks back it up.
+    // Single cross-agent source: AGENTS.md carries the brief; the .agents/rules
+    // workflow rules and the Claude enforcement hooks back it up.
     'AGENTS.md',
-    'CONVENTIONS.md',
-    '.agents/rules/workflow.md',
     'CLAUDE.md',
     // Claude Code config + the protective enforcement hooks (no design ceremony).
     '.claude.json',
@@ -788,6 +776,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/require-tests-with-src.sh',
     '.claude/hooks/check-server-imports.sh',
     '.claude/hooks/check-server-imports.mjs',
+    '.claude/hooks/check-on-edit.sh',
+    '.claude/hooks/check-on-edit.mjs',
     // Git pre-commit hook (blocks commits directly to main).
     '.hooks/pre-commit',
     // Starter tests under the feature-folder layout.
@@ -818,8 +808,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // rewrites; the three infra files get their file-specific transform. On Node,
   // every file is copied byte-identical (the map is empty).
   const PROSE_REWRITE = new Set([
-    'AGENTS.md', 'CLAUDE.md', 'CONVENTIONS.md',
-    '.agents/rules/workflow.md',
+    'AGENTS.md', 'CLAUDE.md',
     'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
     // Comments that name a command (#1527): `npm run ci` in the hook, the
     // Tailwind build note in the ignore file.
@@ -853,16 +842,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       await mkdir(dirname(join(appDir, dest)), { recursive: true });
       let content = await readFile(src, 'utf8');
       content = content.replace(/\{\{APP_NAME\}\}/g, name);
-      // AGENTS.md carries a template-specific build playbook: the full-stack
-      // (UI) playbook or the api (backend) one. The shared meta-rules (required
-      // context-gathering, strict typing, data) live in AGENTS.md itself; only
-      // the `{{PLAYBOOK}}` section swaps, so the two stay single-sourced. The
-      // partials live under templates/partials/ and are NOT copied as app files.
-      if (f === 'AGENTS.md') {
-        const playbookFile = isApi ? 'agents-playbook-api.md' : 'agents-playbook-fullstack.md';
-        const playbook = await readFile(join(TEMPLATES, 'partials', playbookFile), 'utf8');
-        content = content.replace('{{PLAYBOOK}}', () => playbook.trimEnd());
-      }
       if (DB_REWRITE[f]) content = DB_REWRITE[f](content);
       if (isBun) {
         if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
@@ -872,38 +851,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     }
   }
 
-  // The agent skill is the one cross-agent source (AGENTS.md points to it). It
-  // lives ONCE, canonically, at the repo-root `.agents/skills/webjs/`. A
-  // published CLI bundles it under `templates/` at prepack (see
-  // scripts/sync-scaffold-skill.mjs, wired into this package's prepack), so copy
-  // that bundle when present; in the monorepo the bundle is gitignored, so fall
-  // back to the repo-root canonical.
-  const bundledSkill = join(TEMPLATES, '.agents', 'skills', 'webjs');
-  const repoRootSkill = resolve(__dirname, '..', '..', '..', '.agents', 'skills', 'webjs');
-  const skillSrc = existsSync(bundledSkill) ? bundledSkill : repoRootSkill;
-  if (existsSync(skillSrc)) {
-    const skillDest = join(appDir, '.agents', 'skills', 'webjs');
-    await cp(skillSrc, skillDest, { recursive: true });
-    // Bun runtime (#541): the skill's runnable commands are authored in the
-    // canonical npm forms, so derive the bun flavor on copy, the same way the
-    // agent-config markdown above goes through bunifyProse. references/runtime.md
-    // is EXCLUDED on purpose: it is the deliberate node-vs-bun command matrix,
-    // and rewriting its npm column would destroy the comparison it exists to
-    // make.
-    if (isBun) {
-      const { readdir } = await import('node:fs/promises');
-      const entries = await readdir(skillDest, { recursive: true, withFileTypes: true });
-      for (const e of entries) {
-        if (!e.isFile() || !e.name.endsWith('.md') || e.name === 'runtime.md') continue;
-        const p = join(e.parentPath, e.name);
-        await writeFile(p, bunifyProse(await readFile(p, 'utf8')));
-      }
-    }
-  }
-
   // Make the Claude enforcement hooks + the git pre-commit executable.
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['block-prose-punctuation.sh', 'block-raw-htmlelement.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'check-server-imports.sh']) {
+  for (const hook of ['block-prose-punctuation.sh', 'block-raw-htmlelement.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'check-server-imports.sh', 'check-on-edit.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }
@@ -912,101 +862,68 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // --- Drizzle db layer (all templates), dialect-selected (#563) ---
   //
-  // The schema, queries, and actions are identical across dialects; only
-  // db/columns.server.ts + db/connection.server.ts + drizzle.config.ts + the
-  // driver dep differ. Switching dialect (e.g. SQLite in dev, Postgres in
-  // prod) is a config + module swap, not a code rewrite. Pinned to drizzle-orm
-  // 1.0.0-rc.3 (relations v2). See research #562.
+  // Plain Drizzle, as in Drizzle's own docs, so an agent writes the schema
+  // from what it already knows (#1686: a helper module every agent first had
+  // to read cost lookups and hid types, e.g. a timestamp() that was a Date).
+  // A column's SQL name is its key, Drizzle's default; name one explicitly
+  // (\`integer('created_at')\`) when a different SQL name is wanted. Only the
+  // schema's builders, the connection and the driver differ between SQLite and
+  // Postgres. Pinned to drizzle-orm 1.0.0-rc.5 (relations v2). See research #562.
 
-  const columnsSqlite = `import { sqliteTableCreator, integer, text, real, blob, index as _index } from 'drizzle-orm/sqlite-core';
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
-import { getTableName, type Table } from 'drizzle-orm';
-
-// Raw drizzle builders, re-exported so the schema reads like drizzle.
-export { text, integer, real, blob };
-
-// Casing factory: column keys map to snake_case SQL names.
-export const table = sqliteTableCreator((name) => name, 'snake_case');
-
-export const pk = () => integer().primaryKey({ autoIncrement: true });
-export const uuidPk = () => text().primaryKey().$defaultFn(() => crypto.randomUUID());
-export const uuid = () => text();
-// Structured value (array / object) stored as JSON. Type it with json<T>() so
-// the column is narrowed on read/write instead of \`unknown\`.
-export const json = <T>() => text({ mode: 'json' }).$type<T>();
-export const bool = () => integer({ mode: 'boolean' });
-export const timestamp = () => integer({ mode: 'timestamp_ms' });
-export const createdAt = () => timestamp().notNull().defaultNow();
-export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
-
-// Anonymous-style index helper (rc.3 requires a name; this derives a
-// table-qualified one, matching drizzle-kit's own convention).
-export const index = (...cols: SQLiteColumn[]) =>
-  _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [SQLiteColumn, ...SQLiteColumn[]]));
-`;
-
-  const columnsPg = `import { pgTableCreator, serial, uuid as pgUuid, integer, text, real, boolean, jsonb, timestamp as pgTimestamp, index as _index } from 'drizzle-orm/pg-core';
-import type { PgColumn } from 'drizzle-orm/pg-core';
-import { getTableName, type Table } from 'drizzle-orm';
-
-export { text, integer, real };
-
-export const table = pgTableCreator((name) => name, 'snake_case');
-
-export const pk = () => serial().primaryKey();
-export const uuidPk = () => pgUuid().primaryKey().defaultRandom();
-export const uuid = () => pgUuid();
-// Structured value (array / object) stored as JSON. Type it with json<T>() so
-// the column is narrowed on read/write instead of \`unknown\`.
-export const json = <T>() => jsonb().$type<T>();
-export const bool = () => boolean();
-export const timestamp = () => pgTimestamp({ withTimezone: true });
-export const createdAt = () => timestamp().notNull().defaultNow();
-export const updatedAt = () => timestamp().notNull().defaultNow().$onUpdate(() => new Date());
-
-export const index = (...cols: PgColumn[]) =>
-  _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [PgColumn, ...PgColumn[]]));
-`;
-
-  await writeFile(join(appDir, 'db', 'columns.server.ts'), dialect === 'postgres' ? columnsPg : columnsSqlite);
-
-  // Example schema (dialect-agnostic). Replace the User model with your own.
-  await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
-import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}json, createdAt } from './columns.server.ts';
-
-// Example model. Feel free to delete or extend.
-export const users = table('users', {
-  id: pk(),
-  email: text().notNull().unique(),
-  name: text(),
-  // JSON column: a structured value persisted as JSON, typed via json<T>().
-  // Same helper works on SQLite and Postgres. Delete if you do not need it.
-  settings: json<{ theme?: string }>(),${isFullStack ? `
-  // The auth gallery card (app/features/auth) signs credentials against this.
-  // gallery:clear removes this column with the rest of the auth surface.
-  passwordHash: text(),` : ''}
-  createdAt: createdAt(),
-});
-${isFullStack ? `
-// Backs the example-gallery /examples/todo route (modules/todo). Delete it with
-// the gallery when you prune the examples you do not use.
-export const todos = table('todos', {
-  id: uuidPk(),
-  title: text().notNull(),
-  completed: bool().notNull().default(false),
-  createdAt: createdAt(),
-});
-` : ''}
-// Relations live here (one defineRelations for the whole schema). Empty
-// for now; add per-model relations as your schema grows.
-export const relations = defineRelations({ users${isFullStack ? ', todos' : ''} }, () => ({}));
+  const schemaShared = `// A foreign key belongs on the COLUMN, as in any Drizzle schema, and an index
+// in the table's third argument:
+//   export const posts = TABLE('posts', {
+//     id: ID,
+//     userId: integer().notNull().references(() => users.id),
+//     title: text().notNull(),
+//   }, (t) => [index('posts_user_id_idx').on(t.userId)]);
+// A relation (what db.query's \`with\` follows) belongs HERE, in the one
+// defineRelations for the whole schema (Drizzle 1.0), never on a column:
+//   export const relations = defineRelations({ users, posts }, (r) => ({
+//     posts: { author: r.one.users({ from: r.posts.userId, to: r.users.id }) },
+//     users: { posts: r.many.posts() },
+//   }));
+export const relations = defineRelations({ users }, () => ({}));
 
 // Derived types, never hand-written.
 export type User = typeof users.$inferSelect;
-`);
+`;
+
+  const schemaSqlite = `import { defineRelations } from 'drizzle-orm';
+import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
+
+// Example model. Feel free to delete or extend.
+export const users = sqliteTable('users', {
+  id: integer().primaryKey({ autoIncrement: true }),
+  email: text().notNull().unique(),
+  name: text(),
+  // A JSON column: a structured value, typed with $type<T>().
+  settings: text({ mode: 'json' }).$type<{ theme?: string }>(),
+  // A JavaScript Date, stored as milliseconds. For a plain number use integer().
+  createdAt: integer({ mode: 'timestamp_ms' }).notNull().defaultNow(),
+});
+` + schemaShared.replace('TABLE', 'sqliteTable').replace('ID', 'integer().primaryKey({ autoIncrement: true })');
+
+  const schemaPg = `import { defineRelations } from 'drizzle-orm';
+import { pgTable, serial, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+
+// Example model. Feel free to delete or extend.
+export const users = pgTable('users', {
+  id: serial().primaryKey(),
+  email: text().notNull().unique(),
+  name: text(),
+  // A JSON column: a structured value, typed with $type<T>().
+  settings: jsonb().$type<{ theme?: string }>(),
+  // A JavaScript Date.
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+` + schemaShared.replace('TABLE', 'pgTable').replace('ID', 'serial().primaryKey()');
+
+  await writeFile(join(appDir, 'db', 'schema.server.ts'), dialect === 'postgres' ? schemaPg : schemaSqlite);
 
   const connSqlite = `import { isAbsolute, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { NodeSQLiteDatabase } from 'drizzle-orm/node-sqlite';
 import * as schema from './schema.server.ts';
 
 // The only file that opens the driver. Runtime-neutral and ZERO native deps:
@@ -1040,12 +957,17 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
   return client;
 }
 
-async function connect() {
+// One concrete type for db. Both drivers share the same synchronous SQLite
+// query builder, but typed as a union of the two, TypeScript cannot resolve an
+// overloaded method across it and db.select({ id: users.id }) fails to compile.
+type Db = NodeSQLiteDatabase<typeof schema.relations>;
+
+async function connect(): Promise<Db> {
   if ((globalThis as { Bun?: unknown }).Bun) {
     // @ts-expect-error bun:sqlite is a Bun builtin with no Node typings
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: cached(() => tune(new Database(url))), relations: schema.relations });
+    return drizzle({ client: cached(() => tune(new Database(url))), relations: schema.relations }) as unknown as Db;
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
@@ -1144,6 +1066,17 @@ export default defineConfig({
     await writeFile(envExample, dbUrlLine + '\n');
   }
 
+  // A real .env with fresh secrets, the way `rails new` writes its secret key:
+  // createAuth() and session() both refuse to run without theirs, and an app
+  // that works on the first `npm run dev` should not need a manual step first.
+  // The file is gitignored, so each clone generates its own; never overwrite one.
+  const envFile = join(appDir, '.env');
+  if (!existsSync(envFile)) {
+    const example = await readFile(envExample, 'utf8');
+    const secret = () => randomBytes(32).toString('hex');
+    await writeFile(envFile, example.replace(/^(AUTH_SECRET|SESSION_SECRET)=$/gm, (_, key) => `${key}=${secret()}`));
+  }
+
   // .gitignore the generated SQLite file (sqlite only; postgres has no local file).
   if (dialect !== 'postgres') {
     const gitignore = join(appDir, '.gitignore');
@@ -1200,14 +1133,6 @@ export default cors({
     endpoints: {
       health: \`\${base}/api/health\`,
       users: \`\${base}/api/users\`,
-    },
-    // The backend-features showcase (delete app/api/features + its modules to prune).
-    features: {
-      validate: \`\${base}/api/features/validate\`,
-      'rate-limit': \`\${base}/api/features/rate-limit\`,
-      stream: \`\${base}/api/features/stream\`,
-      files: \`\${base}/api/features/files\`,
-      ws: \`\${base.replace(/^http/, 'ws')}/api/features/ws\`,
     },
   });
 }
@@ -1308,20 +1233,6 @@ export type ActionResult<T> =
   | { success: false; error: string; status: number };
 `);
 
-    // The api backend-features showcase: endpoints under app/api/features/**
-    // (the route() adapter + validation, rate limiting, streaming, file storage,
-    // WebSockets + broadcast) that the root api index above links. The api
-    // counterpart of the UI gallery. Prune what you skip.
-    const { writeApiGallery } = await import('./api-gallery.js');
-    await writeApiGallery(appDir);
-
-    // The showcase-reset script (wired as `gallery:clear` for the api template).
-    // It sheds app/api/features + its modules back to the health + users base.
-    const apiClearSrc = join(TEMPLATES, 'scripts', 'clear-api-gallery.mjs');
-    if (existsSync(apiClearSrc)) {
-      await mkdir(join(appDir, 'scripts'), { recursive: true });
-      await cp(apiClearSrc, join(appDir, 'scripts', 'clear-api-gallery.mjs'));
-    }
   }
 
   if (!isApi) {
@@ -1337,36 +1248,27 @@ export type ActionResult<T> =
     // Progressive-enhancement service worker (#271): ship the opt-in offline
     // primitive (the worker + its offline fallback) into the UI scaffold
     // (this block is api-excluded since api has no UI).
-    // Dormant until the app registers it (see the skill's references/service-worker.md);
-    // it never changes the JS-disabled baseline.
+    // Dormant until the app registers it (the opt-in snippet is in sw.js's own
+    // header); it never changes the JS-disabled baseline.
     for (const swFile of ['sw.js', 'offline.html']) {
       const swSrc = join(TEMPLATES, 'public', swFile);
       if (existsSync(swSrc)) await cp(swSrc, join(publicDir, swFile));
+    }
+    // The WebJs logo the header shows, one file per theme (the webjs.dev
+    // lockup: an inverted file would flip the paper along with the ink).
+    await mkdir(join(publicDir, 'brand'), { recursive: true });
+    for (const logo of ['webjs-lockup-on-light.svg', 'webjs-lockup-on-dark.svg']) {
+      await cp(join(TEMPLATES, 'public', 'brand', logo), join(publicDir, 'brand', logo));
     }
     // The app icon and web app manifest: `app/icon.svg` (a neutral PLACEHOLDER
     // the agent replaces with the app's own icon; `webjs doctor` warns while it
     // is still there) and `app/manifest.webmanifest` (the app's name). The
     // framework links both into <head> and answers /favicon.ico with the icon,
-    // so the layout declares nothing. They ship with the app, not the gallery,
-    // so they survive `gallery:clear`.
+    // so the layout declares nothing.
     await mkdir(join(appDir, 'app'), { recursive: true });
     await writeFile(join(appDir, 'app', 'icon.svg'), PLACEHOLDER_ICON_SVG);
     await writeFile(join(appDir, 'app', 'manifest.webmanifest'), appManifest(displayName));
 
-    // The gallery-reset script (wired as `gallery:clear`). Only UI templates have
-    // a gallery, so it ships here (NOT in the flat templateFiles list, which would
-    // copy it into the api app where it has no gallery and would clobber app/).
-    const clearScriptSrc = join(TEMPLATES, 'scripts', 'clear-gallery.mjs');
-    if (existsSync(clearScriptSrc)) {
-      await mkdir(join(appDir, 'scripts'), { recursive: true });
-      // A Bun app gets the Bun spelling of the ui-kit command the script
-      // prints and writes into the reset layout (#1527): `bunx`, never `npx`.
-      const clearScript = await readFile(clearScriptSrc, 'utf8');
-      await writeFile(
-        join(appDir, 'scripts', 'clear-gallery.mjs'),
-        isBun ? clearScript.replaceAll('npx webjsdev ', 'bunx webjsdev ') : clearScript,
-      );
-    }
 
     // Fail loudly if the @webjsdev/ui registry sources aren't on disk.
     // Without this, downstream copy helpers would silently skip and the
@@ -1379,10 +1281,14 @@ export type ActionResult<T> =
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
     // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
+    // The kit components the shell uses (the theme toggle's Button, the home
+    // page form's Input and Label), installed by the kit's own `add`
+    // (local-first, no network), exactly as `npx webjs ui add <name>` would.
+    addUiComponents(appDir, ['button', 'input', 'label']);
 
-    // The gallery cards style with plain Tailwind (the app is pre-initialised for
-    // `webjs ui add <name>` via writeUiBootstrap above, but ships no components
-    // until you add them on demand).
+    // Pages style with Tailwind on the kit's tokens. The app is pre-initialised
+    // for `webjs ui add <name>` via writeUiBootstrap above and ships one kit
+    // component, the Button its theme toggle uses; the rest are added on demand.
 
     // The @webjsdev/ui theme (`--color-primary`, `--color-card`, the @theme maps,
     // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
@@ -1406,11 +1312,28 @@ export type ActionResult<T> =
 @source "../modules/**/*.{ts,js}";
 @source "../lib/**/*.{ts,js}";
 
+/* Base styles, on the kit's tokens. The light tokens are on :root and the
+   dark ones on .dark, which the head script keeps in step with the saved
+   choice or the OS. color-scheme switches on the same class, so native
+   controls and scrollbars always match the tokens: with JavaScript off the
+   page is light throughout rather than light tokens over dark controls. */
+@layer base {
+  :root { color-scheme: light; }
+  :root.dark { color-scheme: dark; }
+  body { @apply bg-background text-foreground font-sans antialiased; }
+}
+
+/* A fixed header leaves normal flow, so reserve its height (--header-h, in
+   styles/globals.css) and stop an in-page #anchor jump (native, or the client
+   router's scrollIntoView) below it. Keyed on the class, so pinning the navbar
+   is a one-class edit. */
+body:has(> header.fixed) { padding-top: var(--header-h); }
+html:has(> body > header.fixed) { scroll-padding-top: var(--header-h); }
+
 /* A navbar pinned from a breakpoint up (md:fixed md:inset-x-0 md:top-0)
    reserves its height from that breakpoint. @variant resolves each breakpoint
    from this app's theme, so a customized --breakpoint-* stays in step; a
-   breakpoint you add under a new name needs its own line. The plain
-   \`fixed\` case lives beside the token in app/layout.ts. */
+   breakpoint you add under a new name needs its own line. */
 body:has(> header[class~="sm:fixed"]) { @variant sm { padding-top: var(--header-h); } }
 body:has(> header[class~="md:fixed"]) { @variant md { padding-top: var(--header-h); } }
 body:has(> header[class~="lg:fixed"]) { @variant lg { padding-top: var(--header-h); } }
@@ -1427,6 +1350,7 @@ html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-to
    replaces), the app's own extras after it. These @theme inline maps turn the
    extras and the type scale into utilities (border-border-strong, text-display). */
 @theme inline {
+  --font-display: var(--font-display);
   --color-border-strong: var(--border-strong);
   --color-primary-tint: var(--primary-tint);
   --text-display: clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
@@ -1450,13 +1374,6 @@ html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-to
 }
 `);
 
-    // The gallery: idiomatic, densely-commented single-feature demos under
-    // app/features/ plus one whole example app under app/examples/, with logic
-    // in modules/, all linked from the home page below. Shipped in the UI
-    // scaffold so an agent gains context by browsing real working code; prune
-    // per-feature (delete the route + its module) for what the app does not use,
-    // or shed the whole gallery at once with `gallery:clear`.
-    await copyGallery(appDir);
 
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
@@ -1474,109 +1391,71 @@ import '#components/theme-toggle.ts';
 
 // The favicon and manifest are app/icon.svg and app/manifest.webmanifest: the
 // framework links them into <head> itself, so nothing is declared here. Replace
-// the placeholder icon with this app's own (see the skill's routing-and-pages
-// reference, "App icon").
+// the placeholder icon with this app's own.
 
 // LayoutProps types every layout argument (children, params, searchParams,
 // url) from the framework, so children is a TemplateResult rather than an
 // untyped value. Derive types like this everywhere instead of widening to
-// unknown; see .agents/skills/webjs/references/typescript.md.
+// unknown.
 export default function RootLayout({ children }: LayoutProps) {
   // Read the in-flight request's CSP nonce so the theme-detection inline script
   // passes strict CSP. Returns '' when no CSP nonce is set.
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme: apply the saved choice, else the OS, before paint (no
-      // flash). The dark tokens and color-scheme both switch on the .dark class,
-      // so this sets .dark (and data-theme for a saved choice). With JavaScript
-      // off nothing sets .dark and the page is light throughout, controls
-      // included. Delete this block for a single-theme app.
+      // Light/dark theme, applied BEFORE first paint so a saved dark choice
+      // never flashes light. This is the one thing that cannot be a component:
+      // a component (the theme toggle included) upgrades only once its module
+      // has loaded, after the first paint. <theme-toggle> takes over from there
+      // (Lit's lifecycle), following the OS while the choice is "system". The
+      // dark tokens and color-scheme both switch on the .dark class; data-theme
+      // records a saved choice. With JavaScript off nothing sets .dark and the
+      // page is light throughout. Delete this block for a single-theme app.
       (function(){
         try {
-          var mq = window.matchMedia('(prefers-color-scheme: dark)');
-          function apply(){
-            var t = null;
-            try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
-            var el = document.documentElement;
-            if (t === 'light' || t === 'dark') el.dataset.theme = t;
-            else delete el.dataset.theme;
-            el.classList.toggle('dark', t === 'dark' || (t !== 'light' && mq.matches));
-          }
-          apply();
-          mq.addEventListener('change', apply);
+          var t = null;
+          try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
+          var el = document.documentElement;
+          if (t === 'light' || t === 'dark') el.dataset.theme = t;
+          el.classList.toggle('dark', t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches));
         } catch (_) {}
       })();
     </script>
     <meta name="color-scheme" content="light">
-    <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
-         Bricolage Grotesque for the display wordmark. Swap these for your own
-         fonts (and update --font-sans in styles/globals.css, or apply a preset
-         with webjs ui init --preset, which prints the faces to load). -->
+    <!-- Geist for text and headings and Geist Mono for code, the webjs.dev/ui
+         type. Swap these for your own fonts (and update --font-sans in
+         styles/globals.css, or apply a preset with webjs ui init --preset,
+         which prints the faces to load). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@400;500;700&display=swap">
     <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
          public/tailwind.css by css:build (run automatically by the dev and start
          tasks; in dev it is also recompiled on request when a source changes, so
          it never goes stale). A real stylesheet, so the app is fully styled with
          JavaScript DISABLED (no in-browser compile).
 
-         asset() adds a content hash in production (/public/tailwind.css?v=...)
+         asset() adds a content hash in production (/tailwind.css?v=...)
          and the framework then serves it immutable for a year, so a deploy that
          changes the CSS changes the url and no browser or CDN can serve the old
          bytes. Mark the thing that FETCHES: do not wrap a <link rel="preload">
          whose asset is really fetched by an @font-face url() in the CSS, or the
          preload can never match the request and the file downloads twice. -->
 
-    <link rel="stylesheet" href=\${asset('/public/tailwind.css')}>
-    <style>
-      /* The design tokens (colours, fonts, radius) live in styles/globals.css,
-         in the theme block that webjs ui init owns: npx webjsdev ui init --preset
-         CODE (a code from webjs.dev/ui/create) replaces them, and nothing here
-         overrides them. The light tokens are on :root and the dark ones on
-         .dark, which the script above keeps in step with the saved choice or
-         the OS. color-scheme switches on the same class, so native controls
-         and scrollbars always match the tokens: with JavaScript off the page
-         is light throughout rather than light tokens over dark controls. */
-      :root {
-        /* The navbar height. The header is sized BY this token and nothing
-           measures it, so the offset below can never drift from the header. */
-        --header-h: 3.5rem;
-
-        color-scheme: light;
-      }
-      :root.dark { color-scheme: dark; }
-    </style>
-    <style>
-      /* Base styles utility classes can't reach. */
-      html, body { margin: 0; }
-      body {
-        background: var(--background);
-        color: var(--foreground);
-        font: 15px/1.6 var(--font-sans);
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-      /* A fixed header leaves normal flow, so reserve its height. Keyed on the
-         class, so pinning the navbar below is a one-class edit. Pinning it
-         from a breakpoint up (md:fixed) is handled in public/input.css, where
-         Tailwind resolves the breakpoint from this app's own theme. */
-      body:has(> header.fixed) { padding-top: var(--header-h); }
-      /* And an in-page #anchor jump (native, or the client router's
-         scrollIntoView) stops below the pinned header instead of under it. */
-      html:has(> body > header.fixed) { scroll-padding-top: var(--header-h); }
-    </style>
+    <link rel="stylesheet" href=\${asset('/tailwind.css')}>
+    <!-- No style block here: the base styles, color-scheme and the pinned-header
+         offset are in public/input.css, on the kit's tokens, and every token
+         (the --header-h navbar height included) is in styles/globals.css. -->
     <!-- Top navbar, on every page: brand on the left, links + theme toggle on
          the right. It floats (no separator) and is in normal flow, so it just
          scrolls with the page. To pin it, add fixed inset-x-0 top-0 z-20 to its
          class (position: fixed, never sticky, which flickers on iOS during a nav).
          Its height is the --header-h token, so keep it one row: nothing measures
          it, which is what keeps the offset right after a client-router swap. -->
-    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
-      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
-        <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
-        WebJs Gallery
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-(--header-h) flex items-center justify-between gap-4">
+      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-display font-bold tracking-tight">
+        <span class="size-5.5 rounded-md bg-linear-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
+        ${displayName}
       </a>
       <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">Docs</a>
@@ -1593,82 +1472,194 @@ export default function RootLayout({ children }: LayoutProps) {
 }
 `);
 
-  // Home page: a gallery index. A masthead, then a grid that links every feature
-  // demo and the example app, and a footer with the docs + source links. Treat it
-  // as a starting point: prune the demos you do not use (delete the
-  // app/features/<x> route AND its modules/<x>), then reshape this page into the
-  // app's real landing page.
-  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
-import { cardClass } from '#modules/gallery/ui/card.ts';
-import { badgeClass } from '#modules/gallery/ui/badge.ts';
-// The demo index is defined once in modules/gallery/nav.ts (the same source the
-// left sidebar reads), so the home cards and the sidebar can never drift.
-import { featureList, EXAMPLES } from '#modules/gallery/nav.ts';
+  // The example module: modules/<feature>/ holds a feature's server actions,
+  // queries, components, utils and types, and the routes in app/ stay thin.
+  // One tiny feature over the schema's users table: an action the home page
+  // binds as a form, a server-only query it reads, a component that renders
+  // the result, the types, and a test.
+  await mkdir(join(appDir, 'modules', 'users', 'actions'), { recursive: true });
+  await mkdir(join(appDir, 'modules', 'users', 'queries'), { recursive: true });
+  await mkdir(join(appDir, 'modules', 'users', 'components'), { recursive: true });
+  await writeFile(join(appDir, 'modules', 'users', 'components', 'user-list.ts'), `import { WebComponent, html } from '@webjsdev/core';
+import type { User } from '../types.ts';
+
+/**
+ * The users feature's component, written as in Lit. The page passes the users
+ * in as a property (.users=\${users}); a component never queries the database
+ * itself, since it also runs in the browser.
+ */
+export class UserList extends WebComponent {
+  static properties = { users: { type: Array } };
+  declare users: User[];
+
+  constructor() {
+    super();
+    this.users = [];
+  }
+
+  render() {
+    if (this.users.length === 0) {
+      return html\`<p class="text-sm text-muted-foreground m-0">No users yet. Add the first one above.</p>\`;
+    }
+    return html\`
+      <ul class="grid gap-1 m-0 p-0 list-none text-sm text-muted-foreground">
+        \${this.users.map((user) => html\`<li>\${user.email}</li>\`)}
+      </ul>
+    \`;
+  }
+}
+UserList.register('user-list');
+`);
+  await writeFile(join(appDir, 'modules', 'users', 'types.ts'), `// The users feature's types, derived from the schema rather than written by hand.
+export type { User } from '#db/schema.server.ts';
+`);
+  await writeFile(join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts'), `import { desc } from 'drizzle-orm';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
+import type { User } from '../types.ts';
+
+// A query: server-only code (a .server.ts file with no 'use server'), called
+// from a page, which runs on the server. Without 'use server' it is never
+// callable from the browser. One function per file.
+export async function listUsers(limit = 5): Promise<User[]> {
+  return db.select().from(users).orderBy(desc(users.createdAt)).limit(limit);
+}
+`);
+  await writeFile(join(appDir, 'modules', 'users', 'actions', 'add-user.server.ts'), `'use server';
+
+import { revalidatePath } from '@webjsdev/server';
+import type { ActionResult } from '@webjsdev/server';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
+import type { User } from '../types.ts';
+
+// A server action, bound by the home page as <form action=\${addUser}>, so it
+// works with JavaScript off. A failure re-renders the page with this result on
+// actionData; a success redirects back and revalidatePath('/') refreshes it.
+// One function per file.
+export async function addUser(formData: FormData): Promise<ActionResult<User>> {
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    return { success: false, fieldErrors: { email: 'Enter a valid email address.' }, status: 422 };
+  }
+  // A duplicate email inserts nothing and returns no row, so only a duplicate
+  // is a field error; any other database error throws and renders the error
+  // page, where onError and the dev overlay see it.
+  const [user] = await db.insert(users).values({ email }).onConflictDoNothing().returning();
+  if (!user) {
+    return { success: false, fieldErrors: { email: 'That email is already added.' }, status: 422 };
+  }
+  revalidatePath('/');
+  return { success: true, data: user };
+}
+`);
+  await writeFile(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), `'use server';
+
+import { revalidatePath } from '@webjsdev/server';
+import type { ActionResult } from '@webjsdev/server';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
+
+// A server action with no input, bound by the home page's Clear list button
+// as <form action=\${clearUsers}>. One function per file.
+export async function clearUsers(): Promise<ActionResult> {
+  await db.delete(users);
+  revalidatePath('/');
+  return { success: true };
+}
+`);
+  await mkdir(join(appDir, 'test', 'users'), { recursive: true });
+  await writeFile(join(appDir, 'test', 'users', 'users.test.ts'), `// The example module's test: its actions against the test database, which
+// \`webjs test\` prepares from db/schema.server.ts. Tests in one file run in
+// order, so the clear test runs last.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { addUser } from '#modules/users/actions/add-user.server.ts';
+import { clearUsers } from '#modules/users/actions/clear-users.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
+
+const form = (email: string) => {
+  const fd = new FormData();
+  fd.set('email', email);
+  return fd;
+};
+
+test('addUser refuses an invalid email', async () => {
+  const result = await addUser(form('not-an-email'));
+  assert.equal(result.success, false);
+  assert.ok(result.fieldErrors?.email);
+});
+
+test('addUser adds a user, which listUsers then returns', async () => {
+  const email = \`ada-\${Date.now()}@example.com\`;
+  const result = await addUser(form(email));
+  assert.equal(result.success, true);
+  assert.ok((await listUsers()).some((u) => u.email === email));
+});
+
+test('addUser refuses an email that is already added', async () => {
+  const email = \`grace-\${Date.now()}@example.com\`;
+  assert.equal((await addUser(form(email))).success, true);
+  const again = await addUser(form(email));
+  assert.equal(again.success, false);
+  assert.match(again.fieldErrors?.email ?? '', /already added/);
+});
+
+test('clearUsers empties the list', async () => {
+  await addUser(form(\`grace-\${Date.now()}@example.com\`));
+  const result = await clearUsers();
+  assert.equal(result.success, true);
+  assert.deepEqual(await listUsers(), []);
+});
+`);
+
+  // Home page: the logo, then the example module at work (a form bound to its
+  // action, its component rendering what its query returns). Reshape it into the app's real landing page.
+  await writeFile(join(appDir, 'app', 'page.ts'), `import { html, nothing } from '@webjsdev/core';
+import type { PageProps } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { labelClass } from '#components/ui/label.ts';
+import { addUser } from '#modules/users/actions/add-user.server.ts';
+import { clearUsers } from '#modules/users/actions/clear-users.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
+import '#modules/users/components/user-list.ts';
 
 export const metadata = {
   title: '${displayName}',
 };
 
-export default function Home() {
-  // Flattened HERE rather than at module scope. A top-level call is a module
-  // side effect, which would ship this page to the browser for nothing.
-  const FEATURES = featureList();
+// A thin route: the data and the mutation live in modules/users/.
+export default async function Home({ actionData }: PageProps) {
+  const latest = await listUsers();
+  const error = actionData?.fieldErrors?.email;
   return html\`
-    <div class="py-8 flex flex-col items-center gap-16">
-      <!-- Hero -->
-      <section class="flex flex-col items-center text-center gap-5">
-        <h1 class="text-5xl sm:text-6xl font-bold tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent" style="font-family: var(--font-display); letter-spacing: -0.02em;">
-          Explore the gallery
-        </h1>
-        <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
-          Each demo isolates a single WebJs capability in real, runnable code. Read the ones you need, then build your app on the same patterns.
-        </p>
-      </section>
-
-      <!-- Gallery: every feature demo + the example app -->
-      <section class="w-full flex flex-col gap-6">
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          \${FEATURES.map(f => html\`
-            <a href="\${f.href}" class=\${cardClass('group flex flex-col gap-1.5 rounded-xl p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
-              <span class="flex items-center justify-between gap-2">
-                <span class="text-sm font-medium text-foreground">\${f.title}</span>
-                <span class="text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
-              </span>
-              <span class="text-xs leading-relaxed text-muted-foreground">\${f.blurb}</span>
-            </a>
-          \`)}
+    <section class="py-16 flex flex-col items-center text-center gap-4">
+      <!-- The WebJs logo, one file per theme (public/brand/), as the heading. -->
+      <h1 class="m-0">
+        <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="228" height="60" class="block h-15 w-auto dark:hidden">
+        <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-15 w-auto dark:block">
+      </h1>
+      <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
+    </section>
+    <!-- The example module (modules/users/): replace it with your own features. -->
+    <section class="mx-auto max-w-sm grid gap-4">
+      <form action=\${addUser} class="grid gap-3">
+        <div class="grid gap-2">
+          <label class=\${labelClass()} for="email">Email</label>
+          <input class=\${inputClass()} id="email" name="email" type="email" required
+            aria-invalid=\${error ? 'true' : nothing} aria-describedby=\${error ? 'email-error' : nothing}>
+          \${error ? html\`<p id="email-error" role="alert" class="text-sm text-destructive m-0">\${error}</p>\` : nothing}
         </div>
-        \${EXAMPLES.map(e => html\`
-          <a href="\${e.href}" class=\${cardClass('group flex flex-col gap-2 rounded-xl p-5 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
-            <span class="flex items-center gap-2.5">
-              <span class=\${badgeClass({ variant: 'outline' })}>Example app</span>
-              <span class="text-sm font-medium text-foreground">\${e.title}</span>
-              <span class="ml-auto text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
-            </span>
-            <span class="text-xs leading-relaxed text-muted-foreground">\${e.blurb}</span>
-          </a>
-        \`)}
-      </section>
-
-      <!-- Footer: docs + source -->
-      <footer class="flex flex-col items-center gap-3">
-        <nav class="flex items-center gap-6 text-sm text-muted-foreground" aria-label="WebJs links">
-          <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconBook()}<span>Docs</span></a>
-          <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconGithub()}<span>GitHub</span></a>
-        </nav>
-        <p class="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground m-0 text-center">
-          Built with WebJs &middot; MIT License
-        </p>
-      </footer>
-    </div>
+        <button class=\${buttonClass()} type="submit">Add user</button>
+      </form>
+      <user-list .users=\${latest}></user-list>
+      \${latest.length > 0 ? html\`
+        <form action=\${clearUsers}>
+          <button class=\${buttonClass({ variant: 'outline' })} type="submit">Clear list</button>
+        </form>\` : nothing}
+    </section>
   \`;
-}
-
-function iconBook() {
-  return html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>\`;
-}
-function iconGithub() {
-  return html\`<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>\`;
 }
 `);
 
@@ -1677,58 +1668,77 @@ function iconGithub() {
 
   // --- Theme toggle component ---
 
-  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjsdev/core';
-import { cn } from '#lib/utils/cn.ts';
-import { buttonClass } from '#modules/gallery/ui/button.ts';
+  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 type Theme = 'system' | 'light' | 'dark';
 
 /**
  * <theme-toggle> is a light-DOM component styled with Tailwind utilities.
  *
- * Light DOM is the default: no static shadow = true, no static styles.
- * Because this component has no custom CSS (only Tailwind classes,
- * which are already unique by construction), the class-prefix rule
- * doesn't apply here. If you ever add a <style> block, prefix every
- * selector with 'theme-toggle' (e.g. .theme-toggle__btn or
- * \`theme-toggle .btn\`).
+ * Light DOM is the default: no static shadow = true, no static styles. It
+ * is the UI kit's ghost icon Button (components/ui/button.ts), and it reacts
+ * through Lit's APIs (reactive state, an @click binding, the connected /
+ * disconnected lifecycle), never a <style> block or a document query. The
+ * one DOM write is the .dark class on <html>, which is the theme switch
+ * itself and no component renders.
  */
 export class ThemeToggle extends WebComponent {
-  readonly #theme = signal<Theme>('system');
+  // Lit's internal reactive state (its @state()): no attribute, re-renders on change.
+  static properties = { theme: { state: true } };
+  declare theme: Theme;
+  #os: MediaQueryList | null = null;
+  readonly #onOsChange = () => this.#apply();
+
+  constructor() {
+    super();
+    this.theme = 'system';
+  }
 
   connectedCallback() {
     super.connectedCallback();
     let saved: string | null = null;
     try { saved = localStorage.getItem('webjs_theme'); } catch {}
-    this.#theme.set(saved === 'light' || saved === 'dark' ? saved : 'system');
+    this.theme = saved === 'light' || saved === 'dark' ? saved : 'system';
+    // The head script in app/layout.ts applied the theme before paint; from
+    // here the toggle keeps it current, following the OS while on "system".
+    this.#os = window.matchMedia('(prefers-color-scheme: dark)');
+    this.#os.addEventListener('change', this.#onOsChange);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.#os?.removeEventListener('change', this.#onOsChange);
   }
 
   cycle() {
-    const t = this.#theme.get();
-    const next: Theme = t === 'system' ? 'light'
-      : t === 'light' ? 'dark' : 'system';
-    this.#theme.set(next);
+    const next: Theme = this.theme === 'system' ? 'light'
+      : this.theme === 'light' ? 'dark' : 'system';
+    this.theme = next;
     try {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
     } catch {}
+    this.#apply();
+  }
+
+  /** The tokens in styles/globals.css and color-scheme both switch on .dark; data-theme records a saved choice. */
+  #apply() {
+    const t = this.theme;
     const el = document.documentElement;
-    if (next === 'system') delete el.dataset.theme;
-    else el.dataset.theme = next;
-    // The tokens in styles/globals.css and color-scheme (native controls)
-    // both switch on the .dark class; data-theme records the saved choice.
-    const dark = next === 'dark'
-      || (next === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    el.classList.toggle('dark', dark);
+    if (t === 'system') delete el.dataset.theme;
+    else el.dataset.theme = t;
+    el.classList.toggle('dark', t === 'dark' || (t === 'system' && !!this.#os?.matches));
   }
 
   render() {
-    const t = this.#theme.get();
+    const t = this.theme;
     const label = t === 'system' ? 'AUTO' : t === 'light' ? 'LIGHT' : 'DARK';
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class=\${cn(buttonClass({ variant: 'secondary', size: 'none' }), 'w-9 h-9 rounded-full text-muted-foreground duration-150 hover:text-foreground active:scale-[0.94]')}
+        type="button"
+        class=\${buttonClass({ variant: 'ghost', size: 'icon' })}
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"
@@ -1738,9 +1748,9 @@ export class ThemeToggle extends WebComponent {
 }
 
 const ICONS = {
-  sun: html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M3 12h2M19 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>\`,
-  moon: html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>\`,
-  system: html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg>\`,
+  sun: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M3 12h2M19 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>\`,
+  moon: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>\`,
+  system: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg>\`,
 };
 
 ThemeToggle.register('theme-toggle');
@@ -1760,30 +1770,32 @@ ThemeToggle.register('theme-toggle');
 
   // --- Print success ---
 
-  const guide = 'AGENTS.md, .agents/skills/webjs/   ← the agent guide';
+  const guide = 'AGENTS.md                     ← the agent brief';
   if (isApi) {
     console.log(`  ${name}/
     app/api/{health,users}/route.ts
     modules/users/{actions,queries,types.ts}   ← routes over server actions
-    db/{schema,columns,connection}.server.ts   ← Drizzle (User model)
+    db/{schema,connection}.server.ts   ← Drizzle (User model)
     ${guide}
 `);
   } else {
     console.log(`  ${name}/
-    app/{layout,page}.ts          ← gallery home; gallery:clear grows in place
-    app/features/*, modules/*     ← browsable demos (incl. auth: login + protected route)
+    app/{layout,page}.ts          ← the starting page, grow it in place
     components/theme-toggle.ts
     public/input.css              ← Tailwind entry (compiles to public/tailwind.css)
-    db/{schema,columns,connection}.server.ts  ← Drizzle
+    db/{schema,connection}.server.ts  ← Drizzle
     ${guide}
 `);
   }
   console.log(`For AI agents, read this before editing:
-  • Read AGENTS.md, then .agents/skills/webjs/SKILL.md. The skill is the guide
-    to building a WebJs app and routes to focused references on demand.
-  • This scaffold is a minimal starting point, not a demo to prune. Grow the app
-    in place: add routes under app/, components under components/, and features
-    under modules/<feature>/, and keep server-only code behind .server.ts.
+  • Read AGENTS.md. Its brief is the whole difference from Next.js routing
+    and Lit components; run 'npx webjs check' after each edit. Fill in its
+    "This app" section as you build, and keep it current.
+  • This scaffold is a minimal starting point. Its one example feature,
+    modules/users/, shows the module shape: read it, then delete it, its test
+    and whatever uses it before building.
+    Add routes under app/, components under components/, and features under
+    modules/<feature>/, and keep server-only code behind .server.ts.
   • Use the wired-up database (Drizzle): define real models in
     db/schema.server.ts, then run 'npm run db:generate' and 'npm run db:migrate'.
     Never store app data in JSON files, in-memory arrays, or localStorage.
@@ -1840,7 +1852,7 @@ ThemeToggle.register('theme-toggle');
   // local file with no .env). Point it at a running database; `dev` / `start`
   // then apply pending migrations via webjs.*.before.
   const pgNote = dialect === 'postgres'
-    ? `\nPostgres: copy .env.example to .env and set DATABASE_URL to a running database before \`${pm} run dev\`.\nThe example URL names the database \`${dbName}\`. Create that database or edit the URL.\n`
+    ? `\nPostgres: set DATABASE_URL in .env to a running database before \`${pm} run dev\`.\nThe example URL names the database \`${dbName}\`. Create that database or edit the URL.\n`
     : '';
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
   // `webjs` npm name is owned by an unrelated package; `npx webjs

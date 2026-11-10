@@ -34,7 +34,7 @@ const KEY_CONTENT: Record<string, RegExp[]> = {
   tasks: [/Welcome back!/, /TASK-8782/, /Page 1 of 4/, /of 100 row\(s\) selected/],
   playground: [/Playground/, /Temperature/, /Maximum Length/, /Top P/],
   authentication: [/Create an account/, /Sofia Davis/, /name="__webjs_action"/],
-  rtl: [/data-slot="rtl-components"/, /dir="rtl"/, /<link rel="stylesheet" href="\/public\/rtl-fonts\.css/],
+  rtl: [/data-slot="rtl-components"/, /dir="rtl"/, /<link rel="stylesheet" href="\/rtl-fonts\.css/],
 };
 
 test('every example renders in the shell with its own nav link current', async () => {
@@ -49,7 +49,7 @@ test('every example renders in the shell with its own nav link current', async (
 test('below md the four examples shadcn pictures show their picture, and rtl shows itself', async () => {
   for (const { slug } of EXAMPLES) {
     const html = await page(`/ui/examples/${slug}`);
-    const picture = /<img src="\/public\/images\/examples\/[a-z]+-light\.png[^"]*" width="2668"/.test(html);
+    const picture = /<img src="\/images\/examples\/[a-z]+-light\.png[^"]*" width="2668"/.test(html);
     assert.equal(picture, slug !== 'rtl', `${slug} picture below md`);
   }
 });

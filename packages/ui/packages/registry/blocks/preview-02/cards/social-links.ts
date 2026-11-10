@@ -7,7 +7,7 @@
  * The `<form>` has no `action` yet. Bind a server action from a
  * `'use server'` file (`<form action=${saveSocialLinks}>`) before you ship it.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
 import { buttonClass } from '../../../components/button.ts';
 import {
@@ -41,7 +41,7 @@ export function socialLinks() {
             <div role="group" data-slot="field" data-orientation="vertical" class=${fieldClass()}>
               <label data-slot="field-label" for=${link.id} class=${fieldLabelClass()}>${link.label}</label>
               <div data-slot="input-group" role="group" class=${inputGroupClass()}>
-                <input data-slot="input-group-control" id=${link.id} name=${link.id} value=${link.value ?? null} placeholder=${link.placeholder ?? null} class=${inputGroupInputClass()}>
+                <input data-slot="input-group-control" id=${link.id} name=${link.id} value=${link.value ?? nothing} placeholder=${link.placeholder ?? nothing} class=${inputGroupInputClass()}>
                 <label data-slot="input-group-addon" data-align="inline-start" for=${link.id} class=${inputGroupAddonClass()}>${link.icon()}</label>
               </div>
             </div>

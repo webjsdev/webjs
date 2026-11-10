@@ -35,7 +35,7 @@ test('observedAttributes derives from static properties, excluding state', () =>
   class A extends WebComponent({
     foo: String,
     bar: prop(Number, { state: true }),       // state → excluded
-    fooBar: String,                           // camelCase → kebab-case + lowercased alias
+    fooBar: String,                           // camelCase → Lit's lowercase name + a kebab alias
     baz: prop(String, { attribute: 'data-baz' }), // custom attribute → verbatim, no alias
   }) {}
   A.register('obs-attrs');
@@ -57,9 +57,9 @@ test('a camelCase prop answers to its kebab name and its lowercased name (#1540)
   }
 });
 
-test('a primary attribute name wins over a sibling prop alias (#1540)', () => {
-  // `foobar` is the PRIMARY name of the `foobar` prop and the alias of
-  // `fooBar`; the primary must win so the alias never steals a real prop.
+test('a prop literally named after the attribute wins a shared default name (#1540)', () => {
+  // `foobar` is the default (lowercase) name of BOTH `fooBar` and `foobar`;
+  // the prop literally named `foobar` keeps it, so a sibling never steals it.
   class P extends WebComponent({ fooBar: String, foobar: String }) {}
   P.register('obs-alias-collide');
   assert.deepEqual(P.observedAttributes.sort(), ['foo-bar', 'foobar'].sort());
@@ -578,9 +578,11 @@ test('default hasChanged treats NaN !== NaN correctly (via strict inequality sem
   C.register('nan-el');
   const el = document.createElement('nan-el');
   document.body.appendChild(el);
+  // Count scheduled updates: the setter always calls requestUpdate (as in
+  // Lit), and requestUpdate runs hasChanged before scheduling anything.
   let updates = 0;
-  const orig = el.requestUpdate.bind(el);
-  el.requestUpdate = () => { updates++; orig(); };
+  const orig = el._scheduleUpdate.bind(el);
+  el._scheduleUpdate = () => { updates++; orig(); };
   el.n = NaN;
   el.n = NaN;   // same NaN, Object.is says no change
   assert.equal(updates, 1);

@@ -8,9 +8,8 @@
 // ships to the browser.
 import type { ActionResult } from '@webjsdev/server';
 // This demo depends on the auth gallery card (modules/auth): getCurrentUser
-// reads the real signed session. If you prune the auth card, prune this
-// server-actions card too (or swap this for your own session read); gallery:clear
-// removes both together.
+// reads the real signed session. Copying this card into an app means copying
+// the auth card too, or swapping this for your own session read.
 import { getCurrentUser } from '#modules/auth/auth.server.ts';
 
 export interface AuthUser {

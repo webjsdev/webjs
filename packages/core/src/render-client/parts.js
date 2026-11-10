@@ -5,6 +5,8 @@ import {
   assertNotFunctionActionAttr, assertNotFunctionReflectedActionProp, isBoundFormAction,
 } from '../form-action.js';
 import { isRepeat } from '../repeat.js';
+import { isDirectiveResult, PartType } from '../directive.js';
+import { isSignal } from '../signal.js';
 import {
   isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch
 } from '../directives.js';
@@ -32,6 +34,29 @@ export let currentRenderRoot = null;
 
 export function setCurrentRenderRoot(root) {
   currentRenderRoot = root;
+}
+
+/**
+ * Where the child part being committed renders, while a fresh template's
+ * parts still sit in their detached fragment. A directive reading
+ * `part.parentNode` in `update()` gets this, lit's "logical DOM parent", rather
+ * than the fragment the clone is built in.
+ * @type {Node | null}
+ */
+let logicalParent = null;
+
+/**
+ * The logical parent for a marker's DOM parent: itself, unless it is the
+ * detached fragment a template clone is built in (not a shadow root and not
+ * the fragment being rendered into).
+ * @param {Node | null} node
+ * @returns {Node | null}
+ */
+function logicalParentOf(node) {
+  if (node && node.nodeType === 11 && !(/** @type any */ (node)).host && node !== currentRenderRoot) {
+    return logicalParent ?? currentRenderRoot ?? node;
+  }
+  return node;
 }
 
 /**
@@ -180,7 +205,7 @@ export function bindPart(p, root) {
   if (p.kind === 'attr-mixed') return { kind: 'attr-mixed', el, name: p.name || '', statics: p.statics || [], group: p.group || [] };
   if (p.kind === 'prop') return { kind: 'prop', el, name: p.name || '' };
   if (p.kind === 'bool') return { kind: 'bool', el, name: p.name || '' };
-  if (p.kind === 'element') return { kind: 'element', el };
+  if (p.kind === 'element') return { kind: 'element', el, refHost: currentRenderHost };
   if (p.kind === 'slot') {
     const slotEl = /** @type {HTMLSlotElement} */ (el);
     // Defer fallback-strip and SLOT_FALLBACK_FRAG installation to apply
@@ -193,19 +218,451 @@ export function bindPart(p, root) {
   throw new Error(`unknown part kind ${/** @type any */(p).kind}`);
 }
 
+/* ================================================================
+ * Custom directives (`@webjsdev/core/directive`, lit's directive API).
+ *
+ * One directive INSTANCE lives per part (per piece of an interpolated
+ * attribute, under its own slot) for as long as the same class renders
+ * there, in a record `{ ctor, inst, child }`. `child` holds the record of a
+ * directive the first one RETURNED, so a directive composing another keeps
+ * both instances. A record is replaced (and an async one disconnected) when a
+ * different class, or a plain value, takes the part over.
+ * ================================================================ */
+
+/** Per-host set of live async-directive records, toggled with the host. */
+const ASYNC_DIRECTIVES = Symbol.for('webjs.asyncDirectives');
+
+/**
+ * The lit-shaped part handed to `Directive#update()`.
+ * @param {any} part
+ * @param {number} [piece] the piece index, for a piece of an interpolated attribute
+ */
+function directivePartFacade(part, piece) {
+  const options = { host: part.__eventHost ?? part.eventHost ?? currentRenderHost };
+  switch (part.kind) {
+    case 'child':
+      return {
+        type: PartType.CHILD,
+        options,
+        get parentNode() { return logicalParentOf(part.marker.parentNode); },
+        get endNode() { return part.marker; },
+        get startNode() {
+          const c = part.child;
+          const first = c && (c.startNode || (Array.isArray(c) ? c[0] : undefined));
+          return first ? first.previousSibling : part.marker.previousSibling;
+        },
+      };
+    case 'attr':
+    case 'attr-mixed':
+      return {
+        type: PartType.ATTRIBUTE,
+        options,
+        element: part.el,
+        name: part.name,
+        tagName: part.el.tagName,
+        strings: part.kind === 'attr-mixed' ? part.statics : undefined,
+        piece,
+      };
+    case 'prop':
+      return { type: PartType.PROPERTY, options, element: part.el, name: part.name, tagName: part.el.tagName };
+    case 'bool':
+      return { type: PartType.BOOLEAN_ATTRIBUTE, options, element: part.el, name: part.name, tagName: part.el.tagName };
+    case 'event':
+      return { type: PartType.EVENT, options, element: part.el, name: part.name, tagName: part.el.tagName };
+    default:
+      return { type: PartType.ELEMENT, options, element: part.el };
+  }
+}
+
+/**
+ * Report a directive record disconnected (async ones run `disconnected()`)
+ * and drop it from its host's registry, with every record it chained to.
+ * @param {any} rec
+ */
+function disconnectDirectiveRecord(rec) {
+  for (let r = rec; r; r = r.child) {
+    r.released = true;
+    if (typeof r.inst._$webjsSetConnected === 'function') {
+      r.inst._$webjsCommit = undefined;
+      try { r.inst._$webjsSetConnected(false); } catch (err) {
+        console.error('[webjs] an async directive\'s disconnected() threw:', err);
+      }
+      r.host?.[ASYNC_DIRECTIVES]?.delete(r);
+    }
+  }
+}
+
+/**
+ * Register an async directive record with its host so it follows the host's
+ * connection. The host gets ONE reactive controller, on its first async
+ * directive, that flips every registered record.
+ * @param {any} host
+ * @param {any} rec
+ */
+function registerAsyncDirective(host, rec) {
+  if (!host || typeof host.addController !== 'function') return;
+  let set = host[ASYNC_DIRECTIVES];
+  if (!set) {
+    const records = (set = host[ASYNC_DIRECTIVES] = new Set());
+    host.addController({
+      hostConnected() { for (const r of [...records]) r.inst._$webjsSetConnected(true); },
+      hostDisconnected() { for (const r of [...records]) r.inst._$webjsSetConnected(false); },
+    });
+  }
+  set.add(rec);
+  rec.host = host;
+}
+
+/**
+ * Resolve a value that may be a custom directive result into what it renders,
+ * keeping the directive instances on `holder[key]` (and their `child` chain).
+ *
+ * @param {any} part
+ * @param {any} holder the object the record lives on (the part, or its piece map)
+ * @param {string | number} key
+ * @param {unknown} value
+ * @param {(v: unknown) => void} commit applies a value `setValue()` pushes
+ * @param {boolean} releaseTop when the value is NOT a directive, whether to
+ *   release a record left from an earlier render (false while a wrapper
+ *   directive such as keyed / guard / cache passes its inner value on)
+ * @param {number} [piece]
+ * @returns {unknown}
+ */
+function resolveDirectiveChain(part, holder, key, value, commit, releaseTop, piece) {
+  if (part.__settingValue) return value;
+  let parent = holder;
+  /** @type {string | number} */
+  let slot = key;
+  let depth = 0;
+  while (isDirectiveResult(value)) {
+    if (++depth > 100) throw new Error('[webjs] a custom directive kept returning directives (more than 100 levels deep).');
+    const d = /** @type {any} */ (value);
+    let rec = parent[slot];
+    if (!rec || rec.ctor !== d.ctor) {
+      if (rec) disconnectDirectiveRecord(rec);
+      const facade = directivePartFacade(part, piece);
+      /** @type {any} */
+      const f = facade;
+      const inst = new d.ctor({ type: f.type, name: f.name, tagName: f.tagName, strings: f.strings });
+      rec = parent[slot] = { ctor: d.ctor, inst, facade, child: undefined, host: undefined, released: false };
+      if (typeof inst._$webjsSetConnected === 'function') {
+        // Record the owning component while its render is on the stack, the
+        // only moment it is knowable, so a `setValue()` commit throw reaches
+        // that component's renderError() (the `watch` rule).
+        if (currentRenderRoot) part.__commitOwner = boundaryOwnerOf(currentRenderRoot);
+        if (part.kind !== 'child') part.__eventHost ??= currentRenderHost;
+        const own = rec;
+        // A container `render()` disconnected (lit's `RootPart.setConnected`)
+        // starts the directives it creates disconnected, as lit does.
+        if (currentRenderRoot?.[ROOT_DISCONNECTED]) inst.isConnected = false;
+        // So does a component rendering while it is out of the document: its
+        // directives start disconnected and are reconnected with it.
+        const owner = part.__eventHost ?? currentRenderHost;
+        if (owner && owner.isConnected === false && typeof owner.addController === 'function') inst.isConnected = false;
+        inst._$webjsCommit = (v) => {
+          if (own.released) return;
+          try {
+            // A directive `setValue()` hands on resolves UNDER this one, so its
+            // instance lives as long as this directive does (lit passes the
+            // directive as the parent to `_$setValue`).
+            commitOutOfBand(part, () => {
+              const resolved = resolveDirectiveChain(part, own, 'child', v, commit, true, piece);
+              if (resolved !== noChange) commit(resolved);
+            });
+          } catch (err) {
+            reportOutOfBandCommitError(part, err);
+          }
+        };
+        registerAsyncDirective(part.__eventHost ?? currentRenderHost, rec);
+      }
+    }
+    value = rec.inst.update(rec.facade, d.values);
+    parent = rec;
+    slot = 'child';
+  }
+  // A directive that answers `noChange` keeps everything below it, a nested
+  // directive's instance included, as lit's `resolveDirective` returns early.
+  if (parent[slot] && value !== noChange && (depth > 0 || releaseTop)) {
+    disconnectDirectiveRecord(parent[slot]);
+    parent[slot] = undefined;
+  }
+  return value;
+}
+
+/**
+ * Set on a container whose `render()` result was disconnected through
+ * `setConnected(false)`.
+ */
+export const ROOT_DISCONNECTED = Symbol('webjs.rootDisconnected');
+
+/**
+ * Report every async directive in a rendered template instance connected or
+ * disconnected, in template order, the walk lit's `RootPart.setConnected`
+ * makes. `disconnected()` / `reconnected()` run once per transition.
+ * @param {any} inst
+ * @param {boolean} connected
+ */
+export function setInstanceDirectivesConnected(inst, connected) {
+  if (!inst || !inst.bound) return;
+  for (const p of inst.bound) setPartDirectivesConnected(p, connected);
+}
+
+/**
+ * Connect or disconnect the directives one part holds, and those in what it
+ * rendered, an array item that is a child part of its own included.
+ * @param {any} p
+ * @param {boolean} connected
+ */
+function setPartDirectivesConnected(p, connected) {
+  /** @param {any} rec */
+  const flip = (rec) => {
+    for (let r = rec; r; r = r.child) {
+      if (typeof r.inst._$webjsSetConnected === 'function') r.inst._$webjsSetConnected(connected);
+    }
+  };
+  flip(p.__directive);
+  if (p.__pieceDirectives) for (const k of Object.keys(p.__pieceDirectives)) flip(p.__pieceDirectives[k]);
+  const c = p.kind === 'child' ? p.child : null;
+  if (!c) return;
+  if (c.kind === 'repeat') for (const i of c.map.values()) setInstanceDirectivesConnected(i, connected);
+  else if (c.kind === 'array') {
+    for (const it of c.items) {
+      if (it.type === 'tpl') setInstanceDirectivesConnected(it.inst, connected);
+      else if (it.type === 'part') setPartDirectivesConnected(it.sub, connected);
+    }
+  } else if ('strings' in c) setInstanceDirectivesConnected(c, connected);
+}
+
+/**
+ * Release every directive record a bound part holds (its own and, for an
+ * interpolated attribute, each piece's), and recurse into a child part's
+ * rendered template so a nested directive is released with the region that
+ * is going away.
+ * @param {any} p
+ */
+function releasePartDirectives(p) {
+  // A part going away drops its signal subscriptions too (a bare signal or a
+  // `watch()` in it), so a later change cannot commit into detached nodes.
+  if (p.__sigSub) teardownSignalPart(p);
+  if (p.__watchSub) teardownWatch(p);
+  if (p.__directive) { disconnectDirectiveRecord(p.__directive); p.__directive = undefined; }
+  if (p.__pieceDirectives) {
+    for (const k of Object.keys(p.__pieceDirectives)) disconnectDirectiveRecord(p.__pieceDirectives[k]);
+    p.__pieceDirectives = undefined;
+  }
+  if (p.kind === 'child' && p.child) releaseRegionDirectives(p.child);
+}
+
+/**
+ * Release the directives inside a child part's rendered content, whatever
+ * shape it took (a template instance, a repeat map, a positional array).
+ * @param {any} c
+ */
+function releaseRegionDirectives(c) {
+  if (!c) return;
+  if (c.kind === 'repeat') { for (const inst of c.map.values()) releaseInstanceDirectives(inst); return; }
+  if (c.kind === 'array') {
+    for (const item of c.items) {
+      if (item.type === 'tpl') releaseInstanceDirectives(item.inst);
+      else if (item.type === 'part') releasePartDirectives(item.sub);
+    }
+    return;
+  }
+  if ('strings' in c) releaseInstanceDirectives(c);
+}
+
+/**
+ * Release every directive record in a template instance's parts. Exported for
+ * the top-level reconciler, which swaps a component's whole template.
+ * @param {any} inst
+ */
+export function releaseInstanceDirectives(inst) {
+  if (!inst || !inst.bound) return;
+  for (const p of inst.bound) releasePartDirectives(p);
+}
+
+/** Whether a value only WRAPS another one the part renders (so its directive record must survive). */
+function isWrapperDirective(value) {
+  return isKeyed(value) || isGuard(value) || isCache(value) || isLive(value);
+}
+
+/** Settled values of the promises `until` has seen, so a re-render that
+ * passes an already-settled promise commits its value at once rather than
+ * flashing the placeholder (Lit's until keeps the same per-part memory). */
+const settledUntil = new WeakMap();
+
+/**
+ * `until(...args)` outside a child position: the value to commit now (the
+ * first non-promise argument, or the value of a higher-priority promise that
+ * has already settled), with each higher-priority promise still pending
+ * scheduled to commit through `onLater` when it settles, while `isCurrent()`.
+ * `has` is false when every argument is a pending promise, which commits
+ * nothing, as Lit's `noChange`.
+ * @param {unknown[]} args
+ * @param {() => boolean} isCurrent
+ * @param {(v: unknown) => void} onLater
+ * @returns {{ has: boolean, value?: unknown }}
+ */
+function untilValueNow(args, isCurrent, onLater) {
+  const isThenable = (/** @type any */ x) => !!x && typeof x.then === 'function';
+  const syncIdx = args.findIndex((x) => !isThenable(x));
+  let limit = syncIdx < 0 ? args.length : syncIdx;
+  /** @type {{ has: boolean, value?: unknown }} */
+  let now = syncIdx < 0 ? { has: false } : { has: true, value: args[syncIdx] };
+  for (let i = 0; i < limit; i++) {
+    if (settledUntil.has(/** @type object */ (args[i]))) {
+      now = { has: true, value: settledUntil.get(/** @type object */ (args[i])) };
+      limit = i;
+      break;
+    }
+  }
+  let best = limit;
+  for (let i = 0; i < limit; i++) {
+    const p = /** @type object */ (args[i]);
+    Promise.resolve(p).then((v) => {
+      settledUntil.set(p, v);
+      if (!isCurrent() || i >= best) return;
+      best = i;
+      onLater(v);
+    }, () => {});
+  }
+  return now;
+}
+
+/**
+ * @param {unknown} prev
+ * @param {unknown} deps
+ */
+function sameGuardDeps(prev, deps) {
+  if (prev === undefined) return false;
+  if (Array.isArray(prev) && Array.isArray(deps)) {
+    return prev.length === deps.length && deps.every((d, i) => Object.is(d, prev[i]));
+  }
+  return Object.is(prev, deps);
+}
+
+/**
+ * One piece of an interpolated attribute through the same unwrap a whole
+ * attribute gets (#1686): `guard`, `keyed`, `cache`, and `until`, whose
+ * later promise rewrites just this piece. A piece with nothing to commit yet
+ * keeps the text it last committed (empty on a first render), as `noChange`.
+ * @param {any} part
+ * @param {number} j
+ * @param {unknown} piece
+ * @param {string[]} committed
+ * @param {{ statics: string[], group: number[] }} mp
+ */
+function mixedPieceValue(part, j, piece, committed, mp) {
+  const guards = (part.__pieceGuardDeps ??= []);
+  const untils = (part.__pieceUntil ??= []);
+  untils[j] = null;
+  if (isGuard(piece)) {
+    const deps = /** @type any */ (piece).deps;
+    if (sameGuardDeps(guards[j], deps)) return committed[j] ?? '';
+    guards[j] = deps;
+    piece = /** @type any */ (piece).fn();
+  } else {
+    guards[j] = undefined;
+  }
+  while (isKeyed(piece) || isCache(piece)) piece = /** @type any */ (piece).value;
+  if (!isUntil(piece)) return piece;
+  const token = {};
+  untils[j] = token;
+  const now = untilValueNow(/** @type any */ (piece).args, () => untils[j] === token, (v) => {
+    if (v === nothing) { part.el.removeAttribute(part.name); return; }
+    assertNotFunctionActionAttr(v, part.name, part.el.localName);
+    committed[j] = String(v ?? '');
+    let text = mp.statics[0];
+    for (let k = 0; k < mp.group.length; k++) text += (committed[k] ?? '') + (mp.statics[k + 1] || '');
+    part.el.setAttribute(part.name, text);
+  });
+  return now.has ? now.value : (committed[j] ?? '');
+}
+
 /**
  * @param {BoundPart} part
  * @param {unknown} value
  * @param {unknown} _prev
  */
 export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb) {
-  if (value === noChange) return;
+  // An interpolated attribute is rebuilt from ALL its pieces, so a `noChange`
+  // in the anchor position must still reach the attr-mixed branch, which
+  // resolves each piece on its own. Every other part keeps its value.
+  if (value === noChange && part.kind !== 'attr-mixed') return;
+  // A custom directive on an element, attribute, property, boolean or event
+  // part resolves to the value it renders before anything else looks at the
+  // value. A child part resolves in applyChild (around its own directive
+  // state); an interpolated attribute resolves per piece below.
+  if (part.kind !== 'child' && part.kind !== 'attr-mixed' && part.kind !== 'slot' && part.kind !== 'noop'
+      && (/** @type any */ (part).__directive || isDirectiveResult(value))) {
+    value = resolveDirectiveChain(part, part, '__directive', value, (v) => {
+      const p = /** @type any */ (part);
+      p.__settingValue = true;
+      try { applyPart(part, v, undefined, undefined, reconcileFormActionsCb); } finally { p.__settingValue = false; }
+    }, true);
+    if (value === noChange) return;
+  }
+  // A bare `${signal}` in an attribute or boolean hole: bind the part to the
+  // signal so a change rewrites just this attribute, with no host re-render
+  // (lit's signals package does the same). An interpolated attribute tracks
+  // every signal piece under one part-level watcher. A `.prop` hole is left
+  // alone, so the property receives the signal object itself.
+  const pAny = /** @type any */ (part);
+  if ((part.kind === 'attr' || part.kind === 'bool' || part.kind === 'attr-mixed') && !pAny.__applyingSignal) {
+    const holdsSignal = part.kind === 'attr-mixed'
+      ? /** @type any */ (part).group.some((/** @type {number} */ i) => isSignalLike(allValues ? allValues[i] : value))
+      : isSignalLike(value);
+    if (holdsSignal) {
+      bindSignalPart(part, () => {
+        pAny.__applyingSignal = true;
+        try {
+          applyPart(part, part.kind === 'attr-mixed' ? value : readSignalLike(value), _prev, allValues, reconcileFormActionsCb);
+        } finally {
+          pAny.__applyingSignal = false;
+        }
+      });
+      return;
+    }
+    if (pAny.__sigSub) teardownSignalPart(pAny);
+  }
   if (isAttributeMap(value)) { applyAttributeMap(part, value); return; }
   part.__mapKind = undefined;
+  // The value-carrying built-in directives outside a child position, as in
+  // Lit (#1686): `guard` commits its callback's result (re-run only when its
+  // deps change), `keyed` and `cache` their value, and `until` its first
+  // non-promise argument now and a higher-priority promise's value once it
+  // settles. They used to be written as "[object Object]". The pieces of an
+  // interpolated attribute take the same unwrap in the 'attr-mixed' case.
+  if (part.kind === 'attr' || part.kind === 'prop' || part.kind === 'bool' || part.kind === 'event') {
+    if (!pAny.__untilApplying) {
+      pAny.__attrUntil = null;
+      if (isGuard(value)) {
+        const deps = /** @type any */ (value).deps;
+        if (sameGuardDeps(pAny.__attrGuardDeps, deps)) return;
+        pAny.__attrGuardDeps = deps;
+        value = /** @type any */ (value).fn();
+      } else {
+        pAny.__attrGuardDeps = undefined;
+      }
+    }
+    while (isKeyed(value) || isCache(value)) value = /** @type any */ (value).value;
+    if (isUntil(value)) {
+      const token = {};
+      pAny.__attrUntil = token;
+      const now = untilValueNow(/** @type any */ (value).args, () => pAny.__attrUntil === token, (v) => {
+        pAny.__untilApplying = true;
+        try { applyPart(part, v, undefined, allValues, reconcileFormActionsCb); } finally { pAny.__untilApplying = false; }
+      });
+      if (!now.has) return;
+      value = now.value;
+    }
+  }
   // Unwrap live() to dirty-check against the live DOM value, not the
   // last rendered value. Essential for <input> two-way binding.
   if (isLive(value)) {
     const liveVal = /** @type any */ (value).value;
+    // live(noChange) keeps whatever the element holds now, as in Lit (#1686).
+    if (liveVal === noChange) return;
     if (part.kind === 'prop' && /** @type any */ (part.el)[part.name] === liveVal) return;
     if (part.kind === 'attr' && part.el.getAttribute(part.name) === String(liveVal)) return;
     if (part.kind === 'bool' && part.el.hasAttribute(part.name) === !!liveVal) return;
@@ -290,8 +747,36 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       // Reconstruct the attribute from static pieces + all dynamic values.
       const mp = /** @type {{ statics: string[], group: number[] }} */ (/** @type any */ (part));
       let val = mp.statics[0];
+      // The text each piece last committed. A `noChange` piece reuses it (empty
+      // on the first render, which is what SSR serves), so it never stringifies
+      // the sentinel itself.
+      const committed = /** @type any */ (part).__pieces ??= [];
+      // A lone hole (`a="${x}"`) is a whole-value binding, as in lit, so a
+      // first-render `noChange` leaves the attribute absent rather than empty.
+      if (mp.group.length === 1 && !mp.statics[0] && !mp.statics[1] && !committed.length
+          && (allValues ? allValues[mp.group[0]] : value) === noChange) break;
+      let hasLive = false;
       for (let j = 0; j < mp.group.length; j++) {
         let piece = allValues ? allValues[mp.group[j]] : value;
+        // A custom directive in this piece: one instance per piece, its
+        // `setValue()` rewriting just this piece of the attribute.
+        const pieceRecs = /** @type any */ (part).__pieceDirectives;
+        if (isDirectiveResult(piece) || (pieceRecs && pieceRecs[j])) {
+          const holder = (/** @type any */ (part).__pieceDirectives ??= {});
+          const pieceIndex = j;
+          piece = resolveDirectiveChain(part, holder, String(j), piece, (v) => {
+            if (v === noChange) return;
+            if (v === nothing) { part.el.removeAttribute(part.name); return; }
+            committed[pieceIndex] = String(v ?? '');
+            let text = mp.statics[0];
+            for (let k = 0; k < mp.group.length; k++) text += (committed[k] ?? '') + (mp.statics[k + 1] || '');
+            part.el.setAttribute(part.name, text);
+          }, true, j);
+        }
+        // A signal piece reads its current value; the part-level watcher
+        // applyPart installed records the read, so a change rebuilds this attribute.
+        if (isSignalLike(piece)) piece = readSignalLike(piece);
+        if (piece === noChange) piece = committed[j] ?? '';
         // Unwrap live() PER PIECE (#1443). The top-of-function unwrap only
         // sees the anchor hole's own value, and every hole inside a QUOTED
         // attribute lands here (single-hole included, the compiler classifies
@@ -299,13 +784,22 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         // server now emits correctly would be rewritten to the wrapper's
         // stringification on the next client commit. Mirrors the reconciler's
         // effectiveFormAttr, which already unwraps each group piece.
-        if (isLive(piece)) piece = /** @type any */ (piece).value;
+        if (isLive(piece)) {
+          piece = /** @type any */ (piece).value;
+          hasLive = true;
+          if (piece === noChange) piece = committed[j] ?? '';
+        }
+        piece = mixedPieceValue(part, j, piece, committed, mp);
         // #1154: same function guard for each piece of a mixed attribute.
         assertNotFunctionActionAttr(piece, part.name, part.el.localName);
         if (piece === nothing) { part.el.removeAttribute(part.name); return; }
-        val += String(piece ?? '');
+        committed[j] = String(piece ?? '');
+        val += committed[j];
         val += mp.statics[j + 1] || '';
       }
+      // A live() piece checks the DOM, not the last render: an identical value
+      // is not written again (Lit's live, #1686).
+      if (hasLive && part.el.getAttribute(part.name) === val) break;
       part.el.setAttribute(part.name, val);
       break;
     }
@@ -460,7 +954,7 @@ export function applyElement(part, value) {
 
   if (refChanged && prevTarget) {
     if (typeof prevTarget === 'function') {
-      try { prevTarget(undefined); } catch {}
+      try { prevTarget.call(partAny.refHost, undefined); } catch {}
     } else if (typeof prevTarget === 'object') {
       prevTarget.value = undefined;
     }
@@ -473,9 +967,9 @@ export function applyElement(part, value) {
         // Same callback now pointing at a different element: deliver
         // an `undefined` cleanup for the prior element first.
         if (!refChanged && partAny.__refElement !== undefined) {
-          try { nextTarget(undefined); } catch {}
+          try { nextTarget.call(partAny.refHost, undefined); } catch {}
         }
-        try { nextTarget(part.el); } catch {}
+        try { nextTarget.call(partAny.refHost, part.el); } catch {}
       } else if (typeof nextTarget === 'object') {
         nextTarget.value = part.el;
       }
@@ -495,6 +989,18 @@ export function applyChild(part, value, reconcileFormActionsCb) {
   // directive handlers recurse via applyChildInner (no re-clear) so
   // their own state survives the recursion.
   if (value === noChange) return;
+  // A custom directive resolves first, so the per-part state of the built-in
+  // directive it may return (until, guard, cache, watch) is judged against
+  // what actually renders here. Its own record is released when a plain
+  // value takes the part over, but kept while a wrapper (keyed / guard /
+  // cache / live) passes an inner value on, since that inner value is
+  // resolved against the same record further down.
+  const partAny = /** @type any */ (part);
+  if (partAny.__directive || isDirectiveResult(value)) {
+    value = resolveDirectiveChain(part, part, '__directive', value,
+      (v) => applyChildInner(part, v, reconcileFormActionsCb), !isWrapperDirective(value));
+    if (value === noChange) return;
+  }
   clearStaleDirectiveState(part, value);
   return applyChildInner(part, value, reconcileFormActionsCb);
 }
@@ -518,11 +1024,13 @@ export function applyChildInner(part, value, reconcileFormActionsCb) {
   // marked as renderer writes rather than authored content.
   const previousHost = currentRenderHost;
   currentRenderHost = part.__eventHost;
+  const previousLogical = logicalParent;
+  logicalParent = logicalParentOf(part.marker && part.marker.parentNode);
   try {
     return commitInto(part.marker && part.marker.parentNode, () =>
       applyChildInnerRaw(part, value, reconcileFormActionsCb),
     );
-  } finally { currentRenderHost = previousHost; }
+  } finally { currentRenderHost = previousHost; logicalParent = previousLogical; }
 }
 
 /**
@@ -531,6 +1039,15 @@ export function applyChildInner(part, value, reconcileFormActionsCb) {
  */
 export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   const marker = part.marker;
+
+  // A custom directive a built-in directive passed on (`keyed(k, mine())`,
+  // `guard(deps, () => mine())`): resolved against the part's record, which
+  // applyChild kept for exactly this.
+  if (isDirectiveResult(value)) {
+    value = resolveDirectiveChain(part, part, '__directive', value,
+      (v) => applyChildInner(part, v, reconcileFormActionsCb), false);
+    if (value === noChange) return;
+  }
 
   // live() in a CHILD position (#1443). applyPart's top-of-function unwrap only
   // sees the hole's own value, so a live() nested inside an ARRAY child arrives
@@ -548,15 +1065,29 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
 
   // unsafeHTML directive: inject raw HTML string as DOM nodes.
   if (isUnsafeHTML(value)) {
-    teardownChild(part);
     const htmlStr = String(/** @type any */ (value).value ?? '');
+    const ns = /** @type any */ (value).ns;
+    // Dirty-checked against the markup last committed, as in Lit (#1686): the
+    // same string again keeps the nodes, and anything the page did to them,
+    // rather than re-parsing (each render builds a new directive object).
+    const last = /** @type any */ (part).__unsafeCommitted;
+    if (last && last.str === htmlStr && last.ns === ns && part.child === last.nodes) return;
+    teardownChild(part);
     const template = document.createElement('template');
-    template.innerHTML = htmlStr;
+    // unsafeSVG / unsafeMathML: parse inside the namespace's root element so
+    // the nodes are SVG / MathML elements, then lift them out of the wrapper.
+    const wrapTag = ns === 'svg' ? 'svg' : ns === 'mathml' ? 'math' : null;
+    template.innerHTML = wrapTag ? `<${wrapTag}>${htmlStr}</${wrapTag}>` : htmlStr;
+    if (wrapTag) {
+      const wrapper = /** @type {Element} */ (template.content.firstChild);
+      wrapper.replaceWith(...wrapper.childNodes);
+    }
     const nodes = [...template.content.childNodes];
     const frag = document.createDocumentFragment();
     for (const n of nodes) frag.appendChild(n);
     marker.parentNode?.insertBefore(frag, marker);
     part.child = nodes;
+    /** @type any */ (part).__unsafeCommitted = { str: htmlStr, ns, nodes };
     return;
   }
 
@@ -611,7 +1142,7 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     teardownChild(part);
     const tpl = /** @type any */ (value).template;
     if (tpl && tpl.content) {
-      const frag = tpl.content.cloneNode(true);
+      const frag = document.importNode(tpl.content, true);
       const nodes = [...frag.childNodes];
       marker.parentNode?.insertBefore(frag, marker);
       part.child = nodes;
@@ -654,6 +1185,11 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   if (isWatch(value)) {
     return applyWatch(part, /** @type any */ (value).signal, reconcileFormActionsCb);
   }
+  // A bare `${signal}` in a child position binds exactly like `watch(signal)`
+  // (lit's signals package renders a bare signal the same way).
+  if (isSignal(value)) {
+    return applyWatch(part, /** @type any */ (value), reconcileFormActionsCb);
+  }
 
   // asyncAppend / asyncReplace: subscribe to the AsyncIterable. Each
   // yielded value is mapped (optional) and appended (asyncAppend) or
@@ -689,6 +1225,17 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
   // flipping one item's binding rebuilt the WHOLE list and detached every
   // node, which cancels a native drag mid-gesture. Use `repeat()` for keyed
   // reordering.
+  //
+  // Any other iterable (a generator from `map()` / `join()` / `range()`, a
+  // Set) renders exactly like an array, as in lit, so it is drained into one
+  // first. A string never reaches here as an iterable (it is checked by
+  // `typeof`), and directive markers are plain objects with no iterator.
+  // A DOM node is committed as itself (below), even one that is also iterable
+  // (a `<form>`, a `<select>`), as in lit.
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && !isDomNode(value)
+      && typeof (/** @type any */ (value))[Symbol.iterator] === 'function') {
+    value = Array.from(/** @type {Iterable<unknown>} */ (value));
+  }
   if (Array.isArray(value)) {
     if (part.child && /** @type any */ (part.child).kind === 'array') {
       reconcileArray(part, value, reconcileFormActionsCb);
@@ -700,6 +1247,10 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     applyArrayFresh(marker, /** @type any */ (arrState), value, reconcileFormActionsCb);
     return;
   }
+
+  // The same node again keeps it where it is, as lit's dirty check does, so
+  // its focus and state are not disturbed by a re-insert.
+  if (isDomNode(value) && Array.isArray(part.child) && part.child.length === 1 && part.child[0] === value) return;
 
   // Remove previously rendered nodes between marker and its next sibling we own.
   if (part.child) {
@@ -720,6 +1271,10 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
         updateInstance(inst, /** @type any */ (value).values, reconcileFormActionsCb);
         return;
       }
+      // A full teardown, as `clear()` does: a ref on an element of the
+      // outgoing template is unset (its callback gets `undefined`), the way
+      // Lit's ref directive is on disconnection, before the new one binds.
+      disposeInstance(inst);
       removeBetween(inst.startNode, inst.endNode);
       part.child = undefined;
     } else {
@@ -731,12 +1286,13 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     }
   }
 
-  if (value == null || value === nothing || value === noChange) return;
+  // An empty string renders no node at all, as lit treats it like `nothing`.
+  if (value == null || value === nothing || value === noChange || value === '') return;
 
   if (isTemplate(value)) {
     const tr = /** @type any */ (value);
     const { templateEl, parts, formActions } = compile(tr);
-    const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+    const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
     const startNode = document.createComment(`${MARKER}s`);
     const endNode = document.createComment(`${MARKER}e`);
     const bound = parts.map((p) => bindPart(p, frag));
@@ -760,17 +1316,44 @@ export function applyChildInnerRaw(part, value, reconcileFormActionsCb) {
     return;
   }
 
-  const node = document.createTextNode(String(value));
+  // A DOM node renders as itself; anything else as text.
+  const node = isDomNode(value) ? /** @type {ChildNode} */ (value) : document.createTextNode(String(value));
   marker.parentNode?.insertBefore(node, marker);
   part.child = [node];
 }
 
+/**
+ * A DOM node a child binding renders as itself (lit's `_commitNode`). Checked
+ * by shape rather than `instanceof Node`, so a node from another realm (an
+ * iframe's document) is recognised too.
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+export function isDomNode(v) {
+  return v !== null && typeof v === 'object' && typeof (/** @type any */ (v)).nodeType === 'number'
+    && typeof (/** @type any */ (v)).cloneNode === 'function';
+}
+
 export function updateInstance(inst, values, reconcileFormActionsCb) {
-  values = values.map((value, i) => value === noChange ? (inst.lastValues[i] ?? nothing) : value);
+  // `noChange` keeps whatever this hole last committed, so it maps to the
+  // previous value and the `Object.is` skip below leaves the DOM alone. It must
+  // not fall back to `nothing` when that value was nullish: a hole that rendered
+  // `title=""` from `undefined` keeps its attribute, as in Lit.
+  values = values.map((value, i) => value === noChange ? inst.lastValues[i] : value);
+  /** Interpolated attributes already rebuilt this pass, so each is built once. */
+  /** @type {Set<number> | null} */
+  let rebuilt = null;
   for (let i = 0; i < values.length; i++) {
     const next = values[i];
-    if (Object.is(next, inst.lastValues[i])) continue;
+    // A custom directive runs on every render even when handed the same
+    // result object, as in lit, which resolves a directive before it compares.
+    if (Object.is(next, inst.lastValues[i]) && !isDirectiveResult(next)) continue;
     const bp = inst.bound[i];
+    const anchorIdx = bp.kind === 'attr-mixed' ? i : /** @type any */ (bp).mixedAnchor;
+    if (anchorIdx != null) {
+      if (rebuilt?.has(anchorIdx)) { inst.lastValues[i] = next; continue; }
+      (rebuilt ??= new Set()).add(anchorIdx);
+    }
     // A hole that belongs to a mixed attribute (`class="a ${x} b ${y}"`) is a
     // `noop` pointing at the attribute's anchor part; re-apply the anchor so the
     // whole attribute is rebuilt from every hole's current value, not just the
@@ -876,7 +1459,7 @@ export function nodesToFrag(nodes) {
  */
 export function buildDetached(tr, reconcileFormActionsCb) {
   const { templateEl, parts, formActions } = compile(tr);
-  const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+  const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
   const startNode = document.createComment(`${MARKER}s`);
   const endNode = document.createComment(`${MARKER}e`);
   const bound = parts.map((p) => bindPart(p, frag));
@@ -908,6 +1491,9 @@ export function buildDetached(tr, reconcileFormActionsCb) {
 
 /** @param {TemplateInstance} inst */
 export function disposeInstance(inst) {
+  // Custom directives in the instance (and in the regions its child parts
+  // rendered) are released first; an async one runs its `disconnected()`.
+  releaseInstanceDirectives(inst);
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher, p.handler);
     if (p.kind === 'element') {
@@ -938,7 +1524,7 @@ export function disposeInstance(inst) {
       const prev = /** @type any */ (p).lastTarget;
       if (prev) {
         if (typeof prev === 'function') {
-          try { prev(undefined); } catch {}
+          try { prev.call(/** @type any */ (p).refHost, undefined); } catch {}
         } else if (typeof prev === 'object') {
           try { prev.value = undefined; } catch {}
         }
@@ -962,8 +1548,9 @@ function applyRepeatFresh(marker, state, value, reconcileFormActionsCb) {
   const parent = marker.parentNode;
   if (!parent) return;
   const bulk = document.createDocumentFragment();
+  const seen = new Map();
   for (let i = 0; i < items.length; i++) {
-    const key = keyFn(items[i], i);
+    const key = slotKey(state, keyFn(items[i], i), seen);
     const tr = templateFn(items[i], i);
     if (!isTemplate(tr)) continue;
     const { inst, frag } = buildDetached(/** @type any */ (tr), reconcileFormActionsCb);
@@ -971,6 +1558,28 @@ function applyRepeatFresh(marker, state, value, reconcileFormActionsCb) {
     bulk.appendChild(frag);
   }
   parent.insertBefore(bulk, marker);
+}
+
+/**
+ * The map key for one occurrence of `key` in a pass (#1686). The first
+ * occurrence is the key itself; the nth repeat of it is a placeholder object
+ * kept on the state, the same one every pass, so a list with duplicate keys
+ * gives each row its own entry. A plain key map let the second row overwrite
+ * the first, whose nodes then stayed in the document tracked by nothing, and
+ * each re-render added another copy. Lit leaves duplicate keys undefined but
+ * never leaks a row.
+ * @param {any} state
+ * @param {unknown} key
+ * @param {Map<unknown, number>} seen occurrences so far in this pass
+ */
+function slotKey(state, key, seen) {
+  const n = seen.get(key) ?? 0;
+  seen.set(key, n + 1);
+  if (n === 0) return key;
+  const dups = (state.dups ??= new Map());
+  let list = dups.get(key);
+  if (!list) dups.set(key, (list = []));
+  return (list[n - 1] ??= { duplicateOf: key, n });
 }
 
 /**
@@ -990,11 +1599,12 @@ function reconcileRepeat(part, value, reconcileFormActionsCb) {
   const state = /** @type {{ kind: 'repeat', map: Map<any, TemplateInstance> }} */ (part.child);
   const { items, keyFn, templateFn } = value;
   const newMap = new Map();
+  const seen = new Map();
 
   try {
     // Walk the new list and position each item's nodes immediately before the marker.
     for (let i = 0; i < items.length; i++) {
-      const key = keyFn(items[i], i);
+      const key = slotKey(state, keyFn(items[i], i), seen);
       const tr = templateFn(items[i], i);
       if (!isTemplate(tr)) continue;
       const existing = state.map.get(key);
@@ -1128,22 +1738,29 @@ function teardownRepeat(state) {
  * instance (bookended by its own markers), a `text` carries a single text
  * node, and an `empty` slot (a nullish / boolean element) renders nothing
  * but still holds the position so index-based reconciliation stays aligned.
- * @typedef {{ type: 'tpl', inst: TemplateInstance } | { type: 'text', node: Text } | { type: 'empty' }} ArrayItem
+ * A `node` is a DOM node the array held, rendered as itself.
+ * @typedef {{ type: 'tpl', inst: TemplateInstance } | { type: 'text', node: Text } | { type: 'node', node: ChildNode } | { type: 'empty' } | { type: 'part', start: Comment, sub: any }} ArrayItem
  */
 
 /** @param {ArrayItem} item @returns {ChildNode | null} */
 function arrayItemFirstNode(item) {
+  if (item.type === 'part') return item.start;
   if (item.type === 'tpl') return item.inst.startNode;
-  if (item.type === 'text') return item.node;
+  if (item.type === 'text' || item.type === 'node') return item.node;
   return null;
 }
 
 /** @param {ArrayItem} item */
 function removeArrayItem(item) {
-  if (item.type === 'tpl') {
+  if (item.type === 'part') {
+    // Its directive and any signal subscription go with it, as a hole's do.
+    releasePartDirectives(item.sub);
+    teardownChild(item.sub);
+    removeBetween(item.start, item.sub.marker);
+  } else if (item.type === 'tpl') {
     disposeInstance(item.inst);
     removeBetween(item.inst.startNode, item.inst.endNode);
-  } else if (item.type === 'text') {
+  } else if (item.type === 'text' || item.type === 'node') {
     item.node.parentNode?.removeChild(item.node);
   }
 }
@@ -1159,11 +1776,24 @@ function buildArrayItem(v, reconcileFormActionsCb) {
   // #1443: unwrap live() per ITEM. applyPart unwraps the hole's own value, so
   // an array child arrives unwrapped at the top and its ITEMS do not.
   if (isLive(v)) v = /** @type any */ (v).value;
+  if (isPartItem(v)) {
+    // A directive or a nested array gets a child part of its own between two
+    // comments, as each item is in Lit, so it renders and keeps its directive
+    // state exactly as it would in a hole. It is filled once its comments are
+    // in the document (`fill`), because a part commits relative to its parent.
+    const start = document.createComment('');
+    const marker = document.createComment('');
+    const frag = document.createDocumentFragment();
+    frag.append(start, marker);
+    const sub = { kind: 'child', marker, __eventHost: currentRenderHost };
+    return { item: { type: 'part', start, sub }, frag, fill: () => applyChild(/** @type any */ (sub), v, reconcileFormActionsCb) };
+  }
   if (isTemplate(v)) {
     const { inst, frag } = buildDetached(/** @type any */ (v), reconcileFormActionsCb);
     return { item: { type: 'tpl', inst }, frag };
   }
-  if (v != null && v !== nothing && v !== noChange) {
+  if (isDomNode(v)) return { item: { type: 'node', node: /** @type any */ (v) }, frag: /** @type any */ (v) };
+  if (v != null && v !== nothing && v !== noChange && v !== '') {
     const node = document.createTextNode(String(v));
     return { item: { type: 'text', node }, frag: node };
   }
@@ -1182,13 +1812,27 @@ function applyArrayFresh(marker, state, value, reconcileFormActionsCb) {
   const bulk = document.createDocumentFragment();
   /** @type {ArrayItem[]} */
   const items = [];
+  /** @type {Array<() => void>} */
+  const fills = [];
   for (const v of value) {
-    const { item, frag } = buildArrayItem(v, reconcileFormActionsCb);
+    const { item, frag, fill } = buildArrayItem(v, reconcileFormActionsCb);
     if (frag) bulk.appendChild(frag);
+    if (fill) fills.push(fill);
     items.push(item);
   }
   parent.insertBefore(bulk, marker);
   state.items = items;
+  for (const fill of fills) fill();
+}
+
+/**
+ * Whether an array item renders through a child part of its own: a directive
+ * result or a nested array / iterable, anything that is not a template, a node
+ * or a primitive (which the item types below handle without one).
+ * @param {unknown} v
+ */
+function isPartItem(v) {
+  return v !== null && typeof v === 'object' && !isTemplate(v) && !isDomNode(v);
 }
 
 /**
@@ -1222,7 +1866,14 @@ function reconcileArray(part, value, reconcileFormActionsCb) {
       const raw = value[i];
       const v = isLive(raw) ? /** @type any */ (raw).value : raw;
       const o = old[i];
-      if (isTemplate(v)) {
+      if (isPartItem(v)) {
+        if (o && o.type === 'part') {
+          applyChild(o.sub, v, reconcileFormActionsCb);
+          next.push(o);
+          consumed = i + 1;
+          continue;
+        }
+      } else if (isTemplate(v)) {
         const tr = /** @type any */ (v);
         if (o && o.type === 'tpl' && o.inst.strings === tr.strings) {
           updateInstance(o.inst, tr.values, reconcileFormActionsCb);
@@ -1230,7 +1881,13 @@ function reconcileArray(part, value, reconcileFormActionsCb) {
           consumed = i + 1;
           continue;
         }
-      } else if (v != null && v !== nothing && v !== noChange) {
+      } else if (isDomNode(v)) {
+        if (o && o.type === 'node' && o.node === v) {
+          next.push(o);
+          consumed = i + 1;
+          continue;
+        }
+      } else if (v != null && v !== nothing && v !== noChange && v !== '') {
         if (o && o.type === 'text') {
           const str = String(v);
           if (o.node.data !== str) o.node.data = str;
@@ -1259,9 +1916,10 @@ function reconcileArray(part, value, reconcileFormActionsCb) {
       // The push sits BEFORE the removal, which is a pure reordering on the
       // success path and means a slot that has already been built and
       // inserted is never untracked at any throw point.
-      const { item, frag } = buildArrayItem(v, reconcileFormActionsCb);
+      const { item, frag, fill } = buildArrayItem(v, reconcileFormActionsCb);
       if (frag) parent.insertBefore(frag, nextArrayAnchor(old, i, marker));
       next.push(item);
+      if (fill) fill();
       if (o) removeArrayItem(o);
       consumed = i + 1;
     }
@@ -1436,7 +2094,7 @@ export function clearStaleDirectiveState(part, value) {
   if (partAny.__keyedKey !== undefined && !isKeyed(value)) {
     partAny.__keyedKey = undefined;
   }
-  if (partAny.__watchSub && !isWatch(value)) {
+  if (partAny.__watchSub && !isWatch(value) && !isSignal(value)) {
     teardownWatch(partAny);
   }
 }
@@ -1786,6 +2444,62 @@ function applyWatch(part, sig, reconcileFormActionsCb) {
 }
 
 /**
+ * Bind an attribute-shaped part (attribute, boolean, interpolated attribute)
+ * to the signals it renders. `run` applies the part's value, reading each
+ * signal inside the part's own `Signal.subtle.Watcher`, so a change re-runs
+ * `run` in a microtask and rewrites only this attribute; the host's render
+ * watcher does not see the read (the commit runs untracked), which is what
+ * keeps a signal change from re-rendering the whole component.
+ *
+ * The watcher is rebuilt on every render of the part, so the read set always
+ * matches the values the latest render bound.
+ *
+ * @param {any} part
+ * @param {() => void} run
+ */
+function bindSignalPart(part, run) {
+  teardownSignalPart(part);
+  if (currentRenderRoot) part.__commitOwner = boundaryOwnerOf(currentRenderRoot);
+  const watcher = new Signal.subtle.Watcher(() => {
+    queueMicrotask(() => {
+      if (part.__sigSub !== watcher) return;
+      try {
+        commitOutOfBand(part, () => watcher.observe(run));
+      } catch (err) {
+        reportOutOfBandCommitError(part, err);
+      }
+    });
+  });
+  part.__sigSub = watcher;
+  watcher.observe(run);
+}
+
+/**
+ * Whether an attribute-shaped hole is bound to a signal: a bare signal, or a
+ * `watch(signal)` marker (which means the same thing outside a child hole).
+ * @param {unknown} v
+ */
+function isSignalLike(v) {
+  return isSignal(v) || isWatch(v);
+}
+
+/** @param {any} v */
+function readSignalLike(v) {
+  return isWatch(v) ? v.signal.get() : v.get();
+}
+
+/**
+ * Dispose an attribute-shaped part's signal watcher.
+ * @param {any} part
+ */
+function teardownSignalPart(part) {
+  if (part.__sigSub) {
+    part.__sigSub.dispose();
+    part.__sigSub = undefined;
+  }
+}
+
+/**
  * Dispose a `watch` directive's per-part watcher. Called from
  * `teardownChild` and from `clearStaleDirectiveState` when the value
  * at the part is no longer a watch.
@@ -2029,7 +2743,7 @@ function renderToNodes(value, reconcileFormActionsCb) {
   if (isTemplate(value)) {
     const tr = /** @type any */ (value);
     const { templateEl, parts, formActions } = compile(tr);
-    const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+    const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
     const bound = parts.map((p) => bindPart(p, frag));
     for (let i = 0; i < tr.values.length; i++) {
       applyPart(bound[i], tr.values[i], undefined, tr.values, reconcileFormActionsCb);

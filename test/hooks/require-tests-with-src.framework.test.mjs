@@ -38,10 +38,10 @@ function makeRepo() {
 }
 
 /** Run the hook in `dir` with a commit payload and the given env. */
-function runHookFull(dir, env = {}) {
+function runHookFull(dir, env = {}, command = 'git commit -m x') {
   return spawnSync('bash', [HOOK], {
     cwd: dir,
-    input: JSON.stringify({ tool_input: { command: 'git commit -m x' } }),
+    input: JSON.stringify({ tool_input: { command } }),
     env: { ...process.env, ...env },
     encoding: 'utf8',
   });
@@ -89,6 +89,10 @@ test('framework hook blocks a commit that net-removes test lines alongside src',
     assert.equal(runHook(dir), 2);
     // The override lets an intentional test refactor through.
     assert.equal(runHook(dir, { WEBJS_ALLOW_TEST_REMOVAL: '1' }), 0);
+    // Written in front of the commit too, since a hook never sees an env an
+    // agent sets for one command. The same text in a message does not count.
+    assert.equal(runHookFull(dir, {}, 'WEBJS_ALLOW_TEST_REMOVAL=1 git commit -m x').status, 0);
+    assert.equal(runHookFull(dir, {}, 'git commit -m "WEBJS_ALLOW_TEST_REMOVAL=1 later"').status, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

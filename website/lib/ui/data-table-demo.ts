@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { checkboxClass } from '#modules/ui/components/checkbox.ts';
@@ -110,7 +110,7 @@ export function paymentsTable(opts: PaymentsTableOptions = {}) {
   const amountAlign = rtl ? 'text-start' : 'text-right';
 
   return html`
-    <data-table-demo class="w-full" page-size=${pageSize} dir=${opts.dir ?? null} lang=${opts.lang ?? null}>
+    <data-table-demo class="w-full" page-size=${pageSize} dir=${opts.dir ?? nothing} lang=${opts.lang ?? nothing}>
       <div class=${cn('flex items-center py-4', rtl ? 'gap-2' : '')}>
         <input type="search" data-slot="input" data-table-filter aria-label=${t.filterEmails} placeholder=${t.filterEmails} class=${cn(inputClass(), 'max-w-sm')}>
         <ui-dropdown-menu class="ms-auto">

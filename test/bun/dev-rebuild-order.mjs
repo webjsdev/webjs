@@ -35,14 +35,21 @@ const root = mkdtempSync(join(tmpdir(), 'webjs-rebuild-order-'));
 try {
   mkdirSync(join(root, 'app'), { recursive: true });
   mkdirSync(join(root, 'lib'), { recursive: true });
+  mkdirSync(join(root, 'components'), { recursive: true });
   writeFileSync(join(root, 'lib/x.js'), 'export const x = 1;\n');
+  // A component, because a page never ships (#1686), so nothing a page
+  // imports is ever servable.
+  const component = (body) => "import { WebComponent, html } from '@webjsdev/core';\n" + body +
+    "class XC extends WebComponent { render() { return html`<p>c</p>`; } }\nXC.register('x-c');\n";
+  writeFileSync(join(root, 'components/x-c.js'), component(''));
   writeFileSync(join(root, 'app/page.js'), 'export default () => "A";\n');
   const app = await createRequestHandler({ appDir: root, dev: true, logger: quiet });
 
   assert.equal((await app.handle(new Request('http://x/'))).status, 200, `the page renders on ${runtime}`);
   assert.equal((await app.handle(new Request('http://x/lib/x.js'))).status, 404, `nothing imports lib/x.js yet on ${runtime}`);
 
-  writeFileSync(join(root, 'app/page.js'), 'import "../lib/x.js";\nexport default () => "B";\n');
+  writeFileSync(join(root, 'components/x-c.js'), component('import "../lib/x.js";\n'));
+  writeFileSync(join(root, 'app/page.js'), 'export default () => "B";\n');
   const real = fsp.readdir;
   let threw = 0;
   fsp.readdir = async (dir, opts) => {

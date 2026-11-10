@@ -54,3 +54,23 @@ test('silent for an import type from a server file (#804)', () => {
     assert.equal(out.trim(), '', 'a type-only import is erased by the stripper, no warning');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('silent for a page, layout or boundary under app/: they run only on the server (#1686)', () => {
+  const dir = makeApp();
+  try {
+    for (const f of ['app/page.ts', 'app/dashboard/layout.ts', 'app/(site)/error.ts', 'app/[id]/not-found.ts']) {
+      const out = run(dir, join(dir, f), "import { q } from '#db/queries.server.ts';\nexport default () => q();");
+      assert.equal(out.trim(), '', `${f} may import a server-only utility`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('still WARNs for a page-named file in an _private folder or outside app/ (#1686)', () => {
+  const dir = makeApp();
+  try {
+    for (const f of ['app/_parts/page.ts', 'lib/docs/page.ts']) {
+      const out = run(dir, join(dir, f), "import { q } from '#db/queries.server.ts';\nexport const x = q;");
+      assert.match(out, /server-only utility/, `${f} is not a route module`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

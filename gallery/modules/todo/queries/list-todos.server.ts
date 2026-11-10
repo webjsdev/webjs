@@ -11,11 +11,9 @@ import type { Todo } from '../types.ts';
 export const method = 'GET';
 
 export async function listTodos(): Promise<Todo[]> {
-  // rc.3 read: the relational query API. `orderBy` uses the object form
-  // (`{ column: 'asc' | 'desc' }`); passing `[desc(todos.createdAt)]` with an
-  // imported column mis-compiles to a bad SQL alias in rc.3. Do NOT use
-  // `db.select({ col })` either (its projection overload trips TS2554 in rc.3).
-  // See the Database (Drizzle) section in this app's AGENTS.md.
+  // The relational query API (relations v2). `orderBy` takes the object form
+  // (`{ createdAt: 'desc' }`) or a callback; the array form from the older
+  // API, `[desc(todos.createdAt)]`, throws `Unknown relational order field`.
   //
   // Two equivalent read styles, both fine: the relational query API
   // (`db.query.todos.findFirst({ where: { id } })` / `findMany`, used here and in

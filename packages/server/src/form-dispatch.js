@@ -1,10 +1,16 @@
-import { isNotFound, isRedirect, isForbidden, isUnauthorized, FORM_ACTION_FIELD } from '@webjsdev/core';
+import { isNotFound, isRedirect, isForbidden, isUnauthorized, FORM_ACTION_FIELD, splitActionId } from '@webjsdev/core';
+import { headerSafeLocation } from './redirect-location.js';
 import { ssrPage, ssrNotFound, ssrForbidden, ssrUnauthorized } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
-import { getBodyLimits } from './context.js';
+import { getBodyLimits, refreshHeaderValue } from './context.js';
+import { readFlash, encodeFlash, flashSetCookie, appRelativePath } from './action-flash.js';
+import { basePath as appBasePath } from './importmap.js';
+import { withBasePath } from './base-path.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
-import { makeThenable } from './thenable-params.js';
+import { makeThenable, searchParamsRecord } from './thenable-params.js';
 import { lookupActionIdentity } from './form-action-identity.js';
+import { originalAction } from './action-seed.js';
+import { declaredParamCount, declaredParamDefaults } from './action-params.js';
 import { verifyOrigin } from './csrf.js';
 import { actionMethod, actionConfigFn, actionMiddleware, resolveTags, RESERVED_CONFIG } from './action-config.js';
 import { runValidate } from './actions.js';
@@ -13,7 +19,6 @@ import { runActionChain } from './action-middleware.js';
 import { runWithActionSignal } from './action-signal.js';
 import { isStreamable } from './action-stream.js';
 import { revalidateTags } from './cache-tags.js';
-import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
 
 /**
  * The form-submission dispatcher (#1155): a non-GET request to a PAGE's own url
@@ -73,7 +78,9 @@ export const ACTION_SKEW_MESSAGE =
  * success (PRG redirect). A result is a failure when ANY of these hold:
  *   - `result.success === false` (explicit), OR
  *   - `result.fieldErrors` is present (per-field validation messages), OR
- *   - `result.error` is present AND `result.success !== true`.
+ *   - `result.error` is present AND `result.success !== true`, OR
+ *   - `result.errors` is present AND `result.success !== true` (the shape
+ *     Next.js examples return from a `useActionState` action, `{ errors }`).
  *
  * Success is the explicit `success: true`, or a bare value (or
  * undefined/null) carrying no error markers. This means an action that returns
@@ -88,6 +95,7 @@ function isFailureResult(result) {
   if (result.success === false) return true;
   if (result.fieldErrors != null) return true;
   if (result.error != null && result.success !== true) return true;
+  if (result.errors != null && result.success !== true) return true;
   return false;
 }
 
@@ -440,6 +448,18 @@ function methodNotAllowed() {
  */
 export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   const { actionIndex, allowedOrigins = [], onError, logger } = deps;
+  // An action that throws answers with the page's nearest error.ts (else
+  // global-error, else the default 500 page), the way a failed page render does
+  // and the way Next.js answers a server action that throws (#1686): not a bare
+  // text 500. The boundary sees a sanitized error in production, and the sink
+  // hears it once, as an action error.
+  /** @param {unknown} e */
+  // `throw undefined` would read as "no error" downstream (renderError is
+  // checked against undefined), so it becomes a real Error first.
+  const errorPage = (e) => ssrPage(route, params, url, {
+    ...ssrOpts, req, onError,
+    renderError: e === undefined ? new Error('[webjs] the action threw undefined') : e,
+  });
 
   // Not a form body at all (a stray JSON POST, a probe): the page path exists
   // and only renders. Answered before the body is touched.
@@ -485,7 +505,20 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // 422 re-render) from seeing a key it did not put there.
   formData.delete(FORM_ACTION_FIELD);
 
-  const found = await lookupActionIdentity(actionIndex, id);
+  // `<form action=${rsvp.bind(null, slug)}>` submits `<hash>/<fn>#<args>`: the
+  // action's own identity, then the bound arguments, which the call below puts
+  // ahead of the form input. A visitor can rewrite them like any field, so the
+  // action authorizes them (as in Next, where an action is a public endpoint).
+  /** @type {unknown[]} */
+  let bound;
+  let baseId;
+  try {
+    ({ id: baseId, args: bound } = splitActionId(id));
+  } catch {
+    return new Response('Malformed bound action arguments', { status: 400 });
+  }
+
+  const found = await lookupActionIdentity(actionIndex, baseId);
   if (!found.ok) {
     // The action's module threw at import (a bad env var read at module scope,
     // a syntax error in dev). That is a server fault, not skew: telling the
@@ -493,8 +526,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // load, and swallowing the error would leave nothing in the log or the APM
     // sink. Surface it the way any other action throw is surfaced.
     if (found.reason === 'load-failed') {
-      if (typeof onError === 'function') onError(found.error);
-      return await formActionErrorResponse(found.error, ssrOpts.dev);
+      return errorPage(found.error);
     }
     if (found.reason === 'skew') {
       return ssrPage(route, params, url, {
@@ -539,29 +571,66 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   let args = [formInput(formData, { warn, label: fnName })];
   const validate = actionConfigFn(mod, 'validate');
   if (typeof validate === 'function') {
-    const v = runValidate(validate, args[0]);
+    const v = await runValidate(validate, args[0]);
     if (!v.ok) {
-      if (v.thrown !== undefined) {
-        // A THROWN validator is answered here rather than rethrown. Letting it
+      if (v.thrown !== undefined && !v.invalid) {
+        // A validator that crashed (any throw but a schema library's
+        // validation error) is answered here rather than rethrown. Letting it
         // escape reaches the handler's last-resort catch, which reports the
         // SAME error to `onError` a second time and answers a bare 500 with no
         // digest, so the one thing that makes a prod error diagnosable is lost.
         // The RPC path does exactly this (`actionErrorResponse` in actions.js).
-        if (typeof onError === 'function') onError(v.thrown);
-        return await formActionErrorResponse(v.thrown, ssrOpts.dev);
+        return errorPage(v.thrown);
       }
-      // A structured failure envelope is a NORMAL result the page renders, so
-      // it takes the 422 re-render path exactly as a failing action would,
-      // submitted values included (#1581).
+      // A structured failure envelope, or a schema library's validation error
+      // (a throw carrying `issues`, mapped to fieldErrors by runValidate for
+      // every transport), is a NORMAL result the page renders, so it takes the
+      // 422 re-render path exactly as a failing action would, submitted values
+      // included (#1581).
       return ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(v.result, formData), status: 422 });
     }
     args = [v.value];
   }
 
-  const searchParams = Object.fromEntries(url.searchParams.entries());
+  const searchParams = searchParamsRecord(url.searchParams);
+  // Next.js's `useActionState` contract: an action declaring TWO parameters is
+  // called `(prevState, formData)`, prevState being what this same action
+  // returned last time (carried by the signed flash cookie; undefined on the
+  // first submission). validate sees the single input; middleware and
+  // invalidates see the call's arguments, the bound ones first, as over RPC.
+  // Bound arguments come before both, so `(slug, prevState, formData)` reads
+  // its prevState once the bound parameters are counted off, as in Next.
+  // The count is the DECLARED one (#1686): `fn.length` stops at the first
+  // default, so `(prevState = initial, formData)` would read as 0, and that
+  // default is how an action supplies the first submission's state.
+  // The form data's slot is the parameter after prevState, and it has no
+  // default in that shape: `(input, opts = {})` is an ordinary action whose
+  // optional second parameter must not turn its input into a prevState.
+  const original = originalAction(fn);
+  const defaults = declaredParamDefaults(original);
+  const withPrevState = declaredParamCount(original) - bound.length >= 2 && !(defaults && defaults[bound.length + 1]);
+  const flash = withPrevState ? await readFlash(req) : null;
+  const prevState = flash && flash.id === id ? flash.result : undefined;
   /** @type {ActionResult | undefined} */
   let result;
   let ranAction = false;
+  // What a COMPLETED action owes the cache and the browser, whichever way it
+  // finished (a returned result or a thrown redirect()): its `invalidates` tags
+  // evicted and reported, and any revalidatePath() reported. A middleware
+  // short-circuit (the action never ran) evicts nothing.
+  const completionHeaders = async () => {
+    /** @type {string[]} */
+    let invalidated = [];
+    if (ranAction) {
+      invalidated = resolveTags(actionConfigFn(mod, 'invalidates'), [...bound, ...args]);
+      if (invalidated.length) await revalidateTags(invalidated);
+    }
+    /** @type {Record<string, string> | null} */
+    let headers = invalidated.length ? { 'x-webjs-invalidate': invalidated.join(',') } : null;
+    const refresh = refreshHeaderValue();
+    if (refresh) headers = { ...(headers || {}), 'x-webjs-refresh': refresh };
+    return headers;
+  };
   try {
     const middleware = actionMiddleware(mod);
     result = await runWithActionSignal(actionReq.signal, () =>
@@ -569,7 +638,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
         middleware,
         {
           request: actionReq,
-          args,
+          args: [...bound, ...args],
           signal: actionReq.signal,
           // Route context a form middleware may want, absent on the RPC path
           // because an RPC call has no page. Params are awaitable AND
@@ -578,17 +647,25 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
           searchParams: makeThenable(searchParams),
           url,
         },
-        () => { ranAction = true; return fn(...args); },
+        () => { ranAction = true; return withPrevState ? fn(...bound, prevState, ...args) : fn(...bound, ...args); },
       ));
   } catch (err) {
     if (isRedirect(err)) {
       const e = /** @type any */ (err);
-      // A thrown redirect from an action (a POST) defaults to 307 Temporary
-      // Redirect, which is method-preserving so the action's intent survives
-      // the bounce; an explicit `redirect(url, status)` overrides it. This is
-      // deliberately NOT the GET gate's 302 default (see ssr.js). PRG (303) is
-      // the SUCCESS-result path below.
-      return new Response(null, { status: e.status || 307, headers: { location: e.url } });
+      // A thrown redirect from a form action ALWAYS answers 303 See Other, as
+      // Next.js does for a server action: the browser follows with a GET, so
+      // the mutation runs once. A 307 (the old default) re-POSTed the body,
+      // identity field included, and ran the action a second time on the
+      // target page. An explicit status is ignored here for the same reason.
+      // The action finished its work before throwing (create, then redirect),
+      // so it evicts and reports exactly as a returned result does.
+      const done = await completionHeaders();
+      const res = new Response(null, { status: 303, headers: { location: headerSafeLocation(e.url), ...done } });
+      // The action finished, so an earlier flash (a failure kept as the next
+      // prevState) no longer describes it: in Next the redirect unmounts the
+      // form and its state goes with it.
+      res.headers.append('set-cookie', flashSetCookie(null));
+      return res;
     }
     // `route` and `params` ride along so the boundary renders inside its
     // layouts, exactly as it does on the page-render path (#1298).
@@ -606,8 +683,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // boundary as the page-render path (#848), not a generic 500.
     if (isForbidden(err)) return ssrForbidden(route, { ...ssrOpts, req, url, route, params });
     if (isUnauthorized(err)) return ssrUnauthorized(route, { ...ssrOpts, req, url, route, params });
-    if (typeof onError === 'function') onError(err);
-    return await formActionErrorResponse(err, ssrOpts.dev);
+    return errorPage(err);
   }
 
   // A streamed return (#489) has no consumer here. The RPC stub decodes frames;
@@ -619,8 +695,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
       `The action ${fnName} returned a stream, which a form submission cannot consume. `
       + 'Return an ActionResult from a form-bound action; stream from a programmatic call instead.',
     );
-    if (typeof onError === 'function') onError(err);
-    return await formActionErrorResponse(err, ssrOpts.dev);
+    return errorPage(err);
   }
 
   // Only a COMPLETED action evicts its `invalidates` tags; a middleware
@@ -634,14 +709,10 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // after a successful PRG the client learns nothing from it. The redirect's
   // own re-render is server-side and seeds fresh data, so what remains exposed
   // is only a later client refetch of a separately cached GET key.
-  let invalidated = [];
-  if (ranAction) {
-    invalidated = resolveTags(actionConfigFn(mod, 'invalidates'), args);
-    if (invalidated.length) await revalidateTags(invalidated);
-  }
-  const invalidateHeader = invalidated.length
-    ? { 'x-webjs-invalidate': invalidated.join(',') }
-    : null;
+  // revalidatePath() in the action is reported too: the router drops its
+  // cached copies of those paths when it applies an in-place response (the
+  // redirect a success answers with re-renders the target on the server anyway).
+  const invalidateHeader = await completionHeaders();
 
   // An action MAY return a `Response` directly (e.g. a content-negotiated
   // `streamResponse`, #248). Honor it verbatim, so the action owns the status +
@@ -656,10 +727,32 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     // page's own path so a poisoned value cannot become an open redirect.
     const ownPath = (url.pathname + url.search) || '/';
     const safe = result ? sameSiteRedirect(result.redirect) : null;
-    return new Response(null, {
+    // The PUBLIC target the browser goes to. The action's own `redirect` is
+    // written as the browser sees it (with the `webjs.basePath` mount, as an
+    // author's links are), while the page's own path comes from the request,
+    // which lost the mount at ingress, so it gets the mount back. Without it a
+    // mounted app's success redirect left the app (`Location: /f`).
+    const mount = appBasePath();
+    const target = safe || withBasePath(ownPath, mount);
+    const res = new Response(null, {
       status: 303,
-      headers: { location: safe || ownPath, ...invalidateHeader },
+      // Header-safe, as every thrown redirect() is: a non-Latin-1 target
+      // would otherwise throw while the Response is built and turn a
+      // successful write into a 500.
+      headers: { location: headerSafeLocation(target), ...invalidateHeader },
     });
+    // The result survives the redirect (Next's useActionState shows a success
+    // message after a submit): the page it lands on reads it as actionData
+    // once, and the next submission of this action gets it as prevState.
+    // A success with nothing to carry still replaces an earlier flash, so the
+    // next submission's prevState is never a stale failure.
+    // Bound to the page the redirect lands on, so no other page shows it,
+    // app-root-relative as the render compares it: the mount stripped ONCE
+    // from the public target.
+    const path = appRelativePath(new URL(target, url).pathname, mount);
+    const value = result !== undefined && result !== null ? await encodeFlash({ id, result, shown: false, path }) : null;
+    res.headers.append('set-cookie', flashSetCookie(value));
+    return res;
   }
 
   // FAILURE: re-render the SAME page with the action result available on
@@ -674,32 +767,14 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   if (invalidateHeader && page instanceof Response) {
     for (const [k, v] of Object.entries(invalidateHeader)) page.headers.set(k, v);
   }
+  // The failure is already on screen, so it is stored as SHOWN: only the next
+  // submission's prevState reads it.
+  if (page instanceof Response) {
+    const value = await encodeFlash({ id, result, shown: true });
+    if (value) {
+      try { page.headers.append('set-cookie', flashSetCookie(value)); } catch { /* immutable: skip the carry */ }
+    }
+  }
   return page;
 }
 
-/**
- * A thrown form action becomes a 500 whose body is sanitized the same way the
- * RPC path's is (#749): dev shows the real message, prod shows a generic one
- * plus a correlation digest and logs the full error. A raw driver message or an
- * fs path is not author-controlled, so it does not reach the browser, and here
- * the browser is showing it to a person rather than parsing it.
- *
- * @param {unknown} err
- * @param {boolean} [dev]
- * @returns {Promise<Response>}
- */
-async function formActionErrorResponse(err, dev) {
-  if (dev) {
-    console.error('[webjs] form action threw:', err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return new Response(msg, { status: 500 });
-  }
-  if (isControlFlowThrow(err)) {
-    console.error('[webjs] form action threw:', err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return new Response(msg, { status: 500 });
-  }
-  const digest = await errorDigest(err);
-  console.error(`[webjs] form action threw [digest=${digest}]:`, err);
-  return new Response(`${GENERIC_ERROR_MESSAGE} (digest ${digest})`, { status: 500 });
-}

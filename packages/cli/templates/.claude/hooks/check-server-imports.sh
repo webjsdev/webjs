@@ -11,8 +11,8 @@
 #
 # WARN, not block (the convention-vs-check principle in this app's AGENTS.md):
 # `webjs check` is the authoritative gate, and a pre-edit static peek cannot see
-# the full elision verdict, so a hard block could false-positive on a display-only
-# page the framework would elide. So this emits a loud reminder and allows the
+# the full module graph, so a hard block could false-positive on a page or layout
+# (which runs only on the server). So this emits a loud reminder and allows the
 # edit. Set WEBJS_SERVER_IMPORT_GATE=block to hard-block instead; set
 # WEBJS_NO_SERVER_IMPORT_GATE=1 to skip.
 #

@@ -28,8 +28,8 @@ import { getStore } from './cache.js';
 import { STREAM_MARKER } from './conditional-get.js';
 import { createHash } from 'node:crypto';
 import { publishedBuildId, basePath } from './importmap.js';
-import { stripBasePath } from './base-path.js';
-import { dynamicAccessed, getRequest } from './context.js';
+import { stripBasePath, withBasePath } from './base-path.js';
+import { dynamicAccessed, getRequest, recordRevalidatedPath } from './context.js';
 import { shared } from './process-shared.js';
 
 /** Namespace prefix for every cached-HTML key, so a flush can target it. */
@@ -278,11 +278,35 @@ export function isCacheableResponse(res, guards = {}) {
  * is ever seen, or grows an unbounded one. Either way eviction silently stops
  * working, which is worse than the explicit contract above.
  *
+ * Next.js parity: the optional second argument is Next's type. `'layout'`
+ * revalidates the path AND everything below it (here: the whole HTML cache),
+ * and a route PATTERN (`'/blog/[slug]'`) revalidates every page it matches
+ * (also the whole cache, since entries are keyed by concrete url). When called
+ * from a server action invoked over RPC, the paths ride back to the browser on
+ * `x-webjs-refresh`, and the page on screen re-renders in place if it is one
+ * of them, so the caller sees the fresh data with no reload.
+ *
  * @param {string} path  e.g. '/blog', '/blog?page=2', or 'https://app.example/blog'
+ * @param {'page' | 'layout'} [type]
  * @returns {Promise<void>}
  */
-export async function revalidatePath(path) {
+export async function revalidatePath(path, type) {
   if (typeof path !== 'string' || !path) return;
+  const layout = type === 'layout';
+  {
+    // The browser compares the reported path with location.pathname, which
+    // carries webjs.basePath. An absolute url is already the public form; a
+    // bare path is app-relative (what the caller writes), so the base path is
+    // put back for the report.
+    let pathname = path;
+    if (/^https?:\/\//i.test(path)) { try { pathname = new URL(path).pathname; } catch { /* keep */ } }
+    else pathname = withBasePath(pathname, basePath());
+    recordRevalidatedPath(pathname.split('?')[0] || '/', layout);
+  }
+  if (layout || path.includes('[')) {
+    await revalidateAll();
+    return;
+  }
   let url;
   if (/^https?:\/\//i.test(path)) {
     try { url = new URL(path); } catch { return; }

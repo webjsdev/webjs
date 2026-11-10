@@ -1,8 +1,8 @@
 # GitHub Copilot Instructions: webjs app
 
 You are working on a webjs app, an AI-first, no-build, web-components-first
-framework. Read AGENTS.md for the full API reference and CONVENTIONS.md for
-project-specific conventions. When AGENTS.md doesn't cover what you need,
+framework. Read AGENTS.md (the WebJs brief plus this app's
+layout and conventions). When AGENTS.md doesn't cover what you need,
 the full hosted docs are at **https://webjs.dev/docs**.
 
 ## Persistence + scaffold rules (non-negotiable)
@@ -13,7 +13,7 @@ the full hosted docs are at **https://webjs.dev/docs**.
   define a Drizzle table. NEVER create `data/*.json`, `db.json`, or any
   JSON file as a fake database. NEVER use module-scope arrays / Maps as
   a substitute. NEVER use localStorage for app data. It resets on reload and cannot scale. This is a project convention
-  (CONVENTIONS.md).
+  (AGENTS.md).
 - **The scaffold is reference, not the final product.** Replace
   `app/page.ts`, the example `User` model, the example users module, etc.
   with the app the user actually asked for. Don't ship "Hello from
@@ -47,8 +47,8 @@ Quality bar stays the same, no blocking on questions.
 Every code change must include:
 1. Server tests in `test/<feature>/*.test.ts` (node:test).
 2. Browser tests in `test/<feature>/browser/*.test.js` (WTR + Playwright, real Chromium).
-3. Documentation updates. Walk every surface in the **Definition of done**
-   section of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md, README.md, docs/,
+3. Documentation updates. Walk every surface in the documentation
+   list (AGENTS.md, README.md, docs/,
    website/, scaffold scripts) and either update or write
    "N/A because <reason>" in the PR body. Docs land on the same PR as the
    code, never as a follow-up.

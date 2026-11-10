@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { badgeClass } from '#modules/ui/components/badge.ts';
@@ -57,7 +57,7 @@ function userNav() {
     <ui-dropdown-menu-trigger>
       <button type="button" class=${cn(buttonClass({ variant: 'ghost' }), 'relative h-8 w-8 rounded-full')} aria-label="Account">
         <span data-slot="avatar" class=${cn(avatarClass(), 'h-9 w-9')}>
-          <img data-slot="avatar-image" class=${avatarImageClass()} src="/public/avatars/vivek.jpg" alt="@vivek">
+          <img data-slot="avatar-image" class=${avatarImageClass()} src="/avatars/vivek.jpg" alt="@vivek">
           <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>VK</span>
         </span>
       </button>
@@ -172,8 +172,8 @@ function columnHeader(s: TasksState, col: Column, title: string) {
       <span class="sr-only">${dir ? `, sorted ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}</span>
     </button>
     <div id=${id} popover role="dialog" aria-label=${`${title} column`} class=${cn(menuPanel('start', 'w-32'), 'font-normal')}>
-      <a data-theme-link href=${hrefFor(s, { sort: { id: col, desc: false } })} class=${menuItem()} aria-current=${dir === 'asc' ? 'true' : null}>${ArrowUpIcon()} Asc</a>
-      <a data-theme-link href=${hrefFor(s, { sort: { id: col, desc: true } })} class=${menuItem()} aria-current=${dir === 'desc' ? 'true' : null}>${ArrowDownIcon()} Desc</a>
+      <a data-theme-link href=${hrefFor(s, { sort: { id: col, desc: false } })} class=${menuItem()} aria-current=${dir === 'asc' ? 'true' : nothing}>${ArrowUpIcon()} Asc</a>
+      <a data-theme-link href=${hrefFor(s, { sort: { id: col, desc: true } })} class=${menuItem()} aria-current=${dir === 'desc' ? 'true' : nothing}>${ArrowDownIcon()} Desc</a>
       <div role="none" class=${dropdownMenuSeparatorClass()}></div>
       <a data-theme-link href=${hrefFor(s, { hide: [...s.hide, col] })} class=${menuItem()}>${EyeOffIcon()} Hide</a>
     </div>

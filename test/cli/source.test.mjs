@@ -25,6 +25,34 @@ test('webjs source <Export> prints the declaration and its doc, not the file', (
   assert.ok(r.stdout.split('\n').length < 40, `one declaration, not the file (${r.stdout.split('\n').length} lines)`);
 });
 
+test('a bare webjs source lists what WebJs provides, by need', () => {
+  const r = run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^What WebJs provides, by need\./, 'the catalogue, not a usage error');
+  assert.match(r.stdout, /^  Auth: createAuth, /m, 'auth is one line');
+  assert.match(r.stdout, /^  Rate limits and CORS: rateLimit, /m, 'and so is each feature the brief does not name');
+});
+
+test('webjs source --pkg <name> alone lists that package, as the MCP tool does for { package }', () => {
+  const r = run('--pkg', 'core');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /@webjsdev\/core\/src:/, 'the package listing, not a lookup of an export named core');
+  assert.doesNotMatch(r.stdout, /No export named/);
+  // A package that is not installed is a miss, as a name no package exports is.
+  const typo = run('--pkg', 'sever');
+  assert.equal(typo.status, 1, 'a --pkg typo exits 1');
+  assert.match(typo.stderr, /not installed\/resolvable/, 'with the message on stderr');
+  assert.equal(typo.stdout, '', 'and nothing on stdout');
+  // The listing offers what a shell can do, not the MCP tool's modes.
+  const listed = run('--pkg', 'core');
+  assert.match(listed.stdout, /npx webjs source <Export>/);
+  assert.doesNotMatch(listed.stdout, /source\(\{ path \}\)/, 'no MCP-only advice');
+  // A name after the flag's value is still the name.
+  const named = run('--pkg', 'core', 'optimistic');
+  assert.equal(named.status, 0, named.stderr);
+  assert.match(named.stdout, /@webjsdev\/core /);
+});
+
 test('webjs source --pkg narrows the search; a miss exits 1 and names the searched packages', () => {
   const ok = run('optimistic', '--pkg', 'core');
   assert.equal(ok.status, 0, ok.stderr);
@@ -38,8 +66,3 @@ test('webjs source --pkg narrows the search; a miss exits 1 and names the search
   assert.match(none.stdout, /searched @webjsdev\/\* packages \(core, server/);
 });
 
-test('webjs source with no name prints usage and exits 1', () => {
-  const r = run();
-  assert.equal(r.status, 1);
-  assert.match(r.stderr, /usage: webjs source <Export>/);
-});

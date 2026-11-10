@@ -19,7 +19,7 @@ const DESCRIPTION = 'A live, full-stack webjs example: posts, comments, auth, an
 // `cacheControl` on their root layout because they are visitor-identical.
 export function generateMetadata(ctx: { url: string }): Metadata {
   const origin = new URL(ctx.url).origin;
-  const image = `${origin}/public/og.png`;
+  const image = `${origin}/og.png`;
   return {
     title: TITLE,
     description: DESCRIPTION,
@@ -66,9 +66,9 @@ export default function RootLayout({ children }: LayoutProps) {
   // CSP nonce for inline scripts. Empty when no nonce in CSP.
   const nonce = cspNonce();
   return html`
-    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" sizes="any">
-    <link rel="icon" href="/public/favicon.png" type="image/png" sizes="32x32">
-    <link rel="apple-touch-icon" href="/public/favicon.png">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/favicon.png">
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P" nonce="${nonce}"></script>
     <script nonce="${nonce}">
@@ -89,7 +89,7 @@ export default function RootLayout({ children }: LayoutProps) {
             else delete el.dataset.theme;
             // data-theme drives the app palette blocks; the .dark class is what
             // the @webjsdev/ui kit's dark: variants read. Keep both in sync (see
-            // the skill's references/styling.md "two signals").
+            // https://webjs.dev/docs/styling).
             var dark = t === 'dark' || (t !== 'light' && !mq.matches);
             el.classList.toggle('dark', dark);
           }
@@ -115,7 +115,7 @@ export default function RootLayout({ children }: LayoutProps) {
         }
       });
     </script>
-    <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
+    <link rel="stylesheet" href=${asset('/tailwind.css')}>
     <style>
       :root {
         color-scheme: light dark;

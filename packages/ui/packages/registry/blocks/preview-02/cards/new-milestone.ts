@@ -7,7 +7,7 @@
  * The `<form>` has no `action` yet. Bind a server action from a
  * `'use server'` file (`<form action=${createGoal}>`) before you ship it.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { buttonClass } from '../../../components/button.ts';
 import {
   cardClass,
@@ -24,7 +24,7 @@ import { cn } from '../../../lib/utils.ts';
 function field(id: string, name: string, label: string, attrs: { placeholder?: string; value?: string }) {
   return html`<div role="group" data-slot="field" data-orientation="vertical" class=${fieldClass()}>
     <label data-slot="field-label" for=${id} class=${fieldLabelClass()}>${label}</label>
-    <input data-slot="input" id=${id} name=${name} placeholder=${attrs.placeholder ?? null} value=${attrs.value ?? null} class=${inputClass()}>
+    <input data-slot="input" id=${id} name=${name} placeholder=${attrs.placeholder ?? nothing} value=${attrs.value ?? nothing} class=${inputClass()}>
   </div>`;
 }
 

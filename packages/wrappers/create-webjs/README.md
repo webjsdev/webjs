@@ -13,7 +13,7 @@ cd my-app && npm run dev
 ## Templates
 
 ```sh
-npm create webjs@latest my-app                       # default: full-stack (pages + components + API + Drizzle/SQLite; auth ships as a gallery card)
+npm create webjs@latest my-app                       # default: full-stack (pages + components + API + Drizzle/SQLite)
 npm create webjs@latest my-api  -- --template api    # backend-only (route handlers + modules + Drizzle, no SSR/UI)
 ```
 

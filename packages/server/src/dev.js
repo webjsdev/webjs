@@ -4,7 +4,6 @@
  */
 
 export {
-  readElideEnabled,
   readSeedEnabled,
   readClientRouterEnabled,
   readHeaderRules,

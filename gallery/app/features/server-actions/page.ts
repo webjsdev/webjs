@@ -1,12 +1,16 @@
 import { html } from '@webjsdev/core';
-import type { Metadata } from '@webjsdev/core';
+import type { Metadata, PageProps } from '@webjsdev/core';
 import { pageHeading, lede } from '#lib/utils/ui.ts';
+import { pickOption } from '#modules/server-actions/actions/pick-option.server.ts';
 import '#modules/server-actions/components/greeter.ts';
 import '#modules/server-actions/components/clock-reader.ts';
 
 export const metadata: Metadata = { title: 'Server actions (.server vs use server) | features' };
 
-export default function ServerActionsExample() {
+type Picked = { success: true; data: { picked: string; note: string } } | { success: false; error: string };
+
+export default function ServerActionsExample({ actionData }: PageProps<'/features/server-actions', Picked>) {
+  const picked = actionData?.success ? actionData.data : null;
   return html`
     ${pageHeading('Server actions')}
     ${lede(html`A 'use server' action is RPC-callable from the client; a plain .server.ts is a server-only utility you never import into a component.`)}
@@ -63,5 +67,23 @@ export default function ServerActionsExample() {
       the window.
     </p>
     <clock-reader></clock-reader>
+
+    <h2 class="text-xl font-semibold mt-10 mb-3">Passing an argument with .bind</h2>
+    <p class="text-muted-foreground mb-4">
+      Each form below is bound to the same action with
+      <code class="font-mono">pickOption.bind(null, option)</code>, as in Next.js. The
+      bound argument arrives before the submitted fields, so the action reads
+      <code class="font-mono">pickOption(option, input)</code>, and it works with
+      JavaScript off. The argument rides in the form's hidden identity field, where a
+      visitor can change it, so the action checks it like any input.
+    </p>
+    ${picked ? html`<p role="status" class="mb-4 text-sm">You picked <strong>${picked.picked}</strong>${picked.note ? html` (${picked.note})` : ''}.</p>` : ''}
+    <div class="flex flex-wrap gap-3">
+      ${['tea', 'coffee', 'water'].map((option) => html`
+        <form action=${pickOption.bind(null, option)} class="flex gap-2 items-center">
+          <input name="note" placeholder="note" class="border border-border rounded px-2 py-1 text-sm w-24">
+          <button type="submit" class="border border-border rounded px-3 py-1 text-sm">Pick ${option}</button>
+        </form>`)}
+    </div>
   `;
 }

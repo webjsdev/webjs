@@ -54,10 +54,10 @@ export default function CachingExample() {
       expires. Wrap the url in <code>asset()</code> and it gains a content hash,
       which the framework then serves <code>immutable</code> for a year:
     </p>
-    <pre class="mb-2 overflow-x-auto rounded-md bg-muted p-3 text-sm"><code>&lt;link rel="stylesheet" href=\${asset('/public/tailwind.css')}&gt;</code></pre>
+    <pre class="mb-2 overflow-x-auto rounded-md bg-muted p-3 text-sm"><code>&lt;link rel="stylesheet" href=\${asset('/tailwind.css')}&gt;</code></pre>
     <p class="mb-2">
       This app's stylesheet resolves to
-      <code class="font-mono text-primary">${asset('/public/tailwind.css')}</code>
+      <code class="font-mono text-primary">${asset('/tailwind.css')}</code>
       (the hash appears in production only, so dev output stays byte-identical).
       New bytes mean a new url, so a stale copy can never be served.
     </p>

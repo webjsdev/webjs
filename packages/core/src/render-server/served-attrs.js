@@ -16,8 +16,7 @@ import { appendReflectedAttrs } from './attrs.js';
  *   - one the element REMOVED is dropped from the tag.
  * An attribute the element left alone keeps its source text BYTE FOR BYTE
  * (its quoting, its entity spelling, its position), so a page whose
- * components touch nothing renders exactly as before, which the elision
- * on-versus-off differential relies on.
+ * components touch nothing renders exactly as before.
  *
  * What stays as written, and why each is safe:
  *   - `data-webjs-prop-*`: a parent's `.prop=${value}` binding, consumed into

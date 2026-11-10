@@ -138,7 +138,7 @@ are registry items too: `theme-<name>` for shadcn's 24 themes and
 
 Copies the component's `.ts` source into `components/ui/<name>.ts` (or your
 configured alias). Resolves transitive deps via `registryDependencies` and
-auto-installs npm deps like `@floating-ui/dom` for popover-style components. For
+installs any npm dependency the app's `package.json` does not already declare. For
 a Tier-1 class-helper component it copies the helpers plus a lean header and a
 one-line pointer, and leaves the worked structural example OUT of the file (get
 it on demand with `npx @webjsdev/ui view <name>`, which is what the pointer it

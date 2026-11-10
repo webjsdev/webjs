@@ -9,11 +9,12 @@ const HOT = Symbol.for('webjs.hot');
 const g = /** @type {any} */ (globalThis);
 
 /**
- * The template strings `html()` / `svg()` keep. Under the dev hot client,
- * textually identical templates share one strings object across module
- * evaluations, so a hot swap rebuilds only the templates whose text changed.
+ * The template strings `html()` / `svg()` / `mathml()` keep. Under the dev
+ * hot client, textually identical templates share one strings object across
+ * module evaluations, so a hot swap rebuilds only the templates whose text
+ * changed.
  * @param {TemplateStringsArray | string[]} s
- * @param {0 | 1} kind
+ * @param {0 | 1 | 2} kind `html`, `svg` or `mathml`, so equal text under two tags stays apart
  * @returns {TemplateStringsArray | string[]}
  */
 export function hotStrings(s, kind) { const h = g[HOT]; return h === undefined ? s : h.strings(s, kind); }

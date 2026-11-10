@@ -46,12 +46,22 @@ export declare function withSessionCookie(init: RequestInit | undefined, session
  * Submit a page's `<form action={action}>` the way a browser with JS OFF does:
  * render the page, reuse the identity the server put in its hidden
  * `__webjs_action` field, and POST it back with the given fields. A POST that
- * omits that field is not a form submission and is answered `405`.
+ * omits that field is not a form submission and is answered `405`. Without
+ * `match`, it picks among the forms bound to an action, skipping a layout's
+ * plain form. When several remain and no `index` is given, it posts the one
+ * whose inputs hold every submitted field name, and throws (listing each form
+ * and its fields) when none or more than one does. A `File` / `Blob` value
+ * posts the form multipart.
+ *
+ * @example
+ * // A layout's bound logout form and the page's task form: the fields pick.
+ * const res = await submitForm(app.handle, '/projects/1', { title: 'Ship it' }, { cookies });
+ * assert.equal(res.status, 303);
  */
 export declare function submitForm(
   handle: Handle,
   path: string,
-  fields?: Record<string, string | string[]> | URLSearchParams | FormData,
+  fields?: Record<string, string | string[] | Blob | Blob[]> | URLSearchParams | FormData,
   opts?: {
     index?: number;
     match?: string | RegExp;
@@ -91,6 +101,25 @@ export declare function actionEndpoint(
  * Round-trip an action through its REAL RPC endpoint (serializer + CSRF + prod
  * error sanitization) and return the parsed return value. Models a same-origin
  * browser POST, so it passes the Origin / Sec-Fetch-Site CSRF check.
+ *
+ * @example
+ * ```ts
+ * // test/tasks/add-task.test.ts, run with `webjs test`
+ * import { test } from 'node:test';
+ * import assert from 'node:assert/strict';
+ * import { createRequestHandler } from '@webjsdev/server';
+ * import { invokeActionForTest, submitForm } from '@webjsdev/server/testing';
+ *
+ * test('a blank title is refused', async () => {
+ *   const app = await createRequestHandler({ appDir: process.cwd() });
+ *   const result = await invokeActionForTest<{ success: boolean }>(
+ *     app, 'modules/tasks/actions/add-task.server.ts', 'addTask', [{ title: '' }]);
+ *   assert.equal(result.success, false);
+ *   // The no-JS form path: renders /tasks, posts its bound form, 422 on failure.
+ *   const res = await submitForm(app.handle, '/tasks', { title: '' });
+ *   assert.equal(res.status, 422);
+ * });
+ * ```
  */
 export declare function invokeActionForTest<T = unknown>(
   app: AppOrHandle,

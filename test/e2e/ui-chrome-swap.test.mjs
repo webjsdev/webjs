@@ -88,7 +88,7 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
     const fullMarketing = await activeSheets(page);
     assert.deepEqual(fullMarketing.duplicated, [], 'a full load links each stylesheet once');
     assert.match(await headerText(page), /Blog/, 'starts on the marketing header');
-    assert.equal(await page.locator('link[href*="/public/ui.css"]').count(), 0, 'the /ui stylesheet is not loaded on a marketing page');
+    assert.equal(await page.locator('link[href*="/ui.css"]').count(), 0, 'the /ui stylesheet is not loaded on a marketing page');
 
     // A marker that a full page load would wipe, plus a recorder for the
     // router's degradation event, armed BEFORE the click.

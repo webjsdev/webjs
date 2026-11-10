@@ -9,7 +9,7 @@
  * The data below is sample data. Replace it with your own, point each `url`
  * at a real route, and mark the current page with `isActive`.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import { collapsibleClass, collapsibleContentClass } from '../../../components/collapsible.ts';
 import {
@@ -115,7 +115,7 @@ export function appSidebar() {
                   <ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
                     ${section.items.map((item) => html`
                       <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
-                        <a href=${item.url} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${item.isActive ? 'true' : 'false'} aria-current=${item.isActive ? 'page' : null} class=${sidebarMenuButtonClass()}>${item.title}</a>
+                        <a href=${item.url} data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active=${item.isActive ? 'true' : 'false'} aria-current=${item.isActive ? 'page' : nothing} class=${sidebarMenuButtonClass()}>${item.title}</a>
                       </li>
                     `)}
                   </ul>

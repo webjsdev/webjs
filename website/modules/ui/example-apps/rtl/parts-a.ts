@@ -115,7 +115,7 @@ const avatar = (src: string, alt: string, fallback: string, cls = '') => html`<s
 </span>`;
 
 export const AVATARS = [
-  { src: '/public/avatars/vivek.jpg', alt: '@vivek', fallback: 'VK' },
+  { src: '/avatars/vivek.jpg', alt: '@vivek', fallback: 'VK' },
   { src: 'https://github.com/maxleiter.png', alt: '@maxleiter', fallback: 'LR' },
   { src: 'https://github.com/evilrabbit.png', alt: '@evilrabbit', fallback: 'ER' },
 ];

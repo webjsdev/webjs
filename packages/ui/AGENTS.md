@@ -124,7 +124,7 @@ packages/ui/
     index.js                      CLI entry (Commander program + dispatch)
     commands/
       init.js                     init, writes components.json, theme CSS, lib/utils/cn.ts (defaults are fixed constants)
-      add.js                      add, resolve registry items + write into project + install deps
+      add.js                      add, resolve registry items + write into project + install the deps package.json lacks
       list.js                     list, show all registry items
       view.js                     view, print a component's source
       diff.js                     diff, compare local vs registry
@@ -379,7 +379,7 @@ render the real value on the server. Icons come from the kit's
 `lib/icons.ts` (`import { ChevronRightIcon } from '../../../lib/icons.ts'`,
 with `lib-icons` in the block's `registryDependencies`), never inline, so an
 app's icon library choice reaches every block it installs. The sample avatar
-is `https://webjs.dev/public/avatars/vivek.jpg` (alt `@vivek`, fallback `VK`),
+is `https://webjs.dev/avatars/vivek.jpg` (alt `@vivek`, fallback `VK`),
 hotlinked by an installed block; the site's mirror makes it site-relative.
 
 **The projector** (`registry/extract.js`), shared by `view` and the MCP `ui`
@@ -560,7 +560,7 @@ upstream order so it diffs cleanly. Six named categories (`color`,
 `typography`, `spacing`, `shape`, `effects`, `motion`) and everything else is
 `layout`. Two placements are counterintuitive and both are kept: padding is
 `spacing`, margin is `layout`. `allow` takes a category name OR a class-group
-id, so `["layout", "rounded"]` admits `w-9 h-9 rounded-full` (the skill's
+id, so `["layout", "rounded"]` admits `w-9 h-9 rounded-full` (the kit's
 sanctioned icon-button one-off) without opening the whole `shape` category
 (`border-2` still fires). Do NOT redefine the taxonomy locally. #1116 was
 reverted for inventing vocabulary shadcn does not ship.
@@ -781,9 +781,9 @@ when the caller passes an explicit custom `--registry <url>`.
   served on demand by `webjsui view` and the MCP `ui` tool. Tier-2
   custom-element files are left whole (the element IS the component). A
   version-skew note: local-first pins `add`/`view` to the INSTALLED ui version,
-  and `diff` is how a user detects upstream drift. The scaffold no longer
-  pre-copies ui components (it initialises the app for `webjs ui add` and the
-  gallery cards style with plain Tailwind), so components are added on demand.
+  and `diff` is how a user detects upstream drift. The scaffold initialises
+  the app for `webjs ui add` and installs one component through the kit's own
+  `add`, the Button its theme toggle uses; the rest are added on demand.
 
 ## Webjs‑CLI subcommand
 
@@ -896,27 +896,17 @@ names mechanically:
 - Use `cn()` from `'../lib/utils.ts'` to merge a helper's output with
   user-supplied classes when needed: `<button class=${cn(buttonClass(), 'rounded-full')}>`.
 - **A registry module does NO work at module scope.** Not a call, not a `new`,
-  not a `document` reference. The elision analyser reads any of those as client
-  work, so the module pins every page that reaches it on a component-free path,
-  and a Tier-1 helper registers no element, so the path-aware carve-out (#963)
-  cannot save it. Because `cn` sits under essentially every helper, one such
-  line costs page elision in every app that runs `webjsui init`. Two shapes
-  caused it (#1320). A `...borderGroups()` spread inside a module-scope table is
-  a real top-level call, fixed by memoising the table behind a function
+  not a `document` reference. A helper module is imported by pages and
+  server-only code on the server and by components in the browser, so
+  module-scope work runs on every import in both places, and a browser global
+  there throws during server rendering. Two shapes once crept in (#1320). A
+  `...borderGroups()` spread inside a module-scope table is a real top-level
+  call, fixed by memoising the table behind a function
   (`let _groups; function GROUPS() { return (_groups ??= [...]) }`). An
   `if (typeof document !== 'undefined') installFooStyles()` stylesheet
   injection is both a call and a browser-global reference, fixed by putting the
   CSS in the theme block instead, which also puts it in the first paint and
-  makes it work with JavaScript off. `packages/ui/test/utils-purity.test.js`
-  pins the flagged set as an EQUALITY, so a new offender fails immediately and
-  the remaining entries can only be removed deliberately. Four are still on
-  that list and DO pin an importing page today: `pagination`, `progress`,
-  `sonner` and `tabs`, an analyser precision gap, since an arrow with an
-  expression body puts its call at brace depth 0 and reads as a top-level
-  statement. The page ships either way, so do not treat them as harmless.
-  `checkbox` and `radio-group` left the list when their checked paint moved
-  into their own classes (#1666), which is the third fix for an injection and
-  the one that needs neither JavaScript nor the app's theme block.
+  makes it work with JavaScript off.
 - **The kit is copy-on-add, so fixing the registry does not fix an app.** An
   existing app holds its own copy of every component and of `lib/utils/cn.ts`,
   and `npx @webjsdev/ui diff` is the discovery channel for the drift. The theme
@@ -1066,7 +1056,9 @@ the server stringified it to `attr=""`, so a component that "omitted" ARIA via a
 null hole passed every browser assertion while serving the empty attribute.
 Three real defects shipped that way before this layer existed, and the
 components still branch those templates so they render right on an older
-`@webjsdev/core`. Both renderers now omit a nullish hole, but the served markup
+`@webjsdev/core`. Since #1682 both renderers follow Lit, so a nullish hole renders an
+EMPTY attribute on both sides and a conditional attribute is omitted with
+`attr=${cond ? 'x' : nothing}` or `attr=${ifDefined(value)}`. The served markup
 is still what a screen reader meets first. Any conditional ARIA needs an assertion here, not just in the
 browser suite.
 
@@ -1075,8 +1067,7 @@ Real-browser tests for the kit live under
 (`ui-overlay.test.js`, `ui-stateful.test.js`, `ui-a11y.test.js` for the Tier-2
 ARIA + keyboard guarantees) and run via the
 top-level `npm run test:browser`. See
-[`references/testing.md`](../../.agents/skills/webjs/references/testing.md) for
-the overall layout.
+https://webjs.dev/docs/testing for the overall layout.
 
 ## Building / running
 

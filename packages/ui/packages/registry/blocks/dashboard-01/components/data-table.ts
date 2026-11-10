@@ -23,7 +23,7 @@
  * in place of `dashboardData`. Until then the inline forms submit as a GET
  * back to the page.
  */
-import { WebComponent, html, prop, render, repeat } from '@webjsdev/core';
+import { WebComponent, html, prop, render, repeat, nothing } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import { badgeClass } from '../../../components/badge.ts';
 import { buttonClass } from '../../../components/button.ts';
@@ -115,7 +115,7 @@ function reviewerCell(row: DashboardRow, edit: RowEdit) {
 function row(r: DashboardRow, state: RowState) {
   const { selected, edit, hidden } = state;
   return html`
-    <tr data-slot="table-row" data-row-id=${String(r.id)} data-dragging="false" data-state=${selected ? 'selected' : null} class=${cn(tableRowClass(), 'relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80')}>
+    <tr data-slot="table-row" data-row-id=${String(r.id)} data-dragging="false" data-state=${selected ? 'selected' : nothing} class=${cn(tableRowClass(), 'relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80')}>
       <td data-slot="table-cell" class=${cell()}>
         <button type="button" draggable="true" data-drag-handle data-slot="button" data-variant="ghost" data-size="icon" class=${cn(buttonClass({ variant: 'ghost', size: 'icon' }), 'size-7 cursor-grab text-muted-foreground hover:bg-transparent')}>
           ${GripVerticalIcon('size-3 text-muted-foreground')}
@@ -124,7 +124,14 @@ function row(r: DashboardRow, state: RowState) {
       </td>
       <td data-slot="table-cell" class=${cell()}>
         <div class="flex items-center justify-center">
-          <input type="checkbox" data-slot="checkbox" data-row-select class=${checkboxClass()} aria-label="Select row" .checked=${selected}>
+          ${state === FIRST_PAINT
+            // The first paint is part of the PAGE's template (the page never
+            // hydrates), so it states the checkbox as an attribute; a page
+            // template may not carry a `.prop` binding. The element's own
+            // repaints set the live property, which a box the user has
+            // toggled still follows.
+            ? html`<input type="checkbox" data-slot="checkbox" data-row-select class=${checkboxClass()} aria-label="Select row" ?checked=${selected}>`
+            : html`<input type="checkbox" data-slot="checkbox" data-row-select class=${checkboxClass()} aria-label="Select row" .checked=${selected}>`}
         </div>
       </td>
       <td data-slot="table-cell" class=${cell()}>

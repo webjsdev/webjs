@@ -1,5 +1,5 @@
-// Demonstrates the WebComponent essentials: the declare-free reactive-prop
-// factory, an instance signal for local state, a lifecycle hook, and a <slot>
+// Demonstrates the WebComponent essentials: the reactive-prop factory (Lit's
+// `static properties` plus `declare` works too), an instance signal for local state, a lifecycle hook, and a <slot>
 // for content projection (works in light DOM, the default). This is the core
 // component authoring shape. Styling is crafted Tailwind on the app's design
 // tokens so it stays visually coherent with the rest of the app.
@@ -8,9 +8,9 @@ import { cardClass } from '#modules/gallery/ui/card.ts';
 import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 export class CounterCard extends WebComponent({
-  // A reactive prop rides an HTML attribute / SSR hydration. Declared ONLY here
-  // (no `static properties`, no class-field `label = ''` which would clobber the
-  // accessor). Set defaults in the constructor.
+  // A reactive prop rides an HTML attribute / SSR hydration. Declared here (or
+  // in Lit's `static properties`), never as a class field `label = ''`, which
+  // would clobber the accessor. Set defaults in the constructor.
   label: prop(String),
 }) {
   readonly #count = signal(0); // instance signal: component-local state

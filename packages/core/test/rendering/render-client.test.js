@@ -359,7 +359,9 @@ test('render: array of primitives renders as concatenated text nodes', () => {
   const el = document.createElement('div');
   render(['a', 'b', 'c'], el);
   assert.equal(el.textContent, 'abc');
-  assert.equal(el.childNodes.length, 3);
+  // Through a child binding, as Lit renders every value (#1686), so the three
+  // text nodes sit between the binding's marker comments.
+  assert.equal([...el.childNodes].filter((n) => n.nodeType === 3).length, 3);
 });
 
 test('render: template → non-template transition clears instance state', () => {

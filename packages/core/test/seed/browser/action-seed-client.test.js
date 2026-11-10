@@ -108,7 +108,7 @@ suite('SSR action seeding, real DOM (#1309)', () => {
   test('a stale block left in the live document cannot outrank a fresh soft-nav seed', async () => {
     // The regression last-write-wins can cause, and the reason the scan drains
     // the live document before ingesting an incoming page. Page A never called
-    // `takeSeed` (every async component on it elided), so the lazy initial scan
+    // `takeSeed` (every async component on it is server-only), so the lazy initial scan
     // never ran and its block is still in the live DOM; it sits after the body
     // content, outside every boundary range, so no swap removes it either. When
     // page B arrives, both renders share the key, and if A's block is ingested
@@ -157,7 +157,7 @@ suite('SSR action seeding, real DOM (#1309)', () => {
   });
 
   test('an outgoing page\'s unconsumed seeds are DISCARDED, not accumulated', async () => {
-    // The block a departed page leaves behind belongs to components that elided,
+    // The block a departed page leaves behind belongs to server-only components,
     // so nothing will ever call `takeSeed` for those keys and nothing but a hit
     // deletes one. Ingesting them would grow the store by a whole page payload
     // per navigation, in production, and inflate the "still unconsumed" figure in
@@ -200,9 +200,9 @@ suite('SSR action seeding, real DOM (#1309)', () => {
 
   test('an already-INGESTED unconsumed seed does not survive a navigation', async () => {
     // The second route into the same "a hit disagrees with the paint" hole, and
-    // the one stripping DOM carriers does not close. Page A carries an elided
+    // the one stripping DOM carriers does not close. Page A carries a server-only
     // component AND a shipping one, so the shipping one's first `takeSeed` fires
-    // the lazy scan and the WHOLE block is ingested: the elided component's key
+    // the lazy scan and the WHOLE block is ingested: the server-only component's key
     // is now in the store with no carrier left to strip and nothing that will
     // ever consume it. Page B emits no seed for that key (a streamed page emits
     // no block at all), so without eviction a component on B calling the same

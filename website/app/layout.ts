@@ -52,7 +52,7 @@ const DESCRIPTION = 'A full-stack JavaScript web components framework with no bu
 
 export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
-  const image = `${origin}/public/og.png`;
+  const image = `${origin}/og.png`;
   // Site-wide canonical, derived here so EVERY page gets one from a single
   // place (the site had none at all, on any page). Built from origin +
   // pathname, so tracking query strings and a stray trailing slash all collapse
@@ -98,10 +98,10 @@ export function generateMetadata(ctx: { url: string }) {
     // markup, so linking it would add a tag nothing reads.
     icons: {
       icon: [
-        { url: '/public/favicon-192.png', type: 'image/png', sizes: '192x192' },
-        { url: '/public/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+        { url: '/favicon-192.png', type: 'image/png', sizes: '192x192' },
+        { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
       ],
-      apple: { url: '/public/apple-touch-icon.png', sizes: '180x180' },
+      apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
     },
     openGraph: {
       type: 'website',
@@ -148,9 +148,9 @@ export default function RootLayout({ children, url }: LayoutProps) {
          final face without the late swap. Each family is one variable file
          covering every weight, so three small woff2 files over h2 is a cheap
          preload budget. -->
-    ${ui ? '' : html`<link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>`}
+    ${ui ? '' : html`<link rel="preload" href="/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>`}
 
     <!-- Warm the analytics connection so the async gtag handshake (and the
          beacon to google-analytics.com it then opens) overlaps head parse
@@ -184,8 +184,8 @@ export default function RootLayout({ children, url }: LayoutProps) {
       })();
     </script>
 
-    ${ui ? html`<link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : ''}
+    ${ui ? html`<link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : ''}
     <style>
       /* Foundation tokens + effects that Tailwind utilities cannot express. */
       /* A single static gradient glow layer. It used to breathe (two layers
@@ -201,8 +201,8 @@ export default function RootLayout({ children, url }: LayoutProps) {
          instead of decorative. */
       /* Every per-theme COLOUR is declared ONCE, as light-dark(LIGHT, DARK),
          and the color-scheme declarations below pick the side. This is the
-         rule the framework teaches its own users (the skill's
-         references/styling.md, and the palette webjs create generates), and
+         rule the framework teaches its own users (/docs/styling, and the
+         palette webjs create generates), and
          the site had been the counter-example: the dark half was written
          twice, once under the OS media query and once under the toggle's
          attribute, so an edit to either block silently drifted the two paths

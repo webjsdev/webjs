@@ -150,7 +150,9 @@ export function regionRouteKey(segmentPath, params) {
   const p = params || {};
   /** Encode one substituted value, per slash-piece (catch-alls keep their
    *  literal separators; each piece is comment-safe + delimiter-safe). */
-  const enc = (v) => String(v).split('/').map((s) => encodeURIComponent(s)).join('/');
+  const enc = (v) => (Array.isArray(v) ? v.join('/') : String(v)).split('/').map((s) => encodeURIComponent(s)).join('/');
+  /** A catch-all value present and non-empty (a string[] since Next parity). */
+  const has = (v) => (Array.isArray(v) ? v.length > 0 : !!v);
   /** A STATIC piece is a folder name emitted as-is EXCEPT the boundary/header
    *  delimiter characters (':' would mis-split the `segment:route-key` parses,
    *  ',' the have-entry list, '%' the decode); percent-encode just those so
@@ -166,12 +168,12 @@ export function regionRouteKey(segmentPath, params) {
     // the already-slash-joined tail (may be '' for an empty optional one).
     if (seg.startsWith('[[...') && seg.endsWith(']]')) {
       const v = p[seg.slice(5, -2)];
-      if (v) out.push(enc(v));
+      if (has(v)) out.push(enc(v));
       continue;
     }
     if (seg.startsWith('[...') && seg.endsWith(']')) {
       const v = p[seg.slice(4, -1)];
-      if (v) out.push(enc(v));
+      if (has(v)) out.push(enc(v));
       continue;
     }
     // Dynamic `[name]`.
@@ -213,14 +215,14 @@ export function regionRouteKey(segmentPath, params) {
  */
 export function wrapWithChildrenMarker(tree, segmentPath, params) {
   const routeKey = regionRouteKey(segmentPath, params);
-  return {
-    _$webjs: 'template',
-    strings: [
-      `<!--wj:children:${segmentPath}:${routeKey}-->`,
-      `<!--/wj:children:${segmentPath}-->`,
-    ],
-    values: [tree],
-  };
+  const strings = [
+    `<!--wj:children:${segmentPath}:${routeKey}-->`,
+    `<!--/wj:children:${segmentPath}-->`,
+  ];
+  // `raw` marks the strings as the framework's own markup, which is what the
+  // renderers require of a template result (a tagged template's strings have it).
+  Object.defineProperty(strings, 'raw', { value: strings.slice() });
+  return { _$webjs: 'template', strings, values: [tree] };
 }
 
 /** Internal helpers re-exported for unit testing. */
@@ -287,6 +289,28 @@ export function extractUserShell(body) {
 export const _extractUserShell = extractUserShell;
 
 /**
+ * The root layout's `<html>` / `<body>` attributes with a list of their names
+ * appended (`data-wj-html="lang class"`), so the client router can bring
+ * exactly those attributes up to date after a soft navigation or a form
+ * submission and leave alone any a script set in the browser (#1686). A
+ * changed theme cookie then shows without a reload, as it does in Next.js.
+ * @param {string} attrs the raw attribute text from the layout's tag
+ * @param {string} mark
+ * @returns {string}
+ */
+export function markRootAttrs(attrs, mark) {
+  const re = /([^\s=/>"']+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?/g;
+  /** @type {string[]} */
+  const list = [];
+  let m;
+  while ((m = re.exec(attrs))) {
+    const n = m[1].toLowerCase();
+    if (n !== mark && !list.includes(n)) list.push(n);
+  }
+  return `${attrs} ${mark}="${list.join(' ')}"`;
+}
+
+/**
  * Inner-only variant of wrapHead: returns just the meta/title/link/script
  * tags that should live INSIDE <head>, without the surrounding
  * <!doctype><html><head>…</head><body> shell. Used to splice into a
@@ -339,9 +363,9 @@ export function buildDocumentParts(body, wrapOpts) {
     const owned = hoistOwnedStylesheets(hoist.body, stylesheetKeys(rootHead, wrapOpts.pageUrl), wrapOpts.pageUrl);
     const composedHead = [rootHead, owned.tags.join('\n')].filter(Boolean).join('\n');
     const prefix =
-      `<!doctype html>\n<html${shell.htmlAttrs}>\n<head${shell.headAttrs}>\n` +
+      `<!doctype html>\n<html${markRootAttrs(shell.htmlAttrs, 'data-wj-html')}>\n<head${shell.headAttrs}>\n` +
       composedHead +
-      `\n</head>\n<body${shell.bodyAttrs}>\n`;
+      `\n</head>\n<body${markRootAttrs(shell.bodyAttrs, 'data-wj-body')}>\n`;
     return { prefix, streamBody: owned.body, closer: `\n</body>\n</html>` };
   }
   // No user shell: framework owns the wrapper.

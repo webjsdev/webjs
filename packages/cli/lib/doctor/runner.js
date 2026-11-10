@@ -7,12 +7,13 @@ import { checkVendorGitignore } from './probes/vendor-gitignore.js';
 import { checkImportmapCoherence } from './probes/importmap-coherence.js';
 import { checkWebjsVersions } from './probes/webjs-versions.js';
 import { checkGitHook } from './probes/git-hook.js';
-import { checkElisionCarriers, checkElisionComponents } from './probes/elision.js';
+import { checkRouteBrowserCode, checkOrphanComponents } from './probes/routes.js';
 import { checkStaticAssetFreshness } from './probes/static-asset-freshness.js';
 import { checkUnmarkedAssetLinks } from './probes/unmarked-asset-links.js';
 import { checkFrameworkResolves, checkFrameworkLinks } from './probes/framework-resolves.js';
 import { checkWorkspaceOverrides } from './probes/workspace-overrides.js';
 import { checkAppIcon } from './probes/app-icon.js';
+import { checkJsxRouteFiles } from './probes/jsx-route-files.js';
 
 /**
  * @typedef {import('./codes.js').DoctorResult} DoctorResult
@@ -43,14 +44,15 @@ import { checkAppIcon } from './probes/app-icon.js';
  */
 export async function runDoctorChecks(appDir, opts = {}) {
   const cliDir = opts.cliDir || new URL('.', import.meta.url).pathname;
-  // ONE elision report for BOTH elision checks (#1308). Started before the
+  // ONE route report for BOTH route checks (#1308, #1686). Started before the
   // batch and awaited inside each check, so the module graph is built once per
   // doctor run and the two checks still run in parallel with everything else.
-  // Fails soft to null, exactly as the carrier check's own try/catch did.
-  const elision = (async () => {
+  // Fails soft to null when the server cannot be imported or the app cannot
+  // be analysed.
+  const routeReport = (async () => {
     try {
-      const { analyzeAppElision } = await import('@webjsdev/server');
-      return await analyzeAppElision(appDir);
+      const { analyzeRouteModules } = await import('@webjsdev/server');
+      return await analyzeRouteModules(appDir);
     } catch { return null; }
   })();
   const results = await Promise.all([
@@ -64,12 +66,13 @@ export async function runDoctorChecks(appDir, opts = {}) {
     Promise.resolve(checkFrameworkLinks(appDir)),
     checkImportmapCoherence(appDir, opts),
     Promise.resolve(checkGitHook(appDir)),
-    checkElisionCarriers(elision),
-    checkElisionComponents(elision),
+    checkRouteBrowserCode(routeReport),
+    checkOrphanComponents(routeReport),
     checkStaticAssetFreshness(appDir, opts),
     checkUnmarkedAssetLinks(appDir),
     Promise.resolve(checkWorkspaceOverrides(appDir)),
     Promise.resolve(checkAppIcon(appDir)),
+    Promise.resolve(checkJsxRouteFiles(appDir)),
   ]);
   // Attach the stable machine code to every result (#975). Centralized here so
   // each check function stays free of the code-contract concern.

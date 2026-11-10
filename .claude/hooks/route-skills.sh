@@ -151,9 +151,8 @@ fi
 # --- webjs-doc-sync: keep all doc surfaces in sync ----------------------
 # Triggers: sync the docs, update the docs/website/docs-site, doc gap or
 # drift, find missing docs, "did we update the docs", audit shipped work
-# for documentation. The skill carries the full surface map (AGENTS.md +
-# the skill at .agents/skills/webjs/, README, the docs site, the website,
-# the scaffold per-agent rule files) so a feature is never documented in only ONE place (the #488
+# for documentation. The skill carries the full surface map (AGENTS.md and
+# its brief, README, the docs site, the website, the scaffold templates) so a feature is never documented in only ONE place (the #488
 # gap: HTTP-verb actions landed in AGENTS.md but the docs site stayed
 # stale).
 if has '(doc|documentation) (gap|drift|sync|coverage|debt)' \
@@ -161,7 +160,7 @@ if has '(doc|documentation) (gap|drift|sync|coverage|debt)' \
    || has '(missing|stale|outdated|out-of-date|out of date).{0,20}(doc|docs|documentation)' \
    || has 'did (we|you|i) (update|sync).{0,20}(doc|docs)' \
    || has '(audit|sweep|check).{0,40}(doc|docs|documentation)'; then
-  add_match "webjs-doc-sync: the request is about documentation sync, drift, or a doc gap. Invoke the webjs-doc-sync skill BEFORE editing any doc. It holds the authoritative map of EVERY surface (AGENTS.md + the skill at .agents/skills/webjs/, README, the docs site under website/app/(site)/docs/, the rest of the marketing website/, and the scaffold templates' per-agent rule files) and the change-type to surface mapping, so no surface is silently skipped. File each confirmed gap via webjs-file-issue."
+  add_match "webjs-doc-sync: the request is about documentation sync, drift, or a doc gap. Invoke the webjs-doc-sync skill BEFORE editing any doc. It holds the authoritative map of EVERY surface (AGENTS.md and its brief, README, the docs site under website/app/(site)/docs/, the rest of the marketing website/, and the scaffold templates) and the change-type to surface mapping, so no surface is silently skipped. File each confirmed gap via webjs-file-issue."
 fi
 
 # --- webjs-scaffold-sync: keep every scaffold surface in sync -----------
@@ -237,7 +236,7 @@ if has 'verify (the |this |that |it )?(change|fix|feature|pr|work|it works|behav
    || has '(confirm|prove|make sure) .{0,30}(works|working|fixed|fixes it)' \
    || has '(manually|actually) (test|try|check) .{0,20}(it|the (fix|change|app|feature))' \
    || has '(boot|dogfood|smoke).{0,20}(app|apps|blog|website|docs)'; then
-  add_match "verify: the request is to confirm a change actually works. Invoke the verify skill (run the app and observe the behaviour). For a change to a shared runtime surface (core/server SSR, client router, importmap, dist, elision), boot the AFFECTED dogfood apps and report evidence. CI covers both in-repo apps (blog and website). A docs-only, test-only, or tooling change needs no app boot."
+  add_match "verify: the request is to confirm a change actually works. Invoke the verify skill (run the app and observe the behaviour). For a change to a shared runtime surface (core/server SSR, client router, importmap, dist, route frontiers), boot the AFFECTED dogfood apps and report evidence. CI covers both in-repo apps (blog and website). A docs-only, test-only, or tooling change needs no app boot."
 fi
 
 # Assemble the additional context. The standing rule is always present; the

@@ -45,12 +45,13 @@ export const DOCTOR_CODES = {
   'framework-links': 'FRAMEWORK_LINKS',
   'importmap-coherence': 'IMPORTMAP_COHERENCE',
   'git-hook': 'GIT_HOOK',
-  'Page/layout elision (carrier hygiene)': 'ELISION_CARRIERS',
-  'Component elision (what the browser drops)': 'ELISION_COMPONENTS',
+  'Route modules (browser code that runs only on the server)': 'ROUTE_BROWSER_CODE',
+  'Components (orphan classes the scanner cannot see)': 'ORPHAN_COMPONENTS',
   'Static build outputs (dev.regenerate freshness)': 'STATIC_ASSET_FRESHNESS',
   'Asset urls (unmarked stylesheet links)': 'UNMARKED_ASSET_LINKS',
   'workspace-overrides': 'WORKSPACE_OVERRIDES',
   'app-icon': 'APP_ICON',
+  'jsx-route-files': 'JSX_ROUTE_FILES',
 };
 
 /**

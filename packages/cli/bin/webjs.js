@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
-import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse } from '../lib/port.js';
+import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordDevPort, recordedDevPort } from '../lib/port.js';
 import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -46,23 +46,9 @@ if (cmd !== 'help' && cmd !== undefined && !wantsHelp && !wantsVersion) {
 }
 
 // Exactly two scaffolds exist. Keep this list as the single source of
-// truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
-// .agents/rules/workflow.md / .github/copilot-instructions.md mirror it.
+// truth. README.md and the docs site mirror it.
 const TEMPLATES = ['full-stack', 'api'];
 
-/**
- * The one thing `webjs elision --verify` must say about its own boundary, in
- * the command's own output rather than only in the docs. The differential masks
- * the JS-loaded set by construction, so it can only ever see the DANGEROUS
- * direction (elision changed the served bytes); a wrongly dropped module shows
- * up as a dead click, which is bytes-identical.
- */
-const VERIFY_CAVEAT = `
-This proves elision did not change the bytes your app serves. It does NOT prove
-post-hydration behaviour: a wrongly dropped module shows up as a dead click, not
-as different bytes. Run your browser or e2e suite twice to cover that half:
-  WEBJS_ELIDE=1 <your e2e command>
-  WEBJS_ELIDE=0 <your e2e command>`;
 
 /**
  * `--routes /a,/b` or `--routes=/a,/b` -> ['/a', '/b']. Every value is
@@ -96,14 +82,12 @@ const USAGE = `webjs commands:
                                                   exit 1 on any failure). The same list a cloud pipeline runs via "npm run ci".
                                                   --only runs one step or group by title; --signoff runs "gh signoff" after a green run
   webjs routes [--json|--table] [--no-headers]    Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape; --no-headers drops the --table header
-  webjs elision [--json] [--verify]               Report which component modules are elided and why each shipped one ships;
-                                                  --verify diffs SSR output with elision on vs off (exits non-zero on a divergence)
   webjs status [path...] [--port N] [--json]      Wait for a running dev server to settle after an edit, request each path, and
                                                   report every error since the last rebuild; exit 1 on any problem, 2 if no server
-  webjs mcp                                       Start the read-only MCP server (routes / actions / components / elision / check)
+  webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
   webjs source <Export> [--pkg <name>]            Print the signature plus doc comment of one export from the installed @webjsdev/*
                                                   packages (typed declarations first, the authored JSDoc as the fallback); exit 1 on a miss
-  webjs doctor [--json] [--strict]                Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision, component elision, un-versioned stylesheet links).
+  webjs doctor [--json] [--strict]                Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, browser code in a route module, orphan components, un-versioned stylesheet links).
                                                   --json emits the structured results (with stable codes). --strict additionally fails on every remaining warning.
                                                   Per-check severity is CONFIG: map a code to off/warn/error under "webjs": { "doctor": { "gate": {...} } }
                                                   in package.json, so CI gates on a chosen subset without every warning becoming fatal
@@ -217,24 +201,6 @@ const HELP = {
     ],
     examples: ['webjs routes', 'webjs routes --table', 'webjs routes --table --no-headers', 'webjs routes --json'],
   },
-  elision: {
-    usage: 'webjs elision [--json] [--verify] [--routes <paths>]',
-    summary:
-      'Report the elision verdict: which component modules the browser never downloads, and why each one that ships does.',
-    options: [
-      { flag: '--json', description: 'Emit the verdict as JSON (byte-identical to the MCP list_elision tool).' },
-      { flag: '--verify', description: 'Render every static page route with elision on and off and diff the observable SSR bytes. Exits non-zero on a divergence.' },
-      { flag: '--routes <paths>', description: 'Comma-separated URL paths to add to the --verify corpus (the only way to cover a dynamic route).' },
-    ],
-    notesTitle: 'What --verify proves',
-    notes: [
-      '--verify proves elision did not change the bytes your app serves. It does NOT',
-      'prove post-hydration behaviour: a wrongly dropped module shows up as a dead',
-      'click, not as different bytes. Run your browser or e2e suite twice',
-      '(WEBJS_ELIDE=1 then WEBJS_ELIDE=0) to cover that half.',
-    ],
-    examples: ['webjs elision', 'webjs elision --json', 'webjs elision --verify', 'webjs elision --verify --routes /,/blog/hello'],
-  },
   audit: {
     usage: 'webjs audit [--json]',
     summary:
@@ -346,27 +312,28 @@ const HELP = {
   },
   mcp: {
     usage: 'webjs mcp',
-    summary: 'Start the read-only MCP server (routes / actions / components / elision / check + a docs/source knowledge layer).',
+    summary: 'Start the read-only MCP server (routes / actions / components / check, plus the WebJs brief and the framework source).',
     examples: ['webjs mcp'],
   },
   source: {
-    usage: 'webjs source <Export> [--pkg <name>]',
-    summary: 'Print one framework export\'s signature plus the doc comment above it, read from the installed @webjsdev/* packages (the typed declarations first, the authored JSDoc when none carries a doc; every overload). The cheap way to check a contract before opening the source file.',
+    usage: 'webjs source [<Export>] [--pkg <name>]',
+    summary: 'With no name, list what WebJs provides by need (auth, sessions, caching, rate limits, uploads, realtime, SEO, test helpers). With a name, print that export\'s signature plus the doc comment above it, read from the installed @webjsdev/* packages (the typed declarations first, the authored JSDoc when none carries a doc; every overload). The cheap way to find a feature and check its contract before opening the source file.',
     options: [
-      { flag: '--pkg <name>', description: 'Search one package only: core, server, cli, ui or intellisense.' },
+      { flag: '--pkg <name>', description: 'Search one package only: core, server, cli, ui or intellisense. With no export name, list that package\'s source entry points.' },
     ],
     notesTitle: 'Exit status',
     notes: [
-      '0 when at least one declaration printed; 1 on a miss (the message names the packages that were searched).',
-      'The read-only MCP `source` tool returns the same text for { export: "<Export>" }.',
+      '0 for the catalogue, a package listing, or when at least one declaration printed; 1 on a miss, a name no package exports or a --pkg that is not installed (the message names the packages that were searched).',
+      'The read-only MCP `source` tool returns the same text: { export: "<Export>" } for a name, { package: "<name>" } for --pkg alone, and the catalogue for no arguments.',
     ],
-    examples: ['webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
+    examples: ['webjs source', 'webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
   },
   status: {
-    usage: 'webjs status [path...] [--port N] [--json] [--timeout <seconds>]',
-    summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. Use it after each edit instead of sleeping and fetching a page.',
+    usage: 'webjs status [path...] [--port N] [--boot] [--json] [--timeout <seconds>]',
+    summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. With no dev server on the port it boots the app in-process instead and probes every route that needs no parameter, so no server has to be started or stopped. Use it after each edit instead of sleeping and fetching a page.',
     options: [
-      { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then 8080, the same resolution `webjs dev` uses.' },
+      { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then the port a running `webjs dev` for this app recorded (so `webjs dev --port 8910` is found without repeating it), then 8080.' },
+      { flag: '--boot', description: 'Skip the dev server: boot the app in-process with the dev handler. With no paths it probes every page and GET route handler that needs no parameter (an optional catch-all at its parent path), lists the routes it skipped, and fails only on a server error there; a path you name still fails at 400.' },
       { flag: '--json', description: 'Print one JSON document: { ok, url, settled, ready, rebuilds, paths, errors }, each error carrying kind, message, file, line, column and codeFrame.' },
       { flag: '--timeout <seconds>', description: 'How long to wait for the server to settle (default 30). A restarting dev server (after a .env, package.json, lockfile, instrumentation or env edit) is retried until then.' },
     ],
@@ -374,10 +341,10 @@ const HELP = {
     notes: [
       '0 when settled, ready, error-free, and every requested path answered below 400.',
       '1 on any recorded error, a path at 400 or above, or no settle before the timeout.',
-      '2 when no dev server answered on the port.',
+      'With no dev server on the port the command boots the app in-process (as --boot) rather than failing.',
       'The same data is GET /__webjs/dev/status?wait=<seconds> on the dev server, which answers 404 in production.',
     ],
-    examples: ['webjs status', 'webjs status / /todos --json', 'webjs status /blog --port 3000'],
+    examples: ['webjs status', 'webjs status --boot', 'webjs status / /todos --json', 'webjs status /blog --port 3000'],
   },
   version: {
     usage: 'webjs version',
@@ -418,8 +385,7 @@ function printCommandHelp(name) {
   // Optional per-command prose for surface a flag table cannot carry (doctor's
   // package.json severity gate is the one that needs it). The heading defaults
   // to `Config:` because that is what doctor's block is and what its help test
-  // pins; a command whose prose is not configuration names its own heading
-  // (`webjs elision`'s is a caveat about what --verify proves).
+  // pins; a command whose prose is not configuration names its own heading.
   if (h.notes) {
     console.log(`\n${h.notesTitle || 'Config'}:`);
     for (const line of h.notes) console.log(`  ${line}`);
@@ -572,6 +538,9 @@ async function main() {
   }
   switch (cmd) {
     case 'dev': {
+      // `dev` is development unless NODE_ENV says otherwise (Next's convention),
+      // so `.env.development` loads; the supervised child inherits it.
+      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'development');
       // If we're already inside the reload child (under the supervisor),
       // start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
@@ -593,6 +562,7 @@ async function main() {
           process.channel?.unref?.();
           process.on('disconnect', () => process.exit(0));
         }
+        if (!g.__webjsDevPortRecorded) { g.__webjsDevPortRecorded = true; recordDevPort(process.cwd(), port); }
         await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }));
         break;
       }
@@ -612,9 +582,9 @@ async function main() {
       // child / inline server load `.env` again later (idempotent).
       //
       // The shell's env is snapshotted FIRST, and the supervised child starts
-      // from the snapshot, not from this process's env (#1689). `.env` is a
-      // restart file, and `process.loadEnvFile` never overrides a variable that
-      // is already set, so a child handed the values loaded here would keep
+      // from the snapshot, not from this process's env (#1689). The env files
+      // are restart files, and `loadAppEnv` never overrides a variable that is
+      // already set, so a child handed the values loaded here would keep
       // the OLD ones after an edit to `.env` restarted it. On Bun, which loads
       // `.env` itself before any code runs, `shellEnvOf` drops those values.
       const shellEnv = shellEnvOf(process.env, process.cwd());
@@ -642,6 +612,7 @@ async function main() {
         const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
+        recordDevPort(process.cwd(), port);
         await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }), {
           exit: (code) => { killTasks(); process.exit(code); },
         });
@@ -659,6 +630,9 @@ async function main() {
       break;
     }
     case 'start': {
+      // Next's convention: `start` is production unless NODE_ENV says
+      // otherwise, so `.env.production` loads and the app sees production.
+      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'production');
       const { startServer } = await import('@webjsdev/server');
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
       // the 8080 default (#447), same as for `dev`.
@@ -802,6 +776,11 @@ async function main() {
     }
     case 'test': {
       const cwd = process.cwd();
+      // A test run is NODE_ENV=test unless one is set, as under Jest and
+      // Vitest: .env.test loads, and session() / createAuth() may use the
+      // generated development secret. A process a test spawns inherits it,
+      // as under Jest (node-env.js).
+      (await import('../lib/node-env.js')).defaultNodeEnv(process.env, 'test');
       const { existsSync } = await import('node:fs');
 
       // Two test runners:
@@ -857,10 +836,20 @@ async function main() {
           const testArgs = process.versions.bun
             ? ['test', ...testFiles]
             : ['--test', ...testFiles];
+          // A SQLite app gets a fresh test database (migrated, or the schema
+          // pushed before the first migration exists), so tests never write
+          // into db/dev.db (the Rails test-database habit).
+          const { wantsTestDatabase, prepareTestDatabase } = await import('../lib/test-db.js');
+          let testDb = null;
+          if (wantsTestDatabase(cwd, process.env)) {
+            testDb = prepareTestDatabase(cwd, { cliBin: fileURLToPath(import.meta.url) });
+            console.log(`webjs test: using a fresh ${testDb.pushed ? 'test database with the schema pushed (no migrations yet)' : 'migrated test database'} (set WEBJS_TEST_DB=0 to use DATABASE_URL instead)\n`);
+          }
           const child = spawn(process.execPath, testArgs, {
-            stdio: 'inherit', cwd, env: { ...process.env },
+            stdio: 'inherit', cwd, env: { ...process.env, ...(testDb ? { DATABASE_URL: testDb.url } : {}) },
           });
           const code = await new Promise(r => child.on('exit', r));
+          testDb?.cleanup();
           if (code !== 0) process.exit(code ?? 1);
         }
       }
@@ -875,7 +864,7 @@ async function main() {
         // `webjs test` with no browser tests stays a no-op (not a hard error).
         // Zero browser test files is a pass, not a failure (#1491). WTR throws
         // `Could not find any test files` on an empty match, so an app with no
-        // browser tests yet (what `gallery:clear` leaves) would fail its own CI
+        // browser tests yet (one that deleted the starter test) would fail its own CI
         // on this layer. Check the globs first and skip with a note. `null`
         // patterns mean the config's `files` is not a plain literal, so WTR
         // runs unchanged and reports for itself.
@@ -1073,7 +1062,7 @@ async function main() {
         console.log('  security leak, a reactive prop that silently stops');
         console.log('  re-rendering, or a build/type-strip failure. They always');
         console.log('  run. Project conventions (layout, style, process) are');
-        console.log('  guidance in CONVENTIONS.md, not rules here.\n');
+        console.log('  guidance in the docs (webjs.dev/docs), not rules here.\n');
         for (const r of RULES) {
           console.log(`  ${r.name.padEnd(30)} ${r.description}`);
         }
@@ -1372,251 +1361,6 @@ async function main() {
       }
       break;
     }
-    case 'elision': {
-      // Report the elision verdict for the app in cwd (#1308): which component
-      // modules the browser never downloads, why each one that ships does,
-      // which page/layout is inert / import-only / ships whole, and any orphan
-      // class that gets no verdict at all. Reuses the ONE analysis pass
-      // (`analyzeAppElision`, the same reporting layer `webjs doctor` and
-      // the MCP `list_elision` tool call), so `--json` is byte-identical to
-      // that tool. Read-only: no autofix, and nothing is written to disk.
-      const appDir = process.cwd();
-
-      // --verify: the app-level differential. Renders every static page route
-      // with elision ON and OFF in this one process and diffs the observable
-      // SSR bytes, which is literally the framework's own guard
-      // (`packages/server/test/elision/differential-elision.test.js`) pointed
-      // at an arbitrary app's route table.
-      if (rest.includes('--verify')) {
-        const { createRequestHandler, buildRouteTable, maskJsSet, staticPageRoutes } =
-          await import('@webjsdev/server');
-
-        const extra = parseRoutesFlag(rest);
-        let table;
-        try {
-          table = await buildRouteTable(appDir);
-        } catch (err) {
-          console.error(`webjs elision --verify: cannot read the route table here (${err && err.message}).`);
-          process.exit(1);
-        }
-        const staticRoutes = staticPageRoutes(table);
-        const dynamic = (table.pages || [])
-          .filter((r) => r.paramNames && r.paramNames.length)
-          .map((r) => (r.routeDir && r.routeDir !== '.' ? '/' + r.routeDir : '/'))
-          .sort();
-        // An extra route the author named explicitly is REQUIRED to render; a
-        // static one that does not is merely reported (a page may legitimately
-        // throw notFound() for every visitor).
-        const required = new Set(extra);
-        const routes = [...new Set([...staticRoutes, ...extra])];
-
-        // The app's access log would drown the verdict, and a verification
-        // run is not a server: keep errors (a real boot failure must surface)
-        // and drop the per-request info lines.
-        const quiet = { info: () => {}, warn: () => {}, debug: () => {}, error: (...a) => console.error(...a) };
-
-        const capture = async (h, r) => {
-          const resp = await h.handle(new Request('http://localhost' + r));
-          return { status: resp.status, html: await resp.text() };
-        };
-        // The module URLs a response preloads, with the content-hash query
-        // stripped. Comparing the two sides' sets is how the run reports what
-        // elision actually DROPPED, which is the only thing that distinguishes
-        // a real pass from two identical renders.
-        const preloadSet = (html) => new Set(
-          [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].map((m) => m[1].split('?')[0]),
-        );
-
-        const ORIG = process.env.WEBJS_ELIDE;
-        /** @type {Record<string, {status:number, html:string}>} */
-        const onA = {}, onB = {}, off = {};
-        try {
-          // Elision ON, FORCED. Deleting the override would only fall back to
-          // `webjs.elide`, so on an app that opts out this side would run with
-          // elision OFF too and the command would compare two identical renders
-          // and report them "identical with elision on vs off", which is false
-          // about a run where elision was never on. The env override wins over
-          // the config key, which is exactly what makes it the right seam here.
-          // Warm fully so the memoized verdict is locked before the env flips
-          // for the second handler.
-          process.env.WEBJS_ELIDE = '1';
-          const hOn = await createRequestHandler({ appDir, dev: false, logger: quiet });
-          if (hOn.warmup) await hOn.warmup();
-          for (const r of routes) onA[r] = await capture(hOn, r);
-          // A SECOND capture through the same warm handler. A route whose two
-          // ON captures already differ is nondeterministic (live data, a random
-          // id, a clock the masker does not normalize), so a differential over
-          // it proves nothing and reporting it as a failure would be a red the
-          // author cannot act on. The framework's own test needs no such pass
-          // because its corpus is fixed and known; an arbitrary app's is not.
-          for (const r of routes) onB[r] = await capture(hOn, r);
-          // Elision OFF via the env override; a fresh handler reads it on its
-          // own first warm.
-          process.env.WEBJS_ELIDE = '0';
-          const hOff = await createRequestHandler({ appDir, dev: false, logger: quiet });
-          if (hOff.warmup) await hOff.warmup();
-          for (const r of routes) off[r] = await capture(hOff, r);
-        } catch (err) {
-          console.error(`webjs elision --verify: could not boot the app (${err && err.message}).`);
-          process.exit(1);
-        } finally {
-          if (ORIG === undefined) delete process.env.WEBJS_ELIDE;
-          else process.env.WEBJS_ELIDE = ORIG;
-        }
-
-        const unrenderable = [], nondeterministic = [], diverged = [];
-        /** @type {Set<string>} modules the OFF side preloads and the ON side does not */
-        const dropped = new Set();
-        let compared = 0;
-        for (const r of routes) {
-          if (onA[r].status >= 400) { unrenderable.push(`${r} (${onA[r].status})`); continue; }
-          if (maskJsSet(onA[r].html) !== maskJsSet(onB[r].html)) { nondeterministic.push(r); continue; }
-          compared++;
-          // What elision removed on this route. A pass over a corpus where this
-          // stays empty is TRUE but trivially so, and the author needs to see
-          // that rather than read it as proof elision was exercised.
-          const onSet = preloadSet(onA[r].html);
-          for (const u of preloadSet(off[r].html)) if (!onSet.has(u)) dropped.add(u);
-          const a = maskJsSet(onA[r].html);
-          const b = maskJsSet(off[r].html);
-          if (onA[r].status !== off[r].status) {
-            diverged.push({ route: r, kind: 'status', a: String(onA[r].status), b: String(off[r].status), at: 0 });
-            continue;
-          }
-          if (a !== b) {
-            let i = 0;
-            while (i < a.length && i < b.length && a[i] === b[i]) i++;
-            diverged.push({
-              route: r, kind: 'body', at: i,
-              a: a.slice(Math.max(0, i - 40), i + 40),
-              b: b.slice(Math.max(0, i - 40), i + 40),
-            });
-          }
-        }
-
-        for (const d of diverged) {
-          console.error(
-            d.kind === 'status'
-              ? `FAIL ${d.route}: status differs with elision on vs off (on=${d.a}, off=${d.b})`
-              : `FAIL ${d.route}: elision changed observable output near offset ${d.at}\n` +
-                `  ON : ...${JSON.stringify(d.a)}\n  OFF: ...${JSON.stringify(d.b)}`,
-          );
-        }
-        const badRequired = unrenderable.filter((u) => required.has(u.split(' ')[0]));
-        for (const u of badRequired) console.error(`FAIL ${u}: a --routes path must render`);
-
-        const skips = [
-          dynamic.length ? `${dynamic.length} skipped (dynamic: ${dynamic.join(', ')})` : '0 skipped (dynamic)',
-          `${nondeterministic.length} skipped (nondeterministic${nondeterministic.length ? ': ' + nondeterministic.join(', ') : ''})`,
-        ];
-        if (unrenderable.length) skips.push(`${unrenderable.length} skipped (did not render: ${unrenderable.join(', ')})`);
-
-        if (diverged.length || badRequired.length) {
-          console.error(`\nwebjs elision --verify: ${diverged.length} route(s) diverged out of ${compared} compared.`);
-          process.exit(1);
-        }
-        if (compared === 0) {
-          // A vacuous pass is a failure, the same posture scripts/run-bun-tests.js
-          // takes for a run that executed zero tests.
-          console.error(
-            `webjs elision --verify: nothing was compared (${skips.join(', ')}).\n` +
-            'Pass --routes /a,/b to name renderable paths, or add a static page route.',
-          );
-          process.exit(1);
-        }
-        console.log(
-          `webjs elision --verify: ${compared} route(s) identical with elision on vs off, ${skips.join(', ')}.\n` +
-          (dropped.size
-            ? `Elision dropped ${dropped.size} module(s) across that corpus, so the comparison was a real one.`
-            : 'Elision dropped NO modules across that corpus: nothing on these routes was elidable, so '
-              + 'there was nothing for elision to change. The comparison holds, it just had no work to '
-              + 'do. Run `WEBJS_ELIDE=1 webjs elision` to see why every module here ships (the same '
-              + 'override this run used, so the verdict matches even in an app that opts out).'),
-        );
-        console.log(VERIFY_CAVEAT);
-        break;
-      }
-
-      const { analyzeAppElision } = await import('@webjsdev/server');
-      const report = await analyzeAppElision(appDir);
-
-      // --json: the machine contract, identical to the MCP `list_elision` shape.
-      if (rest.includes('--json')) {
-        console.log(JSON.stringify(report));
-        break;
-      }
-
-      if (!report.analysed) {
-        const why = {
-          'no-app': 'no app/ directory here, so there is nothing to analyse',
-          'elide-off': 'elision is disabled (webjs.elide false, or WEBJS_ELIDE), so every module ships',
-          unanalysable: 'the app could not be analysed (`webjs check` and `webjs dev` name the real problem)',
-        }[report.skipped] || 'nothing was analysed';
-        console.log(`webjs elision: ${why}.`);
-        break;
-      }
-
-      const s = report.summary;
-      console.log(
-        `webjs elision: ${s.components} component module(s), ${s.elided} elided, ${s.shipped} shipped. ` +
-        `${s.routeModules} route module(s): ${s.inert} inert, ${s.importOnly} import-only, ${s.shippedWhole} ship whole.\n`,
-      );
-
-      const elided = report.components.filter((c) => c.verdict === 'elided');
-      const shipped = report.components.filter((c) => c.verdict === 'shipped');
-      // Column width, capped so one outlier does not push every other row off
-      // the terminal. An over-long cell overflows its own row rather than
-      // widening the table. The FILE column gets the generous cap because a
-      // module path is what a reader scans by; the tag column gets the tight
-      // one because a file registering five tags is the rare case.
-      const pad = (rows, col, cap) => Math.min(cap, Math.max(0, ...rows.map((r) => r[col].length)));
-      const FILE_W = 58, TAG_W = 30;
-
-      if (elided.length) {
-        console.log('Elided components (the browser never downloads these)');
-        const rows = elided.map((c) => [c.file, c.tags.join(', ')]);
-        const w = pad(rows, 0, FILE_W);
-        for (const [file, tags] of rows) console.log(`  ${file.padEnd(w)}  ${tags}`.trimEnd());
-        console.log();
-      }
-      if (shipped.length) {
-        console.log('Shipped components (and the evidence that forced each one)');
-        const rows = shipped.map((c) => [c.file, c.tags.join(', '), `${c.evidence || 'unknown'}: ${c.reason || 'no evidence recorded'}`]);
-        const w0 = pad(rows, 0, FILE_W), w1 = pad(rows, 1, TAG_W);
-        for (const [file, tags, why] of rows) console.log(`  ${file.padEnd(w0)}  ${tags.padEnd(w1)}  ${why}`.trimEnd());
-        console.log();
-      }
-      if (report.routeModules.length) {
-        console.log('Route modules');
-        const rows = report.routeModules.map((r) => [
-          r.verdict, r.file,
-          r.verdict === 'import-only' ? `emits ${r.emits.join(', ') || '(nothing)'}`
-            : r.verdict === 'shipped' ? (r.blocker ? `blocked by ${r.blocker}, which ${r.reason}` : `it ${r.reason}`)
-            : '',
-        ]);
-        const w0 = pad(rows, 0, 12), w1 = pad(rows, 1, FILE_W);
-        for (const [verdict, file, note] of rows) {
-          console.log(`  ${verdict.padEnd(w0)}  ${file.padEnd(w1)}${note ? '  ' + note : ''}`.trimEnd());
-        }
-        console.log();
-      }
-      if (report.orphans.length) {
-        console.log('Orphan components (no elision verdict; `static interactive = true` cannot rescue these)');
-        for (const o of report.orphans) {
-          console.log(`  ${o.className} in ${o.file} is never registered with a literal tag`);
-        }
-        console.log('  Either there is no registration call at all, or the tag is computed. The scanner matches');
-        console.log('  only a literal tag, so either way the module gets no verdict, no registry entry, and no');
-        console.log('  preload hint. With no registration call the element never upgrades at all; with a computed');
-        console.log('  tag it upgrades only while its module still reaches the browser through a shipping importer.');
-        console.log('  Fix: register it with a literal tag, Class.register(\'my-tag\'), or delete the class.');
-        console.log();
-      }
-      if (!report.components.length && !report.routeModules.length) {
-        console.log('  Nothing to report. Add a component or a page under app/.');
-      }
-      break;
-    }
     case 'types': {
       // Generate `.webjs/routes.d.ts` from the app's `app/` routes (#258),
       // narrowing the @webjsdev/core `Route` href union + per-route `params`.
@@ -1719,18 +1463,17 @@ async function main() {
         console.error(`Error: unknown template '${template}'.
 
 Only two scaffolds exist:
-  full-stack   (default): pages + components + API + Drizzle/SQLite, plus a
-                browsable feature gallery. Auth is one of the gallery cards
-                (login + session + a protected route), so a full-stack app
-                already carries a real auth baseline. Pick this for any app
+  full-stack   (default): pages + components + API + Drizzle/SQLite. Pick
+                this for any app
                 the user describes in product terms (todo, blog, dashboard,
                 marketplace, social feed, a SaaS with accounts, …).
   api          backend-only: route handlers + modules + Drizzle/SQLite, no
                 pages/SSR. Pick this only if the user explicitly asks for an
                 HTTP/JSON API with no UI.
 
-The scaffold is a starting point. Replace the example layout/page/
-components/schema with the actual app the user requested. Use Drizzle +
+The scaffold is a starting point. Delete the example module
+(modules/users/, its test and whatever uses it) and replace the example page
+and schema with the actual app the user requested. Use Drizzle +
 SQLite for persistence (already wired up). Never store app data in JSON
 files.
 
@@ -2063,18 +1806,33 @@ Full docs: https://webjs.dev/docs`);
       // runs for its `export` arg, so a Bash-only agent (no MCP) checks a
       // contract for the price of the declaration instead of the whole file.
       // Read-only: it reads the resolved package roots and loads no module.
-      const name = rest.find((a) => !a.startsWith('--'));
       const pkgAt = rest.indexOf('--pkg');
       const pkg = pkgAt >= 0 ? rest[pkgAt + 1] : undefined;
-      if (!name) {
-        console.error('usage: webjs source <Export> [--pkg core|server|cli|ui|intellisense]');
-        process.exit(1);
-      }
-      const { lookupExport, resolveFrameworkRoots } = await import('@webjsdev/mcp');
-      const { existsSync, readdirSync } = await import('node:fs');
+      // The export name is the first argument that is neither a flag nor the
+      // value `--pkg` takes.
+      const name = rest.find((a, i) => !a.startsWith('--') && !(pkgAt >= 0 && i === pkgAt + 1));
+      const { lookupExport, resolveFrameworkRoots, listDir, listSources, featureCatalog } = await import('@webjsdev/mcp');
+      const { existsSync } = await import('node:fs');
       const { readFile } = await import('node:fs/promises');
       const roots = resolveFrameworkRoots(process.cwd(), { exists: existsSync });
-      const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+      const readdir = listDir;
+      if (!name) {
+        // No name: with --pkg, that package's entry points (as the MCP tool
+        // answers { package }); without, the feature catalogue, so an agent
+        // that does not know a name yet finds it in one call (#1686).
+        if (!pkg) { console.log(featureCatalog()); break; }
+        // A package that is not installed is a miss, as a name no package
+        // exports is: the message on stderr, exit 1.
+        if (!roots.some((r) => r.pkg === pkg)) {
+          console.error(listSources({ roots, readdir }, pkg));
+          process.exit(1);
+        }
+        // The next step a shell can take (the MCP tool offers its own modes).
+        console.log(listSources({ roots, readdir }, pkg, {
+          readHint: `Open a file under node_modules/@webjsdev/${pkg}/, or print one export with \`npx webjs source <Export>\`.`,
+        }));
+        break;
+      }
       const out = await lookupExport({ roots, readFile, readdir }, name, pkg);
       console.log(out);
       if (!/^@webjsdev\//m.test(out)) process.exit(1);
@@ -2091,8 +1849,45 @@ Full docs: https://webjs.dev/docs`);
       const timeout = Number(flag(rest, '--timeout')) || 30;
       let basePath = '';
       try { basePath = (await readAppBasePath(process.cwd())) || ''; } catch { /* root mount */ }
+      // An explicit --port or PORT wins; otherwise the port a running
+      // `webjs dev` for this app recorded, so a server started on another
+      // port is found without repeating it (#1686).
+      const explicitPort = flag(rest, '--port') !== undefined || !!process.env.PORT;
+      const port = (!explicitPort && recordedDevPort(process.cwd())) || resolvePort(flag(rest, '--port'));
+      // With no dev server answering on the port, boot the app in-process
+      // instead of retrying for the whole timeout: the brief tells agents to
+      // run `webjs status` after every edit, whether or not a server is up.
+      let boot = rest.includes('--boot');
+      if (!boot) {
+        try {
+          await fetch(`http://localhost:${port}${basePath}/__webjs/dev/status`, { signal: AbortSignal.timeout(1500) });
+        } catch {
+          boot = true;
+          if (!rest.includes('--json')) console.error(`webjs status: no dev server on port ${port}, so booting the app in-process instead.`);
+        }
+      }
+      if (boot) {
+        // No dev server: boot the app in-process with the dev handler and
+        // probe every parameter-free route (or the given paths).
+        const { runStatusBoot } = await import('../lib/status.js');
+        const { createRequestHandler, buildRouteTable } = await import('@webjsdev/server');
+        const { projectRoutes } = await import('@webjsdev/mcp/routes-report');
+        const { extractRouteMethods } = await import('@webjsdev/mcp');
+        const { readFile } = await import('node:fs/promises');
+        const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+        const code = await runStatusBoot({
+          appDir: process.cwd(),
+          paths,
+          basePath,
+          json: rest.includes('--json'),
+          timeoutMs: timeout * 1000,
+          createHandler: (appDir) => createRequestHandler({ appDir, dev: true, logger: quiet }),
+          listRoutes: async (appDir) => projectRoutes(await buildRouteTable(appDir), { appDir, readFile, extractRouteMethods }),
+        });
+        process.exit(code);
+      }
       const code = await runStatus({
-        port: resolvePort(flag(rest, '--port')),
+        port,
         paths,
         basePath,
         json: rest.includes('--json'),

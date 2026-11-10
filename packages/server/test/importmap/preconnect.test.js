@@ -105,8 +105,8 @@ function makeApp({ pageMeta = '', pin = null } = {}) {
 }
 
 /**
- * Write an INTERACTIVE component (a `@click` handler, so the elision analyser
- * keeps it) that imports the bare `dayjs` specifier, so the committed pin's
+ * Write a component (every component ships, #1686) that imports the bare
+ * `dayjs` specifier, so the committed pin's
  * cross-origin dayjs entry stays reachable in the pruned vendor map and the
  * auto vendor preconnect fires.
  */
@@ -171,14 +171,13 @@ test('auto vendor preconnect: an unpinned cross-origin app emits ONE preconnect 
   // A committed pin with a cross-origin target is the deterministic stand-in
   // for "unpinned app that resolved vendors live from a cross-origin CDN":
   // both put a https:// target in the served vendor map, which is what drives
-  // the auto preconnect. The page imports the bare specifier so elision keeps
+  // the auto preconnect. A component imports the bare specifier, which keeps
   // it in the served map.
   const appDir = makeApp({
     pin: { imports: { dayjs: 'https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js' } },
   });
-  // An INTERACTIVE component (@click) that imports the bare dep, so it is not
-  // elided and dayjs stays reachable in the pruned vendor map. The page renders
-  // its tag.
+  // A component that imports the bare dep, so dayjs stays reachable in the
+  // pruned vendor map. The page renders its tag.
   writeVendorWidget(appDir);
   writeFileSync(
     join(appDir, 'app', 'page.js'),

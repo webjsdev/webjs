@@ -74,15 +74,43 @@ export type Route = _HasRoutes extends true
   : string;
 
 /**
+ * The params a route key's own text declares, read without a generated
+ * `RouteParamMap`: `[x]` is a `string`, `[...x]` a `string[]` (as in Next.js)
+ * and `[[...x]]` an optional `string[]`. Segments are read left to right from
+ * the first `[`, so every one is kept; the text up to the first `]` of
+ * `[[...x]]` is `[...x`, which is how the optional form is told apart.
+ */
+type InferredParams<K extends string> =
+  K extends `${string}[${infer Seg}]${infer Rest}`
+    ? Seg extends `[...${infer N}`
+      ? { [P in N]?: string[] } & InferredParams<Rest extends `]${infer After}` ? After : Rest>
+      : Seg extends `...${infer N}`
+        ? { [P in N]: string[] } & InferredParams<Rest>
+        : { [P in Seg]: string } & InferredParams<Rest>
+    : {};
+
+/**
+ * The params for a route key with no generated entry: what its text declares,
+ * or, for a static route and for the wide `string` key, the runtime default
+ * `Record<string, string>`.
+ */
+type FallbackParams<R extends string> = string extends R
+  ? Record<string, string>
+  : keyof InferredParams<R> extends never
+    ? Record<string, string>
+    : InferredParams<R>;
+
+/**
  * The params object for a route key. A generated dynamic route resolves to
  * its `RouteParamMap` entry (`{ slug: string }`, `{ rest: string[] }`,
- * `{ slug?: string[] }`); anything else (a static route, or any route in an
- * un-generated app) resolves to `Record<string, string>`, the runtime
- * default the SSR pipeline produces.
+ * `{ slug?: string[] }`). Without one (an app that never ran `webjs types`),
+ * a dynamic route key still yields the same shape, read from the key itself,
+ * and a static route resolves to `Record<string, string>`, the runtime default
+ * the SSR pipeline produces.
  */
 export type RouteParams<R extends string> = R extends keyof RouteParamMap
   ? RouteParamMap[R]
-  : Record<string, string>;
+  : FallbackParams<R>;
 
 /**
  * A value that is BOTH synchronously usable as `T` and `await`-able to `T`
@@ -97,11 +125,9 @@ export type Awaitable<T> = T & PromiseLike<T>;
  * packages/server/src/ssr.js builds: `{ params, searchParams, url,
  * actionData }`.
  *
- * `searchParams` is typed `Record<string, string | string[]>` to match the
- * established page-context convention, even though the runtime builds it with
- * `Object.fromEntries(url.searchParams.entries())` (so a repeated key is
- * last-wins `string`, never an array). The wider type keeps a future
- * multi-value reader source-compatible.
+ * `searchParams` is `Record<string, string | string[]>`, as in Next.js: a key
+ * that repeats in the query (`?tag=a&tag=b`) is an array of every value, in
+ * order, and any other key is its string.
  *
  * `params` / `searchParams` are `Awaitable<T>` (#848): synchronously readable
  * (`params.id`) AND `await`-able (`const { id } = await params`) for Next
@@ -109,13 +135,42 @@ export type Awaitable<T> = T & PromiseLike<T>;
  * `then` (see packages/server/src/thenable-params.js), so a spread / JSON /
  * `Object.keys` sees only the data keys.
  */
-export interface PageProps<R extends string = string> {
+/**
+ * What a form action hands the page, by default: a failure result re-rendered
+ * (`{ success: false, error, fieldErrors }` is the usual shape) with the
+ * submitted text fields on `values`, or a success result carried across the
+ * redirect (`{ success: true, data }`). The common keys are typed; anything
+ * else the action returned reads as `any`, so `actionData?.data.manageKey`
+ * compiles without a cast, the way an untyped `useActionState` state does in
+ * Next. Name the exact shape with `PageProps`'s second type parameter,
+ * `PageProps<'/route', Awaited<ReturnType<typeof myAction>>>`, for full typing.
+ */
+export interface FormActionData {
+  success?: boolean;
+  error?: string;
   /**
-   * Path params. A generated dynamic route narrows this to its exact shape
-   * (`{ slug: string }`); a static or un-generated route is
-   * `Record<string, string>`. Sync-readable and `await`-able (#848).
+   * Per-field messages. Typed loosely, as `data` is: the page cannot see the
+   * action's return type, and actions return a `Record<string, string>` as
+   * often as a validator's `Record<string, string[]>`, so either assigns
+   * without a cast.
    */
-  params: Awaitable<R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fieldErrors?: Record<string, any>;
+  values?: Record<string, string>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+export interface PageProps<R extends string = string, A = FormActionData> {
+  /**
+   * Path params, narrowed to the route's shape (`{ slug: string }`,
+   * `{ rest: string[] }`) from the generated map or, without one, from the
+   * route key itself; a static route is `Record<string, string>`.
+   * Sync-readable and `await`-able (#848).
+   */
+  params: Awaitable<RouteParams<R>>;
   /** Query string, as an object. Repeated keys are last-wins at runtime. Sync-readable and `await`-able (#848). */
   searchParams: Awaitable<Record<string, string | string[]>>;
   /** The full request URL string. */
@@ -125,9 +180,11 @@ export interface PageProps<R extends string = string> {
    * (#244). `undefined` on a normal GET render. Read `actionData.fieldErrors`
    * / `actionData.values` to surface validation errors and repopulate inputs.
    * On a failure `values` carries every submitted text field, with the action's
-   * own `values` on top (#1581).
+   * own `values` on top (#1581). Typed {@link FormActionData} by default; pass
+   * the action's result type as the second parameter,
+   * `PageProps<'/route', MyResult>`, to type it exactly.
    */
-  actionData?: unknown;
+  actionData?: A;
 }
 
 /**
@@ -135,7 +192,7 @@ export interface PageProps<R extends string = string> {
  * the rendered `children`. Mirrors the `{ children, params, searchParams, url
  * }` object packages/server/src/ssr.js passes a layout.
  */
-export interface LayoutProps<R extends string = string> extends PageProps<R> {
+export interface LayoutProps<R extends string = string, A = FormActionData> extends PageProps<R, A> {
   /** The nested page / inner-layout content this layout must embed. */
   children: TemplateResult;
 }
@@ -149,5 +206,5 @@ export interface LayoutProps<R extends string = string> extends PageProps<R> {
  */
 export interface RouteHandlerContext<R extends string = string> {
   /** Sync-readable and `await`-able (#848), same as `PageProps['params']`. */
-  params: Awaitable<R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>>;
+  params: Awaitable<RouteParams<R>>;
 }

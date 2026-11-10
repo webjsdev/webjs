@@ -17,6 +17,7 @@ import {
   cors,
   cache,
   createAuth,
+  Credentials,
   rateLimit,
   sitemap,
   sitemapIndex,
@@ -43,7 +44,7 @@ import {
   signedUrl,
   verifySignedUrl,
 } from '@webjsdev/server';
-import type { FileStore } from '@webjsdev/server';
+import type { FileStore, MiddlewareRequest, FormInput } from '@webjsdev/server';
 import { testRequest } from '@webjsdev/server/testing';
 import { checkConventions } from '@webjsdev/server/check';
 
@@ -86,13 +87,43 @@ async function invalidate() {
   await revalidateTag('post:5');
 }
 
+// A middleware's request carries Next's request.cookies.
+function guard(request: MiddlewareRequest) {
+  return request.cookies.get('session')?.value;
+}
+void guard;
+// @ts-expect-error the platform Request alone has no cookies.
+(new Request('http://x') as Request).cookies;
+
+// A stored file's body is a web stream, so a route serves it with no cast.
+async function serveStored(key: string) {
+  const file = await getFileStore().get(key);
+  return file ? new Response(file.body, { headers: { 'content-type': file.contentType } }) : null;
+}
+void serveStored;
+
 // Auth factory.
 const authInst = createAuth({ secret: 's', providers: [] });
+// Auth.js's spellings: the env value as is (string | undefined, what
+// process.env.AUTH_SECRET is typed), or no secret.
+declare const envSecret: string | undefined;
+void createAuth({ secret: envSecret, providers: [] });
+void createAuth({ providers: [] });
+// The credentials provider takes Auth.js's authorize contract.
+Credentials({ authorize: async (creds) => (creds.email ? { id: '1' } : null) });
+// Annotating the submitted fields' shape, as in Auth.js, compiles too.
+Credentials({
+  authorize: async (creds: { email: string; password: string }) => (creds.password ? { id: '1', email: creds.email } : null),
+});
+// @ts-expect-error a credentials provider needs an authorize function.
+Credentials({});
 
 // Session class.
 function useSession(s: Session) {
   const v = s.get<string>('userId');
   s.set('userId', 'x');
+  // After a login, rotate the id to prevent session fixation.
+  s.regenerateId(true);
   void v;
 }
 
@@ -162,3 +193,14 @@ void check;
 void sameStore;
 void verified;
 void useFileStore;
+
+// A form-bound action's input: FormData methods and typed property reads.
+async function createTask(input: FormInput<{ title: string; tags: string[] }>) {
+  const title: string = input.title.trim();
+  const tags: string[] = input.tags;
+  const raw = input.get('title');
+  // @ts-expect-error a field the shape does not declare
+  void input.titel;
+  return { title, tags, raw, isFormData: input instanceof FormData };
+}
+void createTask;

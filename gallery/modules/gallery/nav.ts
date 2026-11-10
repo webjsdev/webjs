@@ -2,16 +2,12 @@
  * The gallery's demo index, ONE source of truth for both the home cards and the
  * left sidebar (so they can never drift). A browser-safe data module (no server
  * imports, no client globals): the home flattens the groups into its card grid,
- * and <gallery-nav> renders them grouped. gallery:clear removes this module.
+ * and <gallery-nav> renders them grouped.
  *
  * Blurbs are INTENT-shaped, not noun-shaped: each one opens on the job you would
  * be doing when you want this demo, because the index is the first thing an
  * agent reads and a card that only names the feature cannot be found by someone
- * who does not know the feature exists. The skill's cheat sheet
- * (.agents/skills/webjs/SKILL.md, "Reach For The Right Primitive") carries the
- * same set keyed the same way, and the repo's
- * test/repo-health/skill-gallery-intent-parity.test.mjs fails if the two fall
- * out of step.
+ * who does not know the feature exists.
  */
 export interface NavItem { href: string; title: string; blurb: string; }
 export interface NavGroup { label: string; items: NavItem[]; }
@@ -45,7 +41,7 @@ export const FEATURE_GROUPS: NavGroup[] = [
   {
     label: 'Client & streaming',
     items: [
-      { href: '/features/client-router', title: 'Client router', blurb: 'Navigate without a full page reload. Automatic the moment a page ships a component, with nothing to import or configure.' },
+      { href: '/features/client-router', title: 'Client router', blurb: 'Navigate without a full page reload. Automatic the moment a page renders a component, with nothing to import or configure.' },
       { href: '/features/view-transitions', title: 'View transitions', blurb: 'Cross-fade a navigation instead of snapping. One opt-in meta, plus a marker for elements that must survive the swap.' },
       { href: '/features/streaming', title: 'Streaming actions', blurb: 'Show tokens or progress as the server produces them. An action returning an async generator, consumed with for await.' },
       { href: '/features/stream', title: 'Stream updates', blurb: 'Change one element after a write, like appending a row or bumping a count, without redrawing the region around it.' },

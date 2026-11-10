@@ -49,9 +49,9 @@ const UNSERIALIZABLE_ACTION =
   `'use server';\n` +
   `export async function getThing(id) { return { id, boom: () => id }; }\n`;
 
-// A SHIPPING async component (a reactive prop plus an @click, so elision does
-// not drop it): its `async render()` awaits the action, which is what puts a
-// seed in the collector.
+// A SHIPPING async component (a reactive prop plus an @click): its
+// `async render()` awaits the action, which is what puts a seed in the
+// collector.
 const COMPONENT =
   `import { html, WebComponent } from ${JSON.stringify(CORE_URL)};\n` +
   `import { getThing } from '../actions/things.server.js';\n` +

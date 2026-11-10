@@ -14,8 +14,8 @@
  *
  * Asserts, on whichever runtime executes it: a public asset resolves to
  * `?v=<sha256(bytes) prefix>` computed the same way, the hash tracks the bytes,
- * a fragment survives with the query ahead of it, the hash ignores the elision
- * verdict (core and `public/` are never elision-transformed), and every
+ * a fragment survives with the query ahead of it, the hash ignores the serve
+ * fingerprint (core and `public/` are never transformed at serve time), and every
  * non-public or traversal path is refused WITHOUT reading the file.
  */
 import assert from 'node:assert/strict';
@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
 
 import {
   setAssetRoots,
-  setElisionFingerprint,
+  setServeFingerprint,
   clearAssetHashCache,
   resolveAssetUrl,
 } from '../../packages/server/src/asset-hash.js';
@@ -48,38 +48,38 @@ clearAssetHashCache();
 // A mismatch would hand the two runtimes different urls for one file, so a
 // mixed-runtime fleet would thrash every client's immutable cache.
 const expected = createHash('sha256').update('body{color:red}').digest('hex').slice(0, 12);
-const url = resolveAssetUrl('/public/app.css');
-assert.equal(url, `/public/app.css?v=${expected}`, `${runtime}: hash must be sha256(bytes)[0:12]`);
+const url = resolveAssetUrl('/app.css');
+assert.equal(url, `/app.css?v=${expected}`, `${runtime}: hash must be sha256(bytes)[0:12]`);
 
 // 2. The hash tracks the bytes.
 writeFileSync(join(appDir, 'public', 'app.css'), 'body{color:blue}');
 clearAssetHashCache();
-assert.notEqual(resolveAssetUrl('/public/app.css'), url, `${runtime}: new bytes must yield a new url`);
+assert.notEqual(resolveAssetUrl('/app.css'), url, `${runtime}: new bytes must yield a new url`);
 
 // 3. A fragment survives, with the query ahead of it (string handling parity).
 writeFileSync(join(appDir, 'public', 'icons.svg'), '<svg/>');
 clearAssetHashCache();
 assert.match(
-  resolveAssetUrl('/public/icons.svg#logo'),
-  /^\/public\/icons\.svg\?v=[0-9a-f]{12}#logo$/,
+  resolveAssetUrl('/icons.svg#logo'),
+  /^\/icons\.svg\?v=[0-9a-f]{12}#logo$/,
   `${runtime}: fragment must survive with the query before it`,
 );
 
-// 4. The elision verdict must not reach a public asset's hash (path
+// 4. The serve fingerprint must not reach a public asset's hash (path
 // containment comparisons use `sep`, which is worth pinning per runtime).
 const seen = new Set();
-for (const fp of ['', 'verdict-a', 'verdict-b']) {
-  setElisionFingerprint(fp);
+for (const fp of ['', 'lazy:a', 'lazy:b']) {
+  setServeFingerprint(fp);
   clearAssetHashCache();
-  seen.add(resolveAssetUrl('/public/app.css'));
+  seen.add(resolveAssetUrl('/app.css'));
 }
-setElisionFingerprint('');
+setServeFingerprint('');
 clearAssetHashCache();
 assert.equal(seen.size, 1, `${runtime}: a public url must depend on bytes alone`);
 
 // 5. The security gate holds. These must be refused by the gate, never read,
 // so a private file's existence and bytes stay undisclosed.
-for (const p of ['/.env', '/public/../.env', '/public/%2E%2E/.env', '/etc/passwd']) {
+for (const p of ['/.env', '/../.env', '/%2E%2E/.env', '/etc/passwd']) {
   assert.equal(resolveAssetUrl(p), p, `${runtime}: ${p} must be refused unchanged`);
 }
 

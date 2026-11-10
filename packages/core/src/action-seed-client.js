@@ -165,7 +165,7 @@ export function scanSeeds(root, opts) {
 
   // The live document can still be holding the OUTGOING page's block, because
   // the initial scan is lazy (it runs on the first `takeSeed`) and a page whose
-  // async components all elided never triggers it, while the block sits after
+  // async components are all server-only never triggers it, while the block sits after
   // the body content outside every boundary range, so no swap removes it either.
   //
   // Strip it WITHOUT ingesting. Those values belong to a page that is being
@@ -173,7 +173,7 @@ export function scanSeeds(root, opts) {
   // them for the lazy scan to ingest LATER is what let a departed page's value
   // win a key under last-write-wins and contradict the paint. Ingesting them
   // HERE would order them correctly but keep them forever, because the very
-  // reason the block went unconsumed is that its components elided, so nothing
+  // reason the block went unconsumed is that its components never ship, so nothing
   // will ever call `takeSeed` for those keys and nothing but a hit deletes one.
   // That would grow the store by a whole page payload per navigation, in
   // production, and inflate the "still unconsumed" figure in the dev line with
@@ -183,9 +183,9 @@ export function scanSeeds(root, opts) {
   if (incomingPage) {
     drainCarriers(live, true);
     // And evict what the outgoing page ALREADY ingested. Stripping the DOM
-    // carrier is not enough: a page carrying an elided component alongside a
+    // carrier is not enough: a page carrying a server-only component alongside a
     // shipping one has its WHOLE block ingested by the lazy scan the shipping
-    // one triggers, so the elided component's keys are in the store with no
+    // one triggers, so the server-only component's keys are in the store with no
     // carrier left to strip and nothing that will ever consume them. Navigate to
     // a page that emits no seed for such a key (a streamed page emits no block
     // at all) and a component calling the same action with the same arguments
@@ -424,7 +424,7 @@ export function takeSeed(hash, fnName, argsKey) {
  * `replaced` are what `scanSeeds` merged; `hits` and `misses` are what the
  * generated RPC stubs asked for; `pending` is what is still in the store
  * unconsumed (a non-zero `pending` at rest usually means the seeding component
- * elided, so nothing on the client was ever going to call it).
+ * is server-only, so nothing on the client was ever going to call it).
  * `keyMisses` is the provable subset of `misses`: a call for an action this page
  * DID seed under other arguments, which is the only miss the client can call a
  * defect (see `seedFns`).

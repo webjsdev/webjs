@@ -17,8 +17,9 @@
 // Progressive enhancement: with JS off, each filter link is a normal full-page
 // navigation to ?status=..., which re-renders the whole page with the same
 // filtered list. The frame is an enhancement on top of a working page, never a
-// requirement. The frame element itself upgrades because the root layout ships a
-// component (the theme toggle), so @webjsdev/core and the router load app-wide.
+// requirement. The frame element itself upgrades because the root layout renders
+// a component (the theme toggle), which the browser loads, so @webjsdev/core and
+// the router load app-wide.
 import { html } from '@webjsdev/core';
 import { cardClass } from '#modules/gallery/ui/card.ts';
 import { buttonClass } from '#modules/gallery/ui/button.ts';

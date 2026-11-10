@@ -23,6 +23,7 @@ test('listPosts returns an array', async () =&gt; {
   const posts = await listPosts();
   assert.ok(Array.isArray(posts));
 });</code-block>
+    <p><strong>Server tests get their own database.</strong> For a SQLite app, <code>webjs test</code> creates a temporary database, applies the app's migrations to it with <code>webjs db migrate</code> (or, before the first migration exists, pushes the schema with <code>webjs db push</code>, as Rails loads its schema file), and runs the server tests with <code>DATABASE_URL</code> pointing there, the way Rails prepares a test database. So a test can import the app's <code>db</code> and write to it without touching <code>db/dev.db</code>, and every run starts empty (insert what a test needs; the seed file is not applied). A <code>DATABASE_URL</code> set in the shell is used as is (CI, or a Postgres test database), and <code>WEBJS_TEST_DB=0</code> turns it off.</p>
 
     <h2>Renderer Tests</h2>
     <p>Test <code>renderToString</code> for SSR output. Import it from <code>@webjsdev/core/server</code>, not the root, so your test stays explicit about which side it runs on:</p>
@@ -114,6 +115,10 @@ assert.equal(res.status, 200);
 assert.match(await res.text(), /About/);</code-block>
     <p>A bare path (<code>/about</code>) is prefixed with a dummy origin (the pipeline only reads <code>pathname</code> + <code>search</code>). A full URL string or a pre-built <code>Request</code> works too. The optional third arg is a standard <code>RequestInit</code> (method, headers, body).</p>
 
+    <h3>submitForm: the no-JS write path</h3>
+    <p>A form that binds an action (<code>&lt;form action=\${myAction}&gt;</code>) carries a hidden <code>__webjs_action</code> field naming the action, so a hand-written <code>POST</code> without it is answered <strong>405</strong>. <code>submitForm(app.handle, '/signup', fields)</code> renders the page, reuses the identity the server put there, and posts it back, exactly as a browser with JS off does: a success answers 303, a failure re-renders the same page at 422 with the result on <code>actionData</code>. Options: <code>cookies</code>, <code>match</code> or <code>index</code> (pick one of several forms; without <code>match</code> it chooses among the forms bound to an action, so a layout's plain logout or search form is skipped, and when several bound forms remain it posts the one whose inputs hold every submitted field, refusing with a list of the forms when the fields fit none or more than one), <code>submitPath</code>, and <code>headers</code>. A <code>File</code> or <code>Blob</code> field value posts the form multipart, as a file input does, so an upload action can be tested the same way. A test may also import the action module at the top of the file to call an action directly: the form on the page still binds to it, even though the module loaded before the handler existed.</p>
+    <p>For a browser test that drives the app in a real DOM, <code>createBrowserTestHandler(appDir)</code> from <code>@webjsdev/server/testing</code> exposes the same <code>handle()</code> pipeline to the WTR Chromium session.</p>
+
     <h3>The auth/session helpers</h3>
     <p>Server-action CSRF is an Origin / <code>Sec-Fetch-Site</code> check, so a test needs no CSRF setup: <code>invokeActionForTest</code> models a same-origin browser POST and passes the check automatically (and <code>rawActionRequest(app, file, fn, args, { crossOrigin: true })</code> models a cross-site request to assert the 403). <code>loginAndGetCookies(handle, { email, password })</code> drives the REAL credentials login through <code>handle()</code> (the <code>createAuth</code> route handler) and captures the genuine signed session <code>Set-Cookie</code>, so a follow-up request can hit a protected route as the logged-in user. <code>withSessionCookie(init, cookies)</code> merges those captured cookies onto a request init.</p>
     <code-block>// unauthenticated protected route is gated
@@ -134,10 +139,10 @@ const out = await invokeActionForTest(
     <p><strong>Prefer this over a direct import of the action.</strong> A direct import calls the function in-process and bypasses three production concerns the endpoint enforces:</p>
     <ul>
       <li><strong>the wire serializer</strong> (a <code>Date</code> / <code>Map</code> / <code>BigInt</code> arg or return is genuinely encoded and decoded, not passed by reference),</li>
-      <li><strong>CSRF</strong> (a missing token is a 403),</li>
+      <li><strong>CSRF</strong> (a cross-origin request is a 403),</li>
       <li><strong>prod error sanitization</strong> (a thrown error surfaces as a sanitized message-only payload, never the stack or extra error fields).</li>
     </ul>
-    <p>So <code>invokeActionForTest</code> catches a serializer / CSRF / error-sanitization regression a direct import cannot see. For the negative cases (assert a 403 on missing CSRF, or inspect a sanitized 500 body), <code>rawActionRequest(...)</code> returns the raw <code>Response</code> and never throws on a non-2xx. Pass <code>{ omitCsrf: true }</code> to deliberately drop the CSRF pair.</p>
+    <p>So <code>invokeActionForTest</code> catches a serializer / CSRF / error-sanitization regression a direct import cannot see. For the negative cases (assert a 403 on a cross-origin request, or inspect a sanitized 500 body), <code>rawActionRequest(...)</code> returns the raw <code>Response</code> and never throws on a non-2xx. Pass <code>{ crossOrigin: true }</code> to deliberately drop the CSRF pair.</p>
 
     <h2>API Route Tests</h2>
     <p>Drive route handlers through the same <code>handle()</code> entry (here via <code>testRequest</code>), or call them directly:</p>
@@ -188,7 +193,7 @@ test('WS echo works', async () =&gt; {
     <code-block># Run unit tests
 webjs test
 
-# Run unit + browser tests (WTR + Playwright)
+# Run only the browser tests (WTR + Playwright)
 webjs test --browser</code-block>
 
     <p>It discovers test files by feature folder, with the kind as a subfolder inside the feature only when that kind is present:</p>
@@ -197,7 +202,7 @@ webjs test --browser</code-block>
       <li><code>test/&lt;feature&gt;/browser/&lt;name&gt;.test.js</code>: browser tests (with the <code>--browser</code> flag)</li>
       <li><code>test/&lt;feature&gt;/e2e/&lt;name&gt;.test.{ts,mjs}</code>: e2e (opt in with <code>WEBJS_E2E=1</code>)</li>
     </ul>
-    <p>With no browser test files yet (a fresh app after <code>npm run gallery:clear</code>), <code>webjs test --browser</code> prints <code>no browser tests yet</code> and exits 0 instead of failing, so a missing layer never turns <code>npm run ci</code> red. Once one file matches the <code>files</code> globs in <code>web-test-runner.config.js</code>, the browser layer runs as usual.</p>
+    <p>With no browser test files yet (an app that removed the starter test), <code>webjs test --browser</code> prints <code>no browser tests yet</code> and exits 0 instead of failing, so a missing layer never turns <code>npm run ci</code> red. Once one file matches the <code>files</code> globs in <code>web-test-runner.config.js</code>, the browser layer runs as usual.</p>
 
     <h2>webjs ci command</h2>
     <p>One command for every layer. A scaffolded app declares its gate once, in <code>package.json</code> under <code>webjs.ci</code>, and <code>npm run ci</code> runs it with a timed result line per step, the Rails <code>bin/ci</code> model:</p>
@@ -257,7 +262,7 @@ webjs check
 
 # List the checks and their descriptions
 webjs check --rules</code-block>
-    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), reactive props use <code>declare</code> (broken reactivity), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, and erasable TypeScript only. They always run. Project conventions (layout, testing, styling) are guidance in the shipped skill (<code>.agents/skills/webjs/SKILL.md</code>) and <code>AGENTS.md</code>, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
+    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), a reactive prop is not also a plain class field (it clobbers the accessor), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, and erasable TypeScript only. They always run. Project conventions (layout, testing, styling) are guidance in <code>AGENTS.md</code> and these docs, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
 
     <h2>Recommended Test Structure</h2>
     <p>Feature folders are primary, and the test kind is a subfolder inside the feature only when that kind is present:</p>
@@ -274,7 +279,7 @@ webjs check --rules</code-block>
     e2e/hello.test.ts</code-block>
 
     <h2>AI Agent Testing Convention</h2>
-    <p>In a WebJs project, AI agents are expected to write tests automatically with every code change. The convention is defined in <code>AGENTS.md</code> and the shipped skill (<code>.agents/skills/webjs/SKILL.md</code>):</p>
+    <p>In a WebJs project, AI agents are expected to write tests automatically with every code change. For Claude Code the scaffold's tests hook warns when a source change is committed without one (set <code>WEBJS_TEST_GATE=block</code> to make it refuse). A good default for what each change needs:</p>
     <ul>
       <li><strong>New server action</strong> needs a unit test (round-trip it through <code>invokeActionForTest</code>).</li>
       <li><strong>New component</strong> needs a unit test (SSR rendering), plus a browser test via <code>ssrFixture()</code> when hydration / DOM / slots matter.</li>

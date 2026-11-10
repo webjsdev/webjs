@@ -55,7 +55,7 @@ function parseTagAttrs(tag) {
  * not tidiness. A scan that merely looks ahead for `rel=…stylesheet` anywhere in
  * the tag matches the string inside ANOTHER attribute's value, which flags the
  * two shapes this check most needs to leave alone: the canonical async-CSS
- * `<link rel="preload" as="style" href="/public/app.css" onload="this.rel='stylesheet'">`
+ * `<link rel="preload" as="style" href="/app.css" onload="this.rel='stylesheet'">`
  * (where the advised `asset()` fix would actively BREAK the preload, since the
  * versioned hint could then never match the unversioned request), and a
  * `data-rel="stylesheet"` sitting on a `rel="icon"`. Reading real attributes
@@ -65,9 +65,9 @@ function parseTagAttrs(tag) {
  *   - `rel` is a token list CONTAINING `stylesheet` (so `rel="preload"` with an
  *     onload swap, and `rel="icon"`, are both out).
  *   - `href` is QUOTED. An unquoted value is a template hole
- *     (`href=${asset('/public/app.css')}`), undecidable from source, and is
+ *     (`href=${asset('/app.css')}`), undecidable from source, and is
  *     exactly the shape the marked form uses.
- *   - the path is under `/public/` (after the app's `webjs.basePath` is
+ *   - the path names a file under `public/` (served at the url root, after the app's `webjs.basePath` is
  *     stripped, since under a sub-path deploy the author writes the prefix
  *     themselves and `resolveAssetUrl` strips it before its own `public/` gate).
  *   - `resolveAssetUrl` would actually fingerprint it. It returns a path
@@ -84,7 +84,7 @@ function parseTagAttrs(tag) {
  * @param {string} basePath  the app's normalized `webjs.basePath` (`''` at root)
  * @returns {string | null}
  */
-function unmarkedStylesheetHref(tag, basePath = '') {
+function unmarkedStylesheetHref(tag, basePath = '', appDir = '') {
   const attrs = parseTagAttrs(tag);
   const rel = attrs.get('rel');
   if (!rel || !rel.value) return null;
@@ -96,7 +96,7 @@ function unmarkedStylesheetHref(tag, basePath = '') {
   // Mirror `resolveAssetUrl`'s refusals IN ITS ORDER, so every flagged href is
   // one `asset()` can actually fingerprint. It strips the base path, cuts at
   // `?` / `#`, DECODES, and only then tests `..` and the `public/` prefix.
-  // Testing the raw value instead disagrees at both ends: `/public/%2e%2e/x`
+  // Testing the raw value instead disagrees at both ends: `/%2e%2e/x`
   // would be flagged although wrapping it changes nothing, and
   // `/%70ublic/app.css` would be skipped although `asset()` fingerprints it.
   let probe = url;
@@ -104,7 +104,9 @@ function unmarkedStylesheetHref(tag, basePath = '') {
   const cuts = [probe.indexOf('?'), probe.indexOf('#')].filter((i) => i !== -1);
   let decoded = probe.slice(0, cuts.length ? Math.min(...cuts) : probe.length);
   try { decoded = decodeURIComponent(decoded); } catch { /* keep raw */ }
-  if (decoded.includes('..') || !decoded.startsWith('/public/')) return null;
+  // Public files are served at the url root (`public/app.css` is `/app.css`),
+  // so only an href naming a real file under `public/` is one asset() hashes.
+  if (decoded.includes('..') || decoded.startsWith('/__webjs/')) return null;
   // A query is refused outright (an author query may carry meaning we do not
   // own, so `resolveAssetUrl` returns the url untouched); a `#fragment` is not,
   // since it is split off and preserved.
@@ -115,7 +117,7 @@ function unmarkedStylesheetHref(tag, basePath = '') {
 
 /**
  * ADVISORY (#1095): a route module hand-writes a `<link rel="stylesheet"
- * href="/public/…">` without `asset()`, so the url is un-versioned and a deploy
+ * href="/app.css">` without `asset()`, so the url is un-versioned and a deploy
  * cannot bust a CDN's copy of it.
  *
  * The failure this names was caught in production on webjs.dev: the edge served
@@ -170,7 +172,7 @@ export async function checkUnmarkedAssetLinks(appDir) {
     if (!/<link/i.test(src)) continue;
     LINK_TAG_RE.lastIndex = 0;
     for (const m of src.matchAll(LINK_TAG_RE)) {
-      const href = unmarkedStylesheetHref(m[0], basePath);
+      const href = unmarkedStylesheetHref(m[0], basePath, appDir);
       if (!href) continue;
       // A commented-out tag emits nothing, so advising on it is advice about
       // dead markup.
@@ -192,7 +194,7 @@ export async function checkUnmarkedAssetLinks(appDir) {
       findings.map((f) => `    ${rel(f.file)}:${f.line} href="${f.href}"`).join('\n'),
     fix:
       "Wrap the path in asset(): `import { asset } from '@webjsdev/core'` then "
-      + '`<link rel="stylesheet" href=${asset(\'/public/app.css\')}>`. It appends a content hash in prod '
+      + '`<link rel="stylesheet" href=${asset(\'/app.css\')}>`. It appends a content hash in prod '
       + '(the framework then serves that url immutable for a year) and is a no-op in dev and in the browser. '
       + 'Call it inside the render function, not at module scope.',
   };

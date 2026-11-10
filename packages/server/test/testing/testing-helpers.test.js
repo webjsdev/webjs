@@ -56,6 +56,11 @@ function actionApp() {
       `import { html } from ${HTML_URL};\n` +
       `import { roundtrip, boom } from '../modules/m/act.server.js';\n` +
       `export default function P() { return html\`<p>\${roundtrip}\${boom}</p>\`; }\n`,
+    // A page never ships (#1686), so the browser reaches the action's stub
+    // through a component that imports it; the scanner reads the source only.
+    'components/caller.js':
+      `import { WebComponent } from '@webjsdev/core';\nimport '../modules/m/act.server.js';\n` +
+      `class Caller extends WebComponent {}\nCaller.register('x-caller');\n`,
     'modules/m/act.server.js':
       `'use server';\n` +
       // Echo back a value that only survives if the wire serializer ran: a Date

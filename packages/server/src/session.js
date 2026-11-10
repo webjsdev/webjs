@@ -21,8 +21,9 @@
  */
 
 import { getStore } from './cache.js';
-import { markDynamicAccess } from './context.js';
+import { markDynamicAccess, getRequest } from './context.js';
 import { shared } from './process-shared.js';
+import { devSecret } from './dev-secret.js';
 
 // -- Web Crypto helpers ------------------------------------------------------
 // Same shape as auth.js. We duplicate here rather than share a module
@@ -104,10 +105,20 @@ export class Session {
     };
   }
 
-  /** @param {string} key @returns {unknown} */
+  /**
+   * A value, or a flash value, which reading consumes (Remix's semantics): the
+   * next save drops it, so a "shown once" message is shown once. It used to be
+   * kept and re-serialized on every save, so it never went away.
+   * @param {string} key @returns {unknown}
+   */
   get(key) {
     if (this.#destroyed) return undefined;
-    return this.#data.get(key) ?? this.#flash.get(key);
+    if (this.#data.has(key)) return this.#data.get(key);
+    if (!this.#flash.has(key)) return undefined;
+    const value = this.#flash.get(key);
+    this.#flash.delete(key);
+    this.#dirty = true;
+    return value;
   }
 
   /** @param {string} key @param {unknown} value */
@@ -132,7 +143,8 @@ export class Session {
   }
 
   /**
-   * Set a value that exists for one request only.
+   * Set a value that lasts until the next `get()` of it, as in Remix: flash it
+   * in an action, read it once on the page the redirect lands on.
    * @param {string} key @param {unknown} value
    */
   flash(key, value) {
@@ -316,8 +328,16 @@ const sessionMap = shared('session-map', () => new WeakMap());
  * }} [opts]
  */
 export function session(opts = {}) {
-  const secret = opts.secret || process.env.SESSION_SECRET;
-  if (!secret) throw new Error('session() requires secret option or SESSION_SECRET env var');
+  // In development and tests a missing secret falls back to a generated one
+  // kept in .webjs/dev-secret (dev-secret.js), so a fresh clone or worktree works.
+  const secret = opts.secret || process.env.SESSION_SECRET || devSecret('SESSION_SECRET');
+  if (!secret) {
+    throw new Error(
+      'session() needs a secret to sign its cookie: set SESSION_SECRET in .env (webjs create writes one; '
+      + 'generate another with node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))") '
+      + 'or pass session({ secret }). Only a development or test process (NODE_ENV=development or test) gets a generated one.',
+    );
+  }
 
   const storage = opts.storage || cookieSessionStorage();
   const cookieName = opts.cookieName || 'webjs.sid';
@@ -365,20 +385,22 @@ export function session(opts = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * Get the Session for the current request.
+ * Get the Session for the current request. With no argument it reads the
+ * request in scope, the way `cookies()` and `headers()` do, so a page, action
+ * or route handler calls `getSession()`; passing `getRequest()` works too.
  *
  * ```js
- * const s = getSession(req);
+ * const s = getSession();
  * s.get('userId');
  * s.set('userId', user.id);
  * s.flash('message', 'Saved!');
  * ```
  *
- * @param {Request} req
+ * @param {Request | null} [req]  defaults to the request in scope
  * @returns {Session}
  */
 export function getSession(req) {
-  const s = sessionMap.get(req);
+  const s = sessionMap.get(req ?? /** @type {Request} */ (getRequest()));
   if (!s) throw new Error('getSession() called outside of session middleware');
   // A session read is per-user, so mark the request dynamic so the server HTML
   // cache excludes it even when the page declared `revalidate` (#241).

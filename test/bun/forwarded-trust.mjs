@@ -72,7 +72,7 @@ try {
       `export const revalidate = 60;\n` +
       `export default ({ url }: { url: string }) => {\n` +
       `  const origin = new URL(url).origin;\n` +
-      `  return html\`<main>og \${origin}/public/og.png</main>\`;\n` +
+      `  return html\`<main>og \${origin}/og.png</main>\`;\n` +
       `}\n`,
   );
   // An action, so the CSRF host resolution (#1104) is exercised through the
@@ -108,14 +108,14 @@ try {
   const attackBody = await attack.text();
   assert.match(
     attackBody,
-    /https:\/\/evil\.example\/public\/og\.png/,
+    /https:\/\/evil\.example\/og\.png/,
     `the attacker gets their own origin back on ${runtime}: that response is theirs, and is not the bug`,
   );
 
   // The victim: no forwarded headers at all, so the origin comes from `Host`.
   const clean = await (await fetch(`${base}/`)).text();
   assert.doesNotMatch(clean, /evil\.example/, `the poisoned body is not served to a clean visitor on ${runtime}`);
-  assert.match(clean, new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/public/og\\.png`),
+  assert.match(clean, new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/og\\.png`),
     'the clean visitor gets the real origin');
 
   // And the cache is still a cache: a second clean request is a HIT, so the

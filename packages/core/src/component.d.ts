@@ -9,7 +9,7 @@
  * cost: nothing in this file ships to the browser.
  */
 
-import type { CSSResult } from './css.js';
+import type { CSSResultGroup, CSSResultOrNative } from './css.js';
 import type { TemplateResult } from './html.js';
 
 /** Any constructor the framework accepts as the `type:` field of a property. */
@@ -22,23 +22,41 @@ export type PropertyConstructor<T = unknown> =
   | (new (...args: any[]) => T)
   | ((v: any) => T);
 
-/** Runtime-level property declaration: one entry in `WebComponent({ … })`. */
+/** Runtime-level property declaration: one entry in `WebComponent({ … })` or in Lit's `static properties`. */
 export interface PropertyDeclaration<T = unknown> {
   /** Constructor used for string → value coercion when the attribute changes. */
   type?: PropertyConstructor<T>;
-  /** Write property changes back to the HTML attribute (kebab-cased). */
+  /** Write property changes back to the HTML attribute (the lowercased property name unless `attribute` names one). */
   reflect?: boolean;
   /** Internal-only: no attribute, no reflection, but still reactive. */
   state?: boolean;
-  /** Rename the attribute, or pass `false` to suppress it entirely. */
-  attribute?: string | false;
-  /** Custom attribute ⇄ property serialisation. Takes precedence over `type`. */
-  converter?: {
-    fromAttribute?: (value: string | null, type?: PropertyConstructor<T>) => T;
-    toAttribute?: (value: T, type?: PropertyConstructor<T>) => string | null;
-  };
+  /** Rename the attribute (a string), keep the default name (`true`), or suppress it (`false`). */
+  attribute?: string | boolean;
+  /**
+   * Custom attribute ⇄ property serialisation. Takes precedence over `type`.
+   * A bare function is the `fromAttribute` half (reflection then uses the
+   * default serialisation), as in Lit.
+   */
+  converter?:
+    | ((value: string | null, type?: PropertyConstructor<T>) => T)
+    | {
+        fromAttribute?: (value: string | null, type?: PropertyConstructor<T>) => T;
+        toAttribute?: (value: T, type?: PropertyConstructor<T>) => string | null;
+      };
+  /**
+   * Install no accessor: the class's own get/set stays and must call
+   * `this.requestUpdate(name, oldValue)` itself (Lit's `noAccessor`).
+   */
+  noAccessor?: boolean;
+  /**
+   * Lit's `useDefault`: the first value is the default. It is not reflected,
+   * and removing the attribute restores it instead of `null`.
+   */
+  useDefault?: boolean;
   /** Custom dirty check. Return `true` to schedule an update. */
   hasChanged?: (newValue: T, oldValue: T) => boolean;
+  /** Initial value, or a function called per instance for a fresh object / array. */
+  default?: T | (() => T);
 }
 
 /** Reactive controller protocol (Lit-compatible). */
@@ -50,11 +68,51 @@ export interface ReactiveController {
 }
 
 /**
+ * Lit's `ReactiveControllerHost`: what a controller may rely on from its host.
+ * Every `WebComponent` satisfies it, so a controller typed against it works
+ * with WebJs and Lit alike.
+ */
+export interface ReactiveControllerHost {
+  addController(controller: ReactiveController): void;
+  removeController(controller: ReactiveController): void;
+  requestUpdate(): void;
+  readonly updateComplete: Promise<boolean>;
+}
+
+/** Lit's `ComplexAttributeConverter`: the object form of a property `converter`. */
+export interface ComplexAttributeConverter<Type = unknown, TypeHint = unknown> {
+  fromAttribute?(value: string | null, type?: TypeHint): Type;
+  toAttribute?(value: Type, type?: TypeHint): unknown;
+}
+
+/** Lit's `PropertyDeclarations`: the shape of a `static properties` block. */
+export interface PropertyDeclarations {
+  readonly [key: string]: PropertyDeclaration | PropertyConstructor;
+}
+
+/**
+ * Lit's `PropertyValueMap<T>`: a `changedProperties` Map whose keys and old
+ * values are typed against the component (`PropertyValues<this>`).
+ */
+export interface PropertyValueMap<T> extends Map<PropertyKey, unknown> {
+  get<K extends keyof T>(k: K): T[K] | undefined;
+  set<K extends keyof T>(key: K, value: T[K]): this;
+  has<K extends keyof T>(k: K): boolean;
+  delete<K extends keyof T>(k: K): boolean;
+}
+
+/**
+ * Lit's `PropertyValues`: the `changedProperties` argument of the lifecycle
+ * hooks. `PropertyValues<this>` types its keys against the component.
+ */
+export type PropertyValues<T = any> = T extends object ? PropertyValueMap<T> : Map<PropertyKey, unknown>;
+
+/**
  * Base class for interactive web components.
  *
- * Declare reactive properties via the `extends WebComponent({ … })`
- * factory. It installs the reactive accessor AND types each field for
- * you (no `declare`, no `static properties`):
+ * Declare reactive properties in either of two equivalent ways. The
+ * `extends WebComponent({ … })` factory installs the reactive accessor AND
+ * types each field for you (no `declare` needed):
  *
  *     class StudentCard extends WebComponent({ student: prop<Student>(Object) }) {
  *       render() { return html`<p>${this.student.name}</p>`; }
@@ -64,10 +122,18 @@ export interface ReactiveController {
  * A bare constructor type covers the common case (`WebComponent({ count:
  * Number })` gives `this.count: number`); use the `prop()` helper for
  * options (`prop(Number, { reflect: true })`) or to narrow the type
- * (`prop<Student>(Object)`). Set defaults via the `default` option or in
- * the constructor, never a class-field initializer (it runs after super()
- * and clobbers the reactive accessor). A hand-written `static properties`
- * in a class body is no longer supported and throws at construction.
+ * (`prop<Student>(Object)`). Lit's own spelling works too, with an erasable
+ * `declare` for the type:
+ *
+ *     class Counter extends WebComponent {
+ *       static properties = { count: { type: Number, reflect: true } };
+ *       declare count: number;
+ *     }
+ *
+ * Props merge down the class chain as in Lit, so a subclass's own
+ * `static properties` adds to its parent's. Set defaults via the `default`
+ * option or in the constructor, never a class-field initializer (it runs
+ * after super() and clobbers the reactive accessor).
  *
  * See the Editor Setup doc for tooling that gives attribute/tag
  * intelligence inside `html\`…\`` templates.
@@ -91,7 +157,7 @@ interface WebComponentBase extends HTMLElement {
    * wires every signal the update cycle reads to a re-render automatically;
    * explicit `requestUpdate()` is rarely needed.
    */
-  requestUpdate(name?: string, oldValue?: unknown): void;
+  requestUpdate(name?: PropertyKey, oldValue?: unknown, options?: PropertyDeclaration): void;
   /** A Promise that resolves after the next render commit. */
   readonly updateComplete: Promise<boolean>;
   /** Override point for `updateComplete`. Default returns the internal promise. */
@@ -100,18 +166,40 @@ interface WebComponentBase extends HTMLElement {
   addController(controller: ReactiveController): void;
   /** Detach a reactive controller. */
   removeController(controller: ReactiveController): void;
-  /** Returns the template for this render. May be async. */
-  render(): TemplateResult | Promise<TemplateResult> | void;
+  /** Returns the template for this render. May be async. The default returns `noChange`. */
+  render(): unknown;
+  /**
+   * The node `render()` commits into: the element itself for light DOM, its
+   * shadow root for `static shadow = true`. Undefined until the element
+   * connects, and at SSR.
+   */
+  renderRoot: HTMLElement | ShadowRoot | DocumentFragment | undefined;
+  /** True once the first update has completed. */
+  readonly hasUpdated: boolean;
+  /** True while an update is queued or running. */
+  readonly isUpdatePending: boolean;
+  /**
+   * Create the render root, once per element. The default returns the element
+   * for light DOM, and for `static shadow = true` attaches the shadow root
+   * with `static shadowRootOptions` and adopts `static styles`.
+   */
+  createRenderRoot(): HTMLElement | ShadowRoot | DocumentFragment;
+  /** Called from the update microtask; override to change when an update runs. */
+  scheduleUpdate(): void | Promise<unknown>;
+  /** Run the pending update now, synchronously. No-op when nothing is pending. */
+  performUpdate(): void;
+  /** Called on connect, right before the first update is queued. */
+  enableUpdating(requestedUpdate: boolean): void;
   /** Decide whether to update. Default returns `true`. */
-  shouldUpdate(changedProperties: Map<string, unknown>): boolean;
+  shouldUpdate(changedProperties: PropertyValues): boolean;
   /** Pre-render hook. Safe to set properties; folds into current cycle. */
-  willUpdate(changedProperties: Map<string, unknown>): void;
+  willUpdate(changedProperties: PropertyValues): void;
   /** Render-and-commit step. Default calls `render()` and commits. */
-  update(changedProperties: Map<string, unknown>): void;
+  update(changedProperties: PropertyValues): void;
   /** Post-render hook. Runs after every commit. */
-  updated(changedProperties: Map<string, unknown>): void;
+  updated(changedProperties: PropertyValues): void;
   /** One-shot hook after the first render lands in the DOM. */
-  firstUpdated?(changedProperties: Map<string, unknown>): void;
+  firstUpdated?(changedProperties: PropertyValues): void;
   /** Optional render-error boundary inside the component. */
   renderError?(error: Error): TemplateResult | void;
   /**
@@ -137,6 +225,11 @@ export type Infer<C> =
   C extends BooleanConstructor ? boolean :
   C extends NumberConstructor ? number :
   C extends StringConstructor ? string :
+  // A bare Array / Object says nothing about the element type, so it is the
+  // open type an undeclared Lit property has, not unknown: a typed callback
+  // (`items.filter((m: Message) => ...)`) has to compile, as it would in Lit.
+  C extends ArrayConstructor ? any[] :
+  C extends ObjectConstructor ? any :
   C extends new (...a: any[]) => infer T ? T :
   C extends (v: any) => infer T ? T : unknown;
 
@@ -153,24 +246,34 @@ export type InferProps<S> = {
  */
 interface WebComponentStatics {
   shadow: boolean;
+  /** The `attachShadow()` options, also written onto the server's Declarative Shadow DOM template. */
+  shadowRootOptions: ShadowRootInit;
   hydrate: 'visible' | undefined;
-  properties: Record<string, PropertyDeclaration>;
-  styles: CSSResult | CSSResult[] | null;
+  properties: Record<string, PropertyDeclaration | PropertyConstructor>;
+  styles: CSSResultGroup | null | undefined;
+  /** `static styles` flattened by `finalizeStyles()`: what the shadow root adopts. */
+  readonly elementStyles: CSSResultOrNative[];
+  /** Flatten and dedupe `static styles`; override to post-process. */
+  finalizeStyles(styles?: CSSResultGroup | null): CSSResultOrNative[];
   lazy?: boolean;
-  /**
-   * Force this component to ship (hydrate) even when the elision analyser would
-   * drop it as display-only. The escape hatch for interactivity the analyser
-   * cannot see statically: an OBSERVER that computes the tag it waits for, a
-   * `:defined` rule in an external stylesheet outside the module graph, or a
-   * consumer reaching the element through a string selector. It
-   * cannot rescue a component whose OWN registration tag is computed, since
-   * the scanner requires a literal tag (invariant 3) and never sees that
-   * component at all. Leave unset for the automatic verdict; inspect it with
-   * `webjs elision`.
-   */
-  interactive?: boolean;
   register(tag: string): void;
   readonly observedAttributes: string[];
+  /** Every declared reactive property, own and inherited, as name to declaration. */
+  readonly elementProperties: Map<PropertyKey, PropertyDeclaration>;
+  /** The declaration for `name`, or the default `{ type: String }`. */
+  getPropertyOptions(name: PropertyKey): PropertyDeclaration;
+  /** Declare a reactive property from code. Must run before the first instance. */
+  createProperty(name: PropertyKey, options?: PropertyDeclaration): void;
+  /**
+   * The accessor installed on the prototype for one reactive property.
+   * Override to wrap `super.getPropertyDescriptor(...)`; return `undefined`
+   * to install none.
+   */
+  getPropertyDescriptor(name: PropertyKey, key: string | symbol, options: PropertyDeclaration): PropertyDescriptor | undefined;
+  /** Prepare the class metadata once. Called for you; idempotent. */
+  finalize(): void;
+  /** Run `initializer(element)` in the constructor of every instance of this class and its subclasses. */
+  addInitializer(initializer: (element: WebComponentBase) => void): void;
 }
 
 export interface WebComponentConstructor extends WebComponentStatics {
@@ -211,10 +314,17 @@ export declare function prop<T>(
 ): PropertyDeclaration<T>;
 
 // No type constructor and no attribute: nothing says what the value is, so it
-// is `unknown` until narrowed (`prop<boolean>({ state: true })`).
+// is `unknown` until narrowed (`prop<boolean>({ state: true })`). With a
+// `default` it holds a `T` from the start; without one nothing fills it until
+// the component sets it, so it is `T | undefined`, Lit's `@state() error?:
+// string` (#1686: an agent clearing such a prop with `undefined` failed
+// typecheck against a type that said it was never undefined).
+export declare function prop<T = unknown>(
+  opts: PropertyDeclaration<T> & ({ state: true } | { attribute: false }) & { default: T | (() => T) }
+): PropertyDeclaration<T>;
 export declare function prop<T = unknown>(
   opts: PropertyDeclaration<T> & ({ state: true } | { attribute: false })
-): PropertyDeclaration<T>;
+): PropertyDeclaration<T | undefined>;
 
 export declare function prop<T = string>(
   opts?: PropertyDeclaration<T>

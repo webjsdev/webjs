@@ -1,59 +1,65 @@
 # AGENTS.md for {{APP_NAME}}
 
-This is a WebJs app: AI-first, web-components-first, buildless, and
-progressively enhanced. Read this whole file before you edit anything, then
-follow it. The steps here are required, not optional.
+## The WebJs brief
 
-## Gather context BEFORE you build (required)
+WebJs is a no-build full-stack framework. Write it the way you write Next.js
+routing and Lit components, with the differences below.
 
-WebJs is its own framework. It is not React, Next, or Lit, so writing code from
-that muscle memory produces broken WebJs code. Before you write or change
-anything, gather context from these sources. Do not skip a step to save time.
-This is what separates a working app from a broken one.
+- Routing follows the Next.js App Router: `app/page.ts`, `layout.ts`,
+  `route.ts`, `middleware.ts`, `[param]`, `[...slug]`, `(group)`,
+  `loading.ts`, `error.ts`, `not-found.ts`, `metadata` and
+  `generateMetadata`, and server actions.
+- Components use Lit's APIs (`html`, `css`, reactive properties through
+  `static properties` plus `declare` or the `WebComponent({ ... })` factory,
+  the lifecycle, directives, context, task), imported from `@webjsdev/core`
+  and its `/directives`, `/context`, `/task` and `/signals` subpaths. The base
+  class is `WebComponent`. Register with `Class.register('my-tag')` or
+  `customElements.define`.
+- Components render light DOM by default and `<slot>` works there too. Keep
+  them light: page styles such as Tailwind and the UI kit do not reach into a
+  shadow root. Use `static shadow = true` only when light DOM cannot work.
+- TypeScript must be erasable, so no decorators and no enums.
+- Server-only code and server actions live in `*.server.ts` files. With
+  `'use server'` at the top, their exports are callable from components and
+  bindable as `<form action=${fn}>`. A failed form action re-renders the page
+  with its result on `actionData`.
+- `cookies()`, `headers()` and `revalidatePath()` come from `@webjsdev/server`,
+  and so does `createAuth()`, which is Auth.js's API. Files in `public/` are
+  served from the site root.
+- Never import `lit`, `next` or `react`.
 
-1. **Read the skill.** Start with `.agents/skills/webjs/SKILL.md`, then load the
-   `references/*.md` files it routes to for the surface you are touching. The
-   skill is the guide to building a WebJs app: it helps you choose the right
-   layer, reach for the right export, and avoid the mistakes Next.js or Lit
-   habits cause. Reading it is never wasted work: it survives the
-   gallery-clearing step in the playbook below.
-2. **Study the shipped examples, then build on a clean slate.** The template
-   playbook below says what ships and the exact order to follow. The workflow
-   rules (git, tests, review) are in `.agents/rules/workflow.md`; follow them
-   too.
-3. **Read the framework source for exact contracts.** WebJs is 100% buildless
-   native ES modules, so the source you run IS the source you read. For one
-   export's signature and doc comment run `npx webjs source <Export>` (for
-   example `npx webjs source createAuth`); it reads the installed package and
-   prints the declaration, not the file. When you need the behaviour behind a
-   signature, open the package source under `node_modules/@webjsdev/*` directly
-   (each package ships its own `AGENTS.md`). The full hosted docs are at
-   https://webjs.dev/docs.
+Before hand-writing auth, sessions, caching, rate limits, uploads, realtime or
+SEO, run `npx webjs source`, which lists what WebJs provides for each need.
+`npx webjs source <Export>` then prints one export's signature and example.
+After each edit run `npx webjs check` and `npx webjs status`. The framework
+source is in `node_modules/@webjsdev/*` (no build, so it is the code that
+runs) and the human docs are at https://webjs.dev/docs.
 
-{{PLAYBOOK}}
+Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
+or an in-memory array. Put each feature in `modules/<feature>/` (`actions/` with
+one `'use server'` action per `*.server.ts`, `queries/`, `components/`, `types.ts`)
+and keep routes thin. `modules/users/` is an example of that shape: read it, then
+delete it, its test and whatever uses it before you build the app.
 
-## Type everything (all templates)
+In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
+not `document.getElementById`, `document.querySelector` or `addEventListener`.
 
-Derive the type at every boundary from its source. Never reach for `any`, and
-never `unknown` where a real type exists. The rule is step 8 of the skill's "Default
-Workflow"; the forms to reach for:
+For UI, add shadcn's components from the WebJs UI kit (class helpers such as
+`buttonClass()`, and `<ui-*>` elements where state matters) rather than writing
+them: `npx webjs ui add button dialog` copies each into `components/ui/`, and
+`npx webjs ui list` shows what exists.
 
-- A database row: `typeof table.$inferSelect` (`$inferInsert` for a write),
-  carried into a shipping component with `import type`.
-- An action's input: a named `interface`. Its result: `ActionResult<T>`.
-- Routing files: `PageProps<'/blog/[slug]'>`, `LayoutProps`,
-  `RouteHandlerContext`. `npx webjsdev types` writes the typed `Route` union.
-- A reactive property: `prop<Student>(Object)`, `prop<Tag[]>(Array)`.
+Style with Tailwind utilities on the kit's design tokens (`bg-background`,
+`text-muted-foreground`, `border-border`, `rounded-lg`; the theme lives in
+`styles/globals.css`), never hard-coded colours or hand-written CSS. Change the
+whole look with a theme: `npx webjs ui init --preset <code>` from webjs.dev/ui/create.
 
-The full ladder, with an end-to-end example, is
-`.agents/skills/webjs/references/typescript.md`.
+`npx webjs help` lists every CLI command. The `webjs` MCP server in `.claude.json`
+(`npx @webjsdev/mcp`) answers the same questions as tools: `list_routes`,
+`list_actions`, `list_components`, `check`, `source` and `ui`.
 
-Keep server-only code (database drivers, secrets, `node:*` builtins) in
-`.server.ts` modules. The two kinds (with and without `'use server'`) are the
-skill's "Core WebJs Rules" 1 and 2.
+## This app
 
-## Data (all templates)
-
-Use the wired-up database (Drizzle) for every piece of data the app stores;
-the playbook above has the modeling step. Never store app data in a JSON file,
-an in-memory array, or localStorage.
+Replace this paragraph with what the app does, its features (one line per
+`modules/<feature>/`), its data model and any rule specific to it, and keep it
+current as the app grows. `CLAUDE.md` imports this file, so notes go here.

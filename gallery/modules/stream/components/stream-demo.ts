@@ -14,13 +14,13 @@
 import { WebComponent, html, renderStream } from '@webjsdev/core';
 import { buttonClass } from '#modules/gallery/ui/button.ts';
 // The row markup lives in ONE place, a feature-local view fragment under
-// `utils/ui/` (see references/styling.md for that folder). A fragment rather
+// `utils/ui/` (see https://webjs.dev/docs/styling for that folder). A fragment rather
 // than a display-only <stream-row> element because BOTH of this demo's uses
 // rule an element out, which is the test to apply: the seeded list needs a
 // direct `<ul> > <li>` child (a wrapper tag would sit between them and break
 // the selector and the list semantics), and the streamed payload is an HTML
-// STRING, which a component cannot produce at all. Where a wrapper IS fine,
-// prefer the component.
+// STRING, which a component cannot produce at all. Display-only markup that
+// needs no browser is cheapest as a fragment anyway: it never ships.
 import { streamRow, streamRowHTML } from '../utils/ui/row.ts';
 
 // Build a <webjs-stream> payload string. It is a plain string (NOT an html``
@@ -40,7 +40,7 @@ export class StreamDemo extends WebComponent {
   // NOTE the method names: NOT append() / prepend(). Those are native
   // ParentNode methods, and WebJs instruments them on every light-DOM host for
   // the slot API (#1021), so a component method of the same name is shadowed and
-  // never runs. Name your handlers something else (see muscle-memory-gotchas).
+  // never runs. Name your handlers something else.
   appendRow() {
     this.#n++;
     renderStream(streamPayload('append', 'stream-list', streamRowHTML(`row-${this.#n}`, `Row ${this.#n} (appended)`)));

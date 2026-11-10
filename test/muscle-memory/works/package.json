@@ -1,0 +1,8 @@
+{
+  "name": "muscle-memory-works",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./*"
+  }
+}

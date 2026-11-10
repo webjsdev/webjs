@@ -99,6 +99,9 @@ function project() {
   return d;
 }
 
+// Pages render with `dev: true`, the server's own dev checks: a page never
+// hydrates, so an `@event` or `.prop` binding in the markup a page renders is
+// refused there, and a block must state such a value as an attribute (#1686).
 async function quiet(fn) {
   const log = console.log;
   console.log = () => {};
@@ -117,7 +120,7 @@ for (const name of ['login-04', 'signup-01']) {
 
       const mod = await import(pathToFileURL(resolve(page)).href);
       const { renderToString } = await import('@webjsdev/core/server');
-      const out = await renderToString(mod.default());
+      const out = await renderToString(mod.default(), { dev: true });
       assert.match(out, /<form[\s>]/, 'a real form');
       assert.match(out, /id="email" name="email"/, 'a named email control, so it submits');
       assert.match(out, /data-slot="field-label" for="email"/, 'labelled');
@@ -144,7 +147,7 @@ for (const name of ['sidebar-07', 'sidebar-13', 'sidebar-15', 'dashboard-01']) {
 
       const mod = await import(pathToFileURL(resolve(page)).href);
       const { renderToString } = await import('@webjsdev/core/server');
-      const out = await renderToString(mod.default());
+      const out = await renderToString(mod.default(), { dev: true });
       assert.match(out, /<ui-sidebar-provider[\s>]/, 'the kit sidebar shell');
       assert.match(out, /data-sidebar="menu-button"/, 'menu buttons from the sidebar helpers');
       // The bake keeps its allowlisted hooks (the trigger icon's cn-rtl-flip);
@@ -179,7 +182,7 @@ for (const name of ['preview', 'preview-02', 'preview-03']) {
 
       const mod = await import(pathToFileURL(resolve(page)).href);
       const { renderToString } = await import('@webjsdev/core/server');
-      const out = await renderToString(mod.default());
+      const out = await renderToString(mod.default(), { dev: true });
       assert.match(out, /data-slot="capture-target"/, 'the board grid');
       const kept = [...out.matchAll(/class="([^"]*)"/g)]
         .flatMap((m) => m[1].split(/\s+/))

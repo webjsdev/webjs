@@ -7,11 +7,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "elide": {
-      "description": "Display-only and inert-route dead-JS elision switch. Default true. Set to false to ship every module's JS app-wide, as before the feature existed. Read by readElideEnabled in dev.js; the WEBJS_ELIDE env override wins over this.",
-      "type": "boolean",
-      "default": true
-    },
     "seed": {
       "description": "SSR action-result seeding switch (#472). Default true. When on, a 'use server' action's SSR result is serialized into the page so an async-render component does not re-fetch it over RPC on hydration. Set to false to disable (the client re-fetches as before). Read by readSeedEnabled in dev.js; the WEBJS_SEED env override wins over this.",
       "type": "boolean",
@@ -242,7 +237,7 @@
       "additionalProperties": false,
       "properties": {
         "gate": {
-          "description": "Per-check severity, keyed by the stable DOCTOR_CODES code (NODE_VERSION, UNMARKED_ASSET_LINKS, ELISION_CARRIERS, ...). `error` fails the exit, `warn` reports without failing, `off` silences the check: its finding is not printed and it cannot fail the exit, including under --strict (it still appears on the checklist as [off], in the summary's silenced count, and in full under --json). A code with no entry keeps its default: error for a hard toolchain failure, warn otherwise. This is how CI gates on a chosen subset without --strict making every warning fatal. A malformed gate is a hard error, so a typo cannot silently un-gate CI: that covers an unknown code, a bad severity, a wrong SHAPE (a non-object `doctor` or `gate`), and a misspelled sibling of `gate` such as `gates`. A result that could not check (a network or toolchain outage) is capped at warn and can never be escalated to error.",
+          "description": "Per-check severity, keyed by the stable DOCTOR_CODES code (NODE_VERSION, UNMARKED_ASSET_LINKS, ROUTE_BROWSER_CODE, ...). `error` fails the exit, `warn` reports without failing, `off` silences the check: its finding is not printed and it cannot fail the exit, including under --strict (it still appears on the checklist as [off], in the summary's silenced count, and in full under --json). A code with no entry keeps its default: error for a hard toolchain failure, warn otherwise. This is how CI gates on a chosen subset without --strict making every warning fatal. A malformed gate is a hard error, so a typo cannot silently un-gate CI: that covers an unknown code, a bad severity, a wrong SHAPE (a non-object `doctor` or `gate`), and a misspelled sibling of `gate` such as `gates`. A result that could not check (a network or toolchain outage) is capped at warn and can never be escalated to error.",
           "type": "object",
           "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]*$" },
           "additionalProperties": {

@@ -66,7 +66,7 @@ test('defaults: a static asset response also carries the baseline headers', asyn
     'public/hello.txt': 'hello world',
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/public/hello.txt'));
+  const resp = await app.handle(new Request('http://x/hello.txt'));
   assert.equal(resp.status, 200);
   assert.equal(resp.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(resp.headers.get('x-frame-options'), 'SAMEORIGIN');

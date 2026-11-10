@@ -32,22 +32,31 @@ import { toUrlPath } from '../ssr/preloads.js';
 import { defaultLogger } from '../logger.js';
 import { assertNodeVersion } from '../node-version.js';
 import { applyEnvValidation } from '../env-schema.js';
-import { runInstrumentation } from '../instrumentation.js';
-import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from '../context.js';
+import { runInstrumentation, buildRequestErrorReport } from '../instrumentation.js';
+import { validateAppLayout, AppLayoutError, cssImportProblems } from '../app-layout.js';
+import { applyPendingCookies } from '../cookie-store.js';
+import { loadRootMiddleware, findRootMiddleware } from '../middleware-load.js';
+import { loadEnvFiles, envMode } from '../env-files.js';
+import { buildPublicIndex } from '../public-files.js';
+import { withRequest, setCspNonce, setBodyLimits, setAllowedOrigins, setRequestId, requestId as getRequestId, currentCookieStore, setComponentErrorSink, sealCookies } from '../context.js';
 import { buildInfoResponse } from '../build-info.js';
 import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
 import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from '../vendor.js';
 import { browserEntryFiles } from '../browser-entries.js';
-import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
+import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport, bareImports, dynamicBareImports } from '../module-graph.js';
+import { foreignImportProblems, registerForeignImportGuard } from '../foreign-imports.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
-import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles, hasModuleScopeSideEffect } from '../component-elision.js';
+import { lazyComponentFiles, bindingImportedLazyFiles } from '../lazy-components.js';
+import { routeModuleBrowserHints } from '../client-signals.js';
+import { routeFrontiers, collectBootRouteModules, routeTableFiles, leadsToComponent } from '../route-frontier.js';
+import { hasModuleScopeSideEffect } from '../module-side-effect.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
 import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
-import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl, setDevModuleVersions } from '../asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setServeFingerprint, withAssetHash, assetHashFor, resolveAssetUrl, setDevModuleVersions } from '../asset-hash.js';
 import { bumpBuildEpoch } from '../build-epoch.js';
 import { hintedBootModules } from '../ssr/shipped-modules.js';
 import { createRetryBackoff } from './vendor-retry.js';
@@ -65,7 +74,6 @@ import { createDevStatus } from './dev-status.js';
 import { devReloadState } from '../dev-reload-state.js';
 
 import {
-  readElideEnabled,
   readSeedEnabled,
   readClientRouterEnabled,
   readHeaderRules,
@@ -79,20 +87,21 @@ import {
   readDevToolingFromApp,
 } from './config.js';
 import {
-  exists, kebab, resolveRequestId, shouldAccessLog, loadAppEnv, collectRouteModules,
+  exists, kebab, resolveRequestId, shouldAccessLog,
   appTopLevelDirs, locateCoreDir,
   setReloadIdleMs,
   resolveReloadIdleMs,
 } from './helpers.js';
 import {
-  handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
+  handleCore, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
 import { devImport, clearProdImportCache } from '../dev-import.js';
+import { retireFlashOnRedirect } from '../action-flash.js';
 
 /**
  * A short content digest of a single file's bytes for the app-source deploy
  * signal (#899). Raw `sha256(bytes)`, deliberately independent of `assetHashFor`
- * (which folds the elision fingerprint and memoizes for `?v` emission): the
+ * (which folds the serve fingerprint and memoizes for `?v` emission): the
  * signal only needs "did the source bytes change", and server-only files never
  * enter the asset-hash memo anyway. Returns `''` on a read failure, so a
  * transient error degrades the id rather than throwing during analysis.
@@ -158,7 +167,8 @@ export async function createRequestHandler(opts) {
   // scaffolded apps with a committed .env.example + .env would fail
   // to boot until the user discovered the missing env-load. See
   // tracker #37.
-  loadAppEnv(appDir);
+  // Next.js's env file order (.env.$mode.local, .env.local, .env.$mode, .env).
+  loadEnvFiles(appDir, envMode(!!opts.dev));
   // Optional boot-time env validation (#236). If <appDir>/env.{js,ts} exists it
   // default-exports a typed schema or a custom validator function; we run it
   // against process.env (now populated by loadAppEnv) BEFORE buildActionIndex
@@ -186,7 +196,7 @@ export async function createRequestHandler(opts) {
   // before traffic. Any error sink it registers via setOnError composes with
   // the programmatic opts.onError (both fire). Fail-open (a throwing hook is
   // logged, not fatal).
-  const { onError: instrumentationOnError } = await runInstrumentation(appDir, { dev, logger });
+  const { onError: instrumentationOnError, onRequestError } = await runInstrumentation(appDir, { dev, logger });
   // APM / Sentry integration point (issue #239). Called whenever the request
   // pipeline catches an unhandled error: the top-level handle() catch (the
   // last-resort 500), an unexpected throw inside the produce() funnel, or a
@@ -240,7 +250,14 @@ export async function createRequestHandler(opts) {
       devStatus.record(frame || buildDevErrorFrame(error, { kind, appDir, url }));
     } catch { /* best effort */ }
   }
-  const hasOnError = onErrorSinks.length > 0;
+  const hasOnError = onErrorSinks.length > 0 || typeof onRequestError === 'function';
+  /** Each error object is reported once PER REQUEST, under the first (most
+   * specific) phase that reaches it: a route handler's throw is reported as
+   * `route` before the top-level catch sees the same error again. Keyed by the
+   * request id rather than held forever, so an error object a module throws
+   * again on every request (a rejected module-scope promise) is reported on
+   * each one. @type {WeakMap<object, string | null>} */
+  const reportedErrors = new WeakMap();
 
   /**
    * Invoke every registered onError sink defensively. The phase is a coarse
@@ -248,13 +265,27 @@ export async function createRequestHandler(opts) {
    * @param {unknown} error
    * @param {Request} request
    * @param {string} phase
+   * @param {string} [routePath] the route file path for `onRequestError`
    */
-  function reportError(error, request, phase) {
+  function reportError(error, request, phase, routePath) {
     // Dev status (#1664). Recorded BEFORE the no-sink return, because an app
     // with no onError sink is exactly the one whose action errors were
     // invisible to an agent. An `ssr` error is a render failure.
     recordDevStatus(error, request, phase === 'ssr' ? 'render' : phase);
     if (!hasOnError) return;
+    if (error && typeof error === 'object') {
+      const rid = getRequestId();
+      if (reportedErrors.has(error) && reportedErrors.get(error) === rid) return;
+      reportedErrors.set(error, rid);
+    }
+    // Next.js's instrumentation `onRequestError(error, request, context)`.
+    // Fire-and-forget like Next: an awaited reporter never delays the response,
+    // and a throwing or rejecting one is logged, never surfaced.
+    if (typeof onRequestError === 'function' && !isControlFlowThrow(error)) {
+      buildRequestErrorReport(error, request, phase, routePath)
+        .then((args) => onRequestError(...args))
+        .catch((e) => logger.error?.('[webjs] onRequestError threw (ignored)', { err: String(e) }));
+    }
     const ctx = { request, requestId: getRequestId(), phase };
     for (const sink of onErrorSinks) {
       try {
@@ -338,7 +369,7 @@ export async function createRequestHandler(opts) {
 
   // Install the resolver behind the isomorphic `asset()` helper (#1194), the
   // same provider seam `cspNonce()` uses. An author writes
-  // `href=${asset('/public/app.css')}` and gets the fingerprinted url on the
+  // `href=${asset('/app.css')}` and gets the fingerprinted url on the
   // server; the browser has no provider and returns the path unchanged.
   //
   // The `public/` gate is defensive rather than decorative. `resolveUrlToFile`
@@ -371,6 +402,9 @@ export async function createRequestHandler(opts) {
     try { const real = realpathSync(appDir); if (real !== appDir) installEsmHotHooks(real); } catch { /* appDir only */ }
   }
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
+  // Refuse `next/*`, `react` and `lit` imported from the app's own files at
+  // resolve time (Node), even when the package happens to be installed.
+  registerForeignImportGuard(appDir);
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
   // `webjs.dev.sourceLocations: true`) under `webjs dev`
@@ -410,10 +444,10 @@ export async function createRequestHandler(opts) {
   // rendered deterministically at runtime). Pinning stays optional; an unpinned
   // app does no vendor work at boot and publishes its id after the first
   // successful resolve instead. Either way the EXPENSIVE analysis (graph, scan,
-  // gate, elision) and the UNPINNED jspm resolve stay deferred to the first
+  // gate, frontiers) and the UNPINNED jspm resolve stay deferred to the first
   // request, so #143's win is intact; only the cheap committed-file read moves
   // back to boot, and only when a VALID pin exists. A committed pin file is
-  // served as-is (elision never prunes it), so the boot-resolved map equals the
+  // served as-is (nothing prunes it), so the boot-resolved map equals the
   // final served map and the published id is authoritative.
   //
   // Validate the pin with readPinFile BEFORE treating the app as pinned-at-boot.
@@ -439,13 +473,25 @@ export async function createRequestHandler(opts) {
   }
 
   // Whole-app analysis (module graph, component scan, browser-bound gate,
-  // action index, middleware, elision, vendor) is NOT run at boot. It is
+  // action index, middleware, frontiers, vendor) is NOT run at boot. It is
   // computed on the first request via ensureReady() below and memoized, so the
   // server starts without walking or reading the app's source, executing any
   // server module, or hitting the network. Only the route table is built
   // eagerly: it is a cheap directory scan (no code reads), and routing, Early
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
+  // A file arrangement that can never serve correctly (a page and a route.ts
+  // at one URL, ...) refuses to boot in production, as Next refuses to build.
+  // Dev keeps serving so an edit can fix it: ensureReady re-checks on every
+  // rebuild and answers each request with the problem until then.
+  // Every file under public/, by the root url it is served at (public-files.js).
+  const publicFiles = buildPublicIndex(appDir);
+  if (!dev) {
+    const problems = validateAppLayout(appDir, routeTable, publicFiles);
+    if (problems.length) throw new AppLayoutError(problems);
+    // Both a middleware.* and a proxy.* at the root: also refused at boot.
+    await findRootMiddleware(appDir);
+  }
   // Auto-linked favicons: tell the head builder which icon metadata routes
   // exist, so `app/icon.*` is linked when the app declares no metadata.icons.
   // Bound here rather than threaded through ssrOpts, matching
@@ -517,6 +563,7 @@ export async function createRequestHandler(opts) {
 
   const state = {
     routeTable,
+    publicFiles,
     actionIndex: null,
     middleware: null,
     bodyLimits,
@@ -530,21 +577,26 @@ export async function createRequestHandler(opts) {
     // the core / vendor serving are unchanged, so no server source is exposed.
     testMode: opts.testMode === true,
     moduleGraph: null,
-    elidableComponents: new Set(),
-    inertRouteModules: new Set(),
-    importOnlyRouteModules: new Map(),
+    // Route module -> the component files the boot imports in its place
+    // (#1686). Route modules never ship; see `route-frontier.js`.
+    /** @type {Map<string, string[]>} */
+    routeFrontiers: new Map(),
+    /** @type {Set<string>} */
+    routeModuleFiles: new Set(),
+    /** @type {Array<{ file: string, message: string }>} dev-only route-module hints (#1686) */
+    routeHints: [],
     // `static lazy` component files -> their tags (#1524): a side-effect import
     // of one is served as a lazy-loader registration, and the preload walks
-    // skip it. Independent of the elision switch.
+    // skip it.
     lazyComponentFiles: new Map(),
-    // The browser-bound ENTRY files (pages / layouts / boundaries / components),
+    // The browser-bound ENTRY files (components and instrumentation-client),
     // kept alongside the expanded gate set because the vendor scan roots at the
     // entries rather than at the closure.
     browserEntryFiles: new Set(),
     browserBoundFiles: null,
     // Dev live-reload classification (#1398). `shippedFiles` is the transitive
     // closure of what the browser can ACTUALLY load (the gate set minus every
-    // module elision drops), `graphFiles` is every app source the graph walked,
+    // module the frontier walk skips), `graphFiles` is every app source the graph walked,
     // and `pageFiles` is the route table's pages. Together they are the whole
     // input to `classifyChangedPath`, so a watch event can be answered without
     // reaching into the rest of this state. Dev-only; left empty in prod.
@@ -572,11 +624,10 @@ export async function createRequestHandler(opts) {
     // files, since Bun's `fs.watch` can drop the event (see `missedChanges`).
     /** @type {Map<string, string>} */
     shippedStamps: new Map(),
-    // Transformed-source cache (stripped TS + applied elision). Per-handler,
-    // NOT module-global: the cached bytes bake in THIS handler's elision
-    // verdict, so two handlers for the same app with different elision
-    // settings (a multi-tenant embedder, or the differential elision test)
-    // must not share it, or the second would serve the first's elided source.
+    // Transformed-source cache (stripped TS + the lazy-import rewrite).
+    // Per-handler, NOT module-global: the cached bytes bake in THIS handler's
+    // lazy set and source-location setting, so two handlers for the same app
+    // must not share it.
     tsCache: new Map(),
     // Dev source locations (#1499), fixed for the handler's lifetime, so the
     // per-handler tsCache above never mixes annotated and plain bytes.
@@ -602,7 +653,7 @@ export async function createRequestHandler(opts) {
   // process running several handlers the fallback therefore resolves against
   // the most recently booted one, which is the same scope the asset-url
   // provider already has.
-  setFormActionResolver((fn) => (state.actionIndex ? resolveActionIdentity(state.actionIndex, fn) : null));
+  setFormActionResolver((fn) => (state.actionIndex ? resolveActionIdentity(state.actionIndex, fn, { dev }) : null));
   // The boot script, the modulepreload hints and the lazy-loader map name a
   // bumped module with the same `?t=` its importers' rewritten specifiers
   // carry (#1689), so a fresh document holds one instance of it, not two.
@@ -634,7 +685,7 @@ export async function createRequestHandler(opts) {
   // All whole-app analysis is built lazily on the first request, memoized so
   // boot does none of it. It runs in two stages. The deterministic analysis
   // (module graph, component scan + prime, browser-bound gate, action index,
-  // middleware, elision) is network-free and, once built, never re-runs unless
+  // middleware, frontiers) is network-free and, once built, never re-runs unless
   // a rebuild invalidates it; readiness gates on it. Vendor resolution is a
   // SEPARATE, best-effort stage: a pinned app reads a committed importmap file,
   // an unpinned app auto-fetches from jspm. It does NOT gate readiness, so an
@@ -656,7 +707,7 @@ export async function createRequestHandler(opts) {
   let analysisEverDone = false;
   // A pinned app applied its FULL vendor map and published the build id at boot
   // (above). The deferred vendor stage still runs once (and after every rebuild)
-  // to PRUNE that map to the elision-reachable specifiers, so a pinned app serves
+  // to PRUNE that map to the browser-reachable specifiers, so a pinned app serves
   // the same map an unpinned one does (#197); it does not re-publish the build id
   // (the boot hash stays the deploy fingerprint). An unpinned app starts false and
   // resolves live on the first request.
@@ -717,52 +768,91 @@ export async function createRequestHandler(opts) {
         const now = () => performance.now();
         try {
           if (!analysisDone) {
+            const layoutProblems = validateAppLayout(appDir, state.routeTable, state.publicFiles);
+            if (layoutProblems.length) throw new AppLayoutError(layoutProblems);
             let m = now();
             state.moduleGraph = await buildModuleGraph(appDir);
+            // A foreign-framework import (next/*, react, lit) anywhere in the
+            // app is refused before anything renders: the dev overlay shows
+            // it, production readiness stays 503 naming it.
+            {
+              const relApp = (p) => relative(appDir, p).split(sep).join('/');
+              const foreign = [
+                ...foreignImportProblems(new Map([...bareImports(state.moduleGraph), ...dynamicBareImports(state.moduleGraph)]), relApp),
+                // `import './x.css'` too: a bundler feature with no meaning here.
+                ...cssImportProblems(state.moduleGraph, relApp),
+              ];
+              if (foreign.length) throw new AppLayoutError(foreign);
+            }
             t.graph = now() - m; m = now();
             const components = await scanComponents(appDir);
             await primeComponentRegistry(appDir, components);
             t.scan = now() - m; m = now();
             state.browserEntryFiles = browserEntryFiles(state.routeTable, components);
-            state.browserBoundFiles = reachableFromEntries(state.moduleGraph, [...state.browserEntryFiles], appDir);
+            // Route-table files never load in the browser (#1686): the gate
+            // stops at them and the serve branch refuses them by path.
+            state.routeModuleFiles = routeTableFiles(state.routeTable);
+            state.browserBoundFiles = reachableFromEntries(state.moduleGraph, [...state.browserEntryFiles], appDir,
+              state.routeModuleFiles);
             t.gate = now() - m; m = now();
             state.actionIndex = await buildActionIndex(appDir, dev);
             t.actions = now() - m; m = now();
-            state.middleware = await loadMiddleware(appDir, dev, logger);
+            // Fails CLOSED (middleware-load.js): a root middleware or proxy
+            // that cannot load stops the app serving rather than letting
+            // every request through unguarded.
+            try {
+              state.middleware = await loadRootMiddleware(appDir, dev, logger);
+            } catch (e) {
+              if (e && /** @type {any} */ (e).code === 'WEBJS_APP_LAYOUT') throw e;
+              const err = new Error(`[webjs] the root middleware failed to load, so no request is served (a guard that cannot load must not let requests through): ${/** @type {Error} */ (e).message}`, { cause: e });
+              /** @type {any} */ (err).code = 'WEBJS_APP_LAYOUT';
+              throw err;
+            }
             t.middleware = now() - m; m = now();
             // Client-router opt-out (#629): re-read each pass so toggling
             // `webjs.clientRouter` takes effect on rebuild without a restart.
             setClientRouterEnabled(await readClientRouterEnabled(appDir));
-            // Read the switch ONCE: the dev summary below reports it too, and
-            // calling readElideEnabled twice per warm re-reads package.json.
-            const elideOn = await readElideEnabled(appDir);
-            const r = elideOn
-              ? await analyzeElision(components, collectRouteModules(state.routeTable),
-                  state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
-              : { elidableComponents: new Set(), inertRouteModules: new Set(), importOnlyRouteModules: new Map(),
-                  shippedRouteModules: new Map(), componentVerdicts: new Map() };
-            state.elidableComponents = r.elidableComponents;
-            state.inertRouteModules = r.inertRouteModules;
-            state.importOnlyRouteModules = r.importOnlyRouteModules;
-            state.lazyComponentFiles = lazyComponentFiles(components, state.elidableComponents);
+            // Route modules never ship (#1686): each is replaced in the boot by
+            // its component frontier. Every component ships, as in Lit; a
+            // component in a `.server` file is a stub in the browser, so the walk
+            // stops there. Every route-table file is in the skip set, so a route
+            // module is never emitted or walked through even when another one
+            // imports it.
+            {
+              const routeFiles = collectBootRouteModules(state.routeTable);
+              state.routeFrontiers = routeFrontiers(routeFiles, state.moduleGraph,
+                new Set(components.map((c) => c.file)),
+                state.routeModuleFiles);
+            }
+            // Dev only: code in a route module that looks meant for the browser
+            // but runs only on the server (#1686), reported by `webjs status` as
+            // warnings so an agent sees it in the loop it already runs.
+            if (dev) {
+              const componentFileSet = new Set(components.map((c) => c.file));
+              const carriesComponent = leadsToComponent(state.moduleGraph, componentFileSet);
+              /** @type {Array<{ file: string, message: string }>} */
+              const hints = [];
+              for (const f of collectBootRouteModules(state.routeTable)) {
+                let src;
+                try { src = await readFile(f, 'utf8'); } catch { continue; }
+                for (const message of routeModuleBrowserHints(src, {
+                  file: f, appDir, isComponent: (abs) => componentFileSet.has(abs), carriesComponent,
+                })) hints.push({ file: f, message });
+              }
+              state.routeHints = hints;
+            }
+            state.lazyComponentFiles = lazyComponentFiles(components);
             // A lazy component some module imports WITH bindings loads eagerly
             // anyway, so it keeps its preload hint and its imports as written.
             for (const f of await bindingImportedLazyFiles(state.lazyComponentFiles, state.moduleGraph,
               (f) => readFile(f, 'utf8'), resolveImport, appDir)) state.lazyComponentFiles.delete(f);
             // Dev live-reload classification (#1398): derive the three sets the
             // watch-event classifier reads. `browserBoundFiles` above is the
-            // AUTHORIZATION gate (it walks from every entry, elided ones
-            // included, because an elided module's URL must still 404 rather
-            // than leak), so it is the wrong input here: the question is what
-            // the browser actually HOLDS. Re-walk from the entries elision
-            // keeps, and an edit to anything reachable from those is a reload.
-            // An import-only page's substituted components are themselves
-            // entries, so dropping the page loses none of its reach.
+            // AUTHORIZATION gate, so it is the wrong input here: the question is
+            // what the browser actually HOLDS. Re-walk from the entries, and an
+            // edit to anything reachable from those is a reload.
             if (dev) {
-              const shippedEntries = [...state.browserEntryFiles].filter((f) =>
-                !state.elidableComponents.has(f)
-                && !state.inertRouteModules.has(f)
-                && !state.importOnlyRouteModules.has(f));
+              const shippedEntries = [...state.browserEntryFiles].filter((f) => !state.routeModuleFiles.has(f));
               state.shippedFiles = reachableFromEntries(state.moduleGraph, shippedEntries, appDir);
               state.graphFiles = seenFilesFor(state.moduleGraph);
               state.pageFiles = new Set((state.routeTable.pages || []).map((p) => p.file).filter(Boolean));
@@ -775,31 +865,20 @@ export async function createRequestHandler(opts) {
               primeHotBaselines([...state.componentFiles].filter((f) => state.shippedFiles.has(f)),
                 state.hotSignatures, readHotSignature);
             }
-            // Fold the elision verdict into app-module content hashes (#243): an
-            // app module's served body is elision-transformed, so a verdict flip
-            // must bust its `?v` even when its source is byte-identical. A stable
-            // string of the sorted elidable + inert paths, RELATIVIZED to appDir
-            // so the fingerprint is a property of the app's STRUCTURE, not its
-            // filesystem location (two deploys at different absolute paths, or
-            // two identical apps, produce the same fingerprint). asset-hash
-            // digests it into each app-module hash; '' when nothing is elidable,
-            // so a no-elision app's hash stays exactly `sha256(bytes)`.
+            // Fold the lazy set into app-module content hashes (#243, #1524): a
+            // file flipping to or from `static lazy` changes how every importer
+            // serves its import of it, so the flip must bust the importer's `?v`
+            // even when its source is byte-identical. A stable string of the
+            // sorted lazy paths, RELATIVIZED to appDir so the fingerprint is a
+            // property of the app's STRUCTURE, not its filesystem location.
+            // asset-hash digests it into each app-module hash; '' when nothing is
+            // lazy, so such an app's hash stays exactly `sha256(bytes)`.
             {
               // `appDir + sep` boundary (matches asset-hash's containment guard)
               // so a sibling-prefix dir cannot be mis-relativized.
               const rel = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
-              const elidedPaths = [
-                ...state.elidableComponents,
-                ...state.inertRouteModules,
-                // An import-only module is dropped from the boot (replaced by its
-                // component imports), so a flip in / out of that class must bust
-                // the importer's `?v` too.
-                ...state.importOnlyRouteModules.keys(),
-                // A file flipping to or from `static lazy` changes how every
-                // importer serves its import of it (#1524).
-                ...[...state.lazyComponentFiles.keys()].map((f) => `lazy:${f}`),
-              ].map((p) => (p.startsWith('lazy:') ? `lazy:${rel(p.slice(5))}` : rel(p))).sort();
-              setElisionFingerprint(elidedPaths.length ? elidedPaths.join('\n') : '');
+              const lazyPaths = [...state.lazyComponentFiles.keys()].map((f) => `lazy:${rel(f)}`).sort();
+              setServeFingerprint(lazyPaths.length ? lazyPaths.join('\n') : '');
             }
             // App-source fingerprint for the HTML cache key (#318): a
             // deterministic, location-independent digest of the browser-bound
@@ -807,18 +886,27 @@ export async function createRequestHandler(opts) {
             // module's bytes (which the importmap-only build id misses) re-keys
             // the cache instead of serving a body with stale `?v` boot URLs.
             // PROD only (asset-hash is enabled there); '' in dev, where fs.watch
-            // handles staleness. Computed AFTER the elision fingerprint, so each
-            // per-file hash already reflects the elision verdict (an elision
+            // handles staleness. Computed AFTER the serve fingerprint, so each
+            // per-file hash already reflects the lazy set (a lazy
             // flip changes the served output, so it moves this fingerprint too).
             // This eagerly hashes the WHOLE browser-bound set once (not just the
             // first route's files), but `assetHashFor` is memoized and already
             // runs for `?v` emission in prod, so it stays a one-time bounded cost
             // inside the lazy analysis (never at boot).
+            // Since #1686 a page, layout or boundary is not browser-bound, so an
+            // edit to one alone would leave that set unchanged while the HTML it
+            // renders moved. The raw digest of every graph file (the #899 set
+            // below) is folded in, so a page-only deploy re-keys too.
             if (!dev && state.browserBoundFiles) {
               const relApp = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
               const lines = [...state.browserBoundFiles]
                 .map((abs) => `${relApp(abs)}:${assetHashFor(abs)}`)
                 .sort();
+              if (state.moduleGraph) {
+                for (const abs of [...seenFilesFor(state.moduleGraph)].sort()) {
+                  lines.push(`src:${relApp(abs)}:${fileByteHash(abs)}`);
+                }
+              }
               setAppSourceFingerprint(lines.join('\n'));
             } else {
               setAppSourceFingerprint('');
@@ -827,7 +915,7 @@ export async function createRequestHandler(opts) {
             // fingerprint above: hashes ALL app source (the module-graph `seen`
             // set, INCLUDING server-only `.server.ts` that `browserBoundFiles`
             // omits) with a raw per-file byte digest (decoupled from the
-            // asset-hash memo/elision machinery), plus the installed
+            // asset-hash memo and serve fingerprint), plus the installed
             // `@webjsdev/server` version, so an app-source OR a server-framework
             // deploy moves it. Sorted + appDir-relative for determinism across
             // instances. Drives the client's soft cache-evict (not a reload).
@@ -842,45 +930,29 @@ export async function createRequestHandler(opts) {
             } else {
               setAppSourceId('');
             }
-            t.elision = now() - m;
+            t.frontiers = now() - m;
             if (dev) {
               // An orphan is EITHER shape `findOrphanComponents` reports: no
               // registration call at all, or one whose tag is computed. The
               // scanner matches only a literal tag, so it sees neither, and
-              // what is ALWAYS lost is the verdict, the registry entry, and the
+              // what is ALWAYS lost is the registry entry, the boot import and the
               // preload hint. The upgrade is the part that differs, and a
               // computed tag only survives when its importer ships WHOLE (see
               // findOrphanComponents for why that is the exception). The doctor
-              // check and `webjs elision` say the same thing.
+              // check says the same thing.
               for (const { className, file } of await findOrphanComponents(appDir)) {
                 logger.warn?.(
                   `[webjs] ${className} extends WebComponent but is never registered with a literal tag in ${file} ` +
                     `(either there is no registration call, or its tag is computed), so the scanner cannot see it: ` +
-                    `no elision verdict, no registry entry, no preload hint. ` +
+                    `no registry entry, no preload hint, and no boot import. ` +
                     `<${kebab(className)}> tags never upgrade with no registration call, and a computed tag ` +
                     `upgrades only while its importing module ships whole. ` +
                     `Add \`${className}.register('<tag-name>');\` with a literal tag.`,
                 );
               }
-              // The elision summary (#1308), one server-console line. NOT a
-              // browser push: an inert route ships zero application JS, and the
-              // most useful manual check an author has is opening the network
-              // tab on that route and seeing nothing, which a dev-only boot
-              // script would corrupt on exactly the pages this proves. The fact
-              // is also app-wide while a browser channel is per-tab, and the
-              // per-page detail already has a home in `webjs elision`.
-              // Re-emitted after each fs.watch rebuild, because doRebuild sets
-              // analysisDone = false and this sits inside that stage.
-              logger.info?.(
-                elideOn
-                  ? `[webjs] elision: ${r.elidableComponents.size}/${new Set(components.map((c) => c.file)).size} components elided, ` +
-                    `${r.inertRouteModules.size} route modules inert, ${r.importOnlyRouteModules.size} import-only, ` +
-                    `${r.shippedRouteModules.size} ship whole. Run \`webjs elision\` for the per-module verdict.`
-                  : `[webjs] elision: disabled (WEBJS_ELIDE / webjs.elide), every module ships.`,
-              );
             }
             // The analysis stage is the last writer of per-build inputs (the
-            // elision fingerprint, the import-only and lazy sets, the route
+            // serve fingerprint, the frontiers and the lazy set, the route
             // table), so every epoch-keyed memo is invalidated here once,
             // unconditionally: a request that rendered in the pre-warm window
             // hinted against an empty fingerprint and must not keep serving
@@ -932,11 +1004,11 @@ export async function createRequestHandler(opts) {
           readyDone = true;
           if (ranAnalysis) {
             const ms = (x) => Math.round(x || 0);
-            const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.elision) + ms(t.vendor);
+            const total = ms(t.graph) + ms(t.scan) + ms(t.gate) + ms(t.actions) + ms(t.middleware) + ms(t.frontiers) + ms(t.vendor);
             logger.info?.(
               `[webjs] analysis warm in ${total}ms (graph ${ms(t.graph)}, scan ${ms(t.scan)}, ` +
                 `gate ${ms(t.gate)}, actions ${ms(t.actions)}, middleware ${ms(t.middleware)}, ` +
-                `elision ${ms(t.elision)}, vendor ${ms(t.vendor)})`,
+                `frontiers ${ms(t.frontiers)}, vendor ${ms(t.vendor)})`,
             );
           } else if (ranVendor && vendorResolved) {
             logger.info?.(`[webjs] vendor resolved in ${Math.round(t.vendor || 0)}ms`);
@@ -967,16 +1039,15 @@ export async function createRequestHandler(opts) {
     vendorResolveInFlight = (async () => {
       try {
         const scan = async () => {
-          const skip = new Set([...state.elidableComponents, ...state.inertRouteModules, ...state.importOnlyRouteModules.keys()]);
-          return reachedBareImports(state.moduleGraph, [...state.browserEntryFiles], appDir, skip);
+          return reachedBareImports(state.moduleGraph, [...state.browserEntryFiles], appDir, state.routeModuleFiles);
         };
         const v = await resolveVendorImports(appDir, scan);
         let { imports, integrity } = v;
         if (bootVendorPinned) {
           // resolveVendorImports returns a committed pin VERBATIM (it never runs
-          // the scan for a pinned app). Prune it to the elision-reachable
+          // the scan for a pinned app). Prune it to the browser-reachable
           // specifiers so a pinned app serves the same map an unpinned one does
-          // (#197): an elided-only dep like dayjs is dropped. One scan; the pin
+          // (#197): a dep only a page imports is dropped. One scan; the pin
           // path skipped it. This runs on the first warm AND after every rebuild,
           // so the pruned map is the single source of truth.
           const reachable = await scan();
@@ -1131,6 +1202,7 @@ export async function createRequestHandler(opts) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
+    state.publicFiles = buildPublicIndex(appDir);
     // Adding or deleting app/icon.* changes whether the head auto-links it.
     setMetadataIconRoutes(state.routeTable.metadataRoutes);
     // Refresh the generated route types (#258) so adding/removing a route file
@@ -1159,11 +1231,11 @@ export async function createRequestHandler(opts) {
     // modules too (#1644); the plain `webjs start` path never gets here.
     clearProdImportCache();
     state.tsCache.clear();
-    // A dependency edit can flip an elision verdict without changing an
+    // A dependency edit can flip a lazy or frontier answer without changing an
     // importer's mtime, hence the state.tsCache.clear above.
     await invalidateAnalysis();
     // Refresh the on-request regenerate rules (#967) so a `webjs.dev.regenerate`
-    // config edit takes effect without a restart, mirroring the elide/router
+    // config edit takes effect without a restart, mirroring the router
     // re-reads above. Dev-only; a no-op array in prod.
     if (dev) state.regenerateRules = await readRegenerateRules(appDir);
     // Optimistically clear the dev error (#264): the rebuild itself only
@@ -1198,7 +1270,7 @@ export async function createRequestHandler(opts) {
 
   /**
    * Invalidate the lazy analysis; the next request rebuilds the graph,
-   * component scan, gate, action index, middleware, elision, and vendor map.
+   * component scan, gate, action index, middleware, frontiers, and vendor map.
    * Waits out any in-flight build first so it cannot commit stale results after
    * the reset, and bumps the vendor generation so a vendor resolve still in
    * flight from the previous build cannot flip `vendorResolved` against the
@@ -1259,6 +1331,9 @@ export async function createRequestHandler(opts) {
       const res = await findHotBoundaries(changed.filter((_, i) => perFile[i].v === 'reload'), {
         shipped: prev.shipped,
         componentFiles: prev.components,
+        // The browser entries that are not components (`instrumentation-client`;
+        // a route module is never an entry, #1686): an edit reaching one has no
+        // component to re-import.
         routeFiles: new Set([...prev.entries].filter((f) => !prev.components.has(f))),
         importersOf: (f) => importers.get(f) || [],
         signatureOf,
@@ -1333,6 +1408,9 @@ export async function createRequestHandler(opts) {
       seq: reload ? reload.seq : null,
       rebuilds,
       errors,
+      // Advisory, never a failure: code in a page, layout or boundary that
+      // looks meant for the browser but runs only on the server (#1686).
+      warnings: state.routeHints.map((h) => ({ kind: 'route-browser-code', file: h.file, message: h.message })),
     };
     return Response.json(body, { headers: { 'cache-control': 'no-store' } });
   }
@@ -1379,6 +1457,20 @@ export async function createRequestHandler(opts) {
       // request scope, so `readBody` inside a route handler enforces the same
       // cap the framework's own RPC / form-dispatch body reads do.
       setBodyLimits(state.bodyLimits);
+      setAllowedOrigins(allowedOriginsValue);
+
+      // A component that throws during SSR renders its error state in place and
+      // the page still answers 200, so in dev it is recorded here, as kind
+      // `component`, for `webjs status` and `/__webjs/dev/status` to report.
+      // A `render` entry would not do: a 200 for the url clears those.
+      if (dev) {
+        setComponentErrorSink((tag, error) => {
+          const message = error && typeof error === 'object' && 'message' in error ? String(/** @type {any} */ (error).message) : String(error);
+          const wrapped = new Error(`<${tag}> failed to render during SSR, so it shows its error state: ${message}`);
+          if (error && typeof error === 'object' && 'stack' in error) wrapped.stack = String(/** @type {any} */ (error).stack);
+          recordDevStatus(wrapped, req, 'component');
+        });
+      }
 
       let pathname = '/';
       try { pathname = new URL(req.url).pathname; } catch { /* keep default */ }
@@ -1400,19 +1492,35 @@ export async function createRequestHandler(opts) {
       let res;
       try {
         res = await produce(req);
+        // `cookies().set()` / `.delete()` anywhere in the request (an action,
+        // a route handler, middleware, a render) lands here as Set-Cookie.
+        res = applyPendingCookies(res, currentCookieStore());
+        // The headers are decided now; a streamed body still rendering after
+        // this point must not write a cookie that can never be sent.
+        sealCookies();
       } catch (e) {
         // A throw escaping produce() is the last-resort 500 (every interior
         // path catches its own errors, but a surprise still must not crash the
         // host). Fire the onError sink (best-effort) and emit a sanitized 500,
         // preserving the prior behavior plus the new APM hook.
-        reportError(e, req, 'handle');
-        logger.error?.('[webjs] request pipeline threw', {
-          requestId: reqId,
-          method: req.method,
-          path: pathname,
-          err: e instanceof Error ? e.stack : String(e),
-        });
-        res = new Response('Server error', { status: 500 });
+        if (dev && e && /** @type {any} */ (e).code === 'WEBJS_APP_LAYOUT') {
+          // A layout problem (see app-layout.js) is the app's to fix, not a
+          // crash: show it on every request and in the overlay until an edit
+          // resolves it.
+          reportDevError(e, { kind: 'rebuild' });
+          res = new Response(`[webjs] ${/** @type {Error} */ (e).message}\n`, {
+            status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' },
+          });
+        } else {
+          reportError(e, req, 'handle');
+          logger.error?.('[webjs] request pipeline threw', {
+            requestId: reqId,
+            method: req.method,
+            path: pathname,
+            err: e instanceof Error ? e.stack : String(e),
+          });
+          res = new Response('Server error', { status: 500 });
+        }
       }
 
       // Merge in the secure-by-default headers plus the per-path config
@@ -1456,6 +1564,13 @@ export async function createRequestHandler(opts) {
       // the CSP), so it overrides them all, which is the point: the variable
       // is the developer saying "this dev server is framed by these origins".
       if (embedOriginsValue.length) allowEmbedFraming(merged.headers, embedOriginsValue);
+
+      // A form action's flash is retired when the page it is bound to
+      // redirects instead of rendering, so no other page ever shows it
+      // (action-flash.js). Best-effort.
+      if (req.method === 'GET' && merged.status >= 300 && merged.status < 400) {
+        try { await retireFlashOnRedirect(req, merged, basePathValue); } catch { /* ignore */ }
+      }
 
       // Server HTML cache write (#241): if the SSR marked this response as a
       // cache candidate (an opted-in `revalidate` page), store the FINAL body
@@ -1600,7 +1715,7 @@ export async function createRequestHandler(opts) {
       // Default `'ignore'` is a no-op. The root `/` and file paths are
       // exempt; `/__webjs/*` is exempt too (defense in depth, the redirects
       // above already skip it). The funnel in handle() still wraps this.
-      const canonical = applyTrailingSlash(req, trailingSlashPolicy);
+      const canonical = applyTrailingSlash(req, trailingSlashPolicy, (p) => !!state.publicFiles && state.publicFiles.has(p));
       if (canonical) return canonical;
     }
 
@@ -1693,20 +1808,20 @@ export async function createRequestHandler(opts) {
     const earlyStatic = await tryServeFrameworkStatic(path, req.method.toUpperCase(), { coreDir, appDir, dev, versioned: url.searchParams.has('v') });
     if (earlyStatic) return earlyStatic;
 
-    // `/public/*` needs neither the module graph nor the vendor importmap, so
+    // A `public/` file (served at the url root) needs neither the module graph nor the vendor importmap, so
     // in DEV serve it here rather than behind the analysis (#1397). A cold
-    // `/public/tailwind.css` measured 1907ms at 4a335549, of which 1900ms was
+    // `/tailwind.css` measured 1907ms at 4a335549, of which 1900ms was
     // `ensureReady()`, which is why the stylesheet is the request most exposed
     // to the next `node --watch` restart. DEV ONLY on purpose: in prod
     // `/__webjs/ready` already holds traffic off a cold instance until the
     // analysis and the first vendor attempt have both completed, and hoisting
-    // there would silently un-gate a `/public/*` file that an app middleware
+    // there would silently un-gate a public file that an app middleware
     // protects. The consequence in dev is that root middleware does not run
     // for these paths, the same trade the framework statics above already make
     // in both modes. `state.regenerateRules` is loaded at boot inside
     // createRequestHandler, so the #967 on-request rebuild is available here,
     // ahead of ensureReady.
-    if (dev) {
+    if (dev && req.method === 'GET') {
       const publicResp = await tryServePublicAsset(path, {
         appDir, dev, versioned: url.searchParams.has('v'), regenerateRules: state.regenerateRules,
       });
@@ -1779,8 +1894,7 @@ export async function createRequestHandler(opts) {
     // on the first warm request.
     const moduleUrls = hintedBootModules(page.route, {
       appDir,
-      inert: state.inertRouteModules,
-      importOnly: state.importOnlyRouteModules,
+      frontiers: state.routeFrontiers,
       lazyFiles: state.lazyComponentFiles,
       instrumentationClient: state.routeTable.instrumentationClient,
     }, basePathValue);
@@ -1793,7 +1907,7 @@ export async function createRequestHandler(opts) {
     routeFor,
     /**
      * Proactively run the first-request analysis (module graph, component
-     * scan, gate, action index, middleware, elision, vendor map) in the
+     * scan, gate, action index, middleware, frontiers, vendor map) in the
      * background, so a real first request finds it already memoized. Safe to
      * call any number of times and concurrently: the work is single-flighted,
      * so this never duplicates it or races a real request. It is a single

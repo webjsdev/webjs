@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { scaffoldApp } from '../../packages/cli/lib/create.js';
 import { DEFAULT_ALIASES, DEFAULT_TAILWIND_CSS, init } from '../../packages/ui/src/commands/init.js';
 import { add } from '../../packages/ui/src/commands/add.js';
-import { analyzeAppElision } from '../../packages/server/src/elision-report.js';
+import { analyzeRouteModules } from '../../packages/server/src/route-report.js';
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-ui-'));
@@ -32,18 +32,17 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     const appDir = join(cwd, 'demo');
 
     // Bootstrap for `webjs ui add`: the config + cn() helper + theme ship, so an
-    // app can add more components on demand. The gallery ALSO ships its example
-    // design system (class helpers in modules/gallery/ui/, OUT of components/ui/
-    // where `add` writes, plus lib/utils/ui.ts fragment helpers) that the demos
-    // use; gallery:clear removes those examples.
+    // app can add components on demand. No component ships until it is added.
     assert.ok(await exists(join(appDir, 'components.json')), 'components.json should exist');
     assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
     assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
-    assert.ok(await exists(join(appDir, 'modules', 'gallery', 'ui', 'button.ts')), 'the gallery ships its design system in its own module');
-    assert.ok(await exists(join(appDir, 'modules', 'gallery', 'ui', 'badge.ts')), 'the gallery ships badgeClass');
-    assert.equal(existsSync(join(appDir, 'components', 'ui')), false, 'components/ui is left empty for webjs ui add');
-    assert.ok(await exists(join(appDir, 'lib', 'utils', 'ui.ts')), 'the gallery ships the ui.ts fragment helpers');
+    // The kit's Button, which the theme toggle uses, and nothing else.
+    // The kit components the shell uses (the toggle's Button, the home form's
+    // Input and Label), and nothing else.
+    assert.deepEqual(readdirSync(join(appDir, 'components', 'ui')).sort(), ['button.ts', 'input.ts', 'label.ts'], 'components/ui holds the kit components the shell uses');
+    // One example module, the modules/<feature>/ convention AGENTS.md names.
+    assert.deepEqual(readdirSync(join(appDir, 'modules')), ['users'], 'modules/ ships the one example module');
 
     // The scaffold and `webjsui init` must emit the SAME components.json, so
     // that initialising a bare app and scaffolding a new one land on one
@@ -55,11 +54,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.equal(cfg.tailwind.baseColor, 'neutral');
     assert.deepEqual(cfg.aliases, DEFAULT_ALIASES);
 
-    // The gallery home builds its feature/example cards on the design system.
     const layout = await readFile(join(appDir, 'app', 'layout.ts'), 'utf8');
-    const page = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.match(page, /Explore the gallery/, 'home is the gallery index page');
-    assert.match(page, /cardClass|badgeClass/, 'the home cards use the design-system helpers');
 
     // CSS delivery (#947): the layout links a STATIC compiled stylesheet (works
     // with JS off), not the browser runtime. The Tailwind @theme maps live in
@@ -69,7 +64,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     // a content hash in production and is served immutable: a deploy that
     // changes the CSS changes the url, and no browser or CDN can serve the old
     // bytes at the stable path. Still a plain static stylesheet, JS-off safe.
-    assert.match(layout, /<link rel="stylesheet" href=\$\{asset\('\/public\/tailwind\.css'\)\}>/,
+    assert.match(layout, /<link rel="stylesheet" href=\$\{asset\('\/tailwind\.css'\)\}>/,
       'layout links the static compiled stylesheet through asset()');
     assert.match(layout, /import \{[^}]*\basset\b[^}]*\} from '@webjsdev\/core'/,
       'and imports asset from core');
@@ -97,7 +92,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     // The values are plain CSS in the compiled stylesheet, so the light theme
     // paints with JS off; the dark one is the .dark class, the kit's (and a
     // preset's) switch, which the layout's inline script sets before paint.
-    assert.match(globalsCss, /:root \{[\s\S]*?--primary: #[0-9a-f]{6};/i, 'the palette VALUES are plain CSS in the theme');
+    assert.match(globalsCss, /:root \{[\s\S]*?--primary: oklch\([^)]*\);/, 'the palette VALUES are plain CSS in the theme');
     assert.match(layout, /classList\.toggle\('dark'/, 'and the layout keeps .dark in step with the choice');
   } finally {
     await rm(cwd, { recursive: true, force: true });
@@ -173,15 +168,12 @@ test('lib/utils/cn.ts ships the pure cn() helper; onBeforeCache is in lib/utils/
   }
 });
 
-test('kit helpers do not pin a page to the browser (#1320)', async () => {
-  // The end-to-end property #1320 is about: a page whose only client-facing
-  // imports are Tier-1 class helpers must still be elided. Both defects that
-  // broke it were module-scope work (`...borderGroups()` in cn.ts, a stylesheet
-  // injection in native-select.ts), and either one made this page ship whole.
-  //
-  // Asserted on the elision REPORT rather than on byte size: size moves with
-  // every unrelated kit change, so it would be a maintenance tax carrying no
-  // extra signal.
+test('a page using only the kit class helpers loads no JavaScript and draws no hint (#1320)', async () => {
+  // Tier-1 class helpers are pure functions returning class strings. A page
+  // never ships (#1686), and the helpers register no element, so a page that
+  // uses only them loads nothing in the browser, and nothing in it looks meant
+  // for the browser. Asserted on the route REPORT rather than on byte size:
+  // size moves with every unrelated kit change.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
@@ -212,25 +204,16 @@ test('kit helpers do not pin a page to the browser (#1320)', async () => {
       `  </div>\`;`,
       `}`,
     ].join('\n'));
-
-    const report = await analyzeAppElision(appDir);
-    assert.ok(report.analysed, `elision analysis ran (skipped: ${report.skipped})`);
+    const report = await analyzeRouteModules(appDir);
+    assert.ok(report.analysed, `the route analysis ran (skipped: ${report.skipped})`);
 
     const kit = report.routeModules.find((r) => r.file === join('app', 'kit', 'page.ts'));
-    assert.ok(kit, 'the kit page has a verdict');
+    assert.ok(kit, 'the kit page has a row');
     // It imports only Tier-1 helpers, which register no element, so there is
-    // nothing for it to carry into the browser.
-    assert.equal(kit.verdict, 'inert', `kit page ships, blocked by ${kit.blocker}`);
+    // nothing for it to carry into the browser and nothing to hint about.
+    assert.deepEqual(kit.emits, [], 'the kit page loads no JavaScript');
+    assert.deepEqual(kit.hints, [], 'and holds nothing that looks meant for the browser');
 
-    // And no OTHER route module is pinned by the two modules this fixed, which
-    // is the assertion that fails if either regression comes back anywhere in
-    // the scaffold.
-    const pinned = report.routeModules.filter(
-      (r) => r.verdict === 'shipped'
-        && (r.blocker?.endsWith(join('lib', 'utils', 'cn.ts'))
-          || r.blocker?.endsWith(join('components', 'ui', 'native-select.ts'))),
-    );
-    assert.deepEqual(pinned, [], 'no route module is pinned by cn.ts or native-select.ts');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
@@ -242,26 +225,25 @@ function tsFiles(dir) {
     e.isDirectory() ? tsFiles(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []);
 }
 
-test('webjs ui add in a fresh app never touches the gallery design system', async () => {
-  // A fresh app's `add dialog` pulls the kit's card and input. When the
-  // gallery's own helpers sat at components/ui/{card,input}.ts, the add
-  // overwrote them: two gallery files lost bareInputClass and webjs check
-  // failed, and every gallery card lost its padding.
+test('webjs ui add --overwrite in a fresh app keeps the shell working', async () => {
+  // A fresh app's `add dialog` pulls the kit's card, input, button and badge
+  // into components/ui/, overwriting the Button the theme toggle uses. The
+  // shell imports only the kit's public helper (buttonClass), so it keeps
+  // resolving; nothing else in the shell imports from components/ui/.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const appDir = join(cwd, 'demo');
-    const galleryUi = join(appDir, 'modules', 'gallery', 'ui');
-    const before = Object.fromEntries(await Promise.all(readdirSync(galleryUi).map(async (f) => [f, await readFile(join(galleryUi, f), 'utf8')])));
+    const shell = [...tsFiles(join(appDir, 'app')), ...tsFiles(join(appDir, 'components'))];
     await add.parseAsync(['dialog', 'card', 'input', 'button', 'badge', '--cwd', appDir, '--overwrite', '--yes', '--no-deps'], { from: 'user' });
     assert.ok(existsSync(join(appDir, 'components', 'ui', 'card.ts')), 'the kit card landed where add writes');
-    for (const [f, text] of Object.entries(before)) {
-      assert.equal(await readFile(join(galleryUi, f), 'utf8'), text, `modules/gallery/ui/${f} is untouched`);
-    }
-    // No gallery file reaches into components/ui/, so nothing it imports can be replaced.
-    for (const file of [...tsFiles(join(appDir, 'app')), ...tsFiles(join(appDir, 'modules')), ...tsFiles(join(appDir, 'components'))]) {
-      if (file.includes(join('components', 'ui'))) continue;
-      assert.doesNotMatch(await readFile(file, 'utf8'), /#components\/ui\//, `${file} imports nothing from components/ui/`);
+    for (const file of shell) {
+      const src = await readFile(file, 'utf8');
+      for (const m of src.matchAll(/from '#components\/ui\/([\w-]+)\.ts'/g)) {
+        const helper = { button: 'buttonClass', input: 'inputClass', label: 'labelClass' }[m[1]];
+        assert.ok(helper, `${file} imports only the kit components the scaffold installs (got ${m[1]})`);
+        assert.match(await readFile(join(appDir, 'components', 'ui', `${m[1]}.ts`), 'utf8'), new RegExp(`export function ${helper}\\(`), `${m[1]}.ts still exports ${helper} after the overwrite`);
+      }
     }
   } finally {
     await rm(cwd, { recursive: true, force: true });
@@ -282,15 +264,15 @@ test('the theme lives where init writes it, so a preset repaints a fresh app', a
     assert.doesNotMatch(inputCss, /--font-sans\s*:/, 'input.css leaves the body font to the theme');
     const theme = await readFile(join(appDir, 'styles', 'globals.css'), 'utf8');
     const block = theme.slice(theme.indexOf('/* @webjsdev/ui theme */'), theme.indexOf('/* @webjsdev/ui theme end */'));
-    assert.match(block, /:root \{[\s\S]*?--primary: #1e2226;/, 'the gallery palette is inside the theme block');
-    assert.match(block, /\.dark \{[\s\S]*?--primary: #dee2e6;/, 'with its dark half on .dark');
-    assert.match(block, /@theme inline \{[\s\S]*?--font-sans: 'JetBrains Mono'/, 'and its font where a preset writes one');
+    assert.match(block, /:root \{[\s\S]*?--primary: oklch\(0% 0 0\);/, 'the webjs.dev/ui palette is inside the theme block');
+    assert.match(block, /\.dark \{[\s\S]*?--primary: oklch\(0\.922 0 0\);/, 'with its dark half on .dark');
+    assert.match(block, /@theme inline \{[\s\S]*?--font-sans: 'Geist'/, 'and its font where a preset writes one');
     assert.match(theme.slice(theme.indexOf('/* @webjsdev/ui theme end */')), /--border-strong/, 'the app\'s extra tokens follow the block');
 
     // lyra, zinc, blue, Lora, large radius, from /ui/create.
     await init.parseAsync(['--cwd', appDir, '--preset', 'b1ZhhFKyG', '--css', 'styles/globals.css', '--yes'], { from: 'user' });
     const after = await readFile(join(appDir, 'styles', 'globals.css'), 'utf8');
-    assert.doesNotMatch(after, /--primary: #1e2226;/, 'the gallery palette is replaced');
+    assert.doesNotMatch(after, /--primary: oklch\(0% 0 0\);/, 'the scaffold palette is replaced');
     assert.match(after, /--primary: oklch\(0\.488 0\.243 264\.376\)/, 'by the preset\'s');
     assert.match(after, /--font-sans: 'Lora', serif;/, 'and its body font is the page\'s default family');
     assert.match(after, /--border-strong/, 'the app\'s own tokens are kept');

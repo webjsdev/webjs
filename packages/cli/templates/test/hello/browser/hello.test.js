@@ -7,8 +7,8 @@
  *
  * The runner's mocha UI is `tdd`: use suite() / test() (NOT describe / it), and
  * throw to fail (there is no chai / expect in the importmap; a tiny inline assert
- * like the one below is the idiom). See modules/components/components/browser for
- * a co-located COMPONENT browser test using ssrFixture.
+ * like the one below is the idiom). A component test renders the component
+ * with ssrFixture, as the last example below shows.
  *
  * Tests here have full access to real browser APIs: Shadow DOM,
  * adoptedStyleSheets, IntersectionObserver, events, etc.

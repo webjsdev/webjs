@@ -161,6 +161,57 @@ test('an unidentifiable function is refused, never rendered as an inert form', a
   );
 });
 
+test('action.bind(null, ...) keeps the identity and carries the arguments in the field', async () => {
+  // Next.js passes an extra argument to a form action as rsvp.bind(null, slug).
+  // The server's action wrapper gives every action this .bind; here it is
+  // installed by hand on the test's action.
+  withResolver();
+  const { installActionBind, splitActionId } = await import('../../src/form-action.js');
+  installActionBind(submitFeedback);
+  const when = new Date('2026-01-02T03:04:05Z');
+  const bound = submitFeedback.bind(null, 'meetup', { n: 1, when });
+  const out = await renderToString(html`<form action=${bound}></form>`, { ssr: true });
+  const value = out.match(/name="__webjs_action" value="([^"]*)"/)[1];
+  const parsed = splitActionId(value);
+  assert.equal(parsed.id, ID, 'the action is the one bound');
+  assert.equal(parsed.args[0], 'meetup');
+  assert.equal(parsed.args[1].n, 1);
+  assert.ok(parsed.args[1].when instanceof Date && parsed.args[1].when.getTime() === when.getTime(), 'a Date survives');
+  assert.ok(!/SECRET_MARKER/.test(out), 'the function body never reaches the page');
+
+  // Binding a bound action adds to the list, as Function.prototype.bind does.
+  const twice = bound.bind(null, 'third');
+  const out2 = await renderToString(html`<form action=${submitFeedback}><button formaction=${twice}>Go</button></form>`, { ssr: true });
+  const sub = out2.match(/<button[^>]*value="([^"]*)"/)[1];
+  const chained = splitActionId(sub).args;
+  assert.equal(chained.length, 3, 'both binds\' arguments, in order');
+  assert.equal(chained[0], 'meetup');
+  assert.equal(chained[2], 'third');
+});
+
+test('a function bound natively that is not an action is refused, pointing at action.bind', async () => {
+  withResolver();
+  const plain = async (x, fd) => [x, fd];
+  await assert.rejects(
+    () => renderToString(html`<form action=${plain.bind(null, 'slug')}></form>`, { ssr: true }),
+    (err) => /bound function that is not a server action/.test(err.message) && !/inline action/.test(err.message),
+  );
+});
+
+test('a browser stub carrying its identity binds synchronously to the same value', async () => {
+  // The client renderer reads identity synchronously, so a stub's bound copy
+  // must carry it as a property, equal to what the server emits.
+  setFormActionResolver(() => null);
+  const { installActionBind, bindActionId } = await import('../../src/form-action.js');
+  const stub = async () => {};
+  Object.defineProperty(stub, FORM_ACTION_ID_KEY, { value: ID });
+  installActionBind(stub);
+  const bound = stub.bind(null, 'meetup');
+  assert.equal(bound[FORM_ACTION_ID_KEY], bindActionId(ID, ['meetup']));
+  const out = await renderToString(html`<form action=${bound}></form>`, { ssr: true });
+  assert.ok(out.includes(`value="${bindActionId(ID, ['meetup'])}"`));
+});
+
 test('a function carrying its own identity resolves with no resolver', async () => {
   // This is the browser stub's path: the generated stub stamps its identity on
   // itself, so it needs no server resolver. Pinning it on the server renderer

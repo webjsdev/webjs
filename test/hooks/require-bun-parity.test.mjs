@@ -92,10 +92,10 @@ test('the SPLIT ssr/ and dev/ trees trip the gate, not just the barrels (#1365)'
 test('a barrel-shaped sibling that is NOT runtime-sensitive still passes', () => {
   // The widened pattern must not turn into "anything under a directory whose
   // name starts with ssr or dev". `component-scanner.js` and
-  // `component-elision.js` sit next to the runtime path and are not on it.
+  // `client-signals.js` sit next to the runtime path and are not on it.
   for (const f of [
     'packages/server/src/component-scanner.js',
-    'packages/server/src/component-elision.js',
+    'packages/server/src/client-signals.js',
   ]) {
     const { dir, git } = makeRepo();
     try {

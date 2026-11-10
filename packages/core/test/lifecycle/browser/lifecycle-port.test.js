@@ -10,10 +10,11 @@
  * here imply either a real bug, an intentional divergence, or a port
  * mismatch (documented in the final report).
  *
- * Scope mirrors the cheat sheet in the task description. Decorator-only
- * tests, `@property({ attribute: ... })` options webjs doesn't yet support,
- * dev-mode warnings, lit internals (`finalize`, `addInitializer`,
- * `elementProperties`), and `noChange` / `nothing` sentinels are skipped.
+ * Scope mirrors the cheat sheet in the task description. The tests this file
+ * left out because WebJs lacked the API then (attribute options, `noAccessor`,
+ * `createProperty`, `addInitializer`, `elementProperties`, symbol keys) are
+ * ported verbatim in reactive-element-port-{properties,attributes,accessors,
+ * updates}.test.js. Dev-mode warnings and decorator syntax stay out.
  *
  * webjs-specific notes baked into the port:
  *   - Lifecycle hook throws are caught + logged by webjs (component does
@@ -660,12 +661,10 @@ suite('Lifecycle/property port from lit reactive-element_test.ts', () => {
   // ───────────────────────────────────────────────────────────────────────
 
   test('setting properties in updated() schedules another cycle; updateComplete eventually returns true', async () => {
-    // Webjs intentional divergence from lit: webjs schedules the follow-up
-    // cycle via raw queueMicrotask, which runs BEFORE the await-continuation
-    // of the resolving updateComplete promise. So a single `await updateComplete`
-    // may observe more than one extra cycle having already run. Lit chains the
-    // next cycle through `await __updatePromise`, gating it on the awaiter.
-    // We assert the eventual fixed-point only.
+    // This asserts the eventual fixed point only. The per-await timing (each
+    // `await updateComplete` sees exactly one more cycle, as in Lit, because a
+    // cycle requested from updated() runs after that promise's awaiters) is
+    // Lit's own test, ported in reactive-element-port-updates.test.js.
     let updates = 0;
     class E extends WebComponent({ foo: Number }) {
       constructor() { super(); this.foo = 0; }

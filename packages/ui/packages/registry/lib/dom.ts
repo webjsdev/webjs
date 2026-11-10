@@ -1,8 +1,7 @@
 // Client-only DOM helpers. Kept SEPARATE from lib/utils.ts because these
-// reference `document`: any module that references a client global is treated
-// as client-effecting by the elision analyzer, so bundling this with the pure
-// `cn()` would pin every page that imports `cn` to the browser (#819). Import
-// these ONLY from components (which ship anyway), never from a page/layout.
+// reference `document`, while the pure `cn()` is imported by pages and layouts
+// too, which run only on the server (#819). Import these ONLY from components
+// (which ship to the browser), never from a page/layout.
 
 /**
  * Run `reset` just before the webjs client router snapshots the page into its

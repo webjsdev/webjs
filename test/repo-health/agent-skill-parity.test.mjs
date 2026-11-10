@@ -10,9 +10,9 @@
  *
  * Both sets are read from `git ls-files`, not from the filesystem, so the
  * machine-local `.agents/skills/omarchy` link (untracked, .gitignore:98) is
- * invisible by construction and needs no special case. The one tracked
- * exception is `.agents/skills/webjs/`, a real directory holding the framework
- * teaching skill, which has no `.claude/skills` counterpart.
+ * invisible by construction and needs no special case. Every tracked entry is
+ * a mirror; the framework teaching skill that used to be the one real
+ * directory here was removed.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const RULES_DOC = '.agents/rules/workflow.md';
 /** Tracked entries under .agents/skills/ that are directories, not mirrors. */
-const REAL_DIRS = new Set(['webjs']);
+const REAL_DIRS = new Set([]);
 
 const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' });
 
@@ -102,16 +102,11 @@ test('the workspace rules file documents exactly the mirrored skills', () => {
   );
 });
 
-test('the framework teaching skill stays a real committed directory', () => {
-  const modes = git('ls-files', '-s', '.agents/skills/webjs')
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => l.split(' ')[0]);
-  assert.ok(modes.length > 0, '.agents/skills/webjs must stay committed');
-  assert.ok(
-    !modes.includes('120000'),
-    '.agents/skills/webjs is the canonical teaching skill and must not become a symlink',
-  );
+test('the removed framework teaching skill does not come back', () => {
+  // The app-facing skill at .agents/skills/webjs/ was deleted: the brief in
+  // AGENTS.md plus Lit and Next.js muscle memory replaced it, and the docs site
+  // is the canonical reference. A restored copy would drift from both.
+  assert.equal(git('ls-files', '.agents/skills/webjs').trim(), '');
 });
 
 test('the machine-local omarchy link stays untracked', () => {

@@ -4,15 +4,8 @@ import '#components/like-button.ts';
 import { COMPONENT_SAMPLE, TOGGLE_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE, USAGE_SAMPLE, CORE_SOURCE_SAMPLE, SERVER_SOURCE_SAMPLE } from '#lib/samples.ts';
 import { DOCS_START_PATH, GALLERY_URL, GH_URL, NEW_TAB, SAME_AS } from '#lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
-// HTML), but it does ship to the client as a small dead module: the page loads
-// in the browser to register copy-cmd, and that pulls in its
-// top-level imports. This is an accepted cost. It cannot move to a .server.ts
-// util (a server-only stub throws at load, and this is a page top-level import)
-// and it is not elision-eligible (only display-only components are elided, and
-// an elision-eligible component cannot take a reactive property, so routing the
-// code through one would just duplicate the raw sample in the HTML). Its only
-// dependency, html, is already loaded by the components, so the real cost is a
-// single tiny module fetch.
+// HTML). A page never loads in the browser, so this import never reaches it
+// either; the boot loads only the components the page renders.
 import { highlight } from '#lib/utils/highlight.ts';
 import { BTN_PRIMARY, BTN_GHOST, INSTALL} from '#lib/design/recipes.ts';
 import { ctaPanel } from '#lib/ui/cta-panel.ts';
@@ -51,7 +44,7 @@ export const metadata = {
       '@id': `${SITE_URL}#organization`,
       name: 'WebJs',
       url: SITE_URL,
-      logo: `${SITE_URL}/public/favicon.png`,
+      logo: `${SITE_URL}/favicon.png`,
       // Every owned property, from the one shared list in lib/links.ts, so
       // this node, the SoftwareApplication below it, and the one on
       // /what-is-webjs all state the same entity graph (#1100).
@@ -86,10 +79,10 @@ export const metadata = {
 //   compiled away     and the action beside it never ships at all
 //   browser is the    the standard is kept and the ergonomics are kept too
 //   framework
-//   the app has a     the demos teach, the clear removes them, the shape
+//   the app has a     the brief and one example feature teach, the shape
 //   shape             stays. pays off the hero's first half
-//   framework         and when the demos and the skill run out, the framework
-//   source            itself is readable, in this app's own node_modules
+//   framework         and when the brief and the example run out, the
+//   source            framework itself is readable, in this app's node_modules
 //   works without     the backend template is the option nobody expects, and
 //   a UI too          it is what converts a reader who thinks this is UI-only.
 //                     NOT "Start where you are": that collided with the CTA
@@ -114,9 +107,9 @@ export const metadata = {
 // deleted for restating whole sections. It does NOT cover a line that stops a
 // fast scroller forming a wrong impression from the section they landed on.
 // "It works without a UI too" therefore repeats two things on purpose: that the app
-// arrives with demos AND that one command clears them, and that the defaults
-// are swappable. Someone who lands there cold and reads only "you get a working
-// app full of demos" bounces, and the fix for that is not upstream prose they
+// arrives with one example feature that is small and meant to be deleted, and
+// that the defaults are swappable. Someone who lands there cold and reads only
+// "you get a working app" may expect a pile of demos and bounce, and the fix for that is not upstream prose they
 // did not read. Cut an echo when missing it costs the reader nothing. Keep it
 // when missing it costs them the wrong idea.
 //
@@ -189,7 +182,7 @@ export const metadata = {
 // keep working with JavaScript disabled, because the server sends real HTML.
 // The chips run in the order the section argues: what a component IS, then
 // what the browser does with it, then what that buys. The last two are the
-// progressive-enhancement and elision claims, which the section keeps even
+// progressive-enhancement and zero-JS-pages claims, which the section keeps even
 // though its heading no longer leads with them, because they are consequences
 // of the component model rather than a separate topic, and the P.S. dare below
 // invites the reader to check the fourth one in their own browser.
@@ -200,10 +193,10 @@ export const metadata = {
 // which discards the server's DOM and rebuilds from the compiled template.
 // What is absent is the whole-tree walk. Hydration is scheduled per element by
 // the browser's own custom-element upgrade, pages and layouts never hydrate at
-// all, and elided components never ship. Anything shorter ("no hydration
+// all, and server-only components never ship. Anything shorter ("no hydration
 // runtime", "no hydration overhead") reads as zero cost and is refuted by one
 // look at the network tab.
-const PE_CHIPS = ['Standard custom elements', 'No virtual DOM', 'Server-rendered, then upgraded', 'No whole-page hydration', 'Reads and submits before JS', 'Display components ship 0 KB'];
+const PE_CHIPS = ['Standard custom elements', 'No virtual DOM', 'Server-rendered, then upgraded', 'No whole-page hydration', 'Reads and submits before JS', 'Pages and layouts ship 0 KB'];
 
 // The hero stage shows this source beside the very component it declares,
 // running. Keep the two in step: the panel to its right is a real
@@ -647,9 +640,9 @@ export default function LandingPage() {
                SHIP, and there are two ways a file is not one of them. The action
                window on the left never reaches the browser at all (invariant 1),
                which the lede covers with "the action becomes an RPC call". And
-               an elided display-only component is not served either, which the
-               chips in the section above claim and this section does not mention
-               on purpose, since the reader has just read it. Do not widen the
+               a page, layout or server-only component is not served either,
+               which the chips in the section above claim and this section does
+               not mention on purpose, since the reader has just read it. Do not widen the
                lede to "every file you write is served", which both of those
                refute, and do not answer the tension by softening the heading:
                it is the same sentence /why-webjs uses for its first reason card,
@@ -719,8 +712,8 @@ export default function LandingPage() {
                skip the build step" and that was false of nearly every card, then
                and now. Architecture, types, auth, and the caching / rate-limit /
                storage / WebSocket set all exist in frameworks that DO build; only
-               elision has even a weak link, being per-module because there is no
-               bundler to tree-shake instead. It also fought the header, which
+               the zero-JS route has even a weak link, being per-module because
+               there is no bundler to tree-shake instead. It also fought the header, which
                promises the cards are what the BROWSER does not give you, so a
                reader hunting the build-step connection in "Auth is not a side
                quest" found nothing. The organising principle is the header's, not
@@ -767,10 +760,9 @@ export default function LandingPage() {
                every framework and argues nothing.
 
                Know what this grid no longer covers, because nothing else on the
-               page covers it either. ELISION lost this slot: the chips under
-               the web-components section above still assert it ("Display
-               components ship 0 KB") but nothing explains it any more, and it is
-               the one claim here no other framework can make. STREAMING is down
+               page covers it either. ZERO-JS PAGES lost this slot: the chips
+               under the web-components section above still assert it ("Pages and
+               layouts ship 0 KB") but nothing explains it any more. STREAMING is down
                to a word in the scaffold inventory near the bottom. The CLIENT
                ROUTER is claimed nowhere on the landing page at all. If a slot
                ever frees up, this is the note that says which to bring back. -->
@@ -903,97 +895,54 @@ export default function LandingPage() {
         <div class="max-w-3xl mx-auto mb-12 text-center">
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">The app has a shape before your agent starts</h2>
           <p class="text-fg-muted text-base leading-[1.6] m-0">
-            A scaffolded app arrives with a live demo of every feature WebJs
-            ships, so your agent reads working code instead of guessing at an
-            API. One command clears the demos and leaves the wiring, and the
-            architecture stays decided either way, carried in a skill your agent
-            reads on demand.
+            A scaffolded app arrives small: a layout, a home page, a database,
+            one example feature to copy and then delete, and a 65-line AGENTS.md.
+            Your agent already writes Next.js routes and Lit components, and the
+            brief names only what differs, so it starts on your feature with its
+            context still free. When it needs something WebJs already provides,
+            <code>npx webjs source</code> lists it, and every feature has a
+            runnable demo at gallery.webjs.dev.
           </p>
         </div>
-        <!-- THREE artifacts telling one arc: what arrives, what clearing leaves,
-             and the shape that survives both. This section used to be two (a
-             "Read the demos. Then delete them." section sat above it) and they
-             were merged.
-
-             The lede was 115 words, the longest on the page, and the merge is
-             why: two windows did not survive it (the webjs ui add terminal and
-             the design tokens) so their content was moved into the prose. The
-             cards have since been rebuilt and both are back, in "How the UI is
-             built". The sentence outlived its reason, and by then it was reading
-             out the card headings: "where a feature's code goes" IS the second
-             card, "how the palette is declared, and how a component arrives" IS
-             the third. It is gone. Before adding prose here, check whether a
-             card already shows it, because a window beats a clause every time.
-
-             The payoff sentence went the same way, for the same reason one level
-             up: "It starts on your feature instead of on the scaffolding" is what
-             the H2 above already says, three inches away, and a scroller reads
-             the heading rather than the fourth clause of a paragraph. Check the
-             HEADER too, not just the cards.
-
-             63 words now, from 115. That is close to the floor: what is left is
-             four facts carried once each (the demos exist, one command removes
-             them, the architecture is decided and lives in a skill, the source is
-             readable). Cutting further costs content rather than duplication.
-
-             What the lede must keep carrying is the LAST sentence, the framework
-             source readable in node_modules. That is the one claim in this
-             section no card illustrates, and grepping the page shows this is its
-             only mention anywhere.
-
-             Every one of these is COPIED FROM A REAL SCAFFOLDED APP, not
-             composed for the page. Verified by running webjs create then
-             npm run gallery:clear: 26 routes under app/features before,
-             "Gallery cleared (44 paths removed)" as the actual stdout, and the
-             module paths from the generated tree. Re-generate and re-run before
-             editing any of them. The 26 and the 44 go stale quietly, and a
-             plausible-looking invented path is exactly what a reader tries once.
+        <!-- THREE artifacts: what a scaffolded app arrives with, where a
+             feature's code goes, and how the UI is built. The first window is
+             COPIED FROM A REAL SCAFFOLDED APP (ls app/, wc -l AGENTS.md, and the
+             files under modules/users/), so regenerate one and re-check it
+             before editing. The 65 goes stale quietly when AGENTS.md changes.
 
              (No backticks in here, per invariant 9: a backtick inside an html
              template body closes the literal at JS-parse time, comment or not.
-             This comment had two and took the page down until tsc caught it.
-
-             And exactly ONE closing marker, at the very end. Appending a
-             paragraph to a comment this long, it is easy to close it where your
-             new text stops, which ends the comment mid-block and renders
-             everything after it as visible page text. That shipped once. Note
-             the closing marker cannot be written out even here, since typing it
-             inside a comment is the very thing being warned about, so count the
-             markers instead: openers and closers must be equal in this file.
-             Neither tsc nor webjs check can see the mistake, because a
-             prematurely closed comment is still valid TS and valid HTML. The
-             only detector is looking at the page.) -->
+             And exactly ONE closing marker, at the very end: closing this
+             comment early renders everything after it as page text.) -->
         <div class="grid gap-4 grid-cols-1 wide:grid-cols-3 items-stretch">
           <div class="flex flex-col min-w-0">
-            <p class="text-sm font-medium leading-[1.4] text-fg-subtle mb-2.5 ml-1">What arrives, and what leaves</p>
+            <p class="text-sm font-medium leading-[1.4] text-fg-subtle mb-2.5 ml-1">What arrives</p>
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>terminal</span></figcaption>
-              <pre class="scroll-thin m-0 p-4 overflow-x-auto font-mono text-sm leading-[1.7] [tab-size:2] flex-1" role="region" tabindex="0" aria-label="The feature gallery a scaffolded app ships with"><code><span class="text-accent">$</span> npm create webjs@latest my-app
-<span class="text-accent">$</span> ls my-app/app/features
-async-render   boundaries
-auth           broadcast
-caching        client-router
-<span class="text-fg-subtle">... 26 in all</span>
+              <pre class="scroll-thin m-0 p-4 overflow-x-auto font-mono text-sm leading-[1.7] [tab-size:2] flex-1" role="region" tabindex="0" aria-label="What a scaffolded app arrives with"><code><span class="text-accent">$</span> npm create webjs@latest my-app
+<span class="text-accent">$</span> ls my-app/app
+icon.svg   layout.ts
+page.ts    manifest.webmanifest
 
-<span class="text-accent">$</span> npm run gallery:clear
-Gallery cleared (44 paths removed).
-The skill and db wiring are kept.</code></pre>
+<span class="text-accent">$</span> wc -l my-app/AGENTS.md
+65 my-app/AGENTS.md
+<span class="text-fg-subtle"># the brief: what differs from</span>
+<span class="text-fg-subtle"># Next.js routing and Lit.</span></code></pre>
             </figure>
           </div>
                     <div class="flex flex-col min-w-0">
             <p class="text-sm font-medium leading-[1.4] text-fg-subtle mb-2.5 ml-1">Where the code goes</p>
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>modules/</span></figcaption>
-              <pre class="scroll-thin m-0 p-4 overflow-x-auto font-mono text-sm leading-[1.7] [tab-size:2] flex-1" role="region" tabindex="0" aria-label="The modules architecture a scaffolded app ships with"><code>modules/auth/
-  actions/signup.server.ts
-  queries/current-user.server.ts
+              <pre class="scroll-thin m-0 p-4 overflow-x-auto font-mono text-sm leading-[1.7] [tab-size:2] flex-1" role="region" tabindex="0" aria-label="The modules architecture a scaffolded app ships with"><code>modules/users/
+  actions/add-user.server.ts
+  actions/clear-users.server.ts
+  queries/list-users.server.ts
+  components/user-list.ts
   types.ts
-modules/forms/
-  actions/send-message.server.ts
-db/schema.server.ts
-<span class="text-fg-subtle"># one feature, one folder. reads in</span>
-<span class="text-fg-subtle"># queries, writes in actions, one</span>
-<span class="text-fg-subtle"># function per file.</span></code></pre>
+<span class="text-fg-subtle"># the example feature a new app</span>
+<span class="text-fg-subtle"># ships: reads in queries, writes in</span>
+<span class="text-fg-subtle"># actions, one function per file.</span></code></pre>
             </figure>
           </div>
           <div class="flex flex-col min-w-0">
@@ -1017,11 +966,11 @@ db/schema.server.ts
     </section>
 
     <!-- Sits HERE, after the scaffold section, because its first sentence picks
-         up that section's demos and skill. It was drafted for the slot after
+         up that section's brief. It was drafted for the slot after
          "What you write is what runs", where it chains off the no-build
          decision instead, and that reads well until you notice the lede would
          be naming
-         a ladder (demos, then skill, then source) the reader has not climbed
+         a ladder (brief, then example, then source) the reader has not climbed
          yet. The trigger decides the slot.
 
          This is the readable half of the deleted "Light enough for AI" section,
@@ -1049,8 +998,8 @@ db/schema.server.ts
         <div class="max-w-3xl mx-auto mb-12 text-center">
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">The framework source is in your own project</h2>
           <p class="text-fg-muted text-base leading-[1.6] m-0">
-            A scaffolded app answers most questions with its demos and its agent
-            skill. When those run out, your agent opens the framework itself. It
+            A scaffolded app answers most questions with its brief and what your
+            agent already knows. When those run out, it opens the framework itself. It
             reads the router or the renderer it is actually calling straight from
             node_modules, not a version recalled from training data. The files
             you write ship as written, and so do the framework's, so what it
@@ -1111,7 +1060,7 @@ db/schema.server.ts
       <div class="max-w-6xl mx-auto px-6">
         <div class="max-w-3xl mx-auto mb-12 text-center">
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">It works without a UI too</h2>
-          <p class="text-fg-muted text-base leading-[1.6] m-0">Two starting points, one command each. One is full-stack, the other is routes and modules with no UI at all. Either gives you a working app with live feature demos rather than an empty directory, and one command takes the demos out whenever you want to start clean.</p>
+          <p class="text-fg-muted text-base leading-[1.6] m-0">Two starting points, one command each. One is full-stack, the other is routes and modules with no UI at all. Either gives you a working app with one example feature wired end to end rather than an empty directory, small enough to read in a minute and to delete once your own features are in.</p>
         </div>
         <div class="grid gap-4 grid-cols-1 max-w-2xl mx-auto wide:grid-cols-2 wide:max-w-3xl">
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
@@ -1126,7 +1075,7 @@ db/schema.server.ts
               <h3 class="font-display font-bold text-lg leading-[1.25] m-0">Full Stack</h3>
               <span class="font-mono text-[0.65rem] leading-none tracking-widest uppercase text-[var(--accent-text)] border border-[var(--accent-border)] rounded-full px-2 py-1">Default</span>
             </div>
-            <p class="m-0 text-sm leading-[1.6] text-fg-muted">SSR pages, web components, server actions, a database, streaming, and a browsable feature gallery. Auth (login, sessions, a protected route) ships as a gallery card.</p>
+            <p class="m-0 text-sm leading-[1.6] text-fg-muted">SSR pages, web components, server actions, a database, and streaming, scaffolded small with a short brief for your agent.</p>
             <pre class="scroll-thin m-0 px-3.5 py-3 overflow-x-auto rounded-lg border border-border bg-bg-subtle font-mono text-xs leading-[1.6] text-fg-muted" role="region" tabindex="0" aria-label="Example files in a full-stack app">app/page.ts
 components/counter.ts
 actions/posts.server.ts</pre>
@@ -1177,7 +1126,7 @@ middleware.ts</pre>
       //
       // The one phrase carrying weight was "from the app folder", buried as an
       // aside. It is what the two sections above just earned: the conventions
-      // live in a skill inside the app, and the framework source lives in its
+      // live in AGENTS.md inside the app, and the framework source lives in its
       // node_modules, so launching the agent THERE is what puts either in
       // reach. That is now the second sentence rather than a detail about
       // which directory you happen to be in.
@@ -1207,7 +1156,7 @@ middleware.ts</pre>
       // lines in the first place. So measure the ELEMENT, not a copy of it: an
       // earlier pass measured a clone whose class list had been rewritten and
       // read 57px here, 31px off.
-      lede: 'Run the command below, then start your agent in the new app folder. The conventions, demos, and framework source are already there.',
+      lede: 'Run the command below, then start your agent in the new app folder. The conventions, a demo, and framework source are already there.',
       primary: { href: DOCS_START_PATH, label: 'Get started' },
       // NOT a second docs link. This slot used to point at DOCS_PATH while the
       // primary pointed at DOCS_START_PATH, and /docs is a 308 to

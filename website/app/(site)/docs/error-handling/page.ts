@@ -27,7 +27,7 @@ export default function ErrorHandling() {
     </ul>
 
     <h2>Route-level error boundaries</h2>
-    <p>Place an <code>error.ts</code> file at any level in the <code>app/</code> directory. When a page or layout at that level (or deeper) throws, the nearest <code>error.ts</code> is rendered instead.</p>
+    <p>Place an <code>error.ts</code> file at any level in the <code>app/</code> directory. When a page or layout at that level (or deeper) throws, the nearest <code>error.ts</code> is rendered instead. So does a server action bound to a form on that page, as Next.js forwards a throwing Server Function to the nearest error boundary: with or without JavaScript the submission answers 500 with the boundary, in production with a generic message and a <code>digest</code>.</p>
 
     <p>The boundary renders <strong>inside the layouts at and above its own segment</strong>, so your site chrome stays on screen: the nav, the sidebar and the header are still there, and the user has something to navigate away with. It also means a client-router navigation into a failing page stays a soft navigation rather than reloading the document, so hydrated state elsewhere on the page survives. A layout deeper than the boundary never rendered on the way in, so it is not rendered on the way out either.</p>
 
@@ -40,20 +40,21 @@ export default function ErrorHandling() {
 
     <p>A layout that genuinely crashes is reported to your <code>onError</code> hook rather than being swallowed, so it reaches your error tracker. Repeats of the same crash within one request are collapsed to a single report, since one shared layout can fail several boundary attempts. A <code>redirect()</code> or <code>notFound()</code> is never reported, being routing rather than a crash.</p>
 
-    <p>The same holds when the <strong>boundary file itself</strong> throws or fails to load. Its response body follows the rule the rest of the framework uses for a thrown error: the failure is shown in development and withheld in production, where the page carries only its status, because a thrown message is not something you control and may name a driver, a path or a connection string. The error still reaches <code>onError</code> and the server log either way, so sanitizing the response never means losing the failure.</p>
+    <p>The same holds when the <strong>boundary file itself</strong> throws or fails to load. Its response body follows the rule the rest of the framework uses for a thrown error: the failure is shown in development and withheld in production, where the page shows a generic message and the error's digest (the full error is logged under it), because a thrown message is not something you control and may name a driver, a path or a connection string. The error still reaches <code>onError</code> and the server log either way, so sanitizing the response never means losing the failure.</p>
 
     <p>Two consequences worth knowing. A layout that fetches data runs that fetch a second time on a boundary response, since the chain is rendered again around the boundary. And a <code>&lt;webjs-suspense&gt;</code> inside a wrapped layout shows its fallback, because a boundary response is buffered so its status and headers are final before the first byte goes out.</p>
 
     <code-block>// app/error.ts: root error boundary
 import { html } from '@webjsdev/core';
 
-export default function ErrorPage({ error }: { error: Error }) {
+export default function ErrorPage({ error }: { error: Error &amp; { digest?: string } }) {
   return html${'`'}
     &lt;h1&gt;Something went wrong&lt;/h1&gt;
-    &lt;p&gt;${'${error.message}'}&lt;/p&gt;
+    &lt;p&gt;${'${error.message}'} (ref ${'${error.digest}'})&lt;/p&gt;
     &lt;a href="/"&gt;Go home&lt;/a&gt;
   ${'`'};
 }</code-block>
+    <p id="error-digest"><strong>What the boundary sees in production.</strong> As in Next.js, <code>error.ts</code> and <code>global-error.ts</code> receive a sanitized error in production: its <code>message</code> is the generic <code>Internal server error</code> and it carries a short <code>digest</code>. The raw message never reaches the page, because a thrown message is not something you control and may name a driver, a path or a connection string. The full error is logged on the server under <code>[digest=...]</code>, and your <code>onError</code> / <code>onRequestError</code> reporters receive the original error carrying the same <code>digest</code>, so a reference a user reads off the page finds the report. In development the boundary receives the real error unchanged.</p>
 
     <h3>Nesting</h3>
     <p>Error boundaries are nested. The framework walks from the throwing component outward until it finds the nearest <code>error.ts</code>:</p>
@@ -66,7 +67,7 @@ export default function ErrorPage({ error }: { error: Error }) {
     <p>If <code>blog/error.ts</code> also throws, the parent <code>app/error.ts</code> catches it.</p>
 
     <h2>not-found.ts</h2>
-    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level, and the nearest one wins:</p>
+    <p>A special error boundary for 404 responses. Place <code>not-found.ts</code> at any route level, and the nearest one wins. As in Next.js, a 404 page (and a 403 or 401 one) carries <code>&lt;meta name="robots" content="noindex"&gt;</code> so search engines skip it, unless its metadata sets <code>robots</code> itself. As in Next.js, its own <code>metadata</code> or <code>generateMetadata</code> export titles the 404 page (<code>export const metadata = { title: 'Poll not found' }</code>), resolved like a page's: the title runs through the layouts' <code>title.template</code> and their description carries over. Without a title of its own it takes the layouts' default, and with no <code>not-found.ts</code> at all the title is "Not found". <code>forbidden.ts</code> and <code>unauthorized.ts</code> follow the same rule:</p>
 
     <code-block>// app/not-found.ts
 import { html } from '@webjsdev/core';
@@ -150,10 +151,30 @@ export default function GlobalError({ error }: { error: Error }) {
     <h2>Server action errors</h2>
     <p>Errors thrown from server actions are sanitized in production: the client gets a generic <code>"Internal server error"</code> message plus a short <code>digest</code>, never the raw thrown message or the stack trace. The full error is logged server-side keyed by that digest, so a client-reported digest maps back to the server log line. A <code>redirect()</code> / <code>notFound()</code> control-flow throw passes through. To surface a specific user-facing message, return an <code>ActionResult</code> <code>{ success: false, error }</code> envelope instead of throwing.</p>
 
+    <h2 id="on-request-error">Reporting errors with onRequestError</h2>
+    <p>An app-root <code>instrumentation.ts</code> may export Next.js's <code>onRequestError</code>. The server calls it for every error a request hits on the server: a page or layout render, a metadata route, a <code>route.ts</code> handler, a server action, or middleware. It receives the same three arguments Next passes, so an existing Sentry or OpenTelemetry reporter works unchanged.</p>
+    <code-block>// instrumentation.ts
+export function register() {
+  // start your APM here
+}
+
+export async function onRequestError(
+  err: Error & { digest: string },
+  request: { path: string; method: string; headers: Record&lt;string, string&gt; },
+  context: { routerKind: 'App Router'; routePath: string; routeType: 'render' | 'route' | 'action' | 'proxy' },
+) {
+  await fetch('https://errors.example.com/report', {
+    method: 'POST',
+    body: JSON.stringify({ message: err.message, digest: err.digest, path: request.path, ...context }),
+  });
+}</code-block>
+    <p><code>err.digest</code> is the same short hash a sanitized production response carries, so a digest a user reports maps to the report. <code>routePath</code> is the route file's folder (<code>/app/blog/[slug]</code>), and <code>routeType</code> is <code>render</code> for pages, layouts and metadata, <code>route</code> for a <code>route.ts</code> handler, <code>action</code> for a server action, and <code>proxy</code> for middleware. Each error is reported once, under the most specific of those. The call is fire-and-forget: the response never waits for it, and a reporter that throws or rejects is logged and ignored. A thrown <code>redirect()</code>, <code>notFound()</code>, <code>forbidden()</code> or <code>unauthorized()</code> is routing, not an error, and is never reported.</p>
+    <p>Inside <code>register()</code> you can also call <code>setOnError(fn)</code> from <code>@webjsdev/server</code>, which receives the original error plus <code>{ request, requestId, phase }</code> and composes with the <code>onError</code> option of <code>createRequestHandler</code>.</p>
+
     <h2>Dev error overlay</h2>
     <p>In development, an SSR render crash, a non-erasable-TypeScript strip failure, and a failed rebuild each push a rich error overlay to the open tab over the live-reload channel, without a manual refresh. The overlay shows the message, the offending <code>file:line:column</code>, and a source code frame of the failing line with context. A TypeScript strip failure also shows the erasable-syntax hint inline (a non-erasable <code>enum</code> / <code>namespace</code> breaks only the client module fetch, so the page still server-renders but hydration is dead; the overlay surfaces that instead of burying the hint in a console comment). The overlay dismisses on the next successful rebuild, and the frame is replayed to a tab opened after the breaking edit. A render error does not replace the page you were looking at: the overlay goes up over the last good page, and the edit that fixes the error updates that page in place.</p>
     <p>A render error's overlay is scoped to the page that produced it. It comes down when you navigate away, it never appears in a tab that is viewing a different page, and merely prefetching a link to a broken page (which happens on hover, since link prefetch is on by default) does not raise one on the page you are actually on. A rebuild or TypeScript error is not page-scoped, because it describes a broken build rather than one route, so it stays put until the next successful rebuild.</p>
-    <p>This is strictly a development feature. In production the error response stays terse (only <code>message</code>, never the stack or any file path), and the overlay client is never served, so nothing about your source leaks. An embedding host can observe the same frames via the <code>onDevError</code> option on <code>createRequestHandler</code> / <code>startServer</code>.</p>
+    <p>This is strictly a development feature. In production the error response carries only a generic message and a digest, never the thrown message, the stack or any file path, and the overlay client is never served, so nothing about your source leaks. An embedding host can observe the same frames via the <code>onDevError</code> option on <code>createRequestHandler</code> / <code>startServer</code>.</p>
 
     <h2>Next steps</h2>
     <ul>

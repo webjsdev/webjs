@@ -99,7 +99,7 @@ Auto-installs dependencies. The scaffold lands you with:
 - A working auth flow (Google / GitHub / Credentials)
 - A protected dashboard
 - A starter test suite for both server and browser
-- `AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, and per-tool agent configs
+- A short `AGENTS.md` brief, the `CLAUDE.md` bridge, and a Claude Code hook that runs `webjs check` after every edit
 - A pre-commit hook that blocks commits to `main`, runs `npm test`, and auto-generates changelog entries on version bumps
 - `@webjsdev/ui` installed and ready (`webjs ui add button card dialog`)
 - A `.env.example` and a Drizzle schema with a working example

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { parseCookies } from './csrf.js';
+import { CookieStore, cookiesView } from './cookie-store.js';
 import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
 import { shared } from './process-shared.js';
 
@@ -36,7 +36,10 @@ import { shared } from './process-shared.js';
  * wrong `revalidate` on a cookie-reading page fails safe (uncached) instead of
  * leaking one visitor's view to another.
  *
- * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean }} Store
+ * `revalidatedPaths` collects every `revalidatePath()` call made while serving
+ * the request, so an RPC action response can tell the browser to refresh them.
+ *
+ * @typedef {{ req: Request, cspNonce?: string, bodyLimits?: { json: number, multipart: number }, requestId?: string, dynamicAccess?: boolean, revalidatedPaths?: { path: string, layout: boolean }[], cookieStore?: CookieStore, cookiesSealed?: boolean, componentErrorSink?: (tag: string, error: unknown) => void }} Store
  */
 
 /** @type {AsyncLocalStorage<Store>} */
@@ -96,6 +99,43 @@ export function setBodyLimits(limits) {
 export function getBodyLimits() {
   return als.getStore()?.bodyLimits ?? null;
 }
+
+/**
+ * Set the app's `webjs.allowedOrigins` on the current store, so a check that
+ * runs inside a route handler (the auth routes' origin check, #1686) honours
+ * the same allowlist the action endpoint does.
+ * @param {string[]} origins
+ */
+export function setAllowedOrigins(origins) {
+  const store = als.getStore();
+  if (store) store.allowedOrigins = origins;
+}
+
+/** The app's cross-origin allowlist for this request, or [] outside one. */
+export function getAllowedOrigins() {
+  return als.getStore()?.allowedOrigins ?? [];
+}
+
+/**
+ * Set where the current request's isolated component render failures go. The
+ * dev handler sets one per request so a component that throws during SSR,
+ * which renders its error state in place and leaves the page at 200, still
+ * reaches the dev status `webjs status` reads.
+ *
+ * @param {(tag: string, error: unknown) => void} sink
+ */
+export function setComponentErrorSink(sink) {
+  const store = als.getStore();
+  if (store) store.componentErrorSink = sink;
+}
+
+// The core renderer has no server imports, so it reports an isolated component
+// failure through this process-wide hook, which forwards to the sink of the
+// request being rendered. Outside a request, or with no sink set, it is a no-op.
+globalThis[Symbol.for('webjs.ssr.componentError')] = (tag, error) => {
+  const sink = als.getStore()?.componentErrorSink;
+  if (typeof sink === 'function') sink(tag, error);
+};
 
 /**
  * Set the per-request correlation id on the current store (issue #239). The
@@ -195,28 +235,124 @@ export function headers() {
   // Accept-Language / Cookie read varies the output), so mark the request
   // dynamic so the HTML cache excludes it even under `revalidate` (#241).
   markDynamicAccess();
-  return req.headers;
+  let ro = _readonlyHeaders.get(req);
+  if (!ro) {
+    ro = new ReadonlyHeaders(req.headers);
+    _readonlyHeaders.set(req, ro);
+  }
+  return ro;
+}
+
+/** One read-only copy per request, so repeated `headers()` calls agree. */
+const _readonlyHeaders = shared('readonly-headers', () => new WeakMap());
+
+/**
+ * The request headers `headers()` returns, read-only as Next.js's
+ * `ReadonlyHeaders` is (#1686): writing them changed nothing anyone reads, so
+ * a `set` meant for the RESPONSE vanished silently. A write throws naming the
+ * places a response header or a cookie is actually set.
+ */
+class ReadonlyHeaders extends Headers {
+  /** @returns {never} */
+  append() { throw readonlyHeadersError(); }
+  /** @returns {never} */
+  set() { throw readonlyHeadersError(); }
+  /** @returns {never} */
+  delete() { throw readonlyHeadersError(); }
+}
+
+function readonlyHeadersError() {
+  const e = new Error(
+    'headers() is read-only, as in Next.js: it returns the REQUEST headers. To send a response '
+    + 'header, return it from a route handler or middleware (new Response(body, { headers })) or '
+    + 'set metadata.cacheControl on a page; to set a cookie, use cookies().set().',
+  );
+  e.name = 'ReadonlyHeadersError';
+  return e;
 }
 
 /**
- * Read-only cookie jar for the in-flight request. Returns an object with
- * `.get(name)`, `.has(name)`, `.entries()`. To SET a cookie, return a
- * `Response` whose headers include `Set-Cookie` (route handlers and
- * exposed actions can do this directly).
+ * The in-flight request's cookie store (Next.js's `cookies()` from
+ * `next/headers`). `get(name)` returns `{ name, value }` or undefined, so
+ * `cookies().get('theme')?.value` reads a value; `getAll`, `has`, `size` and
+ * iteration read; `set(name, value, options)` / `set({ name, value, ... })`
+ * and `delete(name)` write a `Set-Cookie` onto this request's response
+ * (applied by the request handler), and a later read in the same request sees
+ * the write. The result is also awaitable, so Next 15's
+ * `(await cookies()).get('theme')` works too. Throws outside a request.
  *
- * @returns {{ get: (name: string) => string | undefined, has: (name: string) => boolean, entries: () => [string, string][] }}
+ * `options.maxAge` is in SECONDS (Next's unit) and `path` defaults to `/`.
+ *
+ * @returns {ReturnType<typeof cookiesView>}
  */
 export function cookies() {
-  const req = getRequest();
-  if (!req) throw new Error('cookies(): called outside a request scope');
+  const store = als.getStore();
+  if (!store) throw new Error('cookies(): called outside a request scope');
   // Reading cookies makes the render per-user (a logged-in vs logged-out body
   // keys off an auth cookie), so mark the request dynamic so the HTML cache
   // excludes it even under `revalidate`, the core leak defense (#241).
   markDynamicAccess();
-  const map = parseCookies(req);
-  return {
-    get: (name) => map[name],
-    has: (name) => Object.prototype.hasOwnProperty.call(map, name),
-    entries: () => Object.entries(map),
-  };
+  return cookiesView(requestCookieStore(store));
+}
+
+/**
+ * The request's cookie store, created on first use. Shared by `cookies()` and
+ * middleware's `request.cookies`, so a write through either is one write.
+ * @param {Store} [store]
+ * @returns {CookieStore}
+ */
+export function requestCookieStore(store = als.getStore()) {
+  if (!store) throw new Error('cookies(): called outside a request scope');
+  if (!store.cookieStore) {
+    store.cookieStore = new CookieStore(store.req.headers.get('cookie'));
+    if (store.cookiesSealed) store.cookieStore.sealed = true;
+  }
+  return store.cookieStore;
+}
+
+/**
+ * Seal the request's cookies once its response headers are decided: a later
+ * `cookies().set()` / `.delete()` (a component rendering inside a streamed
+ * boundary) throws instead of being silently lost. Reads stay allowed.
+ */
+export function sealCookies() {
+  const store = als.getStore();
+  if (!store) return;
+  store.cookiesSealed = true;
+  if (store.cookieStore) store.cookieStore.sealed = true;
+}
+
+/**
+ * The current request's cookie store if one was created, for the handler to
+ * apply its pending `Set-Cookie` writes. Null when no code touched cookies.
+ * @returns {CookieStore | null}
+ */
+export function currentCookieStore() {
+  return als.getStore()?.cookieStore || null;
+}
+
+/**
+ * Record a `revalidatePath()` call against the current request (a no-op with
+ * no ambient request).
+ * @param {string} path app-root-relative pathname, or a route pattern
+ * @param {boolean} layout Next's `'layout'` type
+ */
+export function recordRevalidatedPath(path, layout) {
+  const store = als.getStore();
+  if (!store) return;
+  (store.revalidatedPaths ||= []).push({ path, layout });
+}
+
+/**
+ * The `x-webjs-refresh` header value for the paths revalidated during this
+ * request, or null when there were none. Each path is percent-encoded (a path
+ * may contain a comma) and a layout entry carries a `;layout` suffix.
+ * @returns {string | null}
+ */
+export function refreshHeaderValue() {
+  const list = als.getStore()?.revalidatedPaths;
+  if (!list || !list.length) return null;
+  const seen = new Set();
+  for (const { path, layout } of list) seen.add(encodeURIComponent(path) + (layout ? ';layout' : ''));
+  return [...seen].join(',');
 }

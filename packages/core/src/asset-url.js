@@ -1,10 +1,11 @@
 /**
- * Resolve a `public/` asset url to its content-fingerprinted form, so a
+ * Resolve a `public/` asset url (served at the url ROOT: `public/app.css` is
+ * `/app.css`, as in Next.js) to its content-fingerprinted form, so a
  * deploy that changes the file changes the url and no cache can serve the
  * previous bytes.
  *
  *   import { html, asset } from '@webjsdev/core';
- *   html`<link rel="stylesheet" href=${asset('/public/app.css')}>`
+ *   html`<link rel="stylesheet" href=${asset('/app.css')}>`
  *
  * On the server, `@webjsdev/server` installs a provider that appends
  * `?v=<content-hash>`; the framework then serves a `?v=`-carrying request
@@ -18,7 +19,7 @@
  * the hydrate marker and `createInstance` replaces the SSR'd children), so
  * the client value overwrites the server one. With no provider in the
  * browser, `asset()` returns the bare path there, so an `<img src=${asset(
- * '/public/logo.svg')}>` inside a shipping component paints the hashed url
+ * '/logo.svg')}>` inside a shipping component paints the hashed url
  * at SSR and then swaps it for the un-hashed one on upgrade, fetching the
  * same bytes twice and leaving the short-lived url in the DOM. It still
  * WORKS (the path is always valid), which is why this is a convention rather
@@ -28,13 +29,11 @@
  * The sibling `cspNonce()` carries the same server/browser asymmetry and the
  * same scoping, for the same hydration reason.
  *
- * Call it INSIDE the render function, not at module scope. A depth-0 call is a
- * module-scope side effect, which the elision analyser reads as client work, so
- * hoisting `const CSS = asset('/public/app.css')` pins the whole page or layout
- * into the browser bundle for no benefit. Resolver ordering is not the issue
- * (the server installs its resolver at boot, before any app module loads).
+ * Calling it at module scope works too: the server installs its resolver at
+ * boot, before any app module loads, so a hoisted `const CSS =
+ * asset('/app.css')` in a page or layout resolves the same as one in render.
  *
- * Under `webjs.basePath`, write the prefix yourself: `asset('/app/public/x.css')`.
+ * Under `webjs.basePath`, write the prefix yourself: `asset('/app/x.css')`.
  * The framework only base-path-prefixes urls IT emits, so an author-written
  * url is already your responsibility (an un-prefixed one 404s under a
  * sub-path deploy with or without this helper). `asset()` strips the prefix
@@ -58,9 +57,9 @@
  * exactly the set of urls someone deliberately marked and nothing else in the
  * document is ever read or rewritten.
  *
- * Scope note: only a `public/` path is fingerprinted, matching what the
- * static-asset route will actually serve. Anything else is returned
- * unchanged rather than guessed at.
+ * Scope note: only a file that exists under `public/` is fingerprinted,
+ * matching what the static-asset route will actually serve. Anything else is
+ * returned unchanged rather than guessed at.
  */
 
 /** @type {((path: string) => string) | null} */
@@ -85,7 +84,7 @@ export function setAssetUrlProvider(fn) {
  * resolved. Every failure mode degrades to the plain path, never to a broken
  * one.
  *
- * @param {string} path  a root-absolute same-origin path, e.g. `/public/app.css`
+ * @param {string} path  a root-absolute same-origin path, e.g. `/app.css`
  * @returns {string}
  */
 export function asset(path) {

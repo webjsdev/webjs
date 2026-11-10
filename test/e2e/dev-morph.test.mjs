@@ -132,7 +132,7 @@ describe('E2E: a dev page, layout, server module or component edit applies in pl
     const page = await browser.newPage();
     const cssRequests = [];
     const consoleLines = [];
-    page.on('request', (r) => { if (r.url().includes('/public/app.css')) cssRequests.push(r.url()); });
+    page.on('request', (r) => { if (r.url().includes('/app.css')) cssRequests.push(r.url()); });
     // Kept across a reload, so a line the outgoing document logged is seen.
     page.on('console', (m) => consoleLines.push(m.text()));
     await page.goto(base + '/', { waitUntil: 'networkidle2' });
@@ -201,7 +201,7 @@ describe('E2E: a dev page, layout, server module or component edit applies in pl
       const after = await page.evaluate(() => ({
         token: window.__docToken,
         count: document.querySelector('#bump').textContent.trim(),
-        sheets: document.querySelectorAll('link[rel="stylesheet"][href*="/public/app.css"]').length,
+        sheets: document.querySelectorAll('link[rel="stylesheet"][href*="/app.css"]').length,
       }));
       assert.equal(after.token, before.token, 'the document never loaded again');
       assert.equal(after.count, before.count, 'the counter kept its state, nothing re-rendered it');

@@ -6,7 +6,7 @@
  * `components/preview-03/part-reasoning.ts`. Ported from shadcn/ui's
  * preview-03.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 
 const REASONING_LEVEL_LABELS = ['Understanding', 'Analyzing', 'Prioritizing', 'Refining'] as const;
@@ -17,7 +17,7 @@ export function getReasoningLevelLabel(index: number): string {
 }
 
 export function partReasoning(opts: { text: string; label?: string; class?: string }) {
-  return html`<div data-slot="part-reasoning" data-label=${opts.label ?? null} class=${cn('w-full max-w-full min-w-0', opts.class)}>
+  return html`<div data-slot="part-reasoning" data-label=${opts.label ?? nothing} class=${cn('w-full max-w-full min-w-0', opts.class)}>
     <div class="w-full shimmer">
       <span class="whitespace-pre-wrap">${opts.text}</span>
     </div>

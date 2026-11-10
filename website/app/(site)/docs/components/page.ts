@@ -19,6 +19,29 @@ export default function Components() {
       <li><strong>Talk to an ancestor with a bubbling event, and to a stranger with a module-scope signal.</strong> A made-up event name on <code>document</code> is a global variable with extra steps.</li>
     </ul>
 
+    <h2 id="server-only">Server-only components</h2>
+    <p>A component runs in the browser, as in Lit: it always ships. Markup that only the server should render is written one of two ways, the same split Next.js draws between client and server components (see <a href="/docs/elision">What Ships to the Browser</a>).</p>
+    <ul>
+      <li><strong>Needs the browser</strong> (state, events, lifecycle): a <code>WebComponent</code> in an ordinary file. It always ships and hydrates.</li>
+      <li><strong>Server only, as a custom element</strong>: a <code>WebComponent</code> in a <code>*.server.ts</code> file that does not start with <code>'use server'</code> (that directive turns a file's function exports into actions, and a class is a function, so <code>webjs check</code> refuses the pair). It renders on the server and is never defined in the browser, so it costs no JavaScript and may import server code directly.</li>
+      <li><strong>Server only, as a function</strong>: a function returning <code>html</code>, called from a page or layout. It may be <code>async</code> and query the database, like a Next.js server component, and it never ships.</li>
+    </ul>
+    <code-block>// components/user-card.server.ts: renders on the server, ships nothing
+import { WebComponent, html } from '@webjsdev/core';
+import { getUser } from '#modules/users/queries.server.ts';
+
+export class UserCard extends WebComponent({ id: String }) {
+  async render() {
+    const user = await getUser(this.id);
+    return html\`&lt;div class="card"&gt;&lt;b&gt;\${user.name}&lt;/b&gt;&lt;/div&gt;\`;
+  }
+}
+UserCard.register('user-card');</code-block>
+    <p>The Next.js rules carry over. A page may render either kind. A client component may not import a server-only one (it would load a stub) or render its tag in its own template (the tag is never defined in the browser, so it comes back empty after a client re-render). Pass it in as a child instead, from the page, and it lands in the client component's <code>&lt;slot&gt;</code>, as Next.js passes a server component to a client one as <code>children</code>:</p>
+    <code-block>// app/users/[id]/page.ts
+return html\`&lt;x-tabs&gt;&lt;user-card id=\${id}&gt;&lt;/user-card&gt;&lt;/x-tabs&gt;\`;</code-block>
+    <p><code>webjs check</code> refuses the shapes that would silently do nothing: an event binding, a reactive primitive or a client-only lifecycle hook in a <code>.server</code> component (<code>no-interactivity-in-server-component</code>), and a server-only tag rendered from a client component's template (<code>no-server-component-in-client-template</code>).</p>
+
     <h2>How big should a component be?</h2>
     <p>The rules above say what must not be split apart. They do not say how much to pull in, and read alone they push one way only, since there is always more surrounding markup a component could render. The stopping rule: <strong>a component owns the markup its own behaviour reads or writes.</strong> Static markup that no handler touches, no state change re-renders, and no template hole depends on belongs to the page.</p>
     <p>This is a byte-cost rule rather than a taste one. A page never hydrates, so markup it renders is free in the browser. Markup a component renders is not: the module is fetched, <code>@webjsdev/core</code> comes with it, and on upgrade the component re-renders that subtree. Moving static markup across the boundary turns free HTML into shipped JavaScript that rebuilds what the server already sent.</p>
@@ -31,15 +54,16 @@ export default function Components() {
 
   &lt;review-list .reviews=\${product.reviews}&gt;&lt;/review-list&gt;
 &lt;/article&gt;</code-block>
-    <p>Only <code>&lt;add-to-cart&gt;</code> ships. <code>&lt;spec-table&gt;</code> and <code>&lt;review-list&gt;</code> are display-only, so the framework elides them and the browser fetches neither. Wrapping the whole article in a <code>&lt;product-page&gt;</code> component would ship all three, because a component rendered by a component that ships can no longer be elided. The cost of an oversized island is therefore not linear in what you moved.</p>
+    <p>Only <code>&lt;add-to-cart&gt;</code> needs the browser. Write <code>&lt;spec-table&gt;</code> and <code>&lt;review-list&gt;</code> as <a href="#server-only">server-only components</a> (in <code>*.server.ts</code> files) and the browser fetches neither, while the page still renders them. Wrapping the whole article in a <code>&lt;product-page&gt;</code> component would ship all three, because a client component cannot render a server-only one, so both would have to become client components. The cost of an oversized island is therefore not linear in what you moved.</p>
     <p>To check a component you are about to write, walk its template and ask of each element whether a handler touches it, a state change alters it, or it sits in a template hole. If all three are no, that element is a passenger. A template that is mostly passengers wants splitting. The exception is markup that is static today but is what a near-term behaviour will read, since the alternative is a component that reaches outward for it later. When ownership and bytes genuinely collide, ownership wins.</p>
 
     <h2>The WebComponent Base Class</h2>
-    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> by passing a shape into the base-class factory (<code>extends WebComponent({ ... })</code>, and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
+    <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>reactive properties</strong> (through the base-class factory <code>extends WebComponent({ ... })</code> or Lit's <code>static properties</code> plus <code>declare</code>, both covered below), optionally sets <code>static shadow = true</code> with <code>static styles</code> for scoped CSS, implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
 
     <code-block>import { WebComponent, html, css, signal } from '@webjsdev/core';
 
 class MyCounter extends WebComponent {
+  static shadow = true;   // static styles apply inside a shadow root
 
   // Instance signal carries component-local state. SignalWatcher
   // (built into WebComponent) auto-tracks .get() reads and re-renders.
@@ -81,7 +105,7 @@ UserCard.register('user-card');</code-block>
     <p>If you forget the hyphen, the browser throws at registration time with a clear error message.</p>
 
     <h2>Properties</h2>
-    <p>Reactive properties that ride HTML attributes are declared in <strong>one</strong> place: the base-class factory. You pass the property shape directly into <code>WebComponent({ ... })</code>, the types flow to TypeScript automatically (no <code>declare</code> lines), and the runtime installs a reactive accessor for each key. A hand-written <code>static properties = { ... }</code> field in the class body is no longer supported and throws at construction.</p>
+    <p>Reactive properties that ride HTML attributes are declared either by passing the property shape into the base-class factory <code>WebComponent({ ... })</code>, where the types flow to TypeScript automatically (no <code>declare</code> lines), or with Lit's own <code>static properties = { count: { type: Number } }</code> plus <code>declare count: number</code>. The runtime installs a reactive accessor for each key either way, and a subclass's props merge with its parent's, as in Lit.</p>
 
     <h3>The factory shape</h3>
     <p>Map each property name to its type constructor. Default values are set in the constructor after <code>super()</code> (never a class-field initializer, which runs after <code>super()</code> and clobbers the reactive accessor):</p>
@@ -144,24 +168,50 @@ UserCard.register('user-card');</code-block>
 
     <p>Declare an <strong>array-typed</strong> property with the <code>Array</code> constructor, not <code>Object</code> (<code>tags: prop&lt;string[]&gt;(Array)</code>). The default converter treats both the same (each JSON-encodes the value), so <code>Object</code> does not break anything, but <code>Array</code> states the property's shape correctly. The <code>array-prop-uses-array-type</code> rule in <code>webjs check</code> flags an array-typed generic declared with <code>Object</code>.</p>
 
+    <h3>Every Lit property option</h3>
+    <p>The declaration options behave as in Lit. <code>attribute</code> takes a string (the attribute name, used as written), <code>true</code> (the default name), or <code>false</code> (no attribute). <code>converter</code> takes a <code>{ fromAttribute, toAttribute }</code> object, or a bare function, which is the <code>fromAttribute</code> half while reflection keeps the default serialisation. <code>hasChanged(value, oldValue)</code> decides whether a write schedules an update, and <code>requestUpdate(name, oldValue, options)</code> runs it too, so a manual call with an unchanged value schedules nothing (call <code>requestUpdate()</code> with no arguments to force one). <code>useDefault: true</code> makes the first value the default: it is not reflected, and removing the attribute restores it instead of <code>null</code>.</p>
+    <p>A class that defines its own <code>get</code> / <code>set</code> for a declared property keeps it: the accessor is wrapped, so reads and writes go through your code (a private field included) and each write still records the change, reflects, and re-renders. With <code>noAccessor: true</code> nothing is wrapped and your setter calls <code>this.requestUpdate(name, oldValue)</code> itself.</p>
+    <code-block>class Rating extends WebComponent {
+  static properties = { level: { type: Number, reflect: true } };
+  #level = 0;
+  get level() { return this.#level; }
+  set level(v) { this.#level = Math.max(0, Math.min(5, v)); }   // clamped, still reactive
+}</code-block>
+
+    <h3>Lit's static class API</h3>
+    <p>The class-level members a Lit author reaches for work with Lit's meaning, over the same merged declarations the accessors and attribute readers use (the factory, <code>static properties</code>, and the parent chain):</p>
+    <ul>
+      <li><code>static elementProperties</code> is a <code>Map</code> of every declared property, own and inherited, to its normalised declaration.</li>
+      <li><code>static getPropertyOptions(name)</code> returns one declaration, or the default <code>{ type: String }</code>.</li>
+      <li><code>static createProperty(name, options)</code> declares a property from code. Call it at class definition time; once an instance of the class, or of any subclass, exists the accessors are installed, so a later call throws naming the fix. Before then, a subclass picks up a property its parent creates.</li>
+      <li><code>static getPropertyDescriptor(name, key, options)</code> returns the accessor installed for each property. Override it and wrap <code>super.getPropertyDescriptor(...)</code>, or return <code>undefined</code> to install none.</li>
+      <li><code>static addInitializer(fn)</code> runs <code>fn(element)</code> in the constructor of every instance of the class and its subclasses (Lit's hook for controllers that attach themselves).</li>
+      <li><code>static finalize()</code> is idempotent, and <code>register()</code> and <code>observedAttributes</code> call it for you.</li>
+    </ul>
+    <code-block>class Tracked extends WebComponent({ count: Number }) {}
+Tracked.addInitializer((el) =&gt; el.addController(new LoggerController(el)));
+Tracked.createProperty('label', { type: String });
+Tracked.getPropertyOptions('count').type;   // Number</code-block>
+
     <h3>Attribute-to-Property Coercion</h3>
     <p>When an attribute changes on the DOM element, WebJs coerces the string value to the declared type:</p>
 
     <ul>
       <li><strong>String</strong>: passed through as-is.</li>
       <li><strong>Number</strong>: converted via <code>Number(value)</code>. Null attributes become <code>null</code>.</li>
-      <li><strong>Boolean</strong>: the attribute is <code>true</code> if present and not <code>"false"</code>. Removing the attribute sets <code>false</code>.</li>
+      <li><strong>Boolean</strong>: the property is <code>true</code> whenever the attribute is present, whatever its value, as in HTML and Lit, so <code>open="false"</code> is <code>true</code> (and warns once naming the property). Removing the attribute sets <code>false</code>. To turn one off from a template, bind <code>?open=\${false}</code>, which leaves the attribute out.</li>
       <li><strong>Object / Array</strong>: parsed via <code>JSON.parse()</code>. If parsing fails the property reads back as <code>null</code>, since a string is never a valid value for a property declared <code>Object</code> or <code>Array</code>. An attribute that was never there is a different case: it is not read at all, so the property keeps whatever the constructor gave it.</li>
       <li><strong>Every type</strong>: the value arrives with its HTML character references already decoded, on the server and in the browser alike, before the coercion above runs. So <code>cfg="&amp;#123;&amp;quot;a&amp;quot;:1&amp;#125;"</code> parses as the object it spells, and <code>label="Tom &amp;amp; Jerry"</code> is <code>Tom &amp; Jerry</code>. Named, decimal, and hexadecimal references are all covered, and so are the legacy semicolon-less forms, which decode only where a browser decodes them: <code>&amp;nbsp</code> at the end of a value is a non-breaking space, while <code>&amp;nbspx</code> and <code>&amp;nbsp=x</code> stay literal because the next character is alphanumeric or an <code>=</code>. Writing the semicolon avoids the question.</li>
     </ul>
 
+    <p>As in Lit, <code>defaultConverter</code> and <code>notEqual</code> are exported (from <code>@webjsdev/core</code>), so a converter can fall back to the default for the cases it does not handle, and a <code>hasChanged</code> can build on the default check.</p>
     <p>A property supplying its own <code>converter.fromAttribute</code> bypasses that list entirely. The converter runs first, ahead of any type-based coercion, and whatever it returns IS the property value, so a <code>prop(Object)</code> with a converter never reaches the <code>JSON.parse()</code> step above. It runs on <strong>both</strong> attribute readers, the browser one and the server one, so it executes during SSR as well as on the client upgrade. Two consequences worth planning for. Keep a converter free of browser globals (<code>document</code>, <code>window</code>, <code>navigator</code>): SSR has no DOM, so touching one throws server-side and the component renders its error state instead of its content. And a converter that throws is not caught on either side, because an author who writes one owns the conversion; at SSR the throw is isolated to that component (an error box in dev, an empty element at a 200 in production, with the cause in the server log) while its siblings still render. Both readers hand the converter <strong>decoded</strong> attribute text, so a converter that parses its input (<code>JSON.parse</code> for a Map or a Set, <code>new Date(...)</code>) receives the same string server-side and client-side even when the attribute carries <code>&amp;quot;</code> or <code>&amp;amp;</code>.</p>
 
-    <p>Property names are automatically converted between camelCase (JavaScript) and kebab-case (HTML). A property named <code>userName</code> observes the attribute <code>user-name</code>. HTML attribute names are case-insensitive and the browser lowercases them while parsing, so a camelCase attribute in markup (<code>userName="…"</code>) arrives as <code>username</code>. The property answers to that lowercased name too (lit's default attribute name), so <code>user-name</code>, <code>userName</code> and <code>username</code> all reach <code>userName</code>, in the browser and on the server. Kebab-case is the preferred spelling and the one a reflected property writes. A property with a custom <code>attribute</code> gets no lowercased alias.</p>
+    <p>A property's default attribute is Lit's: the property name lowercased, so <code>userName</code> observes and reflects <code>username</code>. HTML attribute names are case-insensitive and the browser lowercases them while parsing, so <code>userName="…"</code> in markup arrives as <code>username</code> and reaches the property. The kebab spelling <code>user-name</code> is also read, as an alias, in the browser and on the server, but a reflected property always writes the lowercase name, so style a reflected state with <code>[username]</code> (or give the property an explicit <code>attribute: 'user-name'</code> when you want the kebab name everywhere). A property with a custom <code>attribute</code> answers to that name only.</p>
 
     <p>A property that renames its attribute answers to the new name and to nothing else. Given <code>open: prop(Boolean, { attribute: 'is-open' })</code>, write <code>&lt;my-el is-open&gt;</code>; <code>&lt;my-el open&gt;</code> reaches no property on either side.</p>
 
-    <p>A <code>state: true</code> or <code>attribute: false</code> property has no attribute at all and is never read from one, on either side. The way to give one a server-rendered value is a <code>.prop=\${value}</code> binding from the parent template.</p>
+    <p>A <code>state: true</code> or <code>attribute: false</code> property has no attribute at all and is never read from one, on either side. The way to give one a server-rendered value is a <code>.prop=\${value}</code> binding from the parent template. With no <code>default</code> it is typed <code>T | undefined</code>, as Lit's <code>@state() open?: boolean</code> is, since nothing fills it until the component does; give it a <code>default</code> to type it as <code>T</code>.</p>
 
 
     <h3>Reflecting a function is refused</h3>
@@ -244,12 +294,18 @@ Counter.register('my-counter');</code-block>
 
     <p>SSR inlines the current value once; subscription is a client-only concern. Pick <code>watch()</code> when the binding is a scalar (text node, attribute value) tied to one signal and the surrounding template is expensive or static. Pick <code>signal.get()</code> when the render branches on the value, derives several things from it, or reads multiple signals together.</p>
 
+    <h3>A bare signal in a hole</h3>
+    <p>As in Lit's signals package, a signal placed in a hole WITHOUT <code>.get()</code> binds that hole the way <code>watch()</code> does: <code>\${count}</code> in text, <code>title=\${label}</code>, <code>?hidden=\${closed}</code>, and a signal inside an interpolated attribute (<code>class="card \${tone}"</code>) all render the current value on the server and update in place on the client, with no re-render of the host. A <code>.prop=\${sig}</code> hole is the exception: it hands the signal object itself to the property, so a child component can read it.</p>
+    <code-block>html\`&lt;p title=\${label} class="badge \${tone}"&gt;\${count}&lt;/p&gt;\`;</code-block>
+    <p>Lit's <code>SignalWatcher</code> mixin and <code>watch</code> are both importable from <code>@webjsdev/core/signals</code> (Lit's <code>@lit-labs/signals</code>). <code>SignalWatcher</code> returns the class it is given unchanged, because every <code>WebComponent</code> already watches the signals its update reads, so <code>class X extends SignalWatcher(WebComponent)</code> works and means the same thing as <code>class X extends WebComponent</code>.</p>
+
     <h2>Styles</h2>
-    <p>Use the <code>css</code> tagged template to declare scoped styles. They are automatically adopted into the component's shadow root.</p>
+    <p>Use the <code>css</code> tagged template to declare scoped styles on a component with <code>static shadow = true</code>; they are adopted into its shadow root. A light-DOM component (the default) has no shadow root to adopt them into, so <code>static styles</code> there is refused, as described below.</p>
 
     <code-block>import { WebComponent, html, css } from '@webjsdev/core';
 
 class StyledCard extends WebComponent {
+  static shadow = true;
   static styles = css\`
     :host {
       display: block;
@@ -382,7 +438,17 @@ class MyCard extends WebComponent {
 }
 Card.register('my-card');</code-block>
 
-    <p><code>static styles</code> on a light-DOM component is silently ignored. There's no shadow root to adopt them into. If you see your styles failing, check whether you forgot <code>static shadow = true</code>.</p>
+    <p><code>static styles</code> on a light-DOM component never applies, since there is no shadow root to adopt it into, so WebJs reports it rather than ignoring it. <code>webjs check</code> flags it, and the dev server and the browser each log an error once per class naming <code>static shadow = true</code> as the fix. Lit attaches a shadow root by default and WebJs does not, so this is the habit to watch; <code>static shadowRootOptions</code> without <code>static shadow = true</code> is flagged the same way (<code>shadow-options-need-shadow</code>). A hole in a <code>css</code> template takes another <code>css</code> result or a number; a plain string throws and must be wrapped in <code>unsafeCSS()</code> (see <a href="/docs/styling">Styling</a>).</p>
+
+    <h3>shadowRootOptions, createRenderRoot() and renderRoot</h3>
+    <p>These are Lit's members with Lit's meaning. <code>static shadowRootOptions</code> holds the <code>attachShadow()</code> options (<code>delegatesFocus</code>, <code>clonable</code>, <code>serializable</code>, a <code>closed</code> mode); the server writes them onto the Declarative Shadow DOM template too (<code>shadowrootdelegatesfocus</code> and friends), so the first paint and the hydrated element agree. A <code>closed</code> root is reused through <code>ElementInternals</code> rather than replaced, so its server-rendered content survives the upgrade, and a later <code>this.attachInternals()</code> in your own code returns that same internals object. <code>this.renderRoot</code> is the node <code>render()</code> commits into: the shadow root here, the element itself in light DOM. It is <code>undefined</code> until the element connects and at SSR.</p>
+    <code-block>class FancyInput extends WebComponent {
+  static shadow = true;
+  static shadowRootOptions = { mode: 'open', delegatesFocus: true };
+  render() { return html\`&lt;input&gt;\`; }
+  firstUpdated() { this.renderRoot.querySelector('input')?.select(); }
+}</code-block>
+    <p><code>createRenderRoot()</code> creates that root once per element. Its default returns the element for light DOM, and for <code>static shadow = true</code> attaches the shadow root (or reuses the server-rendered one) and adopts <code>static styles</code>. Lit's <code>createRenderRoot() { return this; }</code> works and is already the default. An override may post-process <code>super.createRenderRoot()</code>, but it cannot switch modes on its own: the server renders from <code>static shadow</code> and never calls it, so a shadow root returned without <code>static shadow = true</code> (or a light root with it) throws on connect, naming the fix. Calling <code>attachShadow()</code> yourself during SSR throws the same way, since the server has no DOM.</p>
 
     <h3>Mode summary</h3>
     <p>Both modes are <strong>fully SSR'd</strong>. Shadow DOM renders via Declarative Shadow DOM (<code>&lt;template shadowrootmode="open"&gt;</code>). Light DOM renders content directly as HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker. Both hydrate on the client without flash.</p>
@@ -493,7 +559,7 @@ UserProfile.register('user-profile');</code-block>
     <ul>
       <li><strong>Server data knowable at request time</strong>: <code>async render()</code> in the component. The default, simplest case.</li>
       <li><strong>Re-fetch where stale content would mislead</strong>: add <code>renderFallback()</code>.</li>
-      <li><strong>Genuinely client-only data</strong> (depends on a click, viewport, localStorage, or live updates, not needed in the first paint): use <code>Task</code> / signals plus an RPC action. A <code>Task</code> shows its pending state at SSR, so it loses first-paint data.</li>
+      <li><strong>Genuinely client-only data</strong> (depends on a click, viewport, localStorage, or live updates, not needed in the first paint): use <code>Task</code> / signals plus an RPC action. A <code>Task</code> never runs at SSR (the server renders its initial state), so it loses first-paint data.</li>
       <li><strong>Slow server data</strong> where blocking the first byte hurts: stream it by wrapping the component in <code>&lt;webjs-suspense .fallback=\${html\`…\`}&gt;</code> (fallback on the first byte, content streams in). See <a href="/docs/data-fetching">Data fetching</a>.</li>
     </ul>
     <h3>Anti-patterns</h3>
@@ -536,7 +602,7 @@ card.querySelector('slot').addEventListener('slotchange', ...);</code-block>
 
     <p>A generic DOM library that reaches into a component should operate on the assigned nodes, never on the host element itself.</p>
 
-    <p><strong>Live writes need the component's JS on the page.</strong> A display-only slotted wrapper (a component that only renders a <code>&lt;slot&gt;</code>, with no interactivity) is elided, so it ships no JavaScript and its post-mount native writes are inert, the same as any elided component. A component that is actually interacted with ships automatically (a client module references its tag); if a consumer reaches an otherwise-display-only wrapper through a string selector the analyzer cannot see, force it to ship with <code>static interactive = true</code>. Shadow-DOM components always ship, so this is the one boundary set by elision rather than by slots. See <a href="/docs/elision">Display-Only Elision</a> for what the override does and does not rescue.</p>
+    <p><strong>Live writes need the component's JS on the page.</strong> Every component in an ordinary file ships, so its slots stay live after mount. A slotted wrapper written as a <a href="#server-only">server-only component</a> renders its slot on the server and never defines itself in the browser, so post-mount native writes into it are plain DOM writes with no slot runtime behind them. Keep a wrapper you write into after load in an ordinary file.</p>
 
     <p><strong>Forwarded slots project their content everywhere.</strong> A template can forward a slot into a nested component (<code>html\`&lt;inner-shell&gt;&lt;slot&gt;&lt;/slot&gt;&lt;/inner-shell&gt;\`</code>), and the outer component's content projects through it on a client-only mount, in the server-rendered first paint, and across hydration (it does not flash back to the fallback on the client). The renderer stamps each slot with the host whose template produced it, so a forwarded slot routes to the outer component that rendered it rather than the child it nests in.</p>
 
@@ -570,6 +636,7 @@ html\`
     <p>Use <code>&lt;slot name="..."&gt;</code> to route different pieces of content to different parts of a component:</p>
 
     <code-block>class PageLayout extends WebComponent {
+  static shadow = true;
   static styles = css\`
     .sidebar { float: left; width: 200px; }
     .content { margin-left: 220px; }
@@ -613,10 +680,10 @@ html\`
     <p>WebJs components use the standard custom element lifecycle callbacks. If you override them, <strong>always call super</strong>.</p>
 
     <h3>connectedCallback()</h3>
-    <p>Called when the element is inserted into the document. This is where WebJs attaches the shadow root, adopts styles, and performs the first render. Use it for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
+    <p>Called when the element is inserted into the document. WebJs sets up the render root here (attaching the shadow root and adopting styles when <code>static shadow = true</code>) and queues the first render, which runs a microtask later, as in Lit. DOM work that needs the rendered output belongs in <code>firstUpdated()</code>. Use <code>connectedCallback</code> for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
 
     <code-block>connectedCallback() {
-  super.connectedCallback();  // REQUIRED: sets up shadow root + first render
+  super.connectedCallback();  // REQUIRED: sets up the render root, queues the first render
   this._ws = connectWS('/api/chat', {
     onMessage: (msg) =&gt; this.messages.set([...this.messages.get(), msg]),
   });
@@ -628,12 +695,13 @@ html\`
     <p>Called when the element is removed from the document. Clean up event listeners, timers, WebSocket connections, and other resources:</p>
 
     <code-block>disconnectedCallback() {
+  super.disconnectedCallback();
   this._ws?.close();
   this._ws = null;
   clearInterval(this._timer);
 }</code-block>
 
-    <p>You do not need to call <code>super.disconnectedCallback()</code> (the base class is a no-op), but it does not hurt to include it for safety.</p>
+    <p>Always call <code>super.disconnectedCallback()</code>. The base class disposes the component's signal subscriptions, tears down its slot observers, and calls each controller's <code>hostDisconnected()</code>; skipping it leaks all three.</p>
 
     <h3>attributeChangedCallback(name, oldValue, newValue)</h3>
     <p>Called when one of the <code>observedAttributes</code> changes. WebJs handles this for you. It coerces the attribute value based on the type declared in the factory shape, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
@@ -648,7 +716,7 @@ html\`
     <h3>Render Is Automatic</h3>
     <p>You never call <code>render()</code> directly. It is called automatically:</p>
     <ul>
-      <li>Once during <code>connectedCallback()</code> (first paint).</li>
+      <li>Once after <code>connectedCallback()</code>, a microtask later (first render).</li>
       <li>After every signal write the render reads (tracked by the built-in SignalWatcher).</li>
       <li>After every reactive-property assignment.</li>
       <li>After every <code>requestUpdate()</code> call.</li>
@@ -743,7 +811,7 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
     <p>WebJs wraps the native API (and installs a compatible shim on the server) so the same line works in both environments:</p>
     <ul>
       <li><strong>Browser</strong>: tells the browser to upgrade all <code>&lt;my-counter&gt;</code> elements with the <code>MyCounter</code> class, and mirrors the mapping into webjs's internal registry.</li>
-      <li><strong>Server</strong>: stores the class in the internal registry so <code>renderToString</code> can look it up for Declarative Shadow DOM injection.</li>
+      <li><strong>Server</strong>: stores the class in the internal registry so the server render can instantiate it wherever its tag appears.</li>
     </ul>
 
     <p>Module URLs for <code>&lt;link rel="modulepreload"&gt;</code> hints are discovered separately, by a server-side scanner that walks the app tree on the first request (memoized, and re-run after each rebuild) and derives the file path for each discovered tag. No per-component <code>import.meta.url</code> argument needed.</p>
@@ -772,16 +840,16 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
     <p>Template, style, method and <code>render()</code> edits all apply in place. There is no hot-reload API to opt into: the swap is automatic in dev, and production runs none of it.</p>
 
     <h2>Server Rendering</h2>
-    <p>WebJs components are server-rendered using <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter count="5"&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
+    <p>Every component is server-rendered. A light-DOM component (the default) renders its template inline after a <code>&lt;!--webjs-hydrate--&gt;</code> marker; a component with <code>static shadow = true</code>, like <code>MyCounter</code> above, renders as <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
 
-    <code-block>&lt;my-counter count="5"&gt;
+    <code-block>&lt;my-counter&gt;
   &lt;template shadowrootmode="open"&gt;
     &lt;style&gt;
       :host { display: inline-flex; gap: 8px; }
       button { font: inherit; padding: 4px 12px; }
     &lt;/style&gt;
     &lt;button&gt;-&lt;/button&gt;
-    &lt;output&gt;5&lt;/output&gt;
+    &lt;output&gt;0&lt;/output&gt;
     &lt;button&gt;+&lt;/button&gt;
   &lt;/template&gt;
 &lt;/my-counter&gt;</code-block>
@@ -789,8 +857,8 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
     <h3>How SSR Works</h3>
     <ul>
       <li>The server imports the component module, which calls <code>Class.register('tag')</code> and stores the class in the registry.</li>
-      <li>During <code>renderToString()</code>, the server scans the output HTML for registered custom element tags.</li>
-      <li>For each match, it creates a temporary instance, applies attributes from the HTML, calls <code>render()</code>, and wraps the result in a <code>&lt;template shadowrootmode="open"&gt;</code> block with the component's styles.</li>
+      <li>The renderer walks the page's templates once; when it reaches the tag of a registered component, it renders that component in place.</li>
+      <li>For each one it creates a temporary instance, applies the tag's attributes, runs the pre-render hooks and <code>render()</code>, then writes the result inline (light DOM) or inside a <code>&lt;template shadowrootmode="open"&gt;</code> block with the component's styles (shadow DOM).</li>
       <li>The browser parses this as a native declarative shadow root, so the content is visible <strong>before any JavaScript loads</strong>.</li>
       <li>When the component's JS module eventually loads and the custom element upgrades, the existing shadow root is reused. The client renderer performs a fine-grained diff against the already-painted DOM.</li>
     </ul>
@@ -815,7 +883,7 @@ html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-b
 }
 UserProfile.register('user-profile');</code-block>
 
-    <p>On the client, <code>render()</code> is called synchronously. If you need async data on the client, fetch it in <code>connectedCallback()</code> and write a signal when the data arrives.</p>
+    <p>On the client an <code>async render()</code> is awaited too. When a property change re-runs it, the current content stays on screen until the new render resolves (stale-while-revalidate), and an optional <code>renderFallback()</code> shows while it does. See <a href="/docs/data-fetching">Data fetching</a>.</p>
 
     <h2>Fine-Grained Client Renderer</h2>
     <p>The client renderer does <strong>not</strong> rebuild the entire DOM on every state change. Instead, it tracks each dynamic "hole" in the template and only touches the parts that actually changed.</p>
@@ -839,7 +907,7 @@ UserProfile.register('user-profile');</code-block>
     </ul>
 
     <h3>Keyed Lists with repeat()</h3>
-    <p>By default, rendering an array of templates rebuilds all children when any item changes. For lists where items have stable identities, use <code>repeat()</code> to enable keyed reconciliation:</p>
+    <p>A plain array of templates updates position by position: the DOM for item N is reused for whatever is now at index N, so on a reorder or an insert, focus and component state stay with the position rather than the item. For lists whose items have stable identities, use <code>repeat()</code> so the DOM follows the data:</p>
 
     <code-block>import { WebComponent, html, css, repeat } from '@webjsdev/core';
 
@@ -890,10 +958,10 @@ TaskList.register('task-list');</code-block>
     <h2>Putting It All Together</h2>
     <p>Here is a complete example showing properties, state, events, lifecycle, slots, and scoped styles in a single component:</p>
 
-    <code-block>import { WebComponent, html, css, repeat, connectWS } from '@webjsdev/core';
+    <code-block>import { WebComponent, html, css, repeat, connectWS, signal } from '@webjsdev/core';
 
 class ChatBox extends WebComponent {
-
+  static shadow = true;
   static styles = css\`
     :host { display: block; border: 1px solid var(--border); border-radius: var(--rad-lg); }
     .log  { height: 200px; overflow-y: auto; padding: var(--sp-4); }
@@ -920,13 +988,14 @@ class ChatBox extends WebComponent {
   }
 
   disconnectedCallback() {
+    super.disconnectedCallback();
     this._conn?.close();
     this._conn = null;
   }
 
   send(e) {
     e.preventDefault();
-    const input = this.shadowRoot.querySelector('input');
+    const input = this.renderRoot.querySelector('input');
     if (!input.value.trim() || !this._conn) return;
     this._conn.send({ text: input.value });
     input.value = '';
@@ -961,9 +1030,9 @@ ChatBox.register('chat-box');</code-block>
       <li><strong>Bindings</strong>: <code>attr=\${v}</code> for attributes, <code>.prop=\${v}</code> for properties, <code>?bool=\${v}</code> for booleans.</li>
       <li><strong>Slots</strong>: <code>&lt;slot&gt;</code> for default content, <code>&lt;slot name="x"&gt;</code> for named slots, fallback content, <code>assignedNodes()</code>, <code>slotchange</code>. Works identically in light DOM and shadow DOM.</li>
       <li><strong>Light DOM</strong> by default. Set <code>static shadow = true</code> to opt in to shadow DOM for scoped styles (<code>static styles = css\`...\`</code>) or third-party embed isolation.</li>
-      <li><strong>Lifecycle</strong>: <code>connectedCallback()</code> (call super!), <code>disconnectedCallback()</code>, <code>attributeChangedCallback()</code>.</li>
-      <li><strong>Lists</strong>: <code>repeat(items, keyFn, templateFn)</code> for efficient keyed updates.</li>
-      <li><strong>SSR</strong>: components render to Declarative Shadow DOM. Async <code>render()</code> supported on the server.</li>
+      <li><strong>Lifecycle</strong>: <code>connectedCallback()</code> and <code>disconnectedCallback()</code> (call super in both), <code>attributeChangedCallback()</code>, then Lit's update cycle (<code>willUpdate</code>, <code>firstUpdated</code>, <code>updated</code>).</li>
+      <li><strong>Lists</strong>: <code>repeat(items, keyFn, templateFn)</code> for keyed updates (Lit's two-argument <code>repeat(items, templateFn)</code> works too, keyed by index).</li>
+      <li><strong>SSR</strong>: light-DOM components render inline, shadow-DOM components as Declarative Shadow DOM. Async <code>render()</code> is awaited on the server and the client.</li>
     </ul>
 
     <h2>Next Steps</h2>

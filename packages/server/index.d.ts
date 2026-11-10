@@ -34,6 +34,13 @@ export * from './src/testing.js';
 
 /** A webjs middleware: receives the request + a `next()` continuation. */
 export type Middleware = (req: Request, next: () => Promise<Response>) => Promise<Response> | Response;
+/**
+ * The request an app's `middleware.ts` / `proxy.ts` (and a segment middleware)
+ * receives: the platform `Request` plus Next's `request.cookies`, the same
+ * store `cookies()` returns. Annotate with it where Next.js code writes
+ * `NextRequest`.
+ */
+export type MiddlewareRequest = Request & { readonly cookies: MiddlewareRequestCookies };
 
 // `Handle` is re-exported from ./src/testing.js (the `export *` above), so it
 // is not re-declared here. It is IMPORTED as well, because `export *` re-exports
@@ -45,15 +52,48 @@ export type Middleware = (req: Request, next: () => Promise<Response>) => Promis
  * Mirrors AGENTS.md's documented shape; `@webjsdev/core` does not export it,
  * so it is defined here (the one server-owned shared type).
  */
-export type ActionResult<T = unknown> =
-  | { success: true; data?: T; redirect?: string }
+export type ActionResult<T = any> =
+  | {
+      success: true;
+      data?: T;
+      redirect?: string;
+      message?: string;
+      // The failure fields, absent here, so a read before narrowing on
+      // `success` (`result.error ?? result.fieldErrors?.body`) type-checks.
+      error?: undefined;
+      errors?: undefined;
+      fieldErrors?: undefined;
+      values?: undefined;
+      status?: undefined;
+    }
   | {
       success: false;
       error?: string;
+      /** Next.js's `{ errors }` spelling, read as a failure like `fieldErrors`. */
+      errors?: Record<string, string | string[]>;
+      message?: string;
       fieldErrors?: Record<string, string>;
       values?: Record<string, string>;
       status?: number;
     };
+
+/**
+ * What a form-bound action receives: a real `FormData` (so `get`, `getAll` and
+ * `instanceof FormData` work, as in Next) that also carries each field as a
+ * property, so `input.title` reads it too. A `name[]` field arrives as an array
+ * under `name`; a file input arrives as a `File`. Pass the field shape for
+ * typed property reads.
+ *
+ * @example
+ * 'use server';
+ * import type { FormInput } from '@webjsdev/server';
+ * export async function createTask(input: FormInput<{ title: string; tags: string[] }>) {
+ *   const title = input.title.trim();          // or input.get('title')
+ *   ...
+ * }
+ */
+export type FormInput<Fields extends Record<string, unknown> = Record<string, string | string[] | File>> =
+  FormData & Fields;
 
 /** The pluggable cache store interface (`memoryStore` / `redisStore` / custom). */
 export interface CacheStore {
@@ -248,6 +288,14 @@ export declare function matchApi(
   table: unknown,
   pathname: string,
 ): { route: { file: string }; params: Record<string, string> } | null;
+/**
+ * The URL paths of every STATIC page route in a route table, sorted and
+ * deduped. Dynamic routes are excluded (listing one would mean inventing
+ * param values).
+ */
+export declare function staticPageRoutes(table: {
+  pages?: Array<{ routeDir?: string; paramNames?: string[] }>;
+} | undefined): string[];
 
 // ---------------------------------------------------------------------------
 // route-types.js (#258)
@@ -342,8 +390,7 @@ export declare function setVendorEntries(
 /**
  * Bare-specifier npm imports an app could load in the browser, found by walking
  * the module graph from every browser-bound entry rather than by scanning the
- * directory. Applies no elision pruning, so the result is a superset of what the
- * running server serves.
+ * directory. The result is a superset of what the running server serves.
  */
 export declare function scanBareImports(dir: string): Promise<Set<string>>;
 /** Extract the package name from an import specifier (`dayjs/plugin/utc` -> `dayjs`). */
@@ -492,8 +539,8 @@ export declare function extractComponents(src: string): Array<{ className: strin
  * because there is no registration call anywhere or because the tag is
  * computed. The registration cross-reference is app-wide, so a class a sibling
  * module registers is not an orphan. Neither is visible to the
- * scanner, so both always lose the elision verdict, the tag-to-module registry
- * entry, and the preload hint; assume the element does not upgrade either.
+ * scanner, so both always lose the tag-to-module registry entry, the boot import
+ * and the preload hint; assume the element does not upgrade either.
  * This is about REGISTRATION, never about import reachability. The full
  * semantics, including the one case where a computed tag still upgrades, live
  * on `findOrphanComponents` in `src/component-scanner.js`.
@@ -503,75 +550,53 @@ export declare function findOrphanComponents(
 ): Promise<Array<{ className: string; file: string }>>;
 
 // ---------------------------------------------------------------------------
-// elision-report.js (#646, #1308)
+// route-report.js (#1686)
 // ---------------------------------------------------------------------------
 
-/** Which rule in the analyser forced a component to ship. First match wins. */
-export type ElisionEvidence = 'own' | 'observed' | 'closure' | 'render' | 'import' | 'unreadable';
-
-/** One component module's verdict. `evidence` / `reason` / `by` are null when elided. */
-export interface ElisionComponentRow {
-  /** App-relative path of the component module. */
+/**
+ * One route module (page, layout or boundary). A route module never ships to
+ * the browser; the boot imports `emits`, its component frontier, in its place.
+ */
+export interface RouteModuleRow {
   file: string;
-  /** Every tag this file registers, sorted. */
-  tags: string[];
-  verdict: 'elided' | 'shipped';
-  evidence: ElisionEvidence | null;
-  reason: string | null;
-  /** App-relative path of the module that forced the ship, where one did. */
-  by: string | null;
-}
-
-/** One page/layout route module's verdict. */
-export interface ElisionRouteModuleRow {
-  file: string;
-  verdict: 'inert' | 'import-only' | 'shipped';
-  /** For `import-only`: the component modules the boot emits in its place. */
+  kind: 'page' | 'layout' | 'error' | 'loading' | 'not-found' | 'forbidden' | 'unauthorized' | 'global-not-found';
+  /** The component modules the boot imports in this module's place (empty: zero JS). */
   emits: string[];
-  /** For `shipped`: the first client-effecting blocker, or null when its own code is the cause. */
-  blocker: string | null;
-  reason: string | null;
+  /** Advisory notes on code that looks meant for the browser but runs only on the server. */
+  hints: string[];
 }
 
 /** A `class X extends WebComponent` with no literal-tag registration. */
-export interface ElisionOrphanRow {
+export interface OrphanRow {
   file: string;
   className: string;
 }
 
-export interface ElisionSummary {
-  components: number;
-  elided: number;
-  shipped: number;
+export interface RouteReportSummary {
   routeModules: number;
-  inert: number;
-  importOnly: number;
-  shippedWhole: number;
+  /** Route modules whose frontier is empty: the browser loads nothing for them. */
+  zeroJs: number;
+  /** Route modules whose frontier names at least one component. */
+  carriers: number;
   orphans: number;
 }
 
-/** The whole app-level elision verdict. Every path is app-relative; every array is sorted by `file`. */
-export interface ElisionReport {
+/** What each route costs the browser. Every path is app-relative; every array is sorted by `file`. */
+export interface RouteReport {
   analysed: boolean;
   /** Why nothing was analysed, when `analysed` is false. */
-  skipped: 'no-app' | 'elide-off' | 'unanalysable' | null;
-  components: ElisionComponentRow[];
-  routeModules: ElisionRouteModuleRow[];
-  orphans: ElisionOrphanRow[];
-  summary: ElisionSummary;
+  skipped: 'no-app' | 'unanalysable' | null;
+  routeModules: RouteModuleRow[];
+  orphans: OrphanRow[];
+  summary: RouteReportSummary;
 }
 
 /**
- * App-level elision report, BOTH directions (#646, #1308): every component
- * module as elided or shipped (a shipped one naming the evidence and the module
- * that forced it), every page/layout as inert / import-only / shipped (a
- * shipped one naming the first client-effecting blocker), and every orphan
- * component class that gets no verdict at all. A reporting layer over
- * `analyzeElision`, never a second analysis and never a build artifact.
- * Consumed by `webjs elision`, the MCP `list_elision` tool, and both `webjs
- * doctor` elision checks.
+ * Every route module with the components the boot loads in its place and any
+ * hints about browser-looking code in it, plus every orphan component class.
+ * Consumed by both `webjs doctor` route checks.
  */
-export declare function analyzeAppElision(appDir: string): Promise<ElisionReport>;
+export declare function analyzeRouteModules(appDir: string): Promise<RouteReport>;
 
 // ---------------------------------------------------------------------------
 // dev-regenerate.js (#967, #1672)
@@ -615,39 +640,80 @@ export declare function regenerateStatus(
 ): Promise<Array<{ output: string; command: string; state: RegenerateState }>>;
 
 // ---------------------------------------------------------------------------
-// elision-differential.js (#1308)
-// ---------------------------------------------------------------------------
-
-/**
- * Mask the JS-loaded set (importmap, boot script, modulepreload hints, vendor
- * connection hints, content stamps) out of an SSR response so a diff sees only
- * observable output. The ONE definition shared by the framework's own
- * differential guard and `webjs elision --verify`, so an app can diff its own
- * two captures with exactly the framework's comparator.
- */
-export declare function maskJsSet(html: string): string;
-
-/**
- * The URL paths of every STATIC page route in a `buildRouteTable` result,
- * sorted and deduped. Dynamic routes are excluded (rendering one would mean
- * inventing param values).
- */
-export declare function staticPageRoutes(table: {
-  pages?: Array<{ routeDir?: string; paramNames?: string[] }>;
-}): string[];
-
-// ---------------------------------------------------------------------------
 // context.js (per-request context helpers)
 // ---------------------------------------------------------------------------
 
+/**
+ * The in-flight request's headers, read-only as Next.js's `ReadonlyHeaders`:
+ * `set`, `append` and `delete` throw at runtime and are absent from the type.
+ */
+export type ReadonlyHeaders = Omit<Headers, 'set' | 'append' | 'delete'>;
 /** Read-only headers for the in-flight request. Throws outside a request scope. */
-export declare function headers(): Headers;
-/** Read-only cookie jar for the in-flight request. Throws outside a request scope. */
-export declare function cookies(): {
-  get(name: string): string | undefined;
+export declare function headers(): ReadonlyHeaders;
+/** A cookie as read from the request. */
+export interface RequestCookie { name: string; value: string }
+/** A cookie to write (Next's `ResponseCookie`; `maxAge` in seconds, `path` defaults to `/`). */
+export interface ResponseCookie {
+  name: string;
+  value: string;
+  expires?: Date | number;
+  maxAge?: number;
+  domain?: string;
+  path?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  sameSite?: 'lax' | 'strict' | 'none' | 'Lax' | 'Strict' | 'None' | boolean;
+  partitioned?: boolean;
+  priority?: 'low' | 'medium' | 'high';
+}
+/** The request's cookie store (Next.js's `cookies()` shape). */
+/**
+ * Next.js's `RequestCookies`, `request.cookies` in middleware and a route
+ * handler. Reads are the request's cookies; `set`, `delete` and `clear` change
+ * what the rest of this request reads (the page's `cookies()` included) and
+ * send nothing to the browser. Set a response cookie with `cookies().set()`.
+ */
+export interface MiddlewareRequestCookies {
+  get(name: string | { name: string }): RequestCookie | undefined;
+  getAll(name?: string | { name: string }): RequestCookie[];
   has(name: string): boolean;
-  entries(): [string, string][];
-};
+  readonly size: number;
+  set(name: string, value: string): MiddlewareRequestCookies;
+  set(cookie: RequestCookie): MiddlewareRequestCookies;
+  delete(names: string): boolean;
+  delete(names: string[]): boolean[];
+  clear(): MiddlewareRequestCookies;
+  toString(): string;
+  [Symbol.iterator](): IterableIterator<[string, RequestCookie]>;
+}
+export interface RequestCookies {
+  get(name: string | { name: string }): RequestCookie | undefined;
+  getAll(name?: string | { name: string }): RequestCookie[];
+  has(name: string): boolean;
+  readonly size: number;
+  set(name: string, value: string, options?: Omit<ResponseCookie, 'name' | 'value'>): RequestCookies;
+  set(cookie: ResponseCookie): RequestCookies;
+  delete(name: string | { name: string; path?: string; domain?: string }): RequestCookies;
+  toString(): string;
+  [Symbol.iterator](): IterableIterator<[string, RequestCookie]>;
+}
+/**
+ * The in-flight request's cookies, Next.js's `cookies()`: `cookies().get('x')?.value`
+ * reads, `set` / `delete` write a `Set-Cookie` onto this request's response. Also
+ * awaitable (`(await cookies()).get('x')`). Throws outside a request scope.
+ *
+ * `get` returns a {@link RequestCookie} (`{ name, value }`) or `undefined`, as
+ * in Next.js, never the bare string.
+ *
+ * @example
+ * ```ts
+ * import { cookies } from '@webjsdev/server';
+ * const theme: string = cookies().get('theme')?.value ?? 'light';
+ * cookies().set('theme', 'dark', { path: '/', maxAge: 60 * 60 * 24 * 365, httpOnly: true });
+ * cookies().delete('theme');
+ * ```
+ */
+export declare function cookies(): RequestCookies & Promise<RequestCookies>;
 /** The raw `Request` for the in-flight scope, or null at module top-level. */
 export declare function getRequest(): Request | null;
 /** Run `fn` within a request scope. */
@@ -786,8 +852,13 @@ export declare function cache<T extends (...args: any[]) => Promise<any>>(
 // cache-tags.js (#242) + html-cache.js (#241): server cache invalidation
 // ---------------------------------------------------------------------------
 
-/** Evict every `cache()` entry tagged with `tag`. */
-export declare function revalidateTag(tag: string): Promise<void>;
+/**
+ * Evict every `cache()` entry tagged with `tag`. Takes Next.js 16's second
+ * argument, `revalidateTag(tag, 'max')` (a cache-life profile, or
+ * `{ expire }`), for source compatibility: WebJs evicts at once whatever the
+ * profile, since `cache()` has no stale-while-revalidate window to honour.
+ */
+export declare function revalidateTag(tag: string, profile?: string | { expire?: number }): Promise<void>;
 /** Evict every `cache()` entry tagged with any of `tags`. */
 export declare function revalidateTags(tags: string[]): Promise<void>;
 /**
@@ -800,7 +871,7 @@ export declare function revalidateTags(tags: string[]): Promise<void>;
  * `webjs.basePath` the absolute url is the PUBLIC one and its mount prefix is
  * stripped, so it evicts the entry the write actually stored.
  */
-export declare function revalidatePath(path: string): Promise<void>;
+export declare function revalidatePath(path: string, type?: 'page' | 'layout'): Promise<void>;
 /** Evict all cached HTML (per-process generation bump). */
 export declare function revalidateAll(): Promise<void>;
 
@@ -826,12 +897,34 @@ export declare class Session {
   set(key: string, value: unknown): void;
   has(key: string): boolean;
   unset(key: string): void;
-  /** Set a value readable once on the next request, then cleared. */
+  /** Set a value that lasts until a `get()` reads it (Remix's flash); `has()` does not consume it. */
   flash(key: string, value: unknown): void;
   destroy(): void;
+  /**
+   * Give the session a new id, keeping its data. Call it after a login to
+   * prevent session fixation; `deleteOld` also deletes the old id's stored data.
+   */
+  regenerateId(deleteOld?: boolean): void;
 }
 
-/** Session middleware factory. */
+/**
+ * Session middleware factory: a signed session cookie for apps that do not use
+ * `createAuth`. It throws at import without `secret` or `SESSION_SECRET`.
+ *
+ * @example
+ * ```ts
+ * // middleware.ts
+ * import { session } from '@webjsdev/server';
+ * export default session({ secret: process.env.SESSION_SECRET });
+ *
+ * // In a 'use server' action or a page:
+ * import { getRequest, getSession } from '@webjsdev/server';
+ * const s = getSession(getRequest()!);
+ * s.regenerateId(true);       // after a login, against session fixation
+ * s.set('userId', user.id);
+ * const userId = s.get<string>('userId');
+ * ```
+ */
 export declare function session(opts?: {
   storage?: SessionStorage;
   cookieName?: string;
@@ -850,8 +943,26 @@ export declare function storeSessionStorage(opts?: Record<string, unknown>): Ses
 export declare const cookieSession: typeof cookieSessionStorage;
 /** Alias of `storeSessionStorage`. */
 export declare const storeSession: typeof storeSessionStorage;
-/** Read the session for a request (after the session middleware ran). */
-export declare function getSession(req: Request): Session;
+/**
+ * The session for the current request. With no argument it reads the request
+ * in scope (as `cookies()` and `headers()` do); passing `getRequest()` also works.
+ * Needs `session()` as root middleware; throws outside it.
+ *
+ * @example
+ * ```ts
+ * // middleware.ts
+ * import { session } from '@webjsdev/server';
+ * export default session();             // SESSION_SECRET from .env
+ *
+ * // in a page, action or route handler
+ * import { getSession } from '@webjsdev/server';
+ * const s = getSession();
+ * s.set('cart', [1, 2]);                // persists across requests
+ * s.flash('notice', 'Saved');           // read once by the next request
+ * const notice = s.get('notice');       // unknown; narrow it before use
+ * ```
+ */
+export declare function getSession(req?: Request | null): Session;
 
 // ---------------------------------------------------------------------------
 // broadcast.js
@@ -868,9 +979,14 @@ export declare function broadcast(
 // file-storage.js (#247)
 // ---------------------------------------------------------------------------
 
-/** A streaming handle returned by `FileStore.get` (body is a stream, never buffered). */
+/**
+ * A streaming handle returned by `FileStore.get` (body is a stream, never
+ * buffered). The body is a web `ReadableStream`, so `new Response(file.body)`
+ * serves it as is; an adapter whose SDK returns a Node stream converts it with
+ * `Readable.toWeb`.
+ */
 export interface StoredObjectHandle {
-  body: ReadableStream | import('node:stream').Readable;
+  body: ReadableStream<Uint8Array>;
   size: number;
   contentType: string;
 }
@@ -904,7 +1020,26 @@ export declare const DEFAULT_UPLOAD_DIR: string;
 export declare function diskStore(opts?: { dir?: string; baseUrl?: string }): FileStore;
 /** Set the default file store (call at startup to use a custom dir or S3). */
 export declare function setFileStore(store: FileStore): void;
-/** Get the default file store (`diskStore` under `<cwd>/.webjs/uploads` unless set). */
+/**
+ * Get the default file store (`diskStore` under `<cwd>/.webjs/uploads` unless set).
+ *
+ * @example
+ * ```ts
+ * // In a 'use server' action bound to <form action=${save} enctype="multipart/form-data">
+ * // with <input type="file" name="photo">: the field arrives as a File.
+ * import { getFileStore, generateKey } from '@webjsdev/server';
+ * const key = generateKey(input.photo.name);   // opaque, traversal-safe
+ * await getFileStore().put(key, input.photo);  // streams to disk
+ *
+ * // app/uploads/[key]/route.ts serves it back:
+ * export async function GET(_req: Request, { params }: { params: { key: string } }) {
+ *   let file;
+ *   try { file = await getFileStore().get(params.key); } catch { file = null; } // an unsafe key throws
+ *   if (!file) return new Response('Not found', { status: 404 });
+ *   return new Response(file.body, { headers: { 'content-type': file.contentType } });
+ * }
+ * ```
+ */
 export declare function getFileStore(): FileStore;
 /** Generate a random, opaque, traversal-safe key, preserving a whitelisted extension. */
 export declare function generateKey(filename?: string): string;
@@ -1080,13 +1215,102 @@ export type ResolvedAuthUser = keyof AuthUser extends never
   : AuthUser;
 
 /** Auth configuration for `createAuth`. */
+/**
+ * The Auth.js adapter methods `createAuth` calls, the shape `@auth/*-adapter`
+ * packages implement (`@auth/core/adapters`).
+ */
+export interface AuthAdapter {
+  createUser(user: Record<string, any>): Promise<any> | any;
+  getUser?(id: string): Promise<any> | any;
+  getUserByEmail(email: string): Promise<any> | any;
+  getUserByAccount(account: { provider: string; providerAccountId: string }): Promise<any> | any;
+  updateUser?(user: Record<string, any>): Promise<any> | any;
+  linkAccount(account: Record<string, any>): Promise<any> | any;
+  createSession(session: { sessionToken: string; userId: string; expires: Date }): Promise<any> | any;
+  getSessionAndUser(sessionToken: string): Promise<{ session: { sessionToken: string; userId: string; expires: Date }; user: any } | null> | { session: any; user: any } | null;
+  updateSession?(session: { sessionToken: string; expires?: Date }): Promise<any> | any;
+  deleteSession(sessionToken: string): Promise<any> | any;
+}
+/**
+ * The token the `jwt` and `session` callbacks see, Auth.js's `JWT`: the
+ * standard claims plus whatever the `jwt` callback put on it.
+ */
+export interface AuthJWT {
+  sub?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  iat?: number;
+  exp?: number;
+  [key: string]: unknown;
+}
+
+/** The user the callbacks see, Auth.js's `User`: what `authorize` or the provider returned. */
+export interface AuthCallbackUser {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  [key: string]: unknown;
+}
+
+/** The session the `session` callback receives and returns, Auth.js's `Session`. */
+export interface AuthCallbackSession {
+  user: ResolvedAuthUser & { name?: string | null; email?: string | null; image?: string | null };
+  expires: string;
+  [key: string]: unknown;
+}
+
+type AuthAwaitable<T> = T | Promise<T>;
+
+/**
+ * Auth.js's callbacks, with the parameters Auth.js passes, so a callback
+ * written as Auth.js documents it (`jwt({ token, user })`,
+ * `session({ session, token })`) is typed with no annotation. Declared as
+ * methods so a callback annotated with its own narrower types still compiles.
+ */
+export interface AuthCallbacks {
+  /** At sign-in (`trigger: 'signIn'`, with `user`, `account` and `profile`) and on every session read. */
+  jwt?(params: { token: AuthJWT; user: AuthCallbackUser; account?: Record<string, any> | null; profile?: Record<string, any>; trigger?: 'signIn' | 'signUp' | 'update'; session?: any }): AuthAwaitable<AuthJWT | null>;
+  /** On every session read. `token` under the jwt strategy, `user` under the database strategy. */
+  session?(params: { session: AuthCallbackSession; token: AuthJWT; user: AuthCallbackUser }): AuthAwaitable<any>;
+  /** Return true to allow, a url string to redirect there instead, anything else to deny (Auth.js's rule). */
+  signIn?(params: { user: AuthCallbackUser; account?: Record<string, any> | null; profile?: Record<string, any>; credentials?: Record<string, any> }): AuthAwaitable<boolean | string>;
+  redirect?(params: { url: string; baseUrl: string }): AuthAwaitable<string>;
+  /** Run by `auth` as middleware: true continues, false redirects to sign in, a Response is sent as is. */
+  authorized?: (params: { auth: { user: Record<string, unknown> } | null; request: Request }) => boolean | Response | Promise<boolean | Response>;
+}
+
 export interface AuthConfig {
-  providers: ProviderConfig[];
-  session?: { strategy?: 'jwt' | 'database'; maxAge?: number };
-  secret: string;
-  callbacks?: { session?: Function; jwt?: Function; signIn?: Function; redirect?: Function };
-  adapter?: { load?: Function; save?: Function; destroy?: Function };
+  /** A provider config, or the provider function uncalled (`providers: [GitHub]`), as Auth.js accepts. */
+  providers: Array<ProviderConfig | (() => ProviderConfig)>;
+  /**
+   * `strategy` defaults to `'database'` when an Auth.js adapter is given, else
+   * `'jwt'`. `updateAge` (seconds, default a day) is how often a database
+   * session's expiry is pushed forward, as in Auth.js.
+   */
+  session?: { strategy?: 'jwt' | 'database'; maxAge?: number; updateAge?: number };
+  /** Signs the session. Defaults to `process.env.AUTH_SECRET`, as in Auth.js. */
+  secret?: string | undefined;
+  callbacks?: AuthCallbacks;
+  /**
+   * An Auth.js database adapter (`DrizzleAdapter(db)` from `@auth/drizzle-adapter`,
+   * and the rest), or WebJs's own session store for the database strategy.
+   */
+  adapter?: AuthAdapter | { load?: Function; save?: Function; destroy?: Function };
   pages?: { signIn?: string; signOut?: string; error?: string };
+  /**
+   * Auth.js's `useSecureCookies`: force the Secure flag and the `__Host-`
+   * cookie names on or off. Unset, they follow the auth URL's protocol
+   * (`AUTH_URL`'s when set, else the request's), never `NODE_ENV`.
+   */
+  useSecureCookies?: boolean;
+  /**
+   * Where the auth routes are mounted, as Auth.js's `basePath`. Defaults to
+   * the path of `AUTH_URL` when it has one, else `/api/auth`. `AUTH_URL` (or
+   * `NEXTAUTH_URL`) also sets the origin OAuth callback URLs use.
+   */
+  basePath?: string;
 }
 
 /**
@@ -1097,26 +1321,120 @@ export interface AuthConfig {
  * via `createAuth<MyUser>(...)`.
  */
 export interface AuthInstance<TUser = ResolvedAuthUser> {
-  auth: (req?: Request) => Promise<{ user: TUser } | null>;
-  signIn: (
-    provider: string,
-    data?: Record<string, unknown>,
-    opts?: { redirectTo?: string; req?: Request },
-  ) => Promise<Response>;
-  signOut: (opts?: { redirectTo?: string; req?: Request }) => Promise<Response>;
+  /**
+   * Auth.js's `auth`, in its three shapes: `auth()` / `auth(req)` reads the
+   * session; `export { auth as middleware }` runs as middleware (it sets
+   * `req.auth` and applies `callbacks.authorized`); `auth((req) => ...)` wraps
+   * a middleware whose `req.auth` holds the session.
+   */
+  auth: {
+    (req?: Request | null): Promise<{ user: TUser } | null>;
+    (req: Request, next: unknown): Promise<Response | undefined>;
+    <R>(handler: (req: Request & { auth: { user: TUser } | null }, ...rest: any[]) => R): (req: Request, ...rest: any[]) => Promise<Response | Awaited<R>>;
+  };
+  /**
+   * Auth.js v5's `signIn`. Inside a request (a server action, a route handler,
+   * middleware) it sets the session cookie on the response and throws a
+   * redirect, so `await signIn('credentials', formData)` in a form action signs
+   * in and navigates; a credentials failure throws {@link CredentialsSignin}.
+   * `{ redirect: false }` (in the options or, as Auth.js accepts it, in the
+   * data) returns the target url instead of throwing. With no request in scope
+   * it returns the Response the `/api/auth/*` routes send. The redirecting
+   * form is typed `Promise<Response>`, so `return signIn(...)` fits an action
+   * that returns `ActionResult | Response`.
+   */
+  signIn: {
+    (
+      provider: string,
+      data: (FormData | Record<string, unknown>) | undefined,
+      opts: { redirectTo?: string; redirect: false; req?: Request },
+    ): Promise<string>;
+    (
+      provider: string,
+      data: Record<string, unknown> & { redirect: false },
+      opts?: { redirectTo?: string; req?: Request },
+    ): Promise<string>;
+    (
+      provider: string,
+      data?: FormData | Record<string, unknown>,
+      opts?: { redirectTo?: string; redirect?: true; req?: Request },
+    ): Promise<Response>;
+  };
+  /** Auth.js v5's `signOut`: clears the session and throws a redirect inside a request. */
+  signOut: {
+    (opts: { redirectTo?: string; redirect: false; req?: Request }): Promise<string>;
+    (opts?: { redirectTo?: string; redirect?: true; req?: Request }): Promise<Response>;
+  };
   handlers: { GET: (req: Request) => Promise<Response>; POST: (req: Request) => Promise<Response> };
 }
 
 /**
- * Create the auth system. Parameterise with the session-user shape
- * (`createAuth<MyUser>(...)`) for per-instance typing, or augment the
- * {@link AuthUser} interface for global typing; both make `auth().user` typed
- * with no cast. Defaults to the open {@link AuthUser}, so existing untyped code
- * keeps compiling unchanged.
+ * Create the auth system, Auth.js's API. `createAuth<MyUser>(...)` (or an
+ * augmented {@link AuthUser}) types `auth().user` with no cast.
+ *
+ * @example
+ * ```ts
+ * // modules/auth/auth.server.ts
+ * export const { auth, signIn, signOut, handlers } = createAuth({
+ *   providers: [Credentials({
+ *     async authorize(c: { email: string; password: string }) {
+ *       const user = await findUserByEmail(c.email); // your own query
+ *       if (!user || !(await verifyPassword(c.password, user.passwordHash))) return null;
+ *       return { id: String(user.id), email: user.email };
+ *     },
+ *   })],
+ *   pages: { error: '/login' }, // an uncaught failure lands on /login?error=CredentialsSignin
+ * });
+ * // app/api/auth/[...path]/route.ts: export const { GET, POST } = handlers;
+ * // Read the user anywhere on the server: const session = await auth();
+ *
+ * // A 'use server' action bound as <form action=${logIn}>, as with Auth.js in Next:
+ * export async function logIn(formData: FormData) {
+ *   try {
+ *     await signIn('credentials', formData, { redirectTo: '/dashboard' });
+ *   } catch (error) {
+ *     if (error instanceof AuthError) return { success: false, error: 'Wrong email or password.' };
+ *     throw error; // the success redirect
+ *   }
+ * }
+ * // Sign out the same way: await signOut({ redirectTo: '/' }).
+ * ```
  */
 export declare function createAuth<TUser = ResolvedAuthUser>(config: AuthConfig): AuthInstance<TUser>;
-/** The credentials (email/password) provider. */
-export declare function Credentials(opts: Record<string, unknown>): ProviderConfig;
+/** Next.js's navigation helpers (`next/navigation`), re-exported from `@webjsdev/core` so server code can import them from either package. */
+export declare const notFound: typeof import('@webjsdev/core').notFound;
+export declare const forbidden: typeof import('@webjsdev/core').forbidden;
+export declare const unauthorized: typeof import('@webjsdev/core').unauthorized;
+export declare const redirect: typeof import('@webjsdev/core').redirect;
+export declare const permanentRedirect: typeof import('@webjsdev/core').permanentRedirect;
+
+/** Auth.js's base error: `error instanceof AuthError` and `error.type` say why a sign-in failed. */
+export declare class AuthError extends Error {
+  type: string;
+}
+/** Thrown by `signIn('credentials', ...)` when `authorize` returns null. */
+export declare class CredentialsSignin extends AuthError {
+  type: 'CredentialsSignin';
+  code: string;
+}
+/**
+ * Options for the credentials provider, Auth.js's `Credentials`. `C` is the
+ * shape of the submitted fields, inferred from `authorize`'s annotation
+ * (`authorize(credentials: { email: string; password: string })`).
+ */
+export interface CredentialsOptions<C extends Record<string, unknown> = Record<string, unknown>> {
+  /**
+   * Check the submitted fields (the sign-in form's fields, or the object passed
+   * to `signIn('credentials', data)`). Return the session user, or `null` to
+   * refuse the sign-in.
+   */
+  authorize: (credentials: C) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+/** The credentials (email/password) provider, Auth.js's `Credentials`. */
+export declare function Credentials<C extends Record<string, unknown> = Record<string, unknown>>(
+  opts: CredentialsOptions<C>,
+): ProviderConfig;
 /** The Google OAuth provider. */
 export declare function Google(opts?: Record<string, unknown>): ProviderConfig;
 /** The GitHub OAuth provider. */

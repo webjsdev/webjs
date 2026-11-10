@@ -25,7 +25,7 @@ import {
 } from '../../../components/empty.ts';
 
 const MEMBERS = [
-  { src: 'https://webjs.dev/public/avatars/vivek.jpg', alt: '@vivek', fallback: 'VK' },
+  { src: 'https://webjs.dev/avatars/vivek.jpg', alt: '@vivek', fallback: 'VK' },
   { src: 'https://github.com/maxleiter.png', alt: '@maxleiter', fallback: 'LR' },
   { src: 'https://github.com/evilrabbit.png', alt: '@evilrabbit', fallback: 'ER' },
 ];

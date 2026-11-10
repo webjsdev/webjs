@@ -18,7 +18,7 @@ export const WELCOME_STORAGE_KEY = 'webjs-ui-create-welcome-dialog';
 export function welcomeDialog() {
   return html`<dialog id="create-welcome" data-slot="welcome-dialog" aria-labelledby="create-welcome-title" aria-describedby="create-welcome-description" class="m-auto w-[calc(100vw-2rem)] max-w-92 min-w-0 overflow-hidden rounded-xl bg-card p-0 text-card-foreground shadow-xl ring-1 ring-foreground/10 backdrop:bg-black/50 sm:max-w-sm dark:bg-neutral-900">
     <div class="flex aspect-[2/1.2] w-full items-center justify-center rounded-t-xl bg-neutral-950 text-center text-neutral-100 sm:aspect-2/1">
-      <img src=${asset('/public/brand/webjs-mark-on-dark.svg')} alt="" class="block h-12 w-auto">
+      <img src=${asset('/brand/webjs-mark-on-dark.svg')} alt="" class="block h-12 w-auto">
     </div>
     <div class="grid gap-1 p-4">
       <h2 id="create-welcome-title" class="m-0 text-left text-base font-medium">Build your own WebJs UI</h2>

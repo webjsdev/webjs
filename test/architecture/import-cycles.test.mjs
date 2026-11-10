@@ -17,7 +17,7 @@
  * Breaking either needs a late-bound seam (a module holding a mutable function
  * slot the engine registers into), which trades a static import edge for a
  * runtime one. That is a real cost here rather than a stylistic one, because
- * the elision analyser reads this same module graph statically to decide what
+ * the boot frontier walk reads this same module graph statically to decide what
  * the browser downloads; an edge it cannot see is an edge it cannot follow.
  *
  * Cycles are not inherently broken in ESM: a function declaration is hoisted,

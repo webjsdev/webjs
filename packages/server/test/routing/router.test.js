@@ -35,7 +35,9 @@ test('matches root, static, dynamic, and catch-all routes', async () => {
 
     const files = matchPage(table, '/files/a/b/c');
     assert.ok(files);
-    assert.deepEqual(files.params, { rest: 'a/b/c' });
+    assert.deepEqual(files.params, { rest: ['a', 'b', 'c'] }, 'a catch-all is a string[], as in Next');
+    assert.equal(matchPage(table, '/files'), null, 'an empty required catch-all does not match');
+    assert.equal(matchPage(table, '/files/'), null);
 
     assert.equal(matchPage(table, '/nope'), null);
   } finally {
@@ -141,14 +143,16 @@ test('optional catch-all [[...slug]] matches with and without params', async () 
     // Matches /docs (no params)
     const root = matchPage(table, '/docs');
     assert.ok(root, '/docs should match optional catch-all');
+    assert.deepEqual(root.params, {}, 'an empty optional catch-all omits its key, as in Next');
     // Matches /docs/getting-started
     const one = matchPage(table, '/docs/getting-started');
     assert.ok(one, '/docs/getting-started should match');
-    assert.equal(one.params.slug, 'getting-started');
+    assert.deepEqual(one.params.slug, ['getting-started']);
     // Matches /docs/a/b/c
     const deep = matchPage(table, '/docs/a/b/c');
     assert.ok(deep, '/docs/a/b/c should match');
-    assert.equal(deep.params.slug, 'a/b/c');
+    assert.deepEqual(deep.params.slug, ['a', 'b', 'c']);
+    assert.deepEqual(matchPage(table, '/docs/a%20b/c%2Fd').params.slug, ['a b', 'c/d'], 'split on / before decoding');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

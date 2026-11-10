@@ -1,5 +1,6 @@
 import { BINDING_PREFIXES } from '../binding-prefixes.js';
 import { isVoidElement, isRawtextTag, isTextOnlyTag } from './html-scan.js';
+import { assertNoJsxIsms } from '../jsx-guard.js';
 
 /**
  * The SSR template compiler (#1646): one tokenizer pass per template, run
@@ -74,6 +75,8 @@ export function _compileCount() { return compiled; }
 export function compile(strings) {
   let ops = cache.get(strings);
   if (ops === undefined) {
+    // `className=`, `htmlFor=`, `<Link>`: JSX that HTML silently ignores.
+    assertNoJsxIsms(strings);
     ops = tokenize(strings);
     cache.set(strings, ops);
   }
@@ -115,6 +118,9 @@ function tokenize(strings) {
   let attrName = '';
   let attrStart = 0;   // index into `chunk` of the attribute's first character
   let attrQuote = '';
+  // An unquoted value holding a hole, written quoted (`a=x${v}` -> `a="x..."`),
+  // so a value with a space or `>` in it cannot add an attribute or close the tag.
+  let synthQuote = false;
   let commentDashes = 0;
   let currentTag = '';
   /** @type {Op | null} */
@@ -323,6 +329,18 @@ function tokenize(strings) {
           else chunk += c;
           break;
         case 'attr-quoted':
+          if (synthQuote) {
+            // It ends where the unquoted value it stands for ends, and the
+            // character that ends it is read again as the tag's own.
+            if (WS.test(c) || c === '>' || (c === '/' && s[j + 1] === '>')) {
+              chunk += '"';
+              synthQuote = false;
+              state = 'in-tag';
+              attrName = '';
+              j--;
+            } else chunk += c === '"' ? '&quot;' : c;
+            break;
+          }
           chunk += c;
           if (c === attrQuote) { state = 'in-tag'; attrName = ''; }
           break;
@@ -368,6 +386,22 @@ function tokenize(strings) {
     }
 
     if (i < strings.length - 1) {
+      // An unquoted value with more than the one hole in it (`a=x${v}`,
+      // `a=${x}${y}`, `a=${x}/z`) is written quoted, so the walker resolves it
+      // whole through the quoted-value path, as the client does.
+      if (BINDING_PREFIXES[attrName[0]] === undefined && !synthQuote) {
+        const next = strings[i + 1];
+        const ends = next !== '' && (WS.test(next[0]) || next[0] === '>' || (next[0] === '/' && next[1] === '>'));
+        if (state === 'after-eq' && !ends) {
+          chunk += '"';
+          state = 'attr-quoted'; attrQuote = '"'; synthQuote = true;
+        } else if (state === 'attr-unquoted') {
+          const eq = chunk.indexOf('=', attrStart) + 1;
+          const gap = /^\s*/.exec(chunk.slice(eq))[0].length;
+          chunk = chunk.slice(0, eq + gap) + '"' + chunk.slice(eq + gap).replace(/"/g, '&quot;');
+          state = 'attr-quoted'; attrQuote = '"'; synthQuote = true;
+        }
+      }
       // A value hole sits here. Its op says where, and the walker decides what.
       if (state === 'comment' || state === 'comment-start' || state === 'comment-start-dash' || state === 'comment-bang') {
         flush();

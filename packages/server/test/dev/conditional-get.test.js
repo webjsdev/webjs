@@ -253,19 +253,19 @@ test('a static asset gets an ETag and 304s on a matching If-None-Match', async (
   });
   const app = await createRequestHandler({ appDir, dev: true });
 
-  const first = await app.handle(new Request('http://x/public/logo.svg'));
+  const first = await app.handle(new Request('http://x/logo.svg'));
   assert.equal(first.status, 200);
   const etag = first.headers.get('etag');
   assert.ok(etag, 'static asset carries an ETag');
 
   const second = await app.handle(
-    new Request('http://x/public/logo.svg', { headers: { 'if-none-match': etag } })
+    new Request('http://x/logo.svg', { headers: { 'if-none-match': etag } })
   );
   assert.equal(second.status, 304, 'static asset 304s on a matching validator');
   assert.equal((await second.text()), '', '304 asset has no body');
 
   const mismatch = await app.handle(
-    new Request('http://x/public/logo.svg', { headers: { 'if-none-match': '"0000000000000000"' } })
+    new Request('http://x/logo.svg', { headers: { 'if-none-match': '"0000000000000000"' } })
   );
   assert.equal(mismatch.status, 200, 'a non-matching validator returns the full asset');
 });

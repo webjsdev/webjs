@@ -203,8 +203,8 @@ export const MIME = {
  * The transformed bytes are cached per request handler in `state.tsCache`
  * (a `Map<string, { mtimeMs, code, map }>`), bounded to `TS_CACHE_MAX`
  * entries. The cache is per-handler rather than module-global because the
- * cached code bakes in that handler's elision verdict, so two handlers for
- * the same app with different elision settings must not share it.
+ * cached code bakes in that handler's lazy-component set, so two handlers for
+ * the same app at different moments must not share it.
  */
 export const TS_CACHE_MAX = 500;
 
@@ -245,42 +245,6 @@ export function shouldAccessLog(pathname) {
   return !pathname.startsWith('/__webjs/');
 }
 
-/**
- * Auto-load `<appDir>/.env` into `process.env` once at boot. Mirrors
- * what Rails / Next / Astro do out of the box: a scaffolded app with
- * a committed `.env.example` and a developer-copied `.env` should
- * "just work" without the user having to add a dotenv import or set
- * the file path on the CLI.
- *
- * Uses Node 24+'s built-in `process.loadEnvFile`, which is dotenv-
- * compatible and DOES NOT override pre-existing `process.env` values.
- * Calls that hit a missing file or parse error are silenced; the
- * server should still come up cleanly when there's no `.env`.
- *
- * Idempotent: re-running is a no-op for any env var the user already
- * exported (e.g. via the host shell or a process manager). That
- * keeps the "shell-set wins over file" precedence Rails users
- * expect.
- *
- * Must run before any server-only module is loaded by
- * buildActionIndex, since module-init code in `lib/*.server.ts`
- * (e.g. `createAuth({ secret: process.env.AUTH_SECRET })`) reads
- * process.env at import time. createRequestHandler is the
- * single entry point where this is guaranteed.
- *
- * @param {string} appDir
- */
-export function loadAppEnv(appDir) {
-  try {
-    if (typeof process.loadEnvFile === 'function') {
-      process.loadEnvFile(join(appDir, '.env'));
-    }
-  } catch {
-    // No .env file, malformed file, or Node version without
-    // loadEnvFile. Either way, fall through silently: the user
-    // may not need any env vars, or they may set them via shell.
-  }
-}
 
 /**
  * Walk the route table + component scanner to collect every file the
@@ -317,25 +281,6 @@ export function loadAppEnv(appDir) {
  * @param {string} appDir
  * @returns {Set<string>}
  */
-/**
- * Collect every page + layout file across the route table. These are the
- * modules the client boot script imports, and thus the candidates for
- * inert-route elision (dropping a module that does no client work).
- * `route.{js,ts}` / middleware / metadata are excluded: they never ship.
- *
- * @param {Awaited<ReturnType<typeof buildRouteTable>>} routeTable
- * @returns {string[]}
- */
-export function collectRouteModules(routeTable) {
-  /** @type {Set<string>} */
-  const mods = new Set();
-  for (const page of routeTable.pages || []) {
-    if (page.file) mods.add(page.file);
-    for (const f of page.layouts || []) mods.add(f);
-  }
-  return [...mods];
-}
-
 /**
  * List the app's top-level source directory names, for expanding a `#*`
  * catch-all import alias into one browser importmap prefix scope per dir (#555).

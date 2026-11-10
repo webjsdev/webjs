@@ -64,8 +64,8 @@ describe('webjs test: server discovery', () => {
 
 // `webjs test --browser` with zero matching browser test files passes with a
 // note instead of letting web-test-runner throw `Could not find any test
-// files` (#1491): `gallery:clear` removes the last browser test, and the
-// scaffold's own `webjs ci` must stay green afterwards.
+// files` (#1491): an app that deletes the starter browser test must keep its
+// own `webjs ci` green.
 describe('webjs test: browser layer with no browser tests', () => {
   let emptyApp;
   const CONFIG = join(

@@ -36,6 +36,7 @@
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { explainImportError } from './foreign-imports.js';
 import { moduleVersion } from './dev/esm-hot-hooks.js';
 
 /**
@@ -127,7 +128,9 @@ export async function devImport(file, dev) {
     // promise instead. A rejection is evicted so the next call re-imports (the
     // retry semantic a cold import had), and `clearProdImportCache` drops the
     // whole map on an embedded host's `rebuild()`.
-    const p = import(base);
+    // A load failure caused by a foreign import (`next/*`, `react`, `lit`)
+    // is rewritten to name the WebJs replacement (foreign-imports.js).
+    const p = import(base).catch((e) => { throw explainImportError(e, file); });
     PROD_MODULES.set(file, p);
     p.catch(() => { if (PROD_MODULES.get(file) === p) PROD_MODULES.delete(file); });
     return p;
@@ -137,6 +140,6 @@ export async function devImport(file, dev) {
     return await import(spec);
   } catch (e) {
     RETRY_KEYS.set(base, `${base}-r${++retrySeq}`);
-    throw e;
+    throw explainImportError(e, file);
   }
 }

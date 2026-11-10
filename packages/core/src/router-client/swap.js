@@ -7,6 +7,7 @@
  * @module
  */
 import { scanSeeds } from '../action-seed-client.js';
+import { syncRootAttributes } from './root-attrs.js';
 import { collectBoundaries, planBoundarySwap } from './boundaries.js';
 import { reportFallback } from './diagnostics.js';
 import { blurOutgoingFocus, diffChildren, replaceBoundaryRange, resyncEnclosingHostSlots, swapMarkerRange } from './dom-differ.js';
@@ -113,6 +114,8 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
     if (seedsScanned) return;
     seedsScanned = true;
     try { scanSeeds(doc, { frame: !!frameId }); } catch { /* seeding is best-effort */ }
+    // The root layout's <html> / <body> attributes follow the server (#1686).
+    if (!frameId) { try { syncRootAttributes(doc); } catch { /* best-effort */ } }
   };
 
   // Every host in this parsed doc is FRAMEWORK-SERIALIZED markup (an SSR
@@ -123,7 +126,7 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
   // conditionally closed slot at snapshot time) where the structural
   // slot-marker detector has nothing to see. The chooser consumes and removes
   // the attribute on upgrade.
-  // (An ELIDED display-only host never upgrades, so its stamp is retained as
+  // (A server-only host never upgrades, so its stamp is retained as
   // an inert attribute; diffElementInPlace never copies it onto a live host,
   // and the upgrade path consumes it, so it cannot mis-route anything.)
   try {

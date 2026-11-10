@@ -161,7 +161,8 @@ test('a denied sign-in still goes to pages.error and clears the redirect cookie'
     callbacks: { signIn: async () => false },
   });
   const { done } = await roundTrip(auth, postForm('/dashboard'));
-  assert.equal(done.headers.get('location'), '/auth-error');
+  // Auth.js sends a denied sign-in to its error page with ?error=AccessDenied.
+  assert.equal(done.headers.get('location'), '/auth-error?error=AccessDenied');
   assert.ok(setCookies(done).some((c) => c.startsWith('webjs.auth.redirect=;')));
 });
 
@@ -233,4 +234,18 @@ test('handle(): POST signin with redirectTo=/dashboard/x lands on /dashboard/x',
 test('handle(): an absolute or protocol-relative redirectTo lands on the default', async () => {
   assert.equal((await harnessRoundTrip('https://evil.example/')).headers.get('location'), '/');
   assert.equal((await harnessRoundTrip('//evil.example/')).headers.get('location'), '/');
+});
+
+test('a target callbacks.redirect allows lands after the OAuth callback, as it does for credentials', async () => {
+  // The value is resolved through callbacks.redirect BEFORE it is signed into
+  // the redirect cookie, so the callback leg uses it as the credentials path
+  // does; a custom scheme the app allows is not dropped on the way back.
+  fakeGitHub();
+  const auth = createAuth({
+    secret: 'test-secret-at-least-32-characters-long!!',
+    providers: [GitHub({ clientId: 'cid', clientSecret: 'cs' })],
+    callbacks: { redirect: ({ url }) => (url.startsWith('myapp://') ? url : '/') },
+  });
+  const { done } = await roundTrip(auth, postForm('myapp://auth/done'));
+  assert.equal(done.headers.get('location'), 'myapp://auth/done');
 });

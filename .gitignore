@@ -84,20 +84,10 @@ coverage/
 # Playwright/chrome-devtools MCP console-log output
 .playwright-mcp/
 
-# Bundled MCP docs (generated at prepack from the skill references + SKILL.md + AGENTS.md, #376;
-# the MCP server moved to @webjsdev/mcp in #415, so the bundle is produced there)
-packages/mcp/resources/
-
-# Generated at prepack from the canonical .agents/skills/webjs/ (see
-# scripts/sync-scaffold-skill.mjs). Never commit this bundle.
-packages/cli/templates/.agents/skills/webjs/
-
-# Generated at prepack from the canonical repo-root gallery/ app (see
-# scripts/sync-scaffold-gallery.mjs). Never commit this bundle: the gallery
-# lives ONCE at gallery/, and a committed copy here would silently drift.
-packages/cli/templates/gallery/
-
 # A machine-local symlink into ~/.local/share (an omarchy skill). Kept on disk
 # so the local setup keeps resolving it, untracked so it does not dangle in
 # every other clone. See test/repo-health/no-committed-symlinks.test.mjs.
 .agents/skills/omarchy
+
+# Local agent-eval output (scripts/agent-eval/run.mjs)
+/agent-eval-results.json

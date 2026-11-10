@@ -149,8 +149,8 @@ describe('E2E: dev observability for SSR action seeding (#1309)', {
 
   test('a real client-router soft navigation seeds the incoming page, not the outgoing one', async () => {
     // The path the stale-seed regression actually occurs on, driven through the
-    // router rather than by calling `scanSeeds` by hand. `/elided` carries a BARE
-    // async component, so it elides: nothing on the client ever calls the action,
+    // router rather than by calling `scanSeeds` by hand. `/server-only` carries a
+    // server-only async component: nothing on the client ever calls the action,
     // the lazy initial scan never fires, and its seed block is left sitting in the
     // live document. Soft-navigating away from it is where the outgoing page's
     // leftovers have to be evicted, carrier and store alike, or a component on
@@ -161,12 +161,12 @@ describe('E2E: dev observability for SSR action seeding (#1309)', {
     page.on('request', (r) => { if (r.url().includes('/__webjs/action/')) rpcs.push(r.url()); });
     page.on('console', (m) => { if (m.text().includes(WARN_PREFIX)) warns.push(m.text()); });
     try {
-      await page.goto(`${base}/elided`, { waitUntil: 'networkidle2' });
-      // The elided page really did leave its block behind: nothing consumed it.
+      await page.goto(`${base}/server-only`, { waitUntil: 'networkidle2' });
+      // The server-only page really did leave its block behind: nothing consumed it.
       assert.equal(
         await page.evaluate(() => !!document.querySelector('#__webjs-seeds')),
         true,
-        'the elided page leaves its seed block in the live document',
+        'the server-only page leaves its seed block in the live document',
       );
       rpcs.length = 0;
       warns.length = 0;

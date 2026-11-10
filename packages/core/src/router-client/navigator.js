@@ -475,9 +475,8 @@ async function refreshOutcome(mode) {
   // browser does NOT download: a page gaining or losing a `Suspense(...)`
   // boundary is the plain case, since rendering one does not by itself make the
   // page client-effecting, so it classifies `page` rather than a reload. An edit
-  // to anything that SHIPS reloads instead and never arrives, which covers a
-  // `loading.{js,ts}` either direction (it can never be elided, so it is always
-  // shipped, and a brand-new one is in no graph at all).
+  // to anything that SHIPS reloads instead and never arrives, and so does a
+  // brand-new `loading.{js,ts}`, which is in no graph at all.
   clearPrefetchRefused();
   try {
     const res = await performNavigation(location.href, false, null, { refresh: mode === 'shell' ? 'shell' : 'page' });
@@ -888,7 +887,12 @@ export async function performSubmission(href, method, body, frameId, form, opts)
     navigatingFlagTimer = null;
   }, 150);
 
-  const optimisticState = applyOptimisticLoading();
+  // A write keeps the page it was submitted from on screen while it runs, as a
+  // Next.js server-action form does (#1686): `loading.ts` is a navigation
+  // skeleton, and showing it for a write detached the very form being
+  // submitted, so a validation re-render lost what was typed. A safe-method
+  // submission (a search) is a navigation and keeps the skeleton.
+  const optimisticState = isSafe ? applyOptimisticLoading() : null;
 
   // Submission-state lifecycle: mark the form busy + announce the start, then
   // clear + announce the settle in the finally so EVERY exit (success,
@@ -923,6 +927,14 @@ export async function performSubmission(href, method, body, frameId, form, opts)
     if (typed && outcome && outcome.applied && !outcome.ok && myToken === currentNavigationToken) {
       await _swapCommit;
       if (myToken === currentNavigationToken) restoreFormState(typed);
+    }
+    // A successful write that stayed on this page resets the form, as React
+    // does for a form whose action succeeded (#1686), so the next entry starts
+    // from the defaults the server just rendered. A redirect elsewhere leaves
+    // the page and needs nothing.
+    if (!isSafe && form && outcome && outcome.ok && outcome.applied && outcome.samePage && myToken === currentNavigationToken) {
+      await _swapCommit;
+      if (myToken === currentNavigationToken && form.isConnected && typeof form.reset === 'function') form.reset();
     }
     // Mutating submissions invalidate cached versions of other URLs -
     // do this *after* the response applies so the new page itself is

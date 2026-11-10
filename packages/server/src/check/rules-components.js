@@ -7,7 +7,7 @@
  * logic, and its position in the run order.
  */
 import {
-  extractWebComponentClassBodies, matchClosingBrace, parsePropEntries,
+  extractWebComponentClassBodies, matchClosingBrace, parsePropEntries, parsePropsFromObjectLiteral,
 } from '../js-scan.js';
 import {
   isComponentFile, arrayPropUsesObject, findFieldInitializers,
@@ -49,41 +49,6 @@ export function checkComponentsHaveRegister(files, violations) {
         message: "Component extends WebComponent but is never registered. Call ClassName.register('tag-name') at the bottom of the file.",
         fix: "Add `ClassName.register('tag-name')` after the class definition",
       });
-    }
-  }
-}
-
-/**
- * Rule: `no-static-properties`.
- *
- * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
- * @param {Violation[]} violations  accumulator the rule pushes onto
- * @returns {void}
- */
-export function checkNoStaticProperties(files, violations) {
-  // --- Rule: no-static-properties ---
-  // A hand-written `static properties = { … }` in a WebComponent class body is
-  // no longer supported: reactive properties are declared via the
-  // `extends WebComponent({ … })` factory (the runtime throws on a direct
-  // `static properties`). Flag it statically so the editor catches it before
-  // the page 500s.
-  {
-    for (const { rel, scan } of files) {
-      // Use redacted source so fixture-style strings like
-      // `class X extends WebComponent { static properties = {…} }` inside
-      // template literals don't trip the rule. Real declarations live at
-      // top-level code where the redactor leaves them alone.
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
-      for (const { body } of extractWebComponentClassBodies(scan)) {
-        if (!/static\s+properties\s*=\s*\{/.test(body)) continue;
-        violations.push({
-          rule: 'no-static-properties',
-          file: rel,
-          message:
-            '`static properties = { … }` is no longer supported; declare reactive properties via the `extends WebComponent({ … })` factory instead.',
-          fix: 'Move the properties into the factory call: `class X extends WebComponent({ count: Number })`. Use `prop(Number, { reflect: true })` for options and set defaults in the constructor after super(). Delete the `static properties` block and any `declare` fields for those props.',
-        });
-      }
     }
   }
 }
@@ -133,13 +98,17 @@ export function checkReactivePropsNoClassField(files, violations) {
   // semantics (including `erasableSyntaxOnly: true`) every class-field declaration
   // compiles to Object.defineProperty after super() and clobbers the framework's
   // reactive accessor (silent broken re-renders). Catches `count = 0`,
-  // `count: number = 0`, `count!: number`, and `count?: number`.
+  // `count: number = 0`, `count!: number`, and `count?: number`. Props declared
+  // in Lit's `static properties` count the same as factory props, since the
+  // field clobbers the accessor either way; `declare count: number` is erased
+  // and is never flagged.
   {
     for (const { rel, scan } of files) {
-      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      if (!/class\s+\w+(?:\s*<[^{}();]*?>)?\s+extends\s+WebComponent/.test(scan)) continue;
       for (const { body, factoryProps } of extractWebComponentClassBodies(scan)) {
-        if (factoryProps.size === 0) continue;
-        for (const bad of findFieldInitializers(body, factoryProps)) {
+        const props = new Set([...factoryProps, ...staticPropertyNames(body)]);
+        if (props.size === 0) continue;
+        for (const bad of findFieldInitializers(body, props)) {
           violations.push({
             rule: 'reactive-props-no-class-field',
             file: rel,
@@ -150,6 +119,32 @@ export function checkReactivePropsNoClassField(files, violations) {
       }
     }
   }
+}
+
+/**
+ * The prop names a class body declares through Lit's `static properties`,
+ * spelled as a field (with any of `override` / `readonly` / an access
+ * modifier, and an optional type annotation) or as a `static get` returning an
+ * object literal. Reads the redacted body, so a quoted key is not recovered;
+ * that only means one fewer name to check, never a false positive.
+ *
+ * @param {string} body  a class body from `extractWebComponentClassBodies`
+ * @returns {Set<string>}
+ */
+function staticPropertyNames(body) {
+  const names = new Set();
+  const mods = '(?:(?:override|readonly|public|protected)\\s+)*';
+  const field = new RegExp(`\\bstatic\\s+${mods}properties\\s*(?::[^=;{]*)?=\\s*\\{`, 'g');
+  const getter = new RegExp(`\\bstatic\\s+${mods}get\\s+properties\\s*\\(\\s*\\)[^{]*\\{\\s*return\\s*\\{`, 'g');
+  for (const re of [field, getter]) {
+    let m;
+    while ((m = re.exec(body)) !== null) {
+      const start = m.index + m[0].length;
+      const end = matchClosingBrace(body, start);
+      if (end !== -1) parsePropsFromObjectLiteral(body.slice(start, end), names);
+    }
+  }
+  return names;
 }
 
 /**
@@ -303,4 +298,83 @@ export function checkNoShadowedNativeMember(files, violations) {
       }
     }
   }
+}
+
+/**
+ * The value a class body gives `static shadow`: `true`, `false` (an explicit
+ * `= false` or no declaration at all, the light-DOM default), or `null` when
+ * it cannot be evaluated statically (a getter, a variable, an expression).
+ * @param {string} body  string/comment-masked class body
+ * @returns {boolean | null}
+ */
+function staticShadowValue(body) {
+  if (/\bstatic\s+(?:override\s+)?get\s+shadow\b/.test(body)) return null;
+  const m = /\bstatic\s+(?:override\s+)?(?:readonly\s+)?shadow\s*(?::[^=;\n]*)?=\s*([^;\n]*)/.exec(body);
+  if (!m) return false;
+  const v = m[1].trim();
+  if (/^true\b/.test(v)) return true;
+  if (/^false\b/.test(v)) return false;
+  return null;
+}
+
+/**
+ * Rules: `static-styles-need-shadow` and `shadow-options-need-shadow`.
+ *
+ * WebJs adopts `static styles` into a SHADOW root, and `static
+ * shadowRootOptions` configures that root, but a component renders into light
+ * DOM unless it sets `static shadow = true`. Lit's habit is the opposite
+ * (shadow by default), so a Lit-shaped component declaring either one with no
+ * `static shadow = true` ships styles that never apply, or options nothing
+ * reads, with no other signal at edit time.
+ *
+ * @param {ScannedFile[]} files  every JS/TS file in the app, raw and redacted
+ * @param {Violation[]} violations  accumulator the rule pushes onto
+ * @returns {void}
+ */
+export function checkShadowOnlyStatics(files, violations) {
+  for (const { rel, scan } of files) {
+    if (!/class\s+\w+[^{]*?\s+extends\s+WebComponent/.test(scan)) continue;
+    for (const { body } of extractWebComponentClassBodies(scan)) {
+      if (staticShadowValue(body) !== false) continue;
+      // Only TOP-LEVEL members of this class, never a nested class's.
+      const top = topLevelText(body);
+      if (/\bstatic\s+(?:override\s+)?(?:readonly\s+)?(?:get\s+)?styles\b/.test(top)) {
+        violations.push({
+          rule: 'static-styles-need-shadow',
+          file: rel,
+          message:
+            '`static styles` on a light-DOM component is never applied. WebJs adopts it into a shadow root, and this component renders into light DOM (the default, unlike Lit) because it does not set `static shadow = true`.',
+          fix:
+            'Add `static shadow = true` to scope the styles in a shadow root, or drop `static styles` and style the light DOM with Tailwind utilities or a global stylesheet whose class selectors are prefixed with the tag name.',
+        });
+      }
+      if (/\bstatic\s+(?:override\s+)?(?:readonly\s+)?(?:get\s+)?shadowRootOptions\b/.test(top)) {
+        violations.push({
+          rule: 'shadow-options-need-shadow',
+          file: rel,
+          message:
+            '`static shadowRootOptions` configures a shadow root, and this component has none: it renders into light DOM (the default, unlike Lit) because it does not set `static shadow = true`, so the options are ignored.',
+          fix: 'Add `static shadow = true` so the component attaches a shadow root with these options, or remove `shadowRootOptions`.',
+        });
+      }
+    }
+  }
+}
+
+/**
+ * The text of a class body at brace depth 0, with every nested block blanked,
+ * so a member of a nested class or object literal never reads as this class's.
+ * @param {string} body
+ * @returns {string}
+ */
+function topLevelText(body) {
+  let d = 0;
+  let out = '';
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '{') { d++; out += ' '; continue; }
+    if (c === '}') { d--; out += ' '; continue; }
+    out += d === 0 ? c : (c === '\n' ? '\n' : ' ');
+  }
+  return out;
 }

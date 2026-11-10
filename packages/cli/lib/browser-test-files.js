@@ -2,8 +2,8 @@
  * Decide whether `webjs test --browser` has anything to run (#1491).
  *
  * web-test-runner throws `Could not find any test files with pattern(s)` when
- * its `files` globs match nothing, so an app with no browser tests yet (the
- * state `npm run gallery:clear` leaves behind) fails its own CI on the browser
+ * its `files` globs match nothing, so an app with no browser tests yet (one
+ * that deleted the starter test) fails its own CI on the browser
  * layer. A missing layer is not a failing layer: the server layer already
  * passes with zero files, and the browser layer should too. WTR raises the
  * error while building its session groups, after it has started, so the check

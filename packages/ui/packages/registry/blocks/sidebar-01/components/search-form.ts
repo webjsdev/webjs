@@ -8,7 +8,7 @@
  * file (`<form action=${search}>`). Until then a submit reloads the page with
  * `?q=` in the URL.
  */
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '../../../lib/utils.ts';
 import { labelClass } from '../../../components/label.ts';
 import {
@@ -20,7 +20,7 @@ import { SearchIcon } from '../../../lib/icons.ts';
 
 export function searchForm(opts: { class?: string } = {}) {
   return html`
-    <form role="search" class=${opts.class ?? null}>
+    <form role="search" class=${opts.class ?? nothing}>
       <div data-slot="sidebar-group" data-sidebar="group" class=${cn(sidebarGroupClass(), 'py-0')}>
         <div data-slot="sidebar-group-content" data-sidebar="group-content" class=${cn(sidebarGroupContentClass(), 'relative')}>
           <label data-slot="label" for="search" class=${cn(labelClass(), 'sr-only')}>Search</label>

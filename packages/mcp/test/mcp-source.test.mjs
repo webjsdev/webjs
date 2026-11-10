@@ -153,11 +153,12 @@ test('readSource: a symlink inside src that points outside is refused (realpath 
   rmSync(root, { recursive: true, force: true });
 });
 
-test('runSourceTool: dispatches path -> read, query -> grep, none -> list', async () => {
+test('runSourceTool: dispatches path -> read, query -> grep, package -> list, none -> catalogue', async () => {
   const t = fakeTree();
   assert.match(await runSourceTool(t, { path: 'core/src/html.js' }), /export const html/);
   assert.match(await runSourceTool(t, { query: 'renderToString' }), /server\/src\/ssr\.js/);
-  assert.match(await runSourceTool(t, {}), /@webjsdev\/core\/src:/);
+  assert.match(await runSourceTool(t, {}), /^What WebJs provides, by need\./);
+  assert.match(await runSourceTool(t, { package: 'core' }), /@webjsdev\/core\/src:/);
   assert.match(await runSourceTool(t, { package: 'cli' }), /@webjsdev\/cli\/lib:/);
 });
 
@@ -281,4 +282,56 @@ test('lookupExport: finds createAuth in the real @webjsdev/server typed declarat
   assert.match(out, /@webjsdev\/server index\.d\.ts:\d+/);
   assert.match(out, /export declare function createAuth</);
   assert.ok(out.split('\n').length < 40, `one export, not the file: ${out.split('\n').length} lines`);
+});
+
+test('lookupExport: a member of an exported type answers by its own name (#1686)', async () => {
+  // actionData was the most grepped term across the eval builds, and it is a
+  // PageProps field rather than an export, so it used to be a miss.
+  const tree = exportTree();
+  const out = await lookupExport(tree, 'secret');
+  assert.match(out, /^"secret" is a member of AuthConfig \(@webjsdev\/server index\.d\.ts:4\); `source AuthConfig` prints the whole type\.$/m);
+  assert.match(out, /^  secret: string;$/m);
+  assert.match(await lookupExport(tree, 'nothingNamedThis'), /No export named/, 'a real miss still says so');
+
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { readFile } = await import('node:fs/promises');
+  const roots = resolveFrameworkRoots(resolve(REPO, 'gallery'), { exists: existsSync });
+  const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+  const real = await lookupExport({ roots, readFile, readdir }, 'actionData', 'core');
+  assert.match(real, /"actionData" is a member of PageProps/);
+  assert.ok(real.split('\n').length < 40, 'one member, not the file');
+});
+
+test('lookupExport: source under a SYMLINKED directory is searched (pnpm / workspace installs, #1686)', async () => {
+  // A clean eval build linked each package's src, as pnpm links packages, and
+  // `webjs source actionData` found nothing: a Dirent of a link is not a directory.
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = await import('node:fs');
+  const { readFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { listDir } = await import(resolve(REPO, 'packages', 'mcp', 'src', 'mcp-source.js'));
+  const base = mkdtempSync(join(tmpdir(), 'webjs-src-link-'));
+  try {
+    mkdirSync(join(base, 'real-src'));
+    writeFileSync(join(base, 'real-src', 'routes.d.ts'), ['export interface PageProps {', '  /** The failed submission. */', '  actionData?: unknown;', '}', ''].join('\n'));
+    mkdirSync(join(base, 'core'));
+    symlinkSync(join(base, 'real-src'), join(base, 'core', 'src'));
+    const roots = [{ pkg: 'core', root: join(base, 'core'), src: join(base, 'core', 'src') }];
+    const out = await lookupExport({ roots, readFile, readdir: listDir }, 'actionData');
+    assert.match(out, /"actionData" is a member of PageProps/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('lookupExport: a lower-camel convention name finds its upper-camel type (#1686)', async () => {
+  // generateMetadata is a file convention, not an export; an eval agent got
+  // nothing back and reverse-engineered the contract from the type files.
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { readFile } = await import('node:fs/promises');
+  const roots = resolveFrameworkRoots(resolve(REPO, 'gallery'), { exists: existsSync });
+  const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+  const out = await lookupExport({ roots, readFile, readdir }, 'generateMetadata', 'core');
+  assert.match(out, /^"generateMetadata" is not an export; its type is GenerateMetadata:/);
+  assert.match(out, /export type GenerateMetadata =/);
+  assert.ok(out.split('\\n').length < 40);
 });

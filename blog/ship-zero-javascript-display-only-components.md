@@ -7,6 +7,8 @@ tags: elision, islands, no-build, performance, web-components
 author: Vivek
 ---
 
+*Update: I have since removed elision. It worked, but it was a guess about your code, and a wrong guess quietly dropped a component's interactivity, which is the hardest kind of bug to find. WebJs now decides what ships from where the code lives. Every component in an ordinary file ships, the way a Lit component does, and markup you want kept off the browser goes in a component in a `.server.ts` file or in a function that returns `html`. Pages and layouts no longer ship at all. The post below describes the analyser as it was.*
+
 Write a `<price-tag>` component in webjs. It reads a number, formats it, renders some HTML. No click handler, no signal, no reactive property. Server-render a page that uses it, open the network tab, and look for `price-tag.js`.
 
 It is not there. The framework served the component's HTML and then deleted its JavaScript from the page, because it could prove the component does the same thing with or without its script. The browser downloads nothing for it.

@@ -117,6 +117,94 @@ export class Counter {
   }
 });
 
+test('no-non-erasable-typescript: flags a Lit decorator with its WebJs fix', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'components', 'counter.ts'),
+      `import { WebComponent, html } from '@webjsdev/core';
+export class MyCounter extends WebComponent {
+  @property({ type: Number }) count = 0;
+  render() { return html\`<p>\${this.count}</p>\`; }
+}
+MyCounter.register('my-counter');\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('counter.ts'));
+    assert.ok(v, 'expected the decorator to be flagged');
+    assert.match(v.message, /`@property` at line 3/);
+    assert.match(v.message, /SyntaxError/);
+    assert.match(v.fix, /static properties/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: flags @customElement in a plain .js file', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'components', 'el.js'),
+      `import { WebComponent } from '@webjsdev/core';
+@customElement('my-el')
+export class MyEl extends WebComponent {}\n`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.includes('el.js'));
+    assert.ok(v, 'expected the .js decorator to be flagged');
+    assert.match(v.fix, /MyEl\.register\('my-el'\)/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: @state and @query each get their own fix', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'components', 's.ts'), `class S {\n  @state()\n  private open = false;\n}\n`);
+    await writeFileEnsureDir(join(appDir, 'components', 'q.ts'), `class Q {\n  @query('#x') el!: HTMLElement;\n}\n`);
+    const violations = await checkConventions(appDir);
+    const s = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.endsWith('s.ts'));
+    const q = violations.find((v) => v.rule === 'no-non-erasable-typescript' && v.file.endsWith('q.ts'));
+    assert.match(s.fix, /state: true/);
+    assert.match(q.fix, /this\.renderRoot\.querySelector/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-non-erasable-typescript: an @ in a template, css, JSDoc or string is not a decorator', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(
+      join(appDir, 'components', 'clean.ts'),
+      `import { WebComponent, html, css } from '@webjsdev/core';
+/**
+ * A button.
+ * @param {string} label the label
+ * @returns {void}
+ */
+export class CleanBtn extends WebComponent {
+  static styles = css\`
+@media (min-width: 40rem) { :host { display: block; } }
+\`;
+  render() {
+    return html\`<button
+      @click=\${() => this.go()}>go</button>\`;
+  }
+  go() { return 'a@b.com' + /@x/.source; }
+}
+CleanBtn.register('clean-btn');\n`,
+    );
+    await writeFileEnsureDir(join(appDir, 'public', 'vendor.js'), `@decorated\nclass V {}\n`);
+    const violations = await checkConventions(appDir);
+    const hits = violations.filter((v) => v.rule === 'no-non-erasable-typescript');
+    assert.deepEqual(hits, [], JSON.stringify(hits));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no-non-erasable-typescript: skips node_modules and _private folders', async () => {
   const appDir = await makeTempApp();
   try {
@@ -381,38 +469,14 @@ customElements.define('native-comp', NativeComp);
   }
 });
 
-test('no-static-properties: flags a static properties field in a class body', async () => {
+test("static properties: Lit's spelling with a declare is clean (#1686)", async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
     await writeFile(
-      join(appDir, 'components', 'bad.ts'),
+      join(appDir, 'components', 'lit-style.ts'),
       `import { WebComponent } from '@webjsdev/core';
-class BadProp extends WebComponent {
-  static properties = { count: { type: Number } };
-  declare count: number;
-}
-BadProp.register('bad-prop');
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-static-properties');
-    assert.ok(v, 'expected no-static-properties violation');
-    assert.ok(v.message.includes('static properties'));
-    assert.ok(v.fix.includes('WebComponent({'));
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-static-properties: flags even the old declare + constructor form', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'components'), { recursive: true });
-    await writeFile(
-      join(appDir, 'components', 'old.ts'),
-      `import { WebComponent } from '@webjsdev/core';
-class OldStyle extends WebComponent {
+class LitStyle extends WebComponent {
   static properties = { count: { type: Number } };
   declare count: number;
 
@@ -421,16 +485,46 @@ class OldStyle extends WebComponent {
     this.count = 0;
   }
 }
-OldStyle.register('old-style');
+LitStyle.register('lit-style');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-static-properties');
-    assert.ok(v, 'the static-properties + declare pattern is no longer allowed');
+    const v = violations.find((v) => /static-properties|class-field/.test(v.rule));
+    assert.equal(v, undefined, 'static properties plus an erasable declare is a supported spelling');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+for (const [label, decl] of [
+  ['a static properties field', 'static properties = { count: { type: Number } };'],
+  ['static override properties', 'static override properties = { count: { type: Number } };'],
+  ['a typed static properties field', 'static properties: Record<string, object> = { count: { type: Number } };'],
+  ['a static get properties()', 'static get properties() { return { count: { type: Number } }; }'],
+]) {
+  test(`reactive-props-no-class-field: flags a class field beside ${label} (#1686)`, async () => {
+    const appDir = await makeTempApp();
+    try {
+      await mkdir(join(appDir, 'components'), { recursive: true });
+      await writeFile(
+        join(appDir, 'components', 'field.ts'),
+        `import { WebComponent } from '@webjsdev/core';
+class FieldBad extends WebComponent {
+  ${decl}
+  count = 0;
+}
+FieldBad.register('field-bad');
+`,
+      );
+      const violations = await checkConventions(appDir);
+      const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+      assert.ok(v, 'a class field clobbers a static-properties accessor just as it does a factory one');
+      assert.ok(v.message.includes('`count`'));
+    } finally {
+      await rm(appDir, { recursive: true, force: true });
+    }
+  });
+}
 
 test('no-signal-field-assignment: flags every write that replaces a signal field', async () => {
   const appDir = await makeTempApp();
@@ -522,7 +616,7 @@ Reads.register('signal-reads');
   }
 });
 
-test('no-static-properties: passes for the factory form', async () => {
+test('reactive-props-no-class-field: passes for the factory form', async () => {
   const appDir = await makeTempApp();
   try {
     await mkdir(join(appDir, 'components'), { recursive: true });
@@ -539,7 +633,7 @@ GoodProp.register('good-prop');
 `,
     );
     const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-static-properties');
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
     assert.equal(v, undefined, 'the factory form should be clean');
   } finally {
     await rm(appDir, { recursive: true, force: true });
@@ -897,166 +991,6 @@ test('no-server-env-in-components: does not fire outside components/', async () 
   }
 });
 
-/* -------------------- no-redirect-in-api-route -------------------- */
-
-test('no-redirect-in-api-route: flags `redirect()` in route.ts', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'redirect'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'redirect', 'route.ts'),
-      `import { redirect } from '@webjsdev/core';
-export async function GET() {
-  redirect('https://example.com');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.ok(v, 'expected no-redirect-in-api-route violation');
-    assert.ok(v.message.includes('redirect()'));
-    assert.ok(v.fix.includes('Response.redirect'));
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-redirect-in-api-route: does not flag `Response.redirect()` in route.ts', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'ok'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'ok', 'route.ts'),
-      `export async function GET() {
-  return Response.redirect('https://example.com', 303);
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'Response.redirect() should not be flagged');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-redirect-in-api-route: does not flag `redirect()` in page.ts', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'old-page'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'old-page', 'page.ts'),
-      `import { html, redirect } from '@webjsdev/core';
-export default function OldPage() {
-  redirect('/new-page');
-  return html\`<p>unreachable</p>\`;
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'redirect() in a page is allowed (SSR pipeline catches it)');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-test('no-redirect-in-api-route: does not flag `redirect()` in a server action', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'modules', 'auth', 'actions'), { recursive: true });
-    await writeFile(
-      join(appDir, 'modules', 'auth', 'actions', 'login.server.ts'),
-      `'use server';
-import { redirect } from '@webjsdev/core';
-export async function login() {
-  redirect('/dashboard');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'redirect() in a server action is allowed');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-// #809: the rule previously only saw a NAMED `import { redirect }`. A namespace
-// import + member call (`import * as core; core.redirect(...)`) reaches the same
-// uncaught-500 sentinel and must be flagged too.
-test('no-redirect-in-api-route: flags a namespace `core.redirect()` in route.ts (#809)', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'ns'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'ns', 'route.ts'),
-      `import * as core from '@webjsdev/core';
-export async function GET() {
-  core.redirect('https://example.com');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.ok(v, 'a namespace member call core.redirect() in a route must be flagged');
-    assert.ok(v.file.includes('ns/route.ts'), 'names the offending route file');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-// A route can carry BOTH a named and a namespace import and call only the
-// namespace form; the matchers run independently so the uncaught 500 is still
-// caught (a regression guard for the mutually-exclusive-branch hole).
-test('no-redirect-in-api-route: flags namespace `core.redirect()` even when a named import is also present (#809)', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'both'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'both', 'route.ts'),
-      // A NAMED `redirect` import (so namedM is truthy) that is never called
-      // bare, PLUS a namespace import whose `core.redirect()` is the only call.
-      // Under the old mutually-exclusive `else if (nsM)` the named branch won,
-      // found no bare `redirect(`, and missed the 500; the independent matchers
-      // catch it.
-      `import { redirect } from '@webjsdev/core';
-import * as core from '@webjsdev/core';
-export async function GET() {
-  core.redirect('https://example.com');
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.ok(v, 'core.redirect() must be flagged even when a named redirect import is also present but never called bare');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
-// The counterpart: a namespace import whose `redirect` is never called must NOT
-// be flagged (proves the member-call matcher, not the mere import, drives it).
-test('no-redirect-in-api-route: a namespace import without a redirect call is NOT flagged (#809)', async () => {
-  const appDir = await makeTempApp();
-  try {
-    await mkdir(join(appDir, 'app', 'api', 'ns2'), { recursive: true });
-    await writeFile(
-      join(appDir, 'app', 'api', 'ns2', 'route.ts'),
-      `import * as core from '@webjsdev/core';
-export async function GET() {
-  return core.json({ ok: true });
-}
-`,
-    );
-    const violations = await checkConventions(appDir);
-    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.equal(v, undefined, 'a namespace import that never calls redirect must not be flagged');
-  } finally {
-    await rm(appDir, { recursive: true, force: true });
-  }
-});
-
 
 test('shell-in-non-root-layout: passes when root layout owns the shell', async () => {
   const appDir = await makeTempApp();
@@ -1403,7 +1337,7 @@ test('no-non-erasable-typescript: still flags real top-level enum', async () => 
   }
 });
 
-test('no-static-properties / reactive-props-no-class-field: ignore fixture strings in template literals', async () => {
+test('reactive-props-no-class-field: ignores fixture strings in template literals', async () => {
   // Test files write fixture sources to disk as template-literal
   // strings. Pre-fix, the scanner read those fixture strings as real
   // class declarations in the test file itself, flagging the
@@ -1425,7 +1359,7 @@ test('no-static-properties / reactive-props-no-class-field: ignore fixture strin
     );
     const violations = await checkConventions(appDir);
     const v = violations.find(
-      (v) => v.rule === 'no-static-properties' || v.rule === 'reactive-props-no-class-field',
+      (v) => v.rule === 'reactive-props-no-class-field',
     );
     assert.equal(v, undefined,
       'a class inside a template literal must not trigger the rules');
@@ -1655,3 +1589,184 @@ test('no-scaffold-placeholder: a file carrying the old marker token is not flagg
   }
 });
 
+/* -------------------- no-page-route-conflict -------------------- */
+
+test('no-page-route-conflict: flags a page and a route.ts at the same URL', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'page.ts'), `export default () => 'p';\n`);
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'route.ts'), `export function GET() { return new Response('r'); }\n`);
+    const v = (await checkConventions(appDir)).find((v) => v.rule === 'no-page-route-conflict');
+    assert.ok(v, 'expected a no-page-route-conflict violation');
+    assert.equal(v.file, 'app/x/route.ts');
+    assert.match(v.message, /app\/x\/page\.ts/);
+    assert.match(v.fix, /app\/api/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-page-route-conflict: a route group does not hide the conflict', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', '(site)', 'about', 'page.ts'), `export default () => 'p';\n`);
+    await writeFileEnsureDir(join(appDir, 'app', 'about', 'route.ts'), `export function GET() { return new Response('r'); }\n`);
+    const v = (await checkConventions(appDir)).find((v) => v.rule === 'no-page-route-conflict');
+    assert.ok(v);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-page-route-conflict: a page and a route at different URLs are fine', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'page.ts'), `export default () => 'p';\n`);
+    await writeFileEnsureDir(join(appDir, 'app', 'x', 'data', 'route.ts'), `export function GET() { return new Response('r'); }\n`);
+    const v = (await checkConventions(appDir)).find((v) => v.rule === 'no-page-route-conflict');
+    assert.equal(v, undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-jsx-attributes -------------------- */
+
+test('no-jsx-attributes: flags className=, htmlFor= and a capitalised tag in an html template', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\nexport default () => html`<div className=\"a\"><label htmlFor=${'x'}>x</label><Link href=\"/\">a</Link></div>`;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-jsx-attributes');
+    assert.equal(v.length, 1, 'one violation per template (the first React-ism)');
+    assert.match(v[0].message, /className/);
+    assert.match(v[0].fix, /class=/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-jsx-attributes: prose, strings, comments and escaped samples are not flagged', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      "const s = '<div className=\"x\">';\n" +
+      "// html`<Link className=\"y\">`\n" +
+      "export default () => html`<p>React writes &lt;div className=\"x\"&gt; and &lt;Link&gt;.</p><code-block>\\${'<'}Link></code-block>`;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-jsx-attributes');
+    assert.equal(v.length, 0, JSON.stringify(v));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-jsx-route-file -------------------- */
+
+test('no-jsx-route-file: flags page.tsx / layout.jsx, not a .tsx component', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'blog', 'page.tsx'), 'export default function P() { return <h1>x</h1>; }\n');
+    await writeFileEnsureDir(join(appDir, 'app', 'layout.jsx'), 'export default ({ children }) => children;\n');
+    await writeFileEnsureDir(join(appDir, 'app', 'blog', 'card.tsx'), 'export {};\n');
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-jsx-route-file');
+    assert.deepEqual(v.map((x) => x.file).sort(), ['app/blog/page.tsx', 'app/layout.jsx']);
+    assert.match(v.find((x) => x.file === 'app/blog/page.tsx').fix, /app\/blog\/page\.ts/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-css-import -------------------- */
+
+test('no-css-import: flags side-effect and default CSS imports with the <link> fix', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'layout.ts'), "import './globals.css';\nexport default ({ children }) => children;\n");
+    await writeFileEnsureDir(join(appDir, 'components', 'card.ts'), "import styles from './card.module.css';\nexport { styles };\n");
+    await writeFileEnsureDir(join(appDir, 'lib', 'doc.ts'), "export const s = \"import './x.css'\";\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-css-import');
+    assert.deepEqual(v.map((x) => x.file).sort(), ['app/layout.ts', 'components/card.ts']);
+    assert.match(v[0].fix, /<link rel="stylesheet"/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-inline-use-server -------------------- */
+
+test("no-inline-use-server: flags a 'use server' directive inside a function body", async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\n" +
+      "async function create(fd) {\n  'use server';\n  return fd;\n}\n" +
+      "export default () => html`<form action=${create}></form>`;\n");
+    const v = (await checkConventions(appDir)).find((x) => x.rule === 'no-inline-use-server');
+    assert.ok(v, 'expected no-inline-use-server');
+    assert.match(v.message, /line 2/);
+    assert.match(v.fix, /\.server\.ts/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test("no-inline-use-server: a module-top directive and a commented mention are fine", async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'modules', 'a.server.ts'), "'use server';\nexport async function a() { return 1; }\n");
+    await writeFileEnsureDir(join(appDir, 'lib', 'b.ts'), "// function f() { 'use server'; }\nexport const b = 1;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-inline-use-server');
+    assert.equal(v.length, 0);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test("use-server-needs-extension: a routing file is told to move its actions, not rename", async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'), "'use server';\nexport async function act() {}\nexport default () => '';\n");
+    const v = (await checkConventions(appDir)).find((x) => x.rule === 'use-server-needs-extension');
+    assert.ok(v);
+    assert.doesNotMatch(v.fix, /page\.server\.ts/);
+    assert.match(v.fix, /modules\/<feature>\/actions/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-server-env-in-components (browser-shipped) -------------------- */
+
+test('no-server-env-in-components: NEXT_PUBLIC_ gets the WEBJS_PUBLIC_ fix; a shipped util is covered', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'lib', 'config.ts'), 'export const key = process.env.NEXT_PUBLIC_MAPS_KEY;\n');
+    await writeFileEnsureDir(join(appDir, 'components', 'map-view.ts'),
+      "import { WebComponent, html } from '@webjsdev/core';\nimport { key } from '../lib/config.ts';\n" +
+      "class MapView extends WebComponent({}) { render() { return html`<button @click=${() => key}>m</button>`; } }\nMapView.register('map-view');\n");
+    await writeFileEnsureDir(join(appDir, 'app', 'page.ts'),
+      "import { html } from '@webjsdev/core';\nimport '../components/map-view.ts';\nexport default () => html`<map-view></map-view>${process.env.DATABASE_URL ? '' : ''}`;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-server-env-in-components');
+    assert.deepEqual(v.map((x) => x.file), ['lib/config.ts'], 'the shipped util is flagged; the page function is not');
+    assert.match(v[0].fix, /WEBJS_PUBLIC_MAPS_KEY/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-next-runtime-guard -------------------- */
+
+test('no-next-runtime-guard: flags process.env.NEXT_RUNTIME', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFileEnsureDir(join(appDir, 'instrumentation.ts'),
+      "export async function register() {\n  if (process.env.NEXT_RUNTIME === 'nodejs') await import('./otel.ts');\n}\n");
+    await writeFileEnsureDir(join(appDir, 'lib', 'note.ts'), "// process.env.NEXT_RUNTIME is Next-only\nexport const n = 1;\n");
+    const v = (await checkConventions(appDir)).filter((x) => x.rule === 'no-next-runtime-guard');
+    assert.deepEqual(v.map((x) => x.file), ['instrumentation.ts']);
+    assert.match(v[0].fix, /process\.versions\.bun/);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

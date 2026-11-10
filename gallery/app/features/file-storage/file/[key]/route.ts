@@ -17,9 +17,8 @@ export async function GET(req: Request, { params }: { params: { key: string } })
   }
   const file = await getFileStore().get(params.key);
   if (!file) return new Response('Not found', { status: 404 });
-  // file.body is a web ReadableStream at runtime (the diskStore streams the
-  // bytes); the store's type is a Node/web union, so narrow it for Response.
-  return new Response(file.body as ReadableStream<Uint8Array>, {
+  // file.body is a web ReadableStream: the bytes stream, never buffered.
+  return new Response(file.body, {
     headers: {
       'content-type': file.contentType,
       'content-length': String(file.size),

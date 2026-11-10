@@ -152,8 +152,7 @@ test('findOrphanComponents: a COMPUTED template-literal tag is an orphan (#1308)
   // orphan scan used its own looser pattern, a redacted interpolated template
   // (`A.register(`${p}__STR_1__`)`) satisfied it but NOT `extractComponents`,
   // so the class was neither a component nor an orphan and disappeared from
-  // every surface: the dev warning, the elision report, the CLI section, and
-  // the doctor check. An interpolated template is the most idiomatic way to
+  // every surface: the dev warning, the route report, and the doctor check. An interpolated template is the most idiomatic way to
   // write a computed tag, so this is the shape the report most needs to catch.
   //
   // A LITERAL backtick tag is the counterpart and must NOT be an orphan;
@@ -193,6 +192,23 @@ test('findOrphanComponents: a SIBLING-registered class is not an orphan (#1308)'
     const orphans = await findOrphanComponents(dir);
     assert.deepEqual(orphans.map((o) => o.className).sort(), ['Forgotten'],
       'only the class nothing registers anywhere is an orphan');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('findOrphanComponents: a BASE class its registered subclasses extend is not an orphan (#1686)', async () => {
+  // The UI kit's carousel declares UiCarouselButton extends WebComponent({...})
+  // and registers only its two subclasses; the website warned about the base
+  // on every dev boot. A base class is never meant to have a tag of its own.
+  const dir = await scaffold({
+    'components/carousel.ts': `export class CarouselButton extends WebComponent({ disabled: Boolean }) {\n  render() {}\n}\n`
+      + `export class CarouselNext extends CarouselButton {}\nCarouselNext.register('my-carousel-next');\n`,
+    'components/forgotten.ts': `export class Forgotten extends WebComponent {\n  render() {}\n}\n`,
+  });
+  try {
+    const orphans = await findOrphanComponents(dir);
+    assert.deepEqual(orphans.map((o) => o.className), ['Forgotten'], 'the base is not reported; a real orphan still is');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

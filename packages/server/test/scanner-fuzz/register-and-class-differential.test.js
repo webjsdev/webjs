@@ -2,13 +2,14 @@
 // .define()` call-site detection AND its WebComponent class-body extraction vs a
 // real AST (#753).
 //
-// Component elision and `webjs check` decide which component modules ship and
-// which class bodies to lint off the hand-rolled scanner (`component-scanner.js`
+// The boot and `webjs check` decide which component modules load and which
+// class bodies to lint off the hand-rolled scanner (`component-scanner.js`
 // `extractComponents`, `js-scan.js` `extractWebComponentClassBodies`), not a real
-// parse. The elision direction-safety invariant: it must NEVER elide a component
-// the AST says is real, i.e. the scanner must find AT LEAST every registration /
-// WebComponent class the AST finds. So the hard assertion is `lexerSet` covers
-// `astSet`; a lexer-only over-match ships more (safe) and is only reported.
+// parse. The direction-safety invariant: the scanner must NEVER miss a component
+// the AST says is real (a missed one is never booted), i.e. it must find AT
+// LEAST every registration / WebComponent class the AST finds. So the hard
+// assertion is `lexerSet` covers `astSet`; a lexer-only over-match is only
+// reported.
 //
 // The scanner runs over redacted source (comments masked, string bodies turned
 // to placeholders), so a `register()` inside a comment or a string is inert;
@@ -69,7 +70,7 @@ function astRegistrations(src, filename) {
 // --- WebComponent class bodies: lexer set. -----------------------------------
 /** Class NAMES the hand-rolled body extractor finds (over comment-masked src). */
 function lexerWebComponentClasses(src) {
-  // Mirror component-elision.js:557 / check.js: the extractor is fed
+  // Mirror check.js: the extractor is fed
   // comment-masked source. The name window mirrors the extractor's own regex
   // (incl. the optional generic parameter) and just adds a capture group.
   const masked = redactStringsAndTemplates(src);
@@ -171,7 +172,7 @@ const FIXTURES = [
   },
   {
     // #753 round-2: a TS generic on the class name must not hide the component
-    // from the extractor (else elision could strip an interactive component).
+    // from the extractor (else the component would never be booted).
     name: 'a generic WebComponent class is detected',
     file: 'c.ts',
     src: "class Grid<T> extends WebComponent({ rows: prop<T[]>(Array) }) { render(){ return html`x`; } }\nGrid.register('data-grid');",
@@ -244,8 +245,8 @@ test('corpus: scanner never misses a register()/define the AST finds', () => {
 // `redactStringsAndTemplates` mask, which keeps PLAIN string bodies verbatim (so
 // a sibling `register('tag')` tag stays readable). So a `class X extends
 // WebComponent` written INSIDE a plain string (test fixtures, a doc string in
-// mcp-docs.js) is over-matched. That is verdict-safe (elision ships more, check
-// flags more, never the reverse) and is the documented, accepted trade-off in
+// mcp-docs.js) is over-matched. That is safe (check flags more, never the
+// reverse) and is the documented, accepted trade-off in
 // the js-scan.js header. The corpus asserts only the hard direction: no MISS.
 test('corpus: scanner never misses a WebComponent class the AST finds', () => {
   const misses = [];

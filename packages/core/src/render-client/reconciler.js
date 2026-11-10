@@ -1,5 +1,5 @@
 import { nothing, noChange } from '../sentinels.js';
-import { isTemplate, MARKER } from '../html.js';
+import { isTemplate, MARKER, html } from '../html.js';
 import {
   reconcileFormAction, isBoundFormAction, ABSENT, assertSubmitterHasNoName, assertSubmitterType,
   assertSubmitterHasNoValue, assertSubmitterHasNoStaticFormAction,
@@ -14,7 +14,15 @@ import { compile, submitterActionBindings, INSTANCE } from './template-compiler.
 import { commitAdoption, planSlotAdoption, retargetParts } from './adopt-slots.js';
 import {
   applyPart, bindPart, currentRenderHost, setCurrentRenderHost, currentRenderRoot, findSlotHost, setCurrentRenderRoot, updateInstance,
+  releaseInstanceDirectives, setInstanceDirectivesConnected, ROOT_DISCONNECTED,
 } from './parts.js';
+
+/**
+ * A top-level list as one child binding. One call site, so its strings are a
+ * stable identity and a re-render updates the list in place.
+ * @param {unknown} list
+ */
+const rootList = (list) => html`${list}`;
 
 /**
  * Render a value into a container, reusing DOM where possible.
@@ -24,7 +32,48 @@ import {
  * @param {{host?: object}} [options]
  */
 export function render(value, container, options = {}) {
+  renderValue(value, container, options);
+  return rootPart(container);
+}
+
+/** @type {WeakMap<object, { setConnected(connected: boolean): void }>} */
+const rootParts = new WeakMap();
+
+/**
+ * What `render()` returns, lit's `RootPart`: `setConnected(false)` reports
+ * every async directive in the container disconnected (and starts the ones a
+ * later render creates disconnected), `setConnected(true)` reconnects them.
+ * @param {any} container
+ */
+function rootPart(container) {
+  let part = rootParts.get(container);
+  if (!part) {
+    part = {
+      setConnected(connected) {
+        container[ROOT_DISCONNECTED] = !connected;
+        setInstanceDirectivesConnected(container[INSTANCE], connected);
+      },
+    };
+    rootParts.set(container, part);
+  }
+  return part;
+}
+
+/**
+ * @param {unknown} value
+ * @param {Element | DocumentFragment | ShadowRoot} container
+ * @param {{host?: object}} options
+ */
+function renderValue(value, container, options) {
   if (value === noChange) return;
+  // Any object that is not a template (an array or other iterable such as a
+  // `map()` / `join()` / `range()` generator or a Set, a DOM node, a directive)
+  // renders through a child binding, as Lit's `render()` renders every value
+  // (#1686). It used to be written as text, "[object Generator]" or
+  // "[object Object]".
+  if (value !== null && typeof value === 'object' && !isTemplate(value)) {
+    value = rootList(value);
+  }
   const host = /** @type any */ (container);
   // Open the renderer-write window for the whole commit: every host-receiver
   // write below (and in createInstance / updateInstance / clearInstance / all
@@ -75,13 +124,6 @@ export function render(value, container, options = {}) {
     host[INSTANCE] = null;
     container.replaceChildren();
     if (value == null || value === nothing) return;
-    if (Array.isArray(value)) {
-      for (const v of value) {
-        const text = document.createTextNode(String(v ?? ''));
-        container.appendChild(text);
-      }
-      return;
-    }
     container.appendChild(document.createTextNode(String(value)));
   } finally {
     setCurrentRenderRoot(prevRenderRoot);
@@ -210,7 +252,7 @@ function reconcileSubmitterAction(
   if (!id) {
     // A function that was MEANT as an action still refuses, so a button never
     // silently submits the form's action instead of its own.
-    if (typeof value === 'function') assertIdentifiableAction(null, el.localName);
+    if (typeof value === 'function') assertIdentifiableAction(null, el.localName, value);
     releaseSubmitterAction(el);
     // The submission attributes the framework supplied go with the identity, or
     // a released button keeps a `formmethod` / `formenctype` SSR does not emit
@@ -316,7 +358,7 @@ function resolveHoleValue(v) {
  */
 function createInstance(tr, container, hydrating = false) {
   const { templateEl, parts, formActions } = compile(tr);
-  const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+  const frag = /** @type DocumentFragment */ (document.importNode(templateEl.content, true));
   // Bookend markers bound the instance so we can tear it down cleanly.
   const startNode = document.createComment(`${MARKER}s`);
   const endNode = document.createComment(`${MARKER}e`);
@@ -378,6 +420,9 @@ function clearInstance(inst, container) {
   // element parts, and rescue any projected children sitting inside
   // slot parts so they survive teardown of a collapsing conditional
   // fragment.
+  // Custom directives in the outgoing template are released first (an async
+  // one runs its `disconnected()`), as lit does when a part goes away.
+  releaseInstanceDirectives(inst);
   for (const p of inst.bound) {
     if (p.kind === 'event') p.el.removeEventListener(p.name, p.dispatcher, p.handler);
     if (p.kind === 'element') {
@@ -391,7 +436,7 @@ function clearInstance(inst, container) {
       const prev = /** @type any */ (p).lastTarget;
       if (prev) {
         if (typeof prev === 'function') {
-          try { prev(undefined); } catch {}
+          try { prev.call(/** @type any */ (p).refHost, undefined); } catch {}
         } else if (typeof prev === 'object') {
           try { prev.value = undefined; } catch {}
         }

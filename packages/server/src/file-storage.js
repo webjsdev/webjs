@@ -28,7 +28,7 @@
  *     a limit; it only stays streaming.
  *   - **Traversal-safe keys.** Every key is resolved to an absolute path under
  *     `dir` and rejected if it escapes, using the same `resolve` +
- *     `startsWith(dir + sep)` containment guard the `/public/*` serve path uses
+ *     `startsWith(dir + sep)` containment guard the `public/` serve path uses
  *     in dev.js. A key with `..`, an absolute path, a leading slash, a NUL, or a
  *     backslash is rejected BEFORE any fs operation.
  *   - **S3-pluggability.** The interface operates on web-standard objects only
@@ -117,7 +117,7 @@ const SAFE_EXTENSIONS = new Set([
 /**
  * Validate a storage key and reject anything that could escape the root or is
  * otherwise unsafe. Throws on a bad key BEFORE any filesystem operation; this is
- * the security-critical seam. Mirrors the `/public/*` containment guard
+ * the security-critical seam. Mirrors the `public/` containment guard
  * (`resolve` + `startsWith(root + sep)`) in dev.js.
  *
  * Rejected: an empty / non-string key, a key with a NUL byte, an absolute path,

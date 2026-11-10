@@ -11,7 +11,7 @@
  * invented: a helper matching neither authored shape yields no value list.
  *
  * `allow` takes category names and class-group ids. The documented starting
- * configuration is `["layout", "rounded"]`, which is what lets the skill's
+ * configuration is `["layout", "rounded"]`, which is what lets the kit's
  * sanctioned one-off (`cn(buttonClass({ size: 'none' }), 'w-9 h-9
  * rounded-full')`) pass: `w-9 h-9` is layout, and `rounded-full` is the plain
  * radius group granted by name without opening the whole `shape` category.

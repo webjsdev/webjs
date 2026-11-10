@@ -6,14 +6,30 @@ import { hotStrings } from './hot.js';
  * A TemplateResult is an isomorphic description of HTML: the static string
  * pieces plus the dynamic values. Server and client renderers both consume it.
  *
- * @typedef {{ _$webjs: 'template', strings: TemplateStringsArray | string[], values: unknown[], svg?: boolean }} TemplateResult
+ * @typedef {{ _$webjs: 'template', strings: TemplateStringsArray | string[], values: unknown[], svg?: boolean, mathml?: boolean }} TemplateResult
  *
  * @param {TemplateStringsArray | string[]} strings
  * @param {...unknown} values
  * @returns {TemplateResult}
  */
 export function html(strings, ...values) {
-  return { _$webjs: 'template', strings: hotStrings(strings, 0), values };
+  return { _$webjs: 'template', strings: hotStrings(trusted(strings), 0), values };
+}
+
+/**
+ * The renderers render a template result's strings as markup only when they
+ * carry `raw`, which a tagged template's strings always do, so a result that
+ * arrived as data (JSON with the `_$webjs` brand) is refused. A plain array
+ * passed to `html()` / `svg()` / `mathml()` is code, as `string[]` in the type
+ * says, so it is marked the same way (kept in place so the template cache
+ * still keys on it, copied only when frozen).
+ * @param {TemplateStringsArray | string[]} strings
+ */
+function trusted(strings) {
+  if (!Array.isArray(strings) || Object.prototype.hasOwnProperty.call(strings, 'raw')) return strings;
+  const target = Object.isExtensible(strings) ? strings : strings.slice();
+  Object.defineProperty(target, 'raw', { value: target });
+  return target;
 }
 
 /**
@@ -34,7 +50,21 @@ export function html(strings, ...values) {
  * @returns {TemplateResult}
  */
 export function svg(strings, ...values) {
-  return { _$webjs: 'template', strings: hotStrings(strings, 1), values, svg: true };
+  return { _$webjs: 'template', strings: hotStrings(trusted(strings), 1), values, svg: true };
+}
+
+/**
+ * Tagged template literal for a MathML FRAGMENT, lit's `mathml` tag: markup
+ * that sits inside a `<math>` element but is built in its own template. The
+ * client parses it inside a `<math>` wrapper so its elements land in the
+ * MathML namespace; the server renders it exactly like `html`.
+ *
+ * @param {TemplateStringsArray | string[]} strings
+ * @param {...unknown} values
+ * @returns {TemplateResult}
+ */
+export function mathml(strings, ...values) {
+  return { _$webjs: 'template', strings: hotStrings(trusted(strings), 2), values, mathml: true };
 }
 
 /**

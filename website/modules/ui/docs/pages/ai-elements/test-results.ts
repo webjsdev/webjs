@@ -81,7 +81,7 @@ import {
     ${await componentPreview('test-results-suites', RHEA)}
     ${codeFigure(`<details data-slot="trace-collapsible" ?open=\${failed > 0} class=\${traceCollapsibleClass()}>
   <summary data-slot="trace-collapsible-trigger" class=\${traceCollapsibleTriggerClass()}>
-    <span data-slot="trace-line" data-status=\${failed > 0 ? 'error' : null} class=\${traceLineClass()}>
+    <span data-slot="trace-line" data-status=\${failed > 0 ? 'error' : nothing} class=\${traceLineClass()}>
       <span data-slot="trace-icon" aria-hidden="true" class=\${traceIconClass()}>\${FileCodeIcon()}</span>
       <span data-slot="trace-title" class=\${traceTitleClass()}>user-api.test.ts, 14 tests, 2 failed</span>
     </span>
@@ -99,7 +99,7 @@ import {
 
   return html\`<details data-slot="trace-collapsible" ?open=\${failed > 0} class=\${traceCollapsibleClass()}>
     <summary data-slot="trace-collapsible-trigger" class=\${traceCollapsibleTriggerClass()}>
-      <span data-slot="trace-line" data-status=\${failed > 0 ? 'error' : null} class=\${traceLineClass()}>
+      <span data-slot="trace-line" data-status=\${failed > 0 ? 'error' : nothing} class=\${traceLineClass()}>
         <span data-slot="trace-icon" aria-hidden="true" class=\${traceIconClass()}>\${FlaskConicalIcon()}</span>
         <span data-slot="trace-title" class=\${traceTitleClass()}>
           Ran \${tests.length} tests\${failed > 0 ? ', ' + failed + ' failed' : ''}

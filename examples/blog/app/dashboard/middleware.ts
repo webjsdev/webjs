@@ -11,7 +11,7 @@ export default async function requireAuth(
   req: Request,
   next: () => Promise<Response>,
 ): Promise<Response> {
-  const user = await getUserByToken(cookies().get(SESSION_COOKIE));
+  const user = await getUserByToken(cookies().get(SESSION_COOKIE)?.value);
   if (!user) {
     const to = encodeURIComponent(new URL(req.url).pathname);
     return new Response(null, { status: 302, headers: { location: `/login?then=${to}` } });

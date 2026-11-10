@@ -151,10 +151,10 @@ export default function Icon() {
 export const metadata = {
   icons: {
     icon: [
-      { url: '/public/favicon-192.png', type: 'image/png', sizes: '192x192' },
-      { url: '/public/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/favicon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
     ],
-    apple: { url: '/public/apple-touch-icon.png', sizes: '180x180' },
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
   },
 };</code-block>
     <p>Declare a favicon one of those ways, never as a hand-written <code>&lt;link rel="icon"&gt;</code>: only the root layout may write a document shell at all, so a hand-written tag is unavailable to every other layout. A <code>public/favicon.ico</code> needs no declaration either way, since it is served at the origin root for crawlers that read no markup.</p>

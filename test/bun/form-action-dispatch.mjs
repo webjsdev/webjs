@@ -105,6 +105,15 @@ function urlencoded(fields) {
   const res = await app.handle(urlencoded({ [FIELD]: id, email: 'a@b.com' }));
   assert.equal(res.status, 303, `[${runtime}] a successful submission PRG-redirects`);
   assert.equal(res.headers.get('location'), '/welcome?got=a%40b.com', `[${runtime}] redirect target`);
+  // The result rides the 303 in the signed flash cookie (node:crypto HMAC +
+  // rich serializer, both runtime-sensitive), and decodes back on this runtime.
+  const flash = res.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash='));
+  assert.ok(flash && /HttpOnly; SameSite=Lax/.test(flash), `[${runtime}] the flash cookie is set`);
+  const { decodeFlash } = await import('../../packages/server/src/action-flash.js');
+  const decoded = await decodeFlash(flash.split(';')[0].slice('__webjs_flash='.length));
+  assert.equal(decoded && decoded.id, id, `[${runtime}] the flash names the action`);
+  assert.equal(decoded.result.redirect, undefined, `[${runtime}] the redirect is not carried`);
+  assert.equal(decoded.result.success, true);
 }
 
 // Failure: 422 re-render carrying the field error and the typed value.
@@ -198,6 +207,33 @@ function urlencoded(fields) {
   assert.ok(bodyless, `[${runtime}] the bind-nothing 405 is reported`);
   assert.deepEqual(bodyless.fields, ['email'], `[${runtime}] field names ride, values do not`);
   assert.ok(!JSON.stringify(bodyless.fields).includes('a@b.com'), `[${runtime}] no user data`);
+}
+
+// A prevState with a default (#1686). Its `fn.length` is 0, so the dispatcher
+// counts the parameters the action declares, read from its source through the
+// load-hook facade, which differs per runtime: the default supplies the first
+// state and the second submission receives the first one's result.
+{
+  const pdir = mkdtempSync(join(tmpdir(), 'webjs-1686-prev-'));
+  const put = (rel, body) => { mkdirSync(dirname(join(pdir, rel)), { recursive: true }); writeFileSync(join(pdir, rel), body); };
+  put('count.server.js', `'use server';\nexport async function count(prev = { n: 10 }, input) { const n = prev.n + Number(input.get('by')); return n < 12 ? { success: false, error: 'more', n } : { success: true, n }; }\n`);
+  put('app/count/page.js', `import { html } from ${CORE};\nimport { count } from '../../count.server.js';\nexport default ({ actionData }) => html\`<form action=\${count}></form><p id="n">\${actionData?.n ?? 0}</p>\`;\n`);
+  const papp = await createRequestHandler({ appDir: pdir, dev: false });
+  await papp.warmup();
+  const page = await (await papp.handle(new Request('http://x/count'))).text();
+  const pid = new RegExp(`name="${FIELD}" value="([^"]*)"`).exec(page)[1];
+  const post = (cookie) => new Request('http://x/count', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin', ...(cookie ? { cookie } : {}) },
+    body: new URLSearchParams({ [FIELD]: pid, by: '1' }).toString(),
+  });
+  const first = await papp.handle(post());
+  assert.equal(first.status, 422, `[${runtime}] the first submission fails (10 + 1 < 12)`);
+  assert.match(await first.text(), /<p id="n">11<\/p>/, `[${runtime}] the default supplied the first state`);
+  const flash = first.headers.getSetCookie().find((c) => c.startsWith('__webjs_flash=')).split(';')[0];
+  const second = await papp.handle(post(flash));
+  assert.equal(second.status, 303, `[${runtime}] prevState carried 11, so 11 + 1 succeeds`);
+  rmSync(pdir, { recursive: true, force: true });
 }
 
 rmSync(dir, { recursive: true, force: true });

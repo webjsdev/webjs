@@ -59,16 +59,21 @@ export const WATCH_DIRS = ['app', 'components', 'modules', 'lib', 'actions', 'db
  *
  * - `instrumentation.*` (its `register()`) and `env.*` (the env validation),
  *   which the server runs ONCE per process (#1575).
- * - `.env`, loaded once at boot, and `package.json`, whose `webjs.*` keys are
- *   mostly read once (#1689). The CLI starts the child with the shell's env,
- *   not one `.env` was already loaded into, so the restarted child reads the
- *   edited file instead of keeping the old values.
+ * - The env files `webjs dev` loads, once at boot, in Next's order (`.env`,
+ *   `.env.local`, `.env.development`, `.env.development.local`), and
+ *   `package.json`, whose `webjs.*` keys are mostly read once (#1689). The CLI
+ *   starts the child with the shell's env, not one the files were already
+ *   loaded into, so the restarted child reads the edited file instead of
+ *   keeping the old values.
  * - The lockfiles, since a dependency change means new code under
  *   `node_modules`, which nothing reloads in place.
  */
 export const RESTART_FILES = Object.freeze([
   ...['instrumentation', 'env'].flatMap((n) => ['ts', 'js', 'mts', 'mjs'].map((x) => `${n}.${x}`)),
   '.env',
+  '.env.local',
+  '.env.development',
+  '.env.development.local',
   'package.json',
   'package-lock.json',
   'npm-shrinkwrap.json',
@@ -78,7 +83,7 @@ export const RESTART_FILES = Object.freeze([
   'yarn.lock',
 ]);
 
-const RESTART_FILE = /^(?:(?:instrumentation|env)\.m?[jt]s|\.env|package\.json|package-lock\.json|npm-shrinkwrap\.json|bun\.lockb?|pnpm-lock\.yaml|yarn\.lock)$/;
+const RESTART_FILE = /^(?:(?:instrumentation|env)\.m?[jt]s|\.env(?:\.local|\.development(?:\.local)?)?|package\.json|package-lock\.json|npm-shrinkwrap\.json|bun\.lockb?|pnpm-lock\.yaml|yarn\.lock)$/;
 
 /**
  * Whether a changed (app-relative) path is a restart file (see
@@ -109,7 +114,7 @@ const RESTART_CHILD_ENV = Object.freeze({ [RESTART_FILES_ENV]: RESTART_FILE.sour
  * that loads but never restarts the dev server when edited, which is the quiet
  * half of the bug where a `middleware.ts` was loaded by neither.
  */
-export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', ...RESTART_FILES];
+export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', 'proxy.ts', 'proxy.js', 'proxy.mts', 'proxy.mjs', ...RESTART_FILES];
 
 /**
  * Plan how `webjs dev` runs its server.
@@ -141,7 +146,9 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
     const plugin = bunPluginServed(sourceLocations);
     return {
       mode: 'supervise',
-      args: ['--hot', ...argv],
+      // --no-env-file: WebJs loads the env files itself in Next's order
+      // (env-files.js); Bun's own auto-load would pick a different set.
+      args: ['--no-env-file', '--hot', ...argv],
       env: { ...BUN_CHILD_ENV, ...RESTART_CHILD_ENV },
       restartOnChange: true,
       restartFor: (p) => plugin(p) || isRestartFile(p),

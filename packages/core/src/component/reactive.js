@@ -59,7 +59,7 @@ export function warnFunctionReflection(host, propName, attrName) {
   if (typeof console === 'undefined' || !console.warn) return;
   const tag = tagOf(/** @type any */ (host.constructor)) || host.tagName?.toLowerCase() || 'unknown';
   console.warn(
-    `[webjs] reflect:true property "${propName}" on <${tag}> holds a function `
+    `[webjs] reflect:true property "${String(propName)}" on <${tag}> holds a function `
     + `(or an array carrying one), which has no HTML attribute representation. `
     + `Removing "${attrName}" instead of stringifying it (a stringified function `
     + `writes its source into the page, so a server action's body would ship to `
@@ -96,7 +96,7 @@ export function warnUnserializableReflection(host, propName, attrName, detail) {
   if (typeof console === 'undefined' || !console.warn) return;
   const tag = tagOf(/** @type any */ (host.constructor)) || host.tagName?.toLowerCase() || 'unknown';
   console.warn(
-    `[webjs] reflect:true property "${propName}" on <${tag}> holds a value `
+    `[webjs] reflect:true property "${String(propName)}" on <${tag}> holds a value `
     + `JSON.stringify cannot serialize (a cycle, a BigInt, or a throwing `
     + `toJSON), so it has no HTML attribute representation. Removing `
     + `"${attrName}" instead. Detail: ${detail}`
@@ -132,14 +132,6 @@ export function warnUnserializableReflection(host, propName, attrName, detail) {
  *
  * `changedProperties` is a `Map<string, unknown>` where each entry maps
  * a property name to its previous value.
- *
- * MAINTAINER NOTE. Adding a new overridable lifecycle hook here means
- * the display-only component elision analyser must learn about it too,
- * or it will wrongly elide a component that now does client work. Add
- * the hook name to `CLIENT_LIFECYCLE_HOOKS` in
- * `packages/server/src/component-elision.js`. The guard test at
- * `packages/server/test/elision/lifecycle-coverage.test.js` introspects
- * this prototype and fails until you do.
  *
  * Usage:
  * ```js

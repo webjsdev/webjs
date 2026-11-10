@@ -186,11 +186,11 @@ export function manualSlotFor(state, node) {
 /**
  * Walk up from a light slot to its owning host: the nearest SLOT_STATE
  * ancestor that actually OWNS the slot. A slot separated from that ancestor
- * by another custom element (a forwarded slot inside a foreign / elided
+ * by another custom element (a forwarded slot inside a foreign / server-only
  * component) is nobody's here: attributing it to the outer host would
  * redirect the outer host's own same-named slot, so `assign()` on such a
- * slot is inert instead (the same carve-out as every other elided-component
- * write).
+ * slot is inert instead (the same carve-out as every other write to a
+ * server-only component).
  */
 function hostOfSlot(slot) {
   for (let p = slot.parentElement; p; p = p.parentElement) {

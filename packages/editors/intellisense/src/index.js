@@ -353,7 +353,7 @@ function init(modules) {
     const member =
       hit.attr.modifier === 'property'
         ? ref.members.find((mm) => mm.propName === hit.attr.name)
-        : ref.members.find((mm) => !mm.state && mm.attrName === hit.attr.name);
+        : ref.members.find((mm) => !mm.state && (mm.attrName === hit.attr.name || mm.attrAlias === hit.attr.name));
     return { tag: hit.node.tag, attr: hit.attr, ref, member, program };
   }
 
@@ -787,12 +787,14 @@ function init(modules) {
    * @typedef {{
    *   propName: string,
    *   attrName: string,
+   *   attrAlias: string | undefined,
    *   state: boolean,
    * }} PropMember
    *   One reactive property. `propName` is the reactive property key (factory
    *   shape or `static properties`, the `.prop` binding name, camelCase);
-   *   `attrName` is its hyphenated HTML
-   *   attribute name (the plain / `?bool` binding name); `state` is true when
+   *   `attrName` is its HTML attribute name (the plain / `?bool` binding
+   *   name: a custom `attribute`, else Lit's lowercased property name);
+   *   `attrAlias` is the kebab spelling the runtime also reads; `state` is true when
    *   it has NO attribute (`state: true` or `attribute: false`, excluded from
    *   `observedAttributes`).
    *
@@ -804,7 +806,7 @@ function init(modules) {
    *   properties: string[],
    *   members: PropMember[],
    * }} ComponentRef
-   *   `attributes` = hyphenated attribute names of non-state props (plain /
+   *   `attributes` = attribute names of non-state props (plain /
    *   `?bool` binding targets). `properties` = property names of ALL props
    *   (`.prop` binding targets). `members` = the full records.
    *
@@ -945,7 +947,7 @@ function init(modules) {
         if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
         else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
         if (!key) continue;
-        out.push({ propName: key, attrName: propAttrName(prop, key), state: propIsState(prop) });
+        out.push({ propName: key, attrName: propAttrName(prop, key), attrAlias: propAttrAlias(prop, key), state: propIsState(prop) });
       }
     }
     if (cls.heritageClauses) {
@@ -964,7 +966,7 @@ function init(modules) {
                   if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
                   else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
                   if (!key) continue;
-                  out.push({ propName: key, attrName: propAttrName(prop, key), state: propIsState(prop) });
+                  out.push({ propName: key, attrName: propAttrName(prop, key), attrAlias: propAttrAlias(prop, key), state: propIsState(prop) });
                 }
               }
             }
@@ -1012,9 +1014,25 @@ function init(modules) {
     return false;
   }
 
-  // The HTML attribute name for a prop: a custom `attribute` option wins,
-  // else the kebab-cased property name (matches the runtime in component.js).
+  // The HTML attribute name for a prop: a custom `attribute` string wins,
+  // else Lit's default, the LOWERCASED property name (`attribute: true` means
+  // the default too). Matches `attributeNameFor` in the core runtime.
   function propAttrName(prop, key) {
+    const custom = customAttrName(prop);
+    return custom !== undefined ? custom : key.toLowerCase();
+  }
+
+  // The kebab-cased spelling the runtime still READS as an alias of the
+  // default name (never what it reflects to), or undefined when a custom
+  // attribute is declared or the two spellings coincide.
+  function propAttrAlias(prop, key) {
+    if (customAttrName(prop) !== undefined) return undefined;
+    const kebab = hyphenate(key);
+    return kebab !== key.toLowerCase() ? kebab : undefined;
+  }
+
+  // The `attribute: '...'` string a prop declares, if any.
+  function customAttrName(prop) {
     if (ts.isPropertyAssignment(prop)) {
       let v = prop.initializer;
       if (v && ts.isCallExpression(v)) {
@@ -1034,7 +1052,7 @@ function init(modules) {
         }
       }
     }
-    return hyphenate(key);
+    return undefined;
   }
 
   /**
@@ -1296,9 +1314,10 @@ function init(modules) {
    *    type is not assignable to the member's `declare`d type. Covers plain
    *    attributes, `.prop` bindings, and `?bool` (must be boolean-ish);
    *    `@event` must be callable.
-   *  - **unquoted-binding** (code 9002, invariant 4): an `@event` / `.prop` /
-   *    `?bool` binding whose value is quoted (`@click="${fn}"`). The hole is
-   *    dropped at SSR; it must be unquoted.
+   *  - **specialized-binding-shape** (code 9002, invariant 4): an `@event` /
+   *    `.prop` / `?bool` binding with surrounding text or more than one
+   *    expression (`@click="x${fn}"`). Quoted and unquoted single-expression
+   *    bindings are the same binding, as in Lit, so neither is flagged.
    *  - **expressionless-property-binding** (code 9003): a `.prop` binding with
    *    no `${}` expression (`.value="x"` sets the property to a literal string,
    *    almost always a mistake).
@@ -1408,7 +1427,7 @@ function init(modules) {
         const member =
           attr.modifier === 'property'
             ? ref.members.find((m) => m.propName === attr.name)
-            : ref.members.find((m) => !m.state && m.attrName === attr.name);
+            : ref.members.find((m) => !m.state && (m.attrName === attr.name || m.attrAlias === attr.name));
         if (!member) continue;
         const propType = resolvePropType(program, ref, member.propName, checker);
         if (!propType) continue; // no `declare` annotation → can't check

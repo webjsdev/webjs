@@ -244,7 +244,7 @@ test('does NOT false-block ordinary code (webjs as an identifier / operand)', ()
   // alone, so editing real source is never wrongly blocked.
   assert.equal(runContent(`if (!${B}) return emptyTasks();`).status, 0);
   assert.equal(runContent(`const ${B} = pkg.${B};`).status, 0);
-  assert.equal(runContent(`const cfg = { ${B}: { elide: true } };`).status, 0);
+  assert.equal(runContent(`const cfg = { ${B}: { seed: true } };`).status, 0);
   assert.equal(runContent(`plugins.push(${B}, other);`).status, 0);
 });
 

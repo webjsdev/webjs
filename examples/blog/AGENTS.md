@@ -123,38 +123,12 @@ Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `o
 - `app/api/comments/[postId]/route.ts` exports `WS` for live comment threads.
 - Client components use `connectWS()` for auto-reconnecting WebSocket connections.
 
-### Elision fixtures (e2e-pinned)
-The app carries display-only and inert-route fixtures so the network
-probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
-
-- `components/build-stamp.ts` (rendered on `/` AND on `/observed`): a
-  display-only component whose module is stripped from the served page
-  source, so the browser never downloads it. It is the NEGATIVE CONTROL on
-  both routes: a probe asserting some other module IS downloaded needs a
-  module that is still elided on the same run, or the probe would also pass
-  if elision had stopped working altogether.
-- `components/vendor-badge.ts` (rendered on `/`): a display-only
-  component whose only non-core dependency is `dayjs` (a binding import,
-  not an interactivity signal). Because the component is elided, the
-  bare-import scan skips it, so `dayjs` never enters the importmap and is
-  never fetched. The dayjs-formatted date is still SSR'd.
-- `app/static-info/page.ts`: a fully-static route whose inert page module
-  is dropped from the boot script. The import-only root layout is dropped
-  too (#620); the only module the boot emits is the layout's re-emitted
-  theme-toggle, which loads core and auto-enables the router.
-- `components/observed-badge.ts` + `components/observe-badge.ts` (rendered
-  on `/observed`): a display-only component that WOULD elide, paired with a
-  module that observes it via `customElements.whenDefined('observed-badge')`.
-  The observation forces the badge to ship, so the probe asserts its module
-  IS downloaded (the cross-module-registration fix, #169). The unobserved
-  `build-stamp` is the negative control.
-- `components/forced-badge.ts` (rendered on `/observed`): display-only in
-  every respect (static markup, no events, no reactive props, no lifecycle
-  hook, light DOM) EXCEPT `static interactive = true`, the explicit author
-  override. It pins that override end to end (#1308): before it, the only
-  coverage stopped at the analyser returning a boolean, and nothing proved
-  the boot script actually keeps the module. The probe asserts its module is
-  downloaded on a run where `build-stamp` on the same page still is not.
+### Zero-JS route fixture (e2e-pinned)
+`app/static-info/page.ts` is a fully-static route. No page or layout module
+ever ships (route modules run only on the server); the only module the boot
+emits is the root layout's theme-toggle, which loads core and auto-enables the
+router. The network probes in `test/e2e/e2e.test.mjs` assert that no page or
+layout module is ever requested.
 
 ### Client-router script reactivation (#1102)
 `app/script-swap/` exists ONLY as an e2e fixture. Its layout emits two inline
@@ -175,8 +149,8 @@ async component whose `async render()` awaits `getSeedUser`
 (`modules/seed/queries/get-user.server.ts`, a `'use server'` action). The SSR
 result is seeded into the page, so the e2e network probe asserts NO
 `/__webjs/action/` RPC fires on hydration (initial load and soft nav), while a
-prop bump to an unseeded id DOES fetch. The `@click` bump is what makes the
-component ship (otherwise a bare async leaf would be elided like `/async-leaf`).
+prop bump to an unseeded id DOES fetch. Like every component in an ordinary
+file it ships and hydrates; the `@click` bump is what exercises a client fetch.
 
 ### Webjs UI kit
 `components/ui/` holds the kit, split into two tiers:
@@ -261,40 +235,13 @@ turning the flag off.
 
 ## Conventions
 
-- **One exported function per action/query file.** Name the file after the function.
-- **ActionResult<T> envelope** for all actions: `{ success: true, data } | { success: false, error, status }`.
-- **Routes are thin adapters.** Business logic lives in modules. A route imports a module function, calls it, translates the result to a Response.
-- **Server-only imports** (the DB driver, node:crypto, etc.) only in `.server.ts` files, `db/`, or `lib/`.
+How to write WebJs code is the brief in the root `AGENTS.md` (Next.js App
+Router routing, Lit component APIs, imported from `@webjsdev/*`) plus
+https://webjs.dev/docs. This app adds a few conventions of its own:
+
+- **One exported function per action/query file**, named after the function.
+- **ActionResult<T> envelope** for all actions; the shared type lives in `modules/auth/types.ts`.
+- **Routes are thin adapters.** Business logic lives in modules.
 - **No barrel files.** Import from the specific file.
-- **Types per module** in `types.ts`. Shared types (ActionResult) live in `modules/auth/types.ts`.
-- **globalThis for dev singletons** (the Drizzle `db`, WS clients, comment bus): survives module cache-busting.
-
-## Invariants
-
-1. Never import a DB driver (`node:sqlite`) or `node:*` from components or pages.
-2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
-3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
-4. Component state lives in signals from `@webjsdev/core`. Read with
-   `signal.get()` inside `render()`, write with `signal.set(value)`.
-   Module-scope signals share state across components; instance
-   signals (created in the constructor) carry component-local state.
-5. Pages/layouts are server-only functions returning TemplateResult.
-
-## Recipes
-
-### Add a page
-Create `app/<path>/page.ts`. Export default async function returning `html\`...\``.
-
-### Add an API endpoint
-Create `app/api/<path>/route.ts`. Export named functions: `GET`, `POST`, etc.
-
-### Add a server action
-Create `modules/<feature>/actions/<name>.server.ts`. Export one async function.
-Import from auth/types.ts for ActionResult<T>.
-
-### Add a component
-Create `modules/<feature>/components/<name>.ts` or `components/<name>.ts`.
-Extend the `WebComponent({ ... })` factory to declare reactive properties (e.g. `extends WebComponent({ count: Number })`; per-prop options via `prop(Number, { reflect: true })`), add `static styles` for shadow-DOM components, implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen. A hand-written `static properties` throws at construction (`no-static-properties`); set defaults in the constructor, never a class-field initializer. **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
-
-### Add a database model
-Edit `db/schema.server.ts`. Run `webjs db generate` then `webjs db migrate`.
+- **globalThis for dev singletons** (the Drizzle `db`, WS clients, comment bus), so they survive module cache-busting.
+- **Data lives in Drizzle + SQLite**, never JSON files, module-scope arrays, or localStorage.

@@ -12,12 +12,11 @@ test('html template renders correctly', async () => {
   assert.ok(result.includes('Hello, world!'));
 });
 
-test('example: your first server action test', async () => {
-  // Import your server action:
-  // import { createPost } from '#modules/posts/actions/create-post.server.ts';
-  //
-  // const result = await createPost({ title: 'Test', body: 'Content' });
-  // assert.equal(result.success, true);
-  // assert.ok(result.data.id);
-  assert.ok(true, 'Replace this with real tests');
-});
+// Your first server action test, once you have one:
+//
+// test('createPost saves a post', async () => {
+//   const { createPost } = await import('#modules/posts/actions/create-post.server.ts');
+//   const result = await createPost({ title: 'Test', body: 'Content' });
+//   assert.equal(result.success, true);
+//   assert.ok(result.data.id);
+// });

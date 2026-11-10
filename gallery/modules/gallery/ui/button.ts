@@ -23,8 +23,7 @@
  * component file and tune its class values to your brand. It lives in the
  * gallery's own module, not in components/ui/, because `webjs ui add` writes
  * there: your own `webjs ui add button` lands in components/ui/button.ts and
- * never collides with this one, and gallery:clear removes this folder with the
- * rest of the gallery.
+ * never collides with this one.
  *
  * A11y: an icon-only button has no visible text, so give it an `aria-label`.
  * Native `<button>` focus + keyboard activation are already correct.

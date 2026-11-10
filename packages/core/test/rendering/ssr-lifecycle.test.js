@@ -68,6 +68,41 @@ test('reactive controllers hostUpdate runs before render at SSR', async () => {
   assert.match(out, /from-controller/, 'controller contribution is in the SSR output');
 });
 
+test('a controller whose hostUpdate throws at SSR is skipped, reported once, and the host still renders', async () => {
+  class BrowserOnlyCtrl {
+    constructor(host) { host.addController(this); }
+    hostUpdate() { return window.innerWidth; }
+  }
+  class GoodCtrl {
+    constructor(host) { this.host = host; host.addController(this); }
+    hostUpdate() { this.host.derived = 'kept'; }
+  }
+  class Isolated extends WebComponent {
+    constructor() {
+      super();
+      this.derived = 'none';
+      new BrowserOnlyCtrl(this);
+      new GoodCtrl(this);
+    }
+    render() { return html`<b>${this.derived}</b>`; }
+  }
+  Isolated.register('ssr-isolated-controller');
+  /** @type {unknown[][]} */
+  const errors = [];
+  const orig = console.error;
+  console.error = (...args) => { errors.push(args); };
+  let out;
+  try {
+    out = await renderToString(html`<ssr-isolated-controller></ssr-isolated-controller><ssr-isolated-controller></ssr-isolated-controller>`);
+  } finally {
+    console.error = orig;
+  }
+  assert.equal((out.match(/<b>kept<\/b>/g) || []).length, 2, 'both hosts render, the later controller still ran');
+  const hits = errors.filter((e) => String(e[0]).includes('BrowserOnlyCtrl.hostUpdate() threw during SSR'));
+  assert.equal(hits.length, 1, 'reported once per controller class');
+  assert.match(String(hits[0][0]), /isServer/);
+});
+
 test('a reflect:true property set in the constructor appears as an attribute', async () => {
   class ReflectsLevel extends WebComponent({ level: prop(Number, { reflect: true }) }) {
     constructor() {
@@ -151,8 +186,7 @@ test('a component that neither reflects nor sets attributes keeps a byte-identic
 
   const out = await renderToString(html`<ssr-plain name="x" class="y"></ssr-plain>`);
   // The authored attributes are preserved verbatim and the framework appends
-  // only `data-wj-host` (a light host, uniformly marked). That uniform append is
-  // what preserves the elision on-vs-off differential invariant.
+  // only `data-wj-host` (a light host, uniformly marked).
   assert.match(out, /<ssr-plain name="x" class="y" data-wj-host><!--webjs-hydrate-->/, 'authored attrs kept, marker appended');
 });
 

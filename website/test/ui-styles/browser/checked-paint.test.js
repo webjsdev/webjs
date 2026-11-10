@@ -17,7 +17,7 @@ const assert = {
 
 suite('a checked checkbox and radio paint with no script', () => {
   suiteSetup(async () => {
-    for (const href of ['/public/ui.css', '/public/ui-styles/nova.css', '/public/ui-styles/new-york.css']) {
+    for (const href of ['/ui.css', '/ui-styles/nova.css', '/ui-styles/new-york.css']) {
       if (document.querySelector(`link[href="${href}"]`)) continue;
       const link = document.createElement('link');
       link.rel = 'stylesheet';

@@ -1,35 +1,32 @@
 import { html } from '@webjsdev/core';
+import type { PageProps } from '@webjsdev/core';
 import { cardClass } from '#modules/gallery/ui/card.ts';
 import { inputClass } from '#modules/gallery/ui/input.ts';
 import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { logIn } from '#modules/auth/actions/log-in.server.ts';
 
 export const metadata = { title: 'Log in' };
 
 const inputCls = inputClass();
 
-// A failed sign-in 302s back here with ?error=... (createAuth is configured with
-// pages.error: '/features/auth/login' in modules/auth/auth.server.ts). Map the
-// code to a plain message so a bad password gets visible feedback instead of a
-// silent bounce.
-function errorMessage(code: string | undefined): string | null {
-  if (!code) return null;
-  if (code === 'CredentialsSignin') return 'Invalid email or password.';
-  return 'Could not sign you in. Please try again.';
-}
+type LogInResult = { success: false; error: string; values: { email: string } };
 
-export default function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
-  const error = errorMessage(searchParams.error);
+// The form is bound to the logIn action (modules/auth/actions/log-in.server.ts),
+// the Auth.js v5 shape: a wrong password comes back as actionData with a
+// message and the typed email, so the page re-renders with both. The
+// /api/auth/signin/credentials route createAuth mounts still works for a plain
+// form post too; it lands back here with ?error=CredentialsSignin.
+export default function LoginPage({ actionData, searchParams }: PageProps<'/features/auth/login', LogInResult>) {
+  const error = actionData?.error ?? (searchParams.error ? 'Invalid email or password.' : null);
   return html`
     <div class="max-w-[420px] mx-auto">
       <h1 class="text-h2 font-bold mb-2">Sign in</h1>
       <p class="text-muted-foreground mb-5">Welcome back: log in to continue.</p>
       ${error ? html`<p role="alert" class="mb-4 text-sm text-destructive">${error}</p>` : ''}
-      <form method="POST" action="/api/auth/signin/credentials" class="${cardClass()} grid gap-4 p-5">
-        <!-- createAuth reads redirectTo from the posted form and 302s there after a successful signin. -->
-        <input type="hidden" name="redirectTo" value="/features/auth/dashboard">
+      <form action=${logIn} class="${cardClass()} grid gap-4 p-5">
         <div class="grid gap-1.5">
           <label for="email" class="text-[13px] font-medium text-muted-foreground">Email</label>
-          <input id="email" name="email" type="email" required class=${inputCls} placeholder="ada@example.com" />
+          <input id="email" name="email" type="email" required class=${inputCls} placeholder="ada@example.com" value=${actionData?.values.email ?? ''} />
         </div>
         <div class="grid gap-1.5">
           <label for="password" class="text-[13px] font-medium text-muted-foreground">Password</label>

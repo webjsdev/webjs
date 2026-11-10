@@ -59,7 +59,7 @@ That means no virtual DOM, no reconciler, and no custom hydration protocol to sh
 
 # Progressive enhancement is the default, not a mode
 
-A WebJs page is server-rendered HTML that reads, navigates, and submits forms with JavaScript disabled. JS is opt-in per interactive behavior. Display-only components are detected and their code is stripped from what the browser downloads, so a static component ships zero JavaScript. In Next.js, progressive enhancement is possible but it is something you architect toward, not the default you get for free.
+A WebJs page is server-rendered HTML that reads, navigates, and submits forms with JavaScript disabled. JS is opt-in per interactive behavior. Pages, layouts and server-only components (a component in a `.server.ts` file) never ship, so static markup costs the browser zero JavaScript. In Next.js, progressive enhancement is possible but it is something you architect toward, not the default you get for free.
 
 
 # Where Next.js is the better pick

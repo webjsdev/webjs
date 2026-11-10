@@ -58,7 +58,20 @@
     },
     "./signals": {
       "types": "./src/signal.d.ts",
-      "default": "./src/signal.js"
+      "source": "./src/signal.js",
+      "default": "./dist/webjs-core-browser.js"
+    },
+    "./directive": {
+      "types": "./src/directive.d.ts",
+      "default": "./src/directive.js"
+    },
+    "./async-directive": {
+      "types": "./src/async-directive.d.ts",
+      "default": "./src/async-directive.js"
+    },
+    "./static-html": {
+      "types": "./src/static-html.d.ts",
+      "default": "./src/static-html.js"
     },
     "./package.json": "./package.json"
   },

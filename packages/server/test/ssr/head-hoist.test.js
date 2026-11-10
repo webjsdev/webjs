@@ -79,8 +79,8 @@ test('a <meta> between head-bound tags does NOT strand the later tags (favicon +
   const body =
     '<script>/*theme*/</script>' +
     '<meta name="color-scheme" content="light dark">' +
-    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
-    '<link rel="stylesheet" href="/public/tailwind.css">' +
+    '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' +
+    '<link rel="stylesheet" href="/tailwind.css">' +
     '<style>:root{--x:1}</style>' +
     '<main>content</main>';
   const { head, body: out } = _hoistHeadTags(HEAD, body);

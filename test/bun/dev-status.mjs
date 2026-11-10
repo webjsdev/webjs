@@ -25,6 +25,8 @@ const dir = mkdtempSync(join(tmpdir(), 'webjs-1664-status-'));
 const files = {
   'app/page.js': `import { html } from ${CORE};\nexport default () => html\`<p>home</p>\`;\n`,
   'app/boom/page.js': `export default () => { throw new Error('page exploded'); };\n`,
+  // A page with browser-looking code: legal on the server, reported as a warning (#1686).
+  'app/warn/page.js': `import { html } from ${CORE};\nconst w = typeof window !== 'undefined' ? window.innerWidth : 0;\nexport default () => html\`<p>\${w}</p>\`;\n`,
   'modules/x/fail.server.js': `'use server';\nexport async function failHard() { throw new Error('action exploded'); }\n`,
   'app/act/page.js': `import { html } from ${CORE};\nimport { failHard } from '../../modules/x/fail.server.js';\nexport default () => html\`<p>\${typeof failHard}</p>\`;\n`,
 };
@@ -43,6 +45,8 @@ try {
   let body = await status('?wait=5');
   assert.equal(body.status, 'ok', `[${runtime}] a clean app is ok`);
   assert.equal(body.settled, true, `[${runtime}] and settled`);
+  assert.deepEqual(body.warnings.map((w) => [w.kind, w.file.endsWith(join('warn', 'page.js'))]), [['route-browser-code', true]],
+    `[${runtime}] browser code in a page is a warning that leaves the status ok`);
 
   assert.equal((await app.handle(new Request('http://x/boom'))).status, 500);
   await assert.rejects(invokeActionForTest(app, join(dir, 'modules/x/fail.server.js'), 'failHard', []));

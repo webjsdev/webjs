@@ -1,4 +1,5 @@
 import { BUILTIN, FRAMEWORK_SERVER_ONLY, extractPackageName } from './scanner.js';
+import { foreignImport } from '../foreign-imports.js';
 import { getPackageVersion } from './manifest.js';
 import { normalizeProvider } from './providers.js';
 
@@ -325,7 +326,7 @@ export async function vendorImportMapEntries(bareImports, appDir) {
   for (const spec of bareImports) {
     if (BUILTIN.has(spec)) continue;
     const pkg = extractPackageName(spec);
-    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg)) continue;
+    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg) || foreignImport(spec)) continue;
     const version = getPackageVersion(pkg, appDir);
     if (!version) continue;
     // Splice the version into the specifier: 'dayjs/plugin/utc' with

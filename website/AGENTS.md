@@ -662,7 +662,7 @@ folder once it reaches about three related files. The design system
 bar; `links.ts` and `samples.ts` have not, so they stay loose. Fragments in
 `lib/ui/` are one file per fragment for the same reason the framework keeps
 one action per file: the filename is the index. This is the app-wide fragment
-tier at its grown-up size; the skill's `references/styling.md` names all three
+tier at its grown-up size; https://webjs.dev/docs/styling names all three
 sizes (`modules/<feature>/utils/ui/` for one feature, `lib/utils/ui.ts` for
 app-wide helpers, `lib/ui/` for a subsystem like this one). An app with a
 handful of small helpers is right to keep them in `lib/utils/ui.ts` instead;
@@ -940,8 +940,8 @@ calling an action), re-enable it and delete the assertion in
 - **Each per-theme colour is declared ONCE, as `light-dark(LIGHT, DARK)`**,
   and the three `color-scheme` declarations in `app/layout.ts` pick the side
   (the default follows the OS; the toggle's `[data-theme]` forces one). This
-  is the rule the framework teaches its own users, in the skill at
-  `.agents/skills/webjs/references/styling.md`. A token that is NOT a colour
+  is the rule the framework teaches its own users, at
+  https://webjs.dev/docs/styling. A token that is NOT a colour
   (`--glow-strength`, `--cta-mix`, `--shadow-spread`) cannot ride
   `light-dark()`, so it keeps an explicit override pair: the OS media query
   plus the attribute rule. Nothing else may. Pinned by

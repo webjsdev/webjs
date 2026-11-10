@@ -27,7 +27,7 @@ import {
   vendorPreconnectOrigins,
   publishBuildId,
 } from '../../src/importmap.js';
-import { setAssetRoots, clearAssetHashCache, setElisionFingerprint } from '../../src/asset-hash.js';
+import { setAssetRoots, clearAssetHashCache, setServeFingerprint } from '../../src/asset-hash.js';
 
 let root;
 let appDir;
@@ -61,7 +61,7 @@ before(async () => {
 
 after(async () => {
   setAssetRoots({ appDir: '', coreDir: '', enabled: false });
-  setElisionFingerprint('');
+  setServeFingerprint('');
   clearAssetHashCache();
   await setImportAliasEntries({});
   await setVendorEntries({});
@@ -153,14 +153,14 @@ test('buildImportMap: a byte change plus clearAssetHashCache moves the ?v in the
   assert.match(after, /\?v=[0-9a-f]{12}$/);
 });
 
-test('buildImportMap: the elision fingerprint invalidates on change only', () => {
+test('buildImportMap: the serve fingerprint invalidates on change only', () => {
   const a = buildImportMap();
-  setElisionFingerprint('fp-1');
+  setServeFingerprint('fp-1');
   const b = buildImportMap();
   assert.notEqual(b, a, 'a changed fingerprint is a new build');
-  setElisionFingerprint('fp-1');
+  setServeFingerprint('fp-1');
   assert.equal(buildImportMap(), b, 'the same fingerprint again keeps the memo');
-  setElisionFingerprint('');
+  setServeFingerprint('');
 });
 
 test('importMapTag: the JSON body is memoized while the nonce and build id stay per call', async () => {

@@ -1,4 +1,4 @@
-import { html } from '@webjsdev/core';
+import { html, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { bubbleClass, bubbleContentClass } from '#modules/ui/components/bubble.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
@@ -101,7 +101,7 @@ function TestResultsRow() {
   return html`
     <details data-slot="trace-collapsible" ?open=${summary.failed > 0} class=${traceCollapsibleClass()}>
       <summary data-slot="trace-collapsible-trigger" class=${traceCollapsibleTriggerClass()}>
-        <span data-slot="trace-line" data-status=${summary.failed > 0 ? 'error' : null} class=${traceLineClass()}>
+        <span data-slot="trace-line" data-status=${summary.failed > 0 ? 'error' : nothing} class=${traceLineClass()}>
           <span data-slot="trace-icon" aria-hidden="true" class=${traceIconClass()}>${FlaskConicalIcon()}</span>
           <span data-slot="trace-title" class=${traceTitleClass()}>Ran ${formatCounts(summary)}</span>
         </span>
@@ -114,7 +114,7 @@ function TestResultsRow() {
             return html`
               <details data-slot="trace-collapsible" ?open=${counts.failed > 0} class=${traceCollapsibleClass()}>
                 <summary data-slot="trace-collapsible-trigger" class=${traceCollapsibleTriggerClass()}>
-                  <span data-slot="trace-line" data-status=${counts.failed > 0 ? 'error' : null} class=${traceLineClass()}>
+                  <span data-slot="trace-line" data-status=${counts.failed > 0 ? 'error' : nothing} class=${traceLineClass()}>
                     <span data-slot="trace-icon" aria-hidden="true" class=${traceIconClass()}>${FileCodeIcon()}</span>
                     <span data-slot="trace-title" class=${traceTitleClass()}>${suite.name}, ${formatCounts(counts)}</span>
                   </span>

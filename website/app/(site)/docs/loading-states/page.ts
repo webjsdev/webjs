@@ -61,7 +61,7 @@ export default async function BlogPage() {
 
     <h2>Loading states on client navigation</h2>
     <p>The same <code>loading.ts</code> also feeds client-side navigation. The SSR pipeline emits each segment's loading content as a hidden <code>&lt;template id="wj-loading:&lt;segment-path&gt;"&gt;</code> at body end. When a user clicks a link, the router clones the deepest matching template into the swap slot <strong>immediately</strong>, before the fetch even completes, so the user sees the skeleton instantly instead of stale content from the previous page.</p>
-    <p>If the fetch fails (network error, server crash), the optimistic loading content is reverted and the router falls back to a full page navigation. The same files serve both server-side SSR Suspense and client-side nav optimistic UI. Write one <code>loading.ts</code>, get both behaviors.</p>
+    <p>If the fetch fails (network error, server crash), the optimistic loading content is reverted and the router recovers in place (see <code>webjs:navigation-error</code> on the <a href="/docs/client-router">Client Router</a> page). The same files serve both server-side SSR Suspense and client-side nav optimistic UI. Write one <code>loading.ts</code>, get both behaviors.</p>
 
     <h2>Manual Suspense</h2>
     <p>For more control, use <code>Suspense()</code> directly in your page template instead of a <code>loading.ts</code> file:</p>
@@ -77,6 +77,9 @@ export default function Page() {
 }</code-block>
 
     <p>Each <code>Suspense</code> boundary resolves independently, so the feed can appear before the stats if it's faster.</p>
+
+    <h2>Status codes once streaming has started</h2>
+    <p>As in Next.js, the status goes out with the shell, so a boundary that resolves later cannot change it. <code>redirect()</code> thrown inside a <code>Suspense</code> boundary redirects on the client (a refresh tag with JavaScript off). <code>notFound()</code>, <code>forbidden()</code> and <code>unauthorized()</code> render the nearest <code>not-found.ts</code>, <code>forbidden.ts</code> or <code>unauthorized.ts</code> in place of the streamed content, keep the <code>200</code>, and mark the page <code>noindex</code>. Call them before the boundary (in the page itself) to answer with the real <code>404</code>, <code>403</code> or <code>401</code>. A boundary rendered this way arrives as server markup only, so keep components in a <code>not-found.ts</code> to ones the page already loads, or throw before the boundary.</p>
 
     <h2>Component re-fetch loading: renderFallback()</h2>
     <p>The loading states above are for a PAGE or REGION (a <code>loading.ts</code> skeleton, a <code>Suspense</code> boundary, a streamed <code>&lt;webjs-suspense&gt;</code>). A component that fetches its own data with <a href="/docs/data-fetching">async render</a> has a separate concern: what to show when it RE-FETCHES on the client (a prop / dependency change re-runs <code>async render()</code>).</p>

@@ -18,7 +18,7 @@ export default session({
   storage: cookieSessionStorage(),  // or storeSessionStorage() for Redis
 });</code-block>
 
-    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly), the key used to sign session cookies.</p>
+    <p>The only requirement is <code>SESSION_SECRET</code> (or pass <code>secret</code> directly), the key used to sign session cookies. In development and tests (<code>webjs dev</code>, <code>webjs test</code>, or <code>NODE_ENV=development</code> / <code>test</code>) a missing one is generated once into the gitignored <code>.webjs/dev-secret</code>, with a warning, so a fresh clone or worktree works before anyone writes an <code>.env</code>. Anywhere else it is required, including a process with no <code>NODE_ENV</code> at all. A process a test spawns inherits <code>NODE_ENV=test</code> from the run, as under Jest; set <code>NODE_ENV=production</code> on it when it should behave as production.</p>
 
     <h2>SessionStorage Implementations</h2>
 
@@ -53,11 +53,11 @@ export default session({
 });</code-block>
 
     <h2>Session Class API</h2>
-    <p>Use <code>getSession(req)</code> in any server-side code (API routes, server actions, middleware):</p>
+    <p>Call <code>getSession()</code> in any server-side code (pages, server actions, API routes, middleware). With no argument it reads the request in scope, the way <code>cookies()</code> and <code>headers()</code> do; a route handler can pass its <code>req</code> instead, and <code>getSession(getRequest())</code> works too:</p>
 
     <code-block>import { getSession } from '@webjsdev/server';
 
-const s = getSession(req);</code-block>
+const s = getSession();</code-block>
 
     <h3>s.get(key)</h3>
     <p>Returns the value for the key, checking both regular data and flash data.</p>
@@ -76,7 +76,7 @@ s.set('role', 'admin');</code-block>
     <code-block>if (s.has('userId')) { /* authenticated */ }</code-block>
 
     <h3>s.flash(key, value)</h3>
-    <p>Sets a value that exists for one request only. Use for success/error messages after redirects.</p>
+    <p>Sets a value that lasts until it is read, as in Remix: <code>s.get(key)</code> returns it once and the next save drops it, while <code>s.has(key)</code> checks without consuming. Use for success/error messages after redirects.</p>
 
     <code-block>s.flash('message', 'Post created!');
 // Next request: s.get('message') → 'Post created!'
@@ -128,11 +128,11 @@ export async function POST(req: Request) {
 
     <h2>Example: Flash Messages</h2>
     <code-block>// In a server action after creating a post:
-const s = getSession(req);
+const s = getSession();
 s.flash('success', 'Post published!');
 
 // In the page that renders after redirect:
-const s = getSession(req);
+const s = getSession();
 const message = s.get('success');  // 'Post published!', only this request</code-block>
 
     <h2>Session Options</h2>

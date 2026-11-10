@@ -1,4 +1,4 @@
-import { html, asset } from '@webjsdev/core';
+import { html, asset, nothing } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { styleLinks } from '#lib/ui/style-links.ts';
@@ -45,7 +45,7 @@ function examplesNav(current: ExampleSlug, theme: string) {
         <a href="/ui" class=${NAV_LINK} data-active="false">Examples</a>
         ${EXAMPLES.map((e) => {
           const active = e.slug === current;
-          return html`<a href=${withTheme(`/ui/examples/${e.slug}`, theme)} data-theme-link class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : null}>${e.name}${e.slug === 'rtl'
+          return html`<a href=${withTheme(`/ui/examples/${e.slug}`, theme)} data-theme-link class=${NAV_LINK} data-active=${active ? 'true' : 'false'} aria-current=${active ? 'page' : nothing}>${e.name}${e.slug === 'rtl'
             ? html`<span class="flex size-2 rounded-full bg-blue-500" title="New"></span>`
             : ''}</a>`;
         })}
@@ -66,8 +66,8 @@ function mobilePicture(name: ExampleSlug) {
   const [width, height] = size;
   const title = EXAMPLES.find((e) => e.slug === name)?.name ?? name;
   return html`<div class="md:hidden">
-    <img src=${asset(`/public/images/examples/${name}-light.png`)} width=${String(width)} height=${String(height)} alt=${title} class="block h-auto w-full dark:hidden">
-    <img src=${asset(`/public/images/examples/${name}-dark.png`)} width=${String(width)} height=${String(height)} alt=${title} class="hidden h-auto w-full dark:block">
+    <img src=${asset(`/images/examples/${name}-light.png`)} width=${String(width)} height=${String(height)} alt=${title} class="block h-auto w-full dark:hidden">
+    <img src=${asset(`/images/examples/${name}-dark.png`)} width=${String(width)} height=${String(height)} alt=${title} class="hidden h-auto w-full dark:block">
   </div>`;
 }
 

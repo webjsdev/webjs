@@ -7,6 +7,8 @@ tags: performance, elision, no-build, ssr, web-components
 author: Vivek
 ---
 
+*Update: this got simpler twice. Pages, layouts and boundaries now never ship, whatever they import, so the boot always loads just the components a page renders. And component elision is gone: every component in an ordinary file ships, as in Lit, while server-only markup lives in a `.server.ts` component or a function returning `html`. The `webjs elision` report this post mentions no longer exists; `webjs status` and `webjs doctor` point out code in a page that will only ever run on the server.*
+
 Open a WebJs blog post and pop the network tab. Now look for `page.ts`. It is not there. Look for `layout.ts`. Also not there. The post rendered, the theme toggle in the corner works, and the two files that describe the entire page never crossed the wire. Do the same on a typical React or Next app and you watch the page component and its layout come down as client JavaScript that then hydrates.
 
 That gap is the whole post. Those two files stayed home, and you did not configure anything to make them. It falls out of one fact about how WebJs runs, and once you have seen it, the empty network tab is the thing you learn to check.
@@ -33,6 +35,8 @@ Elision also touches the display-only component itself, the interactive-looking 
 
 # When a page ships whole anyway
 
+*Update: the rule has since become simpler than this section describes. A page, layout or boundary now never ships at all, whatever it imports, and the boot always loads just the components it renders. A client-router import or a browser global in a page no longer pins it, it simply never runs in the browser, and `webjs doctor` warns about code like that instead. The section below is how the earlier version decided.*
+
 Import-only is a specific condition, and knowing when it breaks matters, because that is precisely when `page.ts` reappears in your network tab. A page or layout ships whole when it has a client side effect of its own, beyond just interactive imports. Any of these pins it to the browser:
 
 - An explicit client-router import.
@@ -48,6 +52,6 @@ That last bullet is the sneaky one. The usual offender is a `cn.ts` class-name h
 
 You do not have to stare at the network tab guessing which side effect did it. `webjs doctor` includes a page and layout elision advisory, and it names the specific reason a given page or layout ships. The tool points at the client side effect that pinned the module, so you fix the cause instead of hunting for it.
 
-And if you ever want everything shipped, for a debugging session or because you simply distrust the analysis, turn elision off with `"webjs": { "elide": false }` in the config or `WEBJS_ELIDE=0` in the environment, and every module ships as written. Dropping a page module can never change your first paint, because the served HTML is byte-for-byte identical with elision on or off.
+And if you ever want everything shipped, for a debugging session or because you simply distrust the analysis, turn elision off with `"webjs": { "elide": false }` in the config or `WEBJS_ELIDE=0` in the environment, and every component ships as written (pages and layouts still stay on the server). Dropping a page module can never change your first paint, because the served HTML is byte-for-byte identical with elision on or off.
 
 Which brings it back to the instruction at the top. Open the network tab. `page.ts` and `layout.ts` should not be in it, and neither should show up in the boot `<script type="module">`. If one does, something in that module is doing browser work it should not, and that is your signal to find the stray side effect and move it where it belongs.

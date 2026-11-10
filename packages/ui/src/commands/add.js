@@ -99,8 +99,13 @@ export const add = new Command()
       // @webjsdev/core is always a runtime dep
       if (!dependencies.includes('@webjsdev/core')) dependencies.push('@webjsdev/core');
 
-      if (dependencies.length) await installDeps(cwd, dependencies, false);
-      if (devDependencies.length) await installDeps(cwd, devDependencies, true);
+      // Install only what the app does not already declare. Most components need
+      // nothing beyond @webjsdev/core, which every WebJs app has, and re-installing
+      // it ran a full install and rewrote the app's version range on every add.
+      const missing = undeclaredDeps(cwd, dependencies);
+      const missingDev = undeclaredDeps(cwd, devDependencies);
+      if (missing.length) await installDeps(cwd, missing, false);
+      if (missingDev.length) await installDeps(cwd, missingDev, true);
     }
 
     logger.success('Done.');
@@ -469,6 +474,29 @@ function relative(cwd, p) {
 
 function ensureDir(d) {
   if (!existsSync(d)) mkdirSync(d, { recursive: true });
+}
+
+/**
+ * The dependency specs (`name` or `name@range`) that the app's package.json does
+ * not already declare in any dependency field. A missing or unreadable
+ * package.json declares nothing, so every spec is returned.
+ * @param {string} cwd
+ * @param {string[]} specs
+ * @returns {string[]}
+ */
+export function undeclaredDeps(cwd, specs) {
+  let pkg = {};
+  try { pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8')); } catch {}
+  const declared = new Set();
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+    for (const name of Object.keys(pkg?.[field] || {})) declared.add(name);
+  }
+  // A scoped name starts with @, so the version separator is the LAST @ past it.
+  const nameOf = (spec) => {
+    const at = spec.lastIndexOf('@');
+    return at > 0 ? spec.slice(0, at) : spec;
+  };
+  return specs.filter((spec) => !declared.has(nameOf(spec)));
 }
 
 async function installDeps(cwd, deps, dev) {

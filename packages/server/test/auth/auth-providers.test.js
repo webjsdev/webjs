@@ -386,12 +386,19 @@ test('GET /api/auth/providers returns provider metadata', async () => {
   assert.equal(body.credentials.type, 'credentials');
 });
 
-test('GET /api/auth/signout: clears cookie, redirects', async () => {
+test('GET /api/auth/signout only confirms; POST clears the cookie and redirects (#1686)', async () => {
+  // A GET that signed out let a link prefetch (the client router hovers) or a
+  // crawler log the visitor out. As in Auth.js, GET answers a page whose
+  // button POSTs.
   const { handlers } = createAuth({
     secret: 's',
     providers: [Credentials({ authorize: async () => null })],
   });
-  const resp = await handlers.GET(new Request('http://localhost/api/auth/signout'));
+  const page = await handlers.GET(new Request('http://localhost/api/auth/signout'));
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get('set-cookie'), null, 'a GET clears nothing');
+  assert.match(await page.text(), /<form method="post" action="\/api\/auth\/signout">/);
+  const resp = await handlers.POST(new Request('http://localhost/api/auth/signout', { method: 'POST' }));
   assert.equal(resp.status, 302);
   assert.ok(resp.headers.get('set-cookie').includes('Max-Age=0'));
 });

@@ -12,7 +12,7 @@ HTML-in-template parser:
    `` css`` `` rule.
 2. **Binding-aware completions**: reachable custom-element tag names after
    `<`, and attribute completions keyed by binding prefix: `.` offers
-   property names, plain / `?` offer the hyphenated attribute names
+   property names, plain / `?` offer the attribute names (Lit's lowercased property name, the kebab spelling still resolving)
    (`maxLength` → `max-length`), `@event` is permissive.
 3. **Diagnostics**: assignability-checks an interpolated value against the
    prop's `declare` annotation (`<my-counter .count=${expr}>`), requires

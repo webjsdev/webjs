@@ -36,11 +36,9 @@ let tmpRoot;
 before(() => { tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-conthash-')); });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
-function makeApp({ basePath, elide } = {}) {
+function makeApp({ basePath, nested } = {}) {
   const appDir = mkdtempSync(join(tmpRoot, 'app-'));
-  const webjs = (basePath != null || elide != null)
-    ? { ...(basePath != null ? { basePath } : {}), ...(elide != null ? { elide } : {}) }
-    : undefined;
+  const webjs = basePath != null ? { basePath } : undefined;
   const files = {
     'package.json': JSON.stringify({ name: 'fixture', type: 'module', webjs }),
     'app/layout.js':
@@ -50,15 +48,17 @@ function makeApp({ basePath, elide } = {}) {
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import './widget.js';\n` +
       `export default () => html\`<x-widget></x-widget>\`;\n`,
-    // An interactive component (a @click handler) so it is NOT elided and ships
-    // a module the boot path imports + a modulepreload hint.
+    // A component, so it ships a module the boot path imports + a modulepreload
+    // hint (every component ships, #1686).
     'app/widget.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      (nested ? `import { label } from './label.js';\n` : '') +
       `export class XWidget extends WebComponent {\n` +
       `  render() { return html\`<button @click=\${() => 1}>hi</button>\`; }\n` +
       `}\n` +
       `XWidget.register('x-widget');\n`,
+    ...(nested ? { 'app/label.js': `export const label = 'hi';\n` } : {}),
   };
   for (const [rel, body] of Object.entries(files)) {
     const abs = join(appDir, rel);
@@ -140,11 +140,11 @@ test('PROD: a /public/* asset is fingerprinted + served immutable when ?v is pre
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
 
-  const withV = await app.handle(new Request('http://x/public/logo.svg?v=abc123'));
+  const withV = await app.handle(new Request('http://x/logo.svg?v=abc123'));
   assert.equal(withV.status, 200);
   assert.equal(withV.headers.get('cache-control'), 'public, max-age=31536000, immutable');
 
-  const noV = await app.handle(new Request('http://x/public/logo.svg'));
+  const noV = await app.handle(new Request('http://x/logo.svg'));
   assert.equal(noV.status, 200);
   assert.equal(noV.headers.get('cache-control'), 'public, max-age=3600');
 });
@@ -236,18 +236,13 @@ test('DEV vs PROD HTML differs ONLY by the ?v query (dev is the un-fingerprinted
   assert.equal(norm(devHtml), norm(prodHtml), 'dev and prod bodies match once the ?v is stripped');
 });
 
-/* ---------------- elision-verdict flip busts the importer's ?v ---------------- */
+/* ---------------- every component the page imports is in the boot ---------------- */
 
-test('ELISION-FLIP: a display-only -> interactive flip is reflected in the boot set (#605)', async () => {
-  // page.js imports an always-interactive component AND a `flip` component that
-  // starts DISPLAY-ONLY (elided). Since the page's only client work is importing
-  // components, it is import-only (#605): the page module is dropped and its
-  // SHIPPING components are emitted directly in the boot. When `flip` becomes
-  // interactive the boot set GAINS flip.js. Because that boot script rides the
-  // fresh (never-immutable) HTML, a returning client always picks up the new set,
-  // so the older importer-?v staleness concern is structurally moot once the page
-  // module is no longer a boot specifier.
-  const appDir = mkdtempSync(join(tmpRoot, 'elide-'));
+test('a display-only component ships beside an interactive one (#1686)', async () => {
+  // page.js imports an interactive component AND a display-only one. A page
+  // never ships, so the boot imports its component frontier in its place, and
+  // every component ships whatever it renders, as in Lit.
+  const appDir = mkdtempSync(join(tmpRoot, 'frontier-'));
   const files = {
     'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
     'app/layout.js':
@@ -256,21 +251,20 @@ test('ELISION-FLIP: a display-only -> interactive flip is reflected in the boot 
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import './always.js';\n` +
-      `import './flip.js';\n` +
-      `export default () => html\`<x-always></x-always><x-flip></x-flip>\`;\n`,
+      `import './display.js';\n` +
+      `export default () => html\`<x-always></x-always><x-display></x-display>\`;\n`,
     'app/always.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export class XAlways extends WebComponent {\n` +
       `  render() { return html\`<button @click=\${() => 1}>a</button>\`; }\n` +
       `}\nXAlways.register('x-always');\n`,
-    // DISPLAY-ONLY: no @click / signal / lifecycle, so it is elided.
-    'app/flip.js':
+    'app/display.js':
       `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export class XFlip extends WebComponent {\n` +
+      `export class XDisplay extends WebComponent {\n` +
       `  render() { return html\`<span>display</span>\`; }\n` +
-      `}\nXFlip.register('x-flip');\n`,
+      `}\nXDisplay.register('x-display');\n`,
   };
   for (const [rel, body] of Object.entries(files)) {
     const abs = join(appDir, rel);
@@ -280,35 +274,13 @@ test('ELISION-FLIP: a display-only -> interactive flip is reflected in the boot 
 
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
-
-  const bootPaths = async () => {
-    const html = await (await app.handle(new Request('http://x/'))).text();
-    return new Set(
-      [...bootImportSpecifiers(html), ...modulepreloadHrefs(html)].map((u) => u.split('?')[0]),
-    );
-  };
-  const before = await bootPaths();
-  assert.ok(before.has('/app/always.js'), 'the always-interactive component is in the boot');
-  assert.ok(!before.has('/app/flip.js'), 'the display-only component is elided from the boot');
-  assert.ok(!before.has('/app/page.js'), 'the import-only page module is not a boot specifier');
-
-  // Flip x-flip to interactive WITHOUT touching page.js's bytes.
-  writeFileSync(
-    join(appDir, 'app', 'flip.js'),
-    `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
-    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-    `export class XFlip extends WebComponent {\n` +
-    `  render() { return html\`<button @click=\${() => 2}>now interactive</button>\`; }\n` +
-    `}\nXFlip.register('x-flip');\n`,
+  const html = await (await app.handle(new Request('http://x/'))).text();
+  const boot = new Set(
+    [...bootImportSpecifiers(html), ...modulepreloadHrefs(html)].map((u) => u.split('?')[0]),
   );
-  await app.rebuild();
-
-  const after = await bootPaths();
-  assert.ok(
-    after.has('/app/flip.js'),
-    'the now-interactive component appears in the boot after the flip (the verdict change is reflected)',
-  );
-  assert.ok(after.has('/app/always.js'), 'the always-interactive component is still in the boot');
+  assert.ok(boot.has('/app/always.js'), 'the interactive component is in the boot');
+  assert.ok(boot.has('/app/display.js'), 'the display-only component is in the boot too');
+  assert.ok(!boot.has('/app/page.js'), 'the page module is not a boot specifier');
 });
 
 /* ---------------- 103 Early Hints preload the SAME fingerprinted url ---------------- */
@@ -335,9 +307,9 @@ test('EARLY-HINTS: routeFor() module urls match the body fingerprinted urls (no 
     // Every Early-Hint url is fingerprinted (the prod default; never a bare url
     // that would warm a different cache entry than the body fetches).
     assert.match(u, /\?v=[0-9a-f]{6,}$/, `Early-Hint url is fingerprinted: ${u}`);
-    // For a module the body ALSO emits (page.js here; an inert layout is elided
-    // from the boot and legitimately absent, a pre-existing routeFor difference
-    // out of #243 scope), the FULL url including ?v must match, so the 103 hint
+    // For a module the body ALSO emits (a route module never does, #1686, so
+    // only a component can be absent here), the FULL url including ?v must
+    // match, so the 103 hint
     // warms exactly the url the body requests (no double-fetch).
     const bodyUrl = bodyByPath.get(pathOf(u));
     if (bodyUrl) {
@@ -351,62 +323,60 @@ test('EARLY-HINTS: routeFor() module urls match the body fingerprinted urls (no 
 /* ---------------- nested relative imports carry the matching ?v (#369) ---------------- */
 
 test('NESTED-IMPORTS: a served module versions its relative imports to the preload ?v (one cache key, no double fetch)', async () => {
-  // page.js does `import './widget.js'`. The browser resolves that relative
-  // specifier against page.js's own (?v-versioned) URL, and a ?v is NOT
-  // inherited across that resolution. Before the #369 fix the served body kept
-  // the bare specifier, so the browser fetched `/app/widget.js` (a different
-  // cache key from the `/app/widget.js?v=hash` modulepreload) -> wasted preload,
-  // double download, 1h cache instead of immutable. The fix rewrites the served
-  // specifier to carry widget.js's own ?v, collapsing both onto one URL.
-  //
-  // This exercises relative-import versioning (#369) on a page that is a BOOT
-  // specifier. With elision on, a page whose only client work is importing a
-  // component is import-only (#605) and the component, not the page, is the boot
-  // module; elision is disabled here to keep the page in the boot and isolate the
-  // #369 mechanism, which runs on any served module regardless of elision.
-  const appDir = makeApp({ elide: false });
+  // widget.js does `import { label } from './label.js'`. The browser resolves
+  // that relative specifier against widget.js's own (?v-versioned) URL, and a
+  // ?v is NOT inherited across that resolution. Before the #369 fix the served
+  // body kept the bare specifier, so the browser fetched `/app/label.js` (a
+  // different cache key from the `/app/label.js?v=hash` modulepreload) ->
+  // wasted preload, double download, 1h cache instead of immutable. The fix
+  // rewrites the served specifier to carry label.js's own ?v, collapsing both
+  // onto one URL. The served module is the booted component: a page never
+  // ships (#1686).
+  const appDir = makeApp({ nested: true });
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
 
   const html = await (await app.handle(new Request('http://x/'))).text();
 
-  // The ?v the modulepreload + boot path advertise for widget.js.
-  const widgetPreload = modulepreloadHrefs(html).find((u) => u.includes('/app/widget.js'));
-  assert.ok(widgetPreload, 'widget.js has a modulepreload href');
-  assert.match(widgetPreload, /^\/app\/widget\.js\?v=[0-9a-f]{6,}$/);
+  // The ?v the modulepreload path advertises for label.js.
+  const labelPreload = modulepreloadHrefs(html).find((u) => u.includes('/app/label.js'));
+  assert.ok(labelPreload, 'label.js has a modulepreload href');
+  assert.match(labelPreload, /^\/app\/label\.js\?v=[0-9a-f]{6,}$/);
 
-  // Fetch the SERVED page.js body (via its versioned boot specifier).
-  const pageUrl = bootImportSpecifiers(html).find((u) => u.startsWith('/app/page.js'));
-  assert.ok(pageUrl, 'page.js is a boot specifier');
-  const pageRes = await app.handle(new Request('http://x' + pageUrl));
-  assert.equal(pageRes.status, 200);
-  const pageBody = await pageRes.text();
+  // Fetch the SERVED widget.js body (via its versioned boot specifier).
+  const widgetUrl = bootImportSpecifiers(html).find((u) => u.startsWith('/app/widget.js'));
+  assert.ok(widgetUrl, 'widget.js is a boot specifier');
+  assert.ok(!bootImportSpecifiers(html).some((u) => u.startsWith('/app/page.js')), 'the page is not');
+  const widgetRes = await app.handle(new Request('http://x' + widgetUrl));
+  assert.equal(widgetRes.status, 200);
+  const widgetBody = await widgetRes.text();
 
-  // The served body's relative import now carries widget.js's ?v.
-  const m = pageBody.match(/import\s+'\.\/widget\.js\?v=([0-9a-f]{6,})'/);
-  assert.ok(m, `served page.js versions its './widget.js' import; body was:\n${pageBody}`);
+  // The served body's relative import now carries label.js's ?v.
+  const m = widgetBody.match(/from\s+'\.\/label\.js\?v=([0-9a-f]{6,})'/);
+  assert.ok(m, `served widget.js versions its './label.js' import; body was:\n${widgetBody}`);
 
-  // Resolve the served specifier against page.js's URL the way the browser does:
-  // it must land on EXACTLY the modulepreload href -> a single cache key.
-  const resolved = new URL('./widget.js?v=' + m[1], 'http://x/app/page.js').pathname + '?v=' + m[1];
-  assert.equal(resolved, widgetPreload, 'served import URL === preload href (deduped, one fetch)');
+  // Resolve the served specifier against widget.js's URL the way the browser
+  // does: it must land on EXACTLY the modulepreload href -> a single cache key.
+  const resolved = new URL('./label.js?v=' + m[1], 'http://x/app/widget.js').pathname + '?v=' + m[1];
+  assert.equal(resolved, labelPreload, 'served import URL === preload href (deduped, one fetch)');
 
   // And that URL serves immutable (the headline cache win).
-  const widgetRes = await app.handle(new Request('http://x' + widgetPreload));
-  assert.equal(widgetRes.status, 200);
-  assert.equal(widgetRes.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  const labelRes = await app.handle(new Request('http://x' + labelPreload));
+  assert.equal(labelRes.status, 200);
+  assert.equal(labelRes.headers.get('cache-control'), 'public, max-age=31536000, immutable');
 });
 
 test('NESTED-IMPORTS: DEV serves the bare relative specifier (no ?v), byte-identical to before', async () => {
-  const appDir = makeApp({});
+  // The served module is the booted component: a page never ships (#1686).
+  const appDir = makeApp({ nested: true });
   const app = await createRequestHandler({ appDir, dev: true });
   await app.warmup();
 
-  const pageRes = await app.handle(new Request('http://x/app/page.js'));
-  assert.equal(pageRes.status, 200);
-  const body = await pageRes.text();
-  assert.match(body, /import\s+'\.\/widget\.js'/, 'dev keeps the bare specifier');
-  assert.ok(!body.includes('widget.js?v='), 'dev appends no ?v to a nested import');
+  const widgetRes = await app.handle(new Request('http://x/app/widget.js'));
+  assert.equal(widgetRes.status, 200);
+  const body = await widgetRes.text();
+  assert.match(body, /from\s+'\.\/label\.js'/, 'dev keeps the bare specifier');
+  assert.ok(!body.includes('label.js?v='), 'dev appends no ?v to a nested import');
 });
 
 /* ---------------- basePath composes ---------------- */

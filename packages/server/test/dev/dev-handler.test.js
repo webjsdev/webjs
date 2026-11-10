@@ -38,6 +38,21 @@ function makeApp(files) {
   return appDir;
 }
 
+/**
+ * Source for a component module that side-effect-imports each of `specs`.
+ * A page never ships (#1686), so a module reaches the serve gate only through
+ * a component (or `instrumentation-client`). The component scanner reads the
+ * class and the literal tag from source, so the module never has to run.
+ * @param {string[]} specs
+ * @param {string} [tag]
+ */
+function hostComponent(specs, tag = 'x-host') {
+  const cls = tag.replace(/(^|-)([a-z])/g, (_, __, c) => c.toUpperCase());
+  return specs.map((sp) => `import '${sp}';\n`).join('') +
+    `import { WebComponent } from '@webjsdev/core';\n` +
+    `class ${cls} extends WebComponent {}\n${cls}.register('${tag}');\n`;
+}
+
 /* ------------ health / reload / core serving ------------ */
 
 test('handle: /__webjs/health returns 200 JSON', async () => {
@@ -110,10 +125,13 @@ test('handle: a transient vendor failure does not block readiness', async () => 
   // therefore not held down. The failed resolve is re-attempted on the next
   // request, not via a background timer.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
   });
   const origFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('ECONNREFUSED'); };
@@ -135,10 +153,13 @@ test('handle: a transiently failed vendor resolve is retried per backoff window,
   // jspm fetch per request. The backoff gate opens a 2 s window after the
   // first failure, so fifty requests inside it fire no second attempt.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
   });
   const origFetch = globalThis.fetch;
   let jspmAttempts = 0;
@@ -170,10 +191,13 @@ test('handle: one failed vendor attempt widens the backoff window once, however 
   // a request 4.1 s after that failure fires a third attempt. With per-caller
   // bookkeeping the window is at the cap and the third attempt never comes.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
   });
   const origFetch = globalThis.fetch;
   let jspmAttempts = 0;
@@ -214,10 +238,13 @@ test('handle: a malformed pin file falls through to the real deferred resolve', 
   // through to the normal deferred resolve, which scans the real imports. We
   // detect that by spying on the jspm fetch: the broken path never reaches it.
   const appDir = makeApp({
-    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'package.json': JSON.stringify({ name: 'host' }),
     'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
     'node_modules/testpkg/index.js': 'export const x = 1;\n',
-    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+    // The bare import sits in a component: a page never ships (#1686), so a
+    // page-only one is never vendored.
+    'components/uses-pkg.ts': `import 'testpkg';\nimport { WebComponent } from '@webjsdev/core';\nclass UsesPkg extends WebComponent {}\nUsesPkg.register('uses-pkg');\n`,
+    'app/page.ts': `export default () => 'ok';`,
     '.webjs/vendor/importmap.json': '{ not valid json at all',
   });
   const origFetch = globalThis.fetch;
@@ -414,13 +441,13 @@ test('handle: /public/* serves static files with MIME', async () => {
     'public/hello.txt': 'hello world',
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/public/hello.txt'));
+  const resp = await app.handle(new Request('http://x/hello.txt'));
   assert.equal(resp.status, 200);
   assert.ok(resp.headers.get('content-type').includes('text/plain'));
   assert.equal(await resp.text(), 'hello world');
 });
 
-test('handle: /favicon.ico is aliased to /public/favicon.ico', async () => {
+test('handle: /favicon.ico is aliased to /favicon.ico', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
     'public/favicon.ico': 'X',
@@ -433,9 +460,8 @@ test('handle: /favicon.ico is aliased to /public/favicon.ico', async () => {
 
 test('handle: .ts source served as JS with types stripped', async () => {
   const appDir = makeApp({
-    'app/page.ts':
-      `import { greet } from '../components/widget.ts';\n` +
-      `export default () => greet('world');\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['./widget.ts']),
     'components/widget.ts':
       `export const greet = (n: string): string => \`hi \${n}\`;\n`,
   });
@@ -455,9 +481,8 @@ test('handle: .ts source with non-erasable TS returns 500 pointing at the lint r
   // fallback. The dev server returns a clean 500 with the file path
   // and a pointer at the no-non-erasable-typescript lint rule.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { initial } from '../components/advanced.ts';\n` +
-      `export default () => initial;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['./advanced.ts']),
     'components/advanced.ts': `
       enum Status { Active = 'active', Inactive = 'inactive' }
       export const initial: Status = Status.Active;
@@ -481,9 +506,8 @@ test('handle: .ts source with non-erasable TS returns terse 500 in PROD (no file
   // misconfigured tsconfig and shipped. Operators get full detail in
   // server logs (via console.error).
   const appDir = makeApp({
-    'app/page.ts':
-      `import { initial } from '../components/advanced.ts';\n` +
-      `export default () => initial;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['./advanced.ts']),
     'components/advanced.ts': `
       enum Status { Active = 'active' }
       export const initial: Status = Status.Active;
@@ -506,11 +530,10 @@ test('handle: .ts source with non-erasable TS returns terse 500 in PROD (no file
 
 test('handle: /foo.js falls through to sibling foo.ts when .js is missing', async () => {
   const appDir = makeApp({
-    'app/page.ts':
-      // Import the sibling via `.js` to verify the gate covers both
-      // the .js name (browser asks for) and the .ts file on disk.
-      `import { greeting } from '../components/util.js';\n` +
-      `export default () => greeting;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    // Import the sibling via `.js` to verify the gate covers both
+    // the .js name (browser asks for) and the .ts file on disk.
+    'components/host.ts': hostComponent(['./util.js']),
     'components/util.ts':
       `export const greeting = 'hello';\n`,
   });
@@ -530,7 +553,7 @@ test('handle: prod responses on user source include ETag + max-age', async () =>
     'public/hello.txt': 'hello',
   });
   const app = await createRequestHandler({ appDir, dev: false });
-  const resp = await app.handle(new Request('http://x/public/hello.txt'));
+  const resp = await app.handle(new Request('http://x/hello.txt'));
   assert.equal(resp.status, 200);
   const etag = resp.headers.get('etag');
   // The ETag is WEAK (W/"..."): it is computed over the uncompressed body and
@@ -646,7 +669,7 @@ test('handle: middleware that throws → 500', async () => {
   assert.ok(logs.some(l => /middleware/.test(l.m)), 'error was logged');
 });
 
-test('handle: broken middleware.js fails to load → logger.error, request continues', async () => {
+test('handle: broken middleware.js fails to load → fails CLOSED (500 naming it), never runs unguarded', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
@@ -656,28 +679,34 @@ test('handle: broken middleware.js fails to load → logger.error, request conti
   const errors = [];
   const logger = { info: () => {}, warn: () => {}, error: (m, o) => errors.push({ m, o }) };
   const app = await createRequestHandler({ appDir, dev: true, logger });
-  // Broken middleware: loadMiddleware catches and returns null → request runs straight.
+  // A middleware that cannot load must not let requests through unguarded.
   const resp = await app.handle(new Request('http://x/'));
-  assert.equal(resp.status, 200);
-  assert.ok(errors.some(l => /middleware/.test(l.m)));
+  assert.equal(resp.status, 500);
+  assert.match(await resp.text(), /root middleware failed to load/);
 });
 
 /* ------------ routeFor / rebuild ------------ */
 
-test('routeFor: returns module URLs for a known page', async () => {
+test('routeFor: returns the component frontier, never a route module (#1686)', async () => {
+  const comp = (cls, tag) =>
+    `import { WebComponent } from '@webjsdev/core';\nclass ${cls} extends WebComponent {}\n${cls}.register('${tag}');\n`;
   const appDir = makeApp({
     'app/page.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+      `import { html } from ${JSON.stringify(HTML_URL)};\nimport '../components/page-widget.js';\n` +
+      `export default function P() { return html\`<page-widget></page-widget>\`; }\n`,
     'app/layout.js':
-      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `export default function L({ children }) { return html\`<main>\${children}</main>\`; }\n`,
+      `import { html } from ${JSON.stringify(HTML_URL)};\nimport '../components/nav-widget.js';\n` +
+      `export default function L({ children }) { return html\`<nav-widget></nav-widget><main>\${children}</main>\`; }\n`,
+    'components/page-widget.js': comp('PageWidget', 'page-widget'),
+    'components/nav-widget.js': comp('NavWidget', 'nav-widget'),
+    'package.json': JSON.stringify({ name: 'host' }),
   });
   const app = await createRequestHandler({ appDir, dev: true });
+  await app.warmup();
   const match = app.routeFor('/');
   assert.ok(match);
-  assert.ok(match.moduleUrls.length >= 2, 'includes page + layout');
-  for (const u of match.moduleUrls) assert.ok(u.startsWith('/'));
+  assert.deepEqual(match.moduleUrls, ['/components/nav-widget.js', '/components/page-widget.js'],
+    'the layout frontier first, then the page frontier, and no route module');
 });
 
 test('routeFor: unknown path returns null', async () => {
@@ -907,7 +936,7 @@ test('handle: segment middleware.js wraps matching routes', async () => {
   assert.equal(resp.headers.get('x-admin-mw'), '1');
 });
 
-test('handle: broken segment middleware is skipped without crashing', async () => {
+test('handle: broken segment middleware fails CLOSED (500), never skipping its guard', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
@@ -919,18 +948,21 @@ test('handle: broken segment middleware is skipped without crashing', async () =
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/admin'));
-  assert.equal(resp.status, 200);
+  assert.equal(resp.status, 500, 'the subtree the middleware guards is not served unguarded');
+  assert.match(await resp.text(), /app\/admin\/middleware\.js failed to load/);
+  const root = await app.handle(new Request('http://x/'));
+  assert.equal(root.status, 200, 'pages outside the broken segment still serve');
 });
 
 test('handle: POST to /__webjs/action/<hash>/<fn> invokes the action', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      // Import pulls actions.server.js into the browser-bound graph so
-      // the RPC stub is reachable. Client code normally writes this
-      // import to call the action.
-      `import { double } from '../modules/math/actions.server.js';\n` +
-      `export default function P() { return html\`<p>\${double}</p>\`; }\n`,
+      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+    // A component's import pulls actions.server.js into the browser-bound
+    // graph so the RPC stub is reachable. Client code normally writes this
+    // import to call the action (a page never ships, #1686).
+    'components/host.js': hostComponent(['../modules/math/actions.server.js']),
     'modules/math/actions.server.js':
       `'use server';\n` +
       `export async function double(n) { return n * 2; }\n`,
@@ -998,8 +1030,8 @@ test('handle: cross-origin POST /__webjs/action → 403', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `import { noop } from '../modules/x/actions.server.js';\n` +
-      `export default function P() { return html\`<p>\${noop}</p>\`; }\n`,
+      `export default function P() { return html\`<p>ok</p>\`; }\n`,
+    'components/host.js': hostComponent(['../modules/x/actions.server.js']),
     'modules/x/actions.server.js':
       `'use server';\n` +
       `export async function noop() { return 1; }\n`,
@@ -1020,9 +1052,8 @@ test('handle: cross-origin POST /__webjs/action → 403', async () => {
 
 test('handle: TS source responses share an mtime-keyed cache (second req is fast)', async () => {
   const appDir = makeApp({
-    'app/page.ts':
-      `import { flag } from '../components/cached.ts';\n` +
-      `export default () => flag;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['./cached.ts']),
     'components/cached.ts': `export const flag = true;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -1185,7 +1216,7 @@ test('startServer: non-text content-type is NOT compressed even with gzip offere
   const { server, close } = await startServer({ appDir, dev: false, port: 0, logger, compress: true });
   try {
     const addr = server.address();
-    const resp = await fetch(`http://127.0.0.1:${addr.port}/public/logo.png`, {
+    const resp = await fetch(`http://127.0.0.1:${addr.port}/logo.png`, {
       headers: { 'accept-encoding': 'gzip' },
     });
     assert.equal(resp.status, 200);
@@ -1273,7 +1304,7 @@ test('handle: fileResponse 404 for a deleted file inside /public', async () => {
     'public/real.txt': 'hi',
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const resp = await app.handle(new Request('http://x/public/gone.txt'));
+  const resp = await app.handle(new Request('http://x/gone.txt'));
   assert.equal(resp.status, 404);
 });
 
@@ -1532,13 +1563,13 @@ test('fileResponse prod: ETag is a WEAK 16-char SHA-1 hex digest in quotes', asy
     'public/static.txt': 'fixed body for etag check',
   });
   const app = await createRequestHandler({ appDir, dev: false });
-  const resp = await app.handle(new Request('http://x/public/static.txt'));
+  const resp = await app.handle(new Request('http://x/static.txt'));
   assert.equal(resp.status, 200);
   const etag = resp.headers.get('etag');
   assert.match(etag, /^W\/"[0-9a-f]{16}"$/,
     `ETag must be a weak 16-char hex slice in quotes; got ${etag}`);
   // Second request must produce identical ETag (stable hash).
-  const resp2 = await app.handle(new Request('http://x/public/static.txt'));
+  const resp2 = await app.handle(new Request('http://x/static.txt'));
   assert.equal(resp2.headers.get('etag'), etag, 'ETag must be stable across requests');
 });
 
@@ -1643,14 +1674,13 @@ test('gate: /scripts/build.js or similar utility file → 404', async () => {
     'top-level scripts/ files outside the import graph must NOT be servable');
 });
 
-test('gate: page-imported file under a NON-default dir (src/) IS servable', async () => {
+test('gate: component-imported file under a NON-default dir (src/) IS servable', async () => {
   // Confirms the auto-derived model honours the user's actual structure
-  // rather than a hardcoded dir list. If a page imports from `src/`,
-  // `src/` files become servable automatically. No webjs config needed.
+  // rather than a hardcoded dir list. If a component imports from `src/`,
+  // `src/` files become servable automatically. No WebJs config needed.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { msg } from '../src/util.ts';\n` +
-      `export default () => msg;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['../src/util.ts']),
     'src/util.ts': `export const msg = 'from src';\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
@@ -1672,12 +1702,11 @@ test('gate: path traversal escaping appDir → 404', async () => {
 });
 
 test('gate: transitive import N levels deep is reachable', async () => {
-  // page → components/a → components/b → lib/c. All three should be
+  // component → components/a → components/b → lib/c. All three should be
   // servable.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { a } from '../components/a.ts';\n` +
-      `export default () => a;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['./a.ts']),
     'components/a.ts':
       `import { b } from './b.ts';\n` +
       `export const a = b;\n`,
@@ -1693,32 +1722,31 @@ test('gate: transitive import N levels deep is reachable', async () => {
   }
 });
 
-test('gate: page entry itself is servable (browser fetches it for hydration)', async () => {
+test('gate: a page entry is NOT servable (it runs only on the server, #1686)', async () => {
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/app/page.ts'));
-  assert.equal(resp.status, 200, 'page entries must be servable');
+  assert.equal(resp.status, 404, 'a page never loads in the browser, so its source is never served');
 });
 
 test('gate: newly-imported file becomes servable after rebuild', async () => {
   // Boots a dev server, fetches a file that's NOT YET imported, asserts
-  // 404. Then rewrites the page to import the file and rebuilds. Asserts
-  // the file is now servable. Covers the fs.watch → graph-recompute path.
+  // 404. Then rewrites the component to import the file and rebuilds.
+  // Asserts the file is now servable. Covers the fs.watch → graph-recompute
+  // path.
   const appDir = makeApp({
     'app/page.ts': `export default () => 'ok';`,
+    'components/host.ts': hostComponent([]),
     'lib/late.ts': `export const k = 'k';\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const before = await app.handle(new Request('http://x/lib/late.ts'));
-  assert.equal(before.status, 404, 'file is unreachable before any page imports it');
+  assert.equal(before.status, 404, 'file is unreachable before any component imports it');
 
-  // Rewrite the page to import lib/late.ts, then trigger a rebuild.
-  writeFileSync(
-    join(appDir, 'app/page.ts'),
-    `import { k } from '../lib/late.ts';\nexport default () => k;\n`,
-  );
+  // Rewrite the component to import lib/late.ts, then trigger a rebuild.
+  writeFileSync(join(appDir, 'components/host.ts'), hostComponent(['../lib/late.ts']));
   await app.rebuild();
 
   const after = await app.handle(new Request('http://x/lib/late.ts'));
@@ -1732,9 +1760,8 @@ test('gate: barrel file re-exports add the re-exported file to the graph', async
   // would leave util-a / util-b out of the graph and 404 when the
   // browser fetches them on hydration.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { a, b } from '../lib/index.ts';\n` +
-      `export default () => a + b;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['../lib/index.ts']),
     'lib/index.ts':
       `export * from './util-a.ts';\n` +
       `export { b } from './util-b.ts';\n`,
@@ -1753,9 +1780,8 @@ test('gate: multi-line barrel `export { a, b } from` registers re-export targets
   // real-world shape: a multi-line { ... } before `from`. The EXPORT_FROM_RE
   // gap class allows newlines so this pattern is caught.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { x, y } from '../lib/index.ts';\n` +
-      `export default () => x + y;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['../lib/index.ts']),
     'lib/index.ts':
       `export {\n` +
       `  x,\n` +
@@ -1776,9 +1802,8 @@ test('gate: file imported ONLY by a .server.ts is NOT in the gate', async () => 
   // matches Next.js's behaviour: don't follow imports through
   // .server boundaries.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { create } from '../modules/posts/actions/create.server.ts';\n` +
-      `export default () => create;\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['../modules/posts/actions/create.server.ts']),
     'modules/posts/actions/create.server.ts':
       `'use server';\n` +
       `import { dbCredentials } from '../../../lib/secrets.ts';\n` +
@@ -1804,16 +1829,14 @@ test('gate: file imported ONLY by a .server.ts is NOT in the gate', async () => 
     'file imported only by a .server.ts must NOT be servable');
 });
 
-test('gate: file imported by BOTH a page AND a .server.ts stays servable', async () => {
+test('gate: file imported by BOTH a component AND a .server.ts stays servable', async () => {
   // Counterpart to the previous test. If the same file IS legitimately
-  // imported by a client-bound path (a page), the gate must include
+  // imported by a client-bound path (a component), the gate must include
   // it even though a .server file also imports it. Otherwise legitimate
   // shared utilities would 404.
   const appDir = makeApp({
-    'app/page.ts':
-      `import { format } from '../lib/format.ts';\n` +
-      `import { listPosts } from '../modules/posts/queries/list.server.ts';\n` +
-      `export default () => format(listPosts);\n`,
+    'app/page.ts': `export default () => 'ok';\n`,
+    'components/host.ts': hostComponent(['../lib/format.ts', '../modules/posts/queries/list.server.ts']),
     'modules/posts/queries/list.server.ts':
       `'use server';\n` +
       `import { format } from '../../../lib/format.ts';\n` +
@@ -1822,26 +1845,23 @@ test('gate: file imported by BOTH a page AND a .server.ts stays servable', async
   });
   const app = await createRequestHandler({ appDir, dev: true });
   const resp = await app.handle(new Request('http://x/lib/format.ts'));
-  assert.equal(resp.status, 200, 'utility imported by both a page and a .server file stays servable');
+  assert.equal(resp.status, 200, 'utility imported by both a component and a .server file stays servable');
 });
 
-test('gate: page imports from app/_components/ stay servable', async () => {
+test('gate: a component under app/_components/ and its imports stay servable', async () => {
   // The `_components` / `_private` / `_lib` convention is a
   // ROUTER-ignore mechanism (no page route is mounted under
-  // them), but files inside are still importable from pages and
-  // layouts. The graph walker must enter `_*` dirs to follow
-  // those imports, or legitimate imports 404.
-  // Real example: a root layout importing from
-  // `./_components/theme-toggle.ts`.
+  // them), but files inside are still importable. The graph walker must
+  // enter `_*` dirs to follow a component's imports, or legitimate
+  // imports 404. Real example: a root layout importing
+  // `./_components/theme-toggle.ts`, a component.
   const appDir = makeApp({
     'app/layout.ts':
       `import './_components/theme-toggle.ts';\n` +
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `export default ({ children }) => html\`<main>\${children}</main>\`;\n`,
     'app/page.ts': `export default () => 'ok';`,
-    'app/_components/theme-toggle.ts':
-      `import { swatch } from './palette.ts';\n` +
-      `export const themeToggle = () => swatch;\n`,
+    'app/_components/theme-toggle.ts': hostComponent(['./palette.ts'], 'theme-toggle'),
     'app/_components/palette.ts':
       `export const swatch = 'light';\n`,
   });
@@ -1853,6 +1873,67 @@ test('gate: page imports from app/_components/ stay servable', async () => {
     const resp = await app.handle(new Request(`http://x${url}`));
     assert.equal(resp.status, 200, `${url} should be reachable through _components imports`);
   }
+});
+
+/* ------------ gate (#1686): route modules never load in the browser ------------ */
+
+for (const [label, opts] of /** @type {const} */ ([
+  ['dev', { dev: true }],
+  ['prod', { dev: false }],
+  ['testMode', { dev: true, testMode: true }],
+])) {
+  test(`gate (#1686): a page and a layout URL 404 in ${label}`, async () => {
+    // A route-table file is refused by PATH, test mode included, because it
+    // runs only on the server and its source never leaves.
+    const appDir = makeApp({
+      'app/layout.ts': `export default ({ children }) => children;\n`,
+      'app/page.ts': `export default () => 'ok';\n`,
+      'components/host.ts': hostComponent([]),
+    });
+    const app = await createRequestHandler({ appDir, ...opts });
+    if (app.warmup) await app.warmup();
+    for (const url of ['/app/page.ts', '/app/layout.ts']) {
+      const resp = await app.handle(new Request(`http://x${url}`));
+      assert.equal(resp.status, 404, `${url} is never served (${label})`);
+    }
+    // The component still is, so the 404 is the route rule, not a dead gate.
+    const comp = await app.handle(new Request('http://x/components/host.ts'));
+    assert.equal(comp.status, 200, `a component is still served (${label})`);
+  });
+}
+
+test('gate (#1686): a helper imported only by a page 404s, the same helper through a component is 200', async () => {
+  const pageOnly = makeApp({
+    'app/page.ts': `import { label } from '../lib/label.ts';\nexport default () => label;\n`,
+    'lib/label.ts': `export const label = 'x';\n`,
+  });
+  const a = await createRequestHandler({ appDir: pageOnly, dev: true });
+  assert.equal((await a.handle(new Request('http://x/lib/label.ts'))).status, 404,
+    'a page-only helper never loads in the browser');
+
+  const viaComponent = makeApp({
+    'app/page.ts': `import { label } from '../lib/label.ts';\nexport default () => label;\n`,
+    'components/host.ts': hostComponent(['../lib/label.ts']),
+    'lib/label.ts': `export const label = 'x';\n`,
+  });
+  const b = await createRequestHandler({ appDir: viaComponent, dev: true });
+  assert.equal((await b.handle(new Request('http://x/lib/label.ts'))).status, 200,
+    'the same helper reached through a component is servable');
+});
+
+test('gate (#1686): a component importing a page file does not make the page servable', async () => {
+  // The gate walk stops at route-table files, so neither the page nor what
+  // only the page imports becomes reachable through the component.
+  const appDir = makeApp({
+    'app/page.ts': `import { secret } from '../lib/page-only.ts';\nexport default () => secret;\n`,
+    'lib/page-only.ts': `export const secret = 'p';\n`,
+    'components/host.ts': hostComponent(['../app/page.ts']),
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  assert.equal((await app.handle(new Request('http://x/app/page.ts'))).status, 404, 'the page stays unservable');
+  assert.equal((await app.handle(new Request('http://x/lib/page-only.ts'))).status, 404,
+    'nor is the gate walked through the page');
+  assert.equal((await app.handle(new Request('http://x/components/host.ts'))).status, 200, 'the component is served');
 });
 
 /* ------------ x-webjs-remote-ip stamping + spoof-strip (rate-limit #114) ------------ */

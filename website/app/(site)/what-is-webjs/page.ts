@@ -58,7 +58,7 @@ const FAQ = [
   {
     question: 'What makes WebJs AI-first?',
     answer:
-      'WebJs is designed so a coding agent can change one part of an app without reading all of it. File conventions are predictable, each server function lives in its own file, and the .server.ts extension marks the server boundary explicitly, so the relevant context for a change is small and easy to locate. Every app ships an AGENTS.md contract plus a cross-agent skill that Claude Code, Cursor, Copilot, Gemini, and opencode all read from one source. And because there is no build step, the framework itself sits as plain JavaScript with JSDoc in node_modules/@webjsdev of every app, so an agent reads the actual router, renderer, or serializer it is calling rather than a compiled bundle. That grounding in real source is what lets even smaller AI models produce quality WebJs code.',
+      'WebJs is designed so a coding agent can change one part of an app without reading all of it. File conventions are predictable, each server function lives in its own file, and the .server.ts extension marks the server boundary explicitly, so the relevant context for a change is small and easy to locate. Every app ships one AGENTS.md, carrying the short brief of what differs from Next.js routing and Lit components, that Claude Code, Cursor, Copilot, and opencode all read, and npx webjs source lists what the framework already provides. And because there is no build step, the framework itself sits as plain JavaScript with JSDoc in node_modules/@webjsdev of every app, so an agent reads the actual router, renderer, or serializer it is calling rather than a compiled bundle. That grounding in real source is what lets even smaller AI models produce quality WebJs code.',
   },
   {
     question: 'Is WebJs free to use?',
@@ -83,7 +83,7 @@ const FAQ = [
   {
     question: 'Does a WebJs app work without JavaScript?',
     answer:
-      'Yes, for everything that does not require interactivity. Pages and components are server-rendered to HTML, so content reads, links navigate, and forms submit with JavaScript disabled. Scripts are then layered on per interactive behaviour rather than per component, and a display-only component ships no JavaScript at all.',
+      'Yes, for everything that does not require interactivity. Pages and components are server-rendered to HTML, so content reads, links navigate, and forms submit with JavaScript disabled. Scripts are then layered on per interactive behaviour rather than per component, and a page, layout or server-only component ships no JavaScript at all.',
   },
   {
     question: 'What can you build with WebJs?',
@@ -117,7 +117,7 @@ export function generateMetadata() {
       title: TITLE,
       description: DESCRIPTION,
       url: CANONICAL,
-      image: `${SITE_URL}/public/og-what.png`,
+      image: `${SITE_URL}/og-what.png`,
       'image:width': '1200',
       'image:height': '630',
       'image:alt': 'What is WebJs? A full-stack JavaScript web framework built on web components',
@@ -127,7 +127,7 @@ export function generateMetadata() {
       card: 'summary_large_image',
       title: TITLE,
       description: DESCRIPTION,
-      image: `${SITE_URL}/public/og-what.png`,
+      image: `${SITE_URL}/og-what.png`,
     },
     jsonLd: [
       {

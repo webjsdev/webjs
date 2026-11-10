@@ -21,14 +21,13 @@ export default function AIFirst() {
     <h2>How WebJs Solves This</h2>
 
     <h3>1. AGENTS.md: The Machine-Readable Contract</h3>
-    <p>Every WebJs app has an <code>AGENTS.md</code> at the root. This is a structured document that AI agents read before touching any code. It contains:</p>
+    <p>Every WebJs app has an <code>AGENTS.md</code> at the root, and it is short on purpose. WebJs follows Next.js App Router routing and Lit's component APIs, so an agent's existing habits already write most of an app correctly. The file holds only what differs:</p>
     <ul>
-      <li><strong>File conventions table</strong>: which filename means what (page.ts, route.ts, middleware.ts, .server.ts, etc.).</li>
-      <li><strong>Public API surface</strong>: every exported function from <code>webjs</code> and <code>@webjsdev/server</code> with a one-line description.</li>
-      <li><strong>Invariants</strong>: rules that must never be broken ("never import node:sqlite from a component", "event holes must be unquoted").</li>
-      <li><strong>Recipes</strong>: step-by-step instructions for "add a page", "add a server action", "add a component", "add a DB model".</li>
-      <li><strong>What's deliberately deferred</strong>, so agents don't try to implement features that aren't supported yet.</li>
+      <li><strong>The WebJs brief</strong>: the handful of places WebJs departs from Next.js and Lit (light DOM by default, erasable TypeScript, server code in <code>*.server.ts</code>, imports from <code>@webjsdev/*</code>), and the instruction to run <code>webjs check</code> and <code>webjs status</code> after each edit.</li>
+      <li><strong>A build checklist</strong> for the template the app was created from.</li>
+      <li><strong>Types and data</strong>: derive every type from its source, and keep data in the database.</li>
     </ul>
+    <p>Everything else is enforced rather than documented: <code>webjs check</code> and the runtime refuse a habit that cannot work, with the WebJs fix in the message, and the framework source in <code>node_modules/@webjsdev/*</code> is the exact reference, since there is no build.</p>
     <p>An AI agent reads AGENTS.md once and knows: the shape of the app, what's safe to change, what's not, and how to add any feature. No guessing.</p>
 
     <h3>2. The WebJs MCP Server</h3>
@@ -48,14 +47,13 @@ export default function AIFirst() {
       <li><code>list_routes</code>: the live route table.</li>
       <li><code>list_actions</code>: server actions with their <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code> RPC endpoints (the real hashes).</li>
       <li><code>list_components</code>: the registered custom-element tags.</li>
-      <li><code>list_elision</code>: the display-only elision verdict, which component modules the browser never downloads and the evidence behind each one that ships. See <a href="/docs/elision">Display-Only Elision</a>.</li>
       <li><code>check</code>: the structured <code>webjs check</code> violations.</li>
       <li><code>ui</code>: the <code>@webjsdev/ui</code> kit inventory, or one component's helper signatures, paste-ready example, and a11y header.</li>
     </ul>
     <p>Use these to learn the real route, action, and component surface before editing, instead of grepping or assuming.</p>
-    <p><strong>Knowledge and authoring layer:</strong> an <code>init</code> tool (a read-first pointer with the mental model and invariants, the primer for a fresh setup), a <code>docs</code> tool (retrieve a topic or search the <code>.agents/skills/webjs/</code> reference corpus), and a <code>source</code> tool that reads the framework's OWN no-build source from <code>node_modules/@webjsdev/*/src</code> (what actually runs). On top of the tools, the server exposes MCP <code>resources</code> (the docs corpus plus this app's <code>AGENTS.md</code>) and recipe <code>prompts</code> (guided page, route, action, and component workflows), so the no-build framework source and the docs/recipes are surfaced directly to the agent.</p>
-    <p>The docs corpus is resolved from the app being asked about, not from wherever the server happens to be installed: the copy in that app's <code>node_modules/@webjsdev/mcp</code> wins over the snapshot the server was published with, then the server's own snapshot, then whatever docs the server resolves locally, which is the repo-root skill in a monorepo checkout. That last rung is an unconditional fallback rather than a checkout probe, so neither the corpus line nor the warning asserts a checkout. It matters for a globally installed server, which otherwise serves the docs it shipped with forever. <code>init</code> reports which corpus it served on its first line, and warns when the app's <code>@webjsdev/mcp</code> is newer than the running server's, so a stale global install is visible instead of silently teaching reverted guidance.</p>
-    <p>An agent has two complementary ways to understand the framework, and either beats guessing from training data: grep the full no-build source under <code>node_modules/@webjsdev/*/src</code> (the real code that runs, no sourcemaps), and the MCP for live app introspection plus the curated <code>init</code> / <code>docs</code> / <code>source</code> knowledge tools.</p>
+    <p><strong>The brief and the source:</strong> an <code>init</code> tool returns the WebJs brief, the short list of what differs from Next.js App Router routing and Lit components, which is the same text the scaffold's <code>AGENTS.md</code> opens with. A <code>source</code> tool reads the framework's OWN no-build source from <code>node_modules/@webjsdev/*/src</code> (what actually runs), and its <code>export</code> argument returns one export's signature plus its doc comment. There is no separate docs corpus for agents: WebJs is designed so Lit and Next.js habits produce correct code, and where one cannot, <code>webjs check</code> and the runtime refuse it with the fix in the message.</p>
+    <p><code>init</code> warns when the app's installed <code>@webjsdev/mcp</code> is newer than the running server's, so a stale global install is visible instead of silently serving an old brief and old tools.</p>
+    <p>An agent has two complementary ways to understand the framework, and either beats guessing from training data: grep the full no-build source under <code>node_modules/@webjsdev/*/src</code> (the real code that runs, no sourcemaps), and the MCP for live app introspection plus the <code>init</code> and <code>source</code> tools.</p>
 
     <h3>3. Predictable File Layout</h3>
     <code-block>app/
@@ -110,31 +108,31 @@ export async function createPost(
     <h3>9. Cross-Agent Config, One Source</h3>
     <p>The scaffold ships a single cross-agent source of truth rather than a per-tool rule duplicate for each agent:</p>
     <ul>
-      <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent</li>
-      <li><code>.agents/skills/webjs/SKILL.md</code>, the shipped routing skill carrying the framework context</li>
-      <li><code>.agents/rules/workflow.md</code>, the git, test, and review workflow rules</li>
-      <li>Thin bridges for tools that do not read <code>AGENTS.md</code> natively: <code>CLAUDE.md</code> (Claude Code), <code>GEMINI.md</code> (Gemini CLI), and <code>.github/copilot-instructions.md</code> (Copilot in VS Code), each pointing at <code>AGENTS.md</code></li>
+      <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent, opening with the WebJs brief: what differs from Next.js routing and Lit components</li>
+      <li>A thin bridge for Claude Code, <code>CLAUDE.md</code>, which imports <code>AGENTS.md</code> (Cursor, opencode, Antigravity and the Copilot coding agent read <code>AGENTS.md</code> natively)</li>
     </ul>
-    <p>Every agent gets the same rules from that one source: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
+    <p>That is the whole agent doc set, deliberately short. An agent already knows Next.js routing and Lit components, so the brief spends its words only on what differs, and the tokens an agent would have spent reading a long rule file go to the app instead. Your team's own git and review process stays yours.</p>
 
-    <h3>10. Autonomous Mode</h3>
-    <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
+    <p>For Claude Code the scaffold also wires a <code>PostToolUse</code> hook, <code>.claude/hooks/check-on-edit.sh</code>, that runs <code>webjs check --json</code> after each edit to an app source file and hands that file's violations back to the agent with their fixes, so a wrong Lit or Next.js habit is corrected in the same turn. For a TypeScript file it also runs <code>webjs typecheck</code> and hands back that file's type errors (a few seconds; a module the agent has not written yet is not reported), so the first full typecheck finds a clean draft. It is silent when the file is clean, <code>WEBJS_NO_TYPECHECK_ON_EDIT=1</code> skips the type errors, and <code>WEBJS_NO_CHECK_ON_EDIT=1</code> turns it off.</p>
+
+    <h3>10. Hooks Instead of Rules</h3>
+    <p>For Claude Code the scaffold enforces what a rule file would otherwise ask for: a branch guard refuses an edit on <code>main</code>, a tests hook warns when source is committed without a test, and a stop hook asks for a commit before a turn ends with uncommitted work. A hook fires when it matters and costs nothing otherwise.</p>
 
     <h3>11. Automatic Tests and Docs</h3>
-    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention lives in <code>AGENTS.md</code> and the shipped skill (<code>.agents/skills/webjs/SKILL.md</code>), and is enforced via <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
+    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The scaffold's tests hook backs it, and <code>webjs test</code> and <code>webjs check</code> verify it. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
 
     <h3>12. Scaffold + Persistence Defaults</h3>
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. WebJs enforces this with three guardrails:</p>
     <ul>
-      <li><strong>Exactly two scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default) and <code>--template api</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>. Auth is one of the full-stack gallery cards, not a separate template.</li>
-      <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code>, <code>db/columns.server.ts</code>, <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.dev.before</code> + <code>webjs.start.before</code> steps running <code>webjs db migrate</code> (idempotent, so a <code>db:generate</code>'d migration applies on the next boot), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent edits the schema, runs <code>db:generate</code>, and <code>npm run dev</code> applies it, and won't accidentally fall back to JSON files for persistence.</li>
-      <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in <code>AGENTS.md</code> and the shipped skill, so an agent reading it takes the database path.</li>
+      <li><strong>Exactly two scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default) and <code>--template api</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>. Auth is a feature you add (see the <a href="/docs/authentication">authentication docs</a>), not a separate template.</li>
+      <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code> (plain Drizzle), <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.dev.before</code> + <code>webjs.start.before</code> steps running <code>webjs db migrate</code> (idempotent, so a <code>db:generate</code>'d migration applies on the next boot), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent edits the schema, runs <code>db:generate</code>, and <code>npm run dev</code> applies it, and won't accidentally fall back to JSON files for persistence.</li>
+      <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in <code>AGENTS.md</code>, so an agent reading it takes the database path.</li>
     </ul>
     <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
     <code-block>User asks for…                                          Scaffold
 ─────────────────────────────────────────────────────────────────────
 Todo app, blog, notes, dashboard, marketplace, social   default
-App with auth / login / signup / accounts (SaaS)        default (auth card)
+App with auth / login / signup / accounts (SaaS)        default
 HTTP/JSON API only, no UI                                --template api</code-block>
     <p>The scaffold is REFERENCE, not the final product. The agent's job after scaffolding is to replace the example <code>app/page.ts</code> ("Hello from …"), the example <code>User</code> model in <code>db/schema.server.ts</code>, and the example components with the app the user actually requested. The infrastructure (Drizzle wiring, test config, agent rules, route conventions) stays.</p>
 
@@ -147,7 +145,7 @@ HTTP/JSON API only, no UI                                --template api</code-bl
       <li><strong>Add a new API endpoint</strong>: create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
       <li><strong>Add a server action</strong>: create <code>modules/foo/actions/bar.server.ts</code>, export an async function. Import it from a component. Done. No tRPC setup.</li>
       <li><strong>Add a component</strong>: create a file, extend the <code>WebComponent({ ... })</code> factory with your property shape, implement <code>render()</code>, call <code>ClassName.register('tag-name')</code>. Done. No framework CLI scaffolding.</li>
-      <li><strong>Add authentication</strong>: follow the recipe in AGENTS.md. Create lib/session.server.ts, modules/auth/*, middleware.ts. The pattern is documented step by step.</li>
+      <li><strong>Add authentication</strong>: wire <code>createAuth()</code> from <code>@webjsdev/server</code>, or copy the gallery's auth demo (<code>gallery/app/features/auth/</code> and <code>gallery/modules/auth/</code>), which has a login, a signed session and a protected route.</li>
       <li><strong>Add a database model</strong>: edit <code>db/schema.server.ts</code>, run <code>webjs db generate</code> then <code>webjs db migrate</code>. Create queries + actions in a new module. Done.</li>
       <li><strong>Debug an issue</strong>: read the failing route file, trace imports, find the action, check types. No build-artifact archaeology.</li>
     </ul>
@@ -170,7 +168,7 @@ HTTP/JSON API only, no UI                                --template api</code-bl
 ──────────────────────────────────────────────────────────
 AGENTS.md contract     ✅ built-in   ❌ none       ❌ none
 MCP server (read-only) ✅ webjs mcp  ❌ none       ❌ none
-Cross-agent configs    ✅ 5 agents   ❌ none       ❌ none
+Cross-agent config     ✅ AGENTS.md  ❌ none       ❌ none
 Auto tests + docs      ✅ enforced   ❌ manual     ❌ manual
 Branch guardrails      ✅ hooks      ❌ none       ❌ none
 Convention validator   ✅ webjs check ❌ none      ❌ none
@@ -181,19 +179,11 @@ Typed RPC (no schema)  ✅ rich types ⚠️ Flight     ❌ manual
 Autonomous mode        ✅ defaults   ❌ n/a        ❌ n/a</code-block>
 
     <h2>The AGENTS.md File</h2>
-    <p>Here's what a WebJs app's <code>AGENTS.md</code> contains (the blog example ships a complete one):</p>
-    <code-block>## What webjs is
-## App layout (file conventions table)
-## Public API: webjs
-## Public API: @webjsdev/server
-## Modules architecture
-## File conventions in detail (pages, layouts, routes, actions, components)
-## Invariants (rules agents must follow)
-## Recipes (step-by-step: add a page, add an action, add a component...)
-## Security checklist for REST endpoints
-## Advanced features (Suspense, bundling, rate limiting, WebSockets...)
-## Runtime targets (Node, embedded, edge)
-## Deliberately deferred (what NOT to implement)</code-block>
-    <p>You can read the full <a href="https://github.com/webjsdev/webjs/blob/main/AGENTS.md">AGENTS.md on GitHub</a>.</p>
+    <p>Here is the outline of the <code>AGENTS.md</code> a new app gets:</p>
+    <code-block>## The WebJs brief
+## Build a full-stack app (default template)   (or the api template's checklist)
+### Commands
+## Types and data (all templates)</code-block>
+    <p>You can read the <a href="https://github.com/webjsdev/webjs/blob/main/packages/cli/templates/AGENTS.md">template on GitHub</a>.</p>
   `;
 }

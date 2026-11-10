@@ -40,7 +40,7 @@ test('dev rides over a mid-rewrite: a 0-byte read is retried and serves the sett
   truncateSync(cssPath, 0);
   setTimeout(() => writeFileSync(cssPath, CONTENT), 40);
 
-  const res = await app.handle(new Request('http://x/public/style.css'));
+  const res = await app.handle(new Request('http://x/style.css'));
   const body = await res.text();
   assert.equal(res.status, 200);
   assert.equal(body.length, CONTENT.length, 'the full CSS is served, not the mid-rewrite empty read');
@@ -56,7 +56,7 @@ test('a genuinely empty, untouched asset serves immediately (no retry, no delay)
   truncateSync(cssPath, 0);
   utimesSync(cssPath, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000)); // mtime 1 min ago
   const t0 = Date.now();
-  const res = await app.handle(new Request('http://x/public/style.css'));
+  const res = await app.handle(new Request('http://x/style.css'));
   const body = await res.text();
   assert.equal(body.length, 0, 'a stale empty file is served as-is');
   assert.ok(Date.now() - t0 < 100, 'no retry window is paid for a genuinely empty asset');
@@ -68,7 +68,7 @@ test('COUNTERFACTUAL: prod does not retry, so a mid-rewrite empty read is served
   const app = await createRequestHandler({ appDir, dev: false });
 
   truncateSync(cssPath, 0);
-  const res = await app.handle(new Request('http://x/public/style.css'));
+  const res = await app.handle(new Request('http://x/style.css'));
   const body = await res.text();
   assert.equal(res.status, 200);
   assert.equal(body.length, 0, 'prod serves the current bytes without the dev retry');
@@ -77,6 +77,6 @@ test('COUNTERFACTUAL: prod does not retry, so a mid-rewrite empty read is served
 test('a genuinely non-empty asset is served immediately (no added latency)', async () => {
   const appDir = makeApp();
   const app = await createRequestHandler({ appDir, dev: true });
-  const res = await app.handle(new Request('http://x/public/style.css'));
+  const res = await app.handle(new Request('http://x/style.css'));
   assert.equal((await res.text()).length, CONTENT.length, 'a normal read is unaffected');
 });

@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 export default async function RtlPage({ url, searchParams }: Pick<PageProps, 'url' | 'searchParams'>) {
   const lang = readLang((await searchParams).lang);
   return examplesShell(new URL(url), 'rtl', html`
-    <link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>
+    <link rel="stylesheet" href=${asset('/rtl-fonts.css')}>
     ${rtlComponents(lang)}
   `, { style: 'nova' });
 }

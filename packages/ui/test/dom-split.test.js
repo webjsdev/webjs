@@ -9,8 +9,8 @@ import { init } from '../src/commands/init.js';
 // Counterfactuals for the #819 lib/dom.ts split on the external
 // `webjs ui add` / `webjs ui init` distribution path. Overlay components
 // import onBeforeCache from '../lib/dom.ts' (a module kept separate from the
-// pure cn() in '../lib/utils.ts' so the elision analyzer does not pin every
-// cn importer to the browser). The add/init commands must ship that dom
+// pure cn() in '../lib/utils.ts' so a page or layout importing cn never pulls
+// in browser globals). The add/init commands must ship that dom
 // module AND rewrite the registry-relative import, or the emitted component
 // carries a broken '../lib/dom.ts' specifier.
 

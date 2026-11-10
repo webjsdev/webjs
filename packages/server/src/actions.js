@@ -1,4 +1,5 @@
 import { digestHex } from './crypto-utils.js';
+import { headerSafeLocation } from './redirect-location.js';
 import { readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { walk } from './fs-walk.js';
@@ -16,10 +17,10 @@ import { runActionChain } from './action-middleware.js';
 import { isStreamable, streamActionResponse } from './action-stream.js';
 import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
-import { getBodyLimits } from './context.js';
+import { getBodyLimits, refreshHeaderValue } from './context.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
-import { FORM_ACTION_ID_KEY, FORM_ACTION_FIELD } from '@webjsdev/core';
+import { FORM_ACTION_ID_KEY, FORM_ACTION_FIELD, isRedirect } from '@webjsdev/core';
 import { devImport } from './dev-import.js';
 import { formInput, isFormData } from './action-input.js';
 
@@ -45,6 +46,49 @@ function jsonBodyLimit() {
 export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
 
 /**
+ * The `issues` array a schema library's validation error carries (zod, valibot,
+ * Standard Schema), or null for any other throw.
+ * @param {unknown} e
+ * @returns {Array<{ path?: unknown[], message?: string }> | null}
+ */
+function schemaIssues(e) {
+  const issues = e && typeof e === 'object' ? /** @type {any} */ (e).issues : undefined;
+  return Array.isArray(issues) && issues.length > 0 ? issues : null;
+}
+
+/**
+ * A failure result from a schema error's issues: the first message per field
+ * as `fieldErrors` (a nested path joined with dots), and a form-level `error`
+ * for an issue with no path.
+ * @param {unknown} e
+ */
+function issuesResult(e) {
+  /** @type {Record<string, string>} */
+  const fieldErrors = {};
+  let error;
+  for (const issue of schemaIssues(e) || []) {
+    // A segment is a key, or Standard Schema's { key }; a symbol key is
+    // converted explicitly, since join's implicit conversion throws on one.
+    const path = Array.isArray(issue.path)
+      ? issue.path.map((p) => {
+        const k = p && typeof p === 'object' && 'key' in p ? /** @type {any} */ (p).key : p;
+        return typeof k === 'symbol' ? (k.description ?? '') : String(k);
+      }).join('.')
+      : '';
+    const message = typeof issue.message === 'string' ? issue.message : 'Invalid value.';
+    if (path) {
+      // Own keys only (a field named `constructor` is not already present),
+      // and defined rather than assigned, so `__proto__` is a field, not the
+      // object's prototype.
+      if (!Object.hasOwn(fieldErrors, path)) {
+        Object.defineProperty(fieldErrors, path, { value: message, enumerable: true, writable: true, configurable: true });
+      }
+    } else if (!error) error = message;
+  }
+  return { success: false, fieldErrors, ...(error ? { error } : {}), status: 422 };
+}
+
+/**
  * Run an attached input validator against an action's input, shared by the RPC
  * path (`invokeAction`) and the `route()` REST adapter so the contract is
  * identical across transports (#245). The framework only CALLS the validator and
@@ -53,21 +97,27 @@ export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
  * @param {(input: any) => any} validate the attached validator
  * @param {any} input the value handed to the validator (the action's first arg
  *   on RPC, the merged query/params/body object on REST)
- * @returns {{ ok: true, value: any } | { ok: false, result: { success: false, fieldErrors?: Record<string,string>, error?: string, status: number }, thrown?: unknown }}
+ * @returns {{ ok: true, value: any } | { ok: false, result: { success: false, fieldErrors?: Record<string,string>, error?: string, status: number }, thrown?: unknown, invalid?: boolean }}
  *   `ok: true` carries the value to pass to the action (the validated `data`,
  *   the transformed return, or the original input). `ok: false` carries the
  *   structured failure result the caller serializes back; on a THROWN validator
  *   it also carries the original error on `thrown` so a caller can salvage a
  *   schema lib's structured `issues` (the REST path does, for back-compat).
  */
-export function runValidate(validate, input) {
+export async function runValidate(validate, input) {
   let out;
   try {
-    out = validate(input);
+    // Awaited, so an async validator (an async schema check, a lookup) works
+    // like a sync one; a returned Promise must never read as a transformed input.
+    out = await validate(input);
   } catch (e) {
-    // Throw-to-reject (the classic `Schema.parse` contract). Map to a sanitized
-    // failure result; a thrown validator is a 400 (bad input), not a 500.
-    // Surface only the message; `thrown` lets the REST caller recover `issues`.
+    // A schema library's validation error (a throw carrying `issues`: zod's
+    // `.parse`, valibot, Standard Schema) is invalid INPUT, mapped once here so
+    // every transport answers it alike: the issues become fieldErrors with a
+    // 422, as a structured envelope failure is (`invalid` marks it).
+    if (schemaIssues(e)) return { ok: false, result: issuesResult(e), thrown: e, invalid: true };
+    // Any other throw-to-reject: a sanitized failure result, a 400 over REST;
+    // `thrown` lets the RPC path treat it as the crash it may be.
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, result: { success: false, error: msg, status: 400 }, thrown: e };
   }
@@ -322,7 +372,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // `method` is a default POST), so the first client call resolves from the
   // seed with no hydration round-trip. The browser-cache staleness check is
   // GET-only (only a GET is browser-cached).
-  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig',
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh', 'followActionRedirect as __redirect', 'installActionBind as __bindable',
     // Streaming RPC (#489): an action returning a stream / async iterable sends
     // back a framed body; the stub decodes it into an async iterable the caller
     // `for await`s. The imports are small constants + one decoder factory.
@@ -343,6 +393,12 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // caught on the next read).
   lines.push(`async function __handle(res, fn, key, since) {`);
   lines.push(`  const inv = __tagHdr(res.headers.get('x-webjs-invalidate')); if (inv.length) __markStale(inv);`);
+  // redirect() in the action (Next parity): navigate there; the call's promise
+  // rejects with the redirect sentinel, which the page ignores unhandled.
+  lines.push(`  const rd = res.headers.get('x-webjs-redirect'); if (rd) return __redirect(rd);`);
+  // revalidatePath() in the action: refresh the page on screen in place when
+  // it was revalidated, BEFORE the caller's await resolves (Next behaviour).
+  lines.push(`  const rf = res.headers.get('x-webjs-refresh'); if (rf) await __refresh(rf);`);
   lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t, since); }`);
   lines.push(`  const ct = res.headers.get('content-type') || '';`);
   // A streamed result (#489): the action returned a stream / async iterable.
@@ -425,7 +481,9 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // load-hook registry instead; both produce the same string, which is what
   // makes the SSR'd form and the re-rendered one submit the same value.
   // Non-enumerable so `import * as actions` and a spread stay unchanged.
-  lines.push(`const __id = (fn, name) => { try { Object.defineProperty(fn, ${J(FORM_ACTION_ID_KEY)}, { value: __HASH + '/' + name }); } catch {} return fn; };`);
+  // `.bind(null, id)` keeps the identity too (installActionBind), so a bound
+  // stub re-renders to the same hidden field the server emitted.
+  lines.push(`const __id = (fn, name) => { try { Object.defineProperty(fn, ${J(FORM_ACTION_ID_KEY)}, { value: __HASH + '/' + name }); } catch {} return __bindable(fn); };`);
   for (const name of fnNames) {
     lines.push(
       name === 'default'
@@ -519,16 +577,17 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
   // server-to-server call.
   const validate = actionConfigFn(mod, 'validate');
   if (typeof validate === 'function') {
-    const v = runValidate(validate, args[0]);
+    const v = await runValidate(validate, args[0]);
     if (!v.ok) {
-      if (v.thrown !== undefined) {
+      if (v.thrown !== undefined && !v.invalid) {
         // A THROWN validator behaves like a thrown action: a sanitized error
         // response (non-200, so the client stub throws), with prod stack
         // sanitization. The onError sink sees the original error too.
         if (typeof onError === 'function') onError(v.thrown);
         return actionErrorResponse(v.thrown, idx.dev);
       }
-      // A structured `{ success: false, fieldErrors }` envelope is a NORMAL
+      // A structured `{ success: false, fieldErrors }` envelope, or a schema
+      // error's issues mapped to one, is a NORMAL
       // result the action author renders (`result.fieldErrors`): serialized as
       // a 200 RPC payload so the client stub returns it as a real object rather
       // than throwing, the failure status riding inside the envelope.
@@ -536,6 +595,7 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     }
     args = [v.value, ...args.slice(1)];
   }
+  let ranAction = false;
   try {
     // Run inside the request's AbortSignal scope (#492) and the per-action
     // middleware chain (#490): the chain wraps the action, can short-circuit
@@ -543,7 +603,6 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     // the action reads via actionContext(). `ranAction` distinguishes a real
     // action completion from a middleware short-circuit (the action never ran).
     const middleware = actionMiddleware(mod);
-    let ranAction = false;
     const result = await runWithActionSignal(req.signal, () =>
       runActionChain(middleware, { request: req, args, signal: req.signal }, () => { ranAction = true; return fn(...args); }));
     // Streaming result (#489): a COMPLETED action returning a ReadableStream /
@@ -557,6 +616,8 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
         const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
         if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
       }
+      const refresh = refreshHeaderValue();
+      if (refresh) headers['x-webjs-refresh'] = refresh;
       return streamActionResponse(result, { signal: req.signal, onError, headers, dev: idx.dev });
     }
     if (method === 'GET') {
@@ -575,8 +636,29 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
         headers['x-webjs-invalidate'] = inv.join(',');
       }
     }
+    // revalidatePath() during the action (Next parity): the browser refreshes
+    // those paths, and the page on screen in place when it is one of them.
+    const refresh = refreshHeaderValue();
+    if (refresh) headers['x-webjs-refresh'] = refresh;
     return rpcResponse(result ?? null, { headers });
   } catch (e) {
+    // redirect() / permanentRedirect() in an action called over RPC (Next.js
+    // parity): not an error. The response tells the generated stub where to
+    // go (`x-webjs-redirect: <url>;<push|replace>`, push by default as in a
+    // Next server action), and the client router navigates there. A mutation
+    // that ran still evicts its `invalidates` tags and reports revalidatePath.
+    if (isRedirect(e)) {
+      const r = /** @type {any} */ (e);
+      /** @type {Record<string, string>} */
+      const headers = { 'x-webjs-redirect': `${headerSafeLocation(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}` };
+      if (ranAction && method !== 'GET') {
+        const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+        if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
+      }
+      const refresh = refreshHeaderValue();
+      if (refresh) headers['x-webjs-refresh'] = refresh;
+      return rpcResponse(null, { headers: { ...headers, 'cache-control': 'no-store' } });
+    }
     if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }

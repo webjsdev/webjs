@@ -45,7 +45,7 @@ export default function RootLayout({ children }: LayoutProps) {
       <p>Self-host the font file under <code>public/fonts/</code>, declare it in the Tailwind entry your app compiles, and make it the sans family:</p>
       ${codeFigure(`@font-face {
   font-family: "Noto Sans Arabic";
-  src: url("/public/fonts/noto-sans-arabic.woff2") format("woff2");
+  src: url("/fonts/noto-sans-arabic.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
