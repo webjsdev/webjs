@@ -829,6 +829,21 @@
     },
     "withSessionCookie": {
       "demoed": true
+    },
+    "notFound": {
+      "exempt": "internal: a re-export of @webjsdev/core's navigation helper (demoed there), so server code can import it from either package"
+    },
+    "forbidden": {
+      "exempt": "internal: a re-export of @webjsdev/core's navigation helper (demoed there), so server code can import it from either package"
+    },
+    "unauthorized": {
+      "exempt": "internal: a re-export of @webjsdev/core's navigation helper (demoed there), so server code can import it from either package"
+    },
+    "redirect": {
+      "exempt": "internal: a re-export of @webjsdev/core's navigation helper (demoed there), so server code can import it from either package"
+    },
+    "permanentRedirect": {
+      "exempt": "internal: a re-export of @webjsdev/core's navigation helper (demoed there), so server code can import it from either package"
     }
   },
   "conventions": {

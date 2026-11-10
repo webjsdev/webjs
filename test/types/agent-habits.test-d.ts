@@ -3,7 +3,7 @@
 // WebJs type, not on the agent's own logic. It must compile clean with no
 // casts. The rule from now on: an eval typecheck failure caused by a framework
 // type adds a block here, beside the fix that made it compile.
-import { createAuth, getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler, revalidateTag } from '@webjsdev/server';
+import { createAuth, notFound, forbidden, getRequest, getSession, Credentials, GitHub, cookies, headers, createRequestHandler, revalidateTag } from '@webjsdev/server';
 import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
 import type { GenerateMetadata, LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
@@ -90,6 +90,14 @@ export async function typedAction(found: boolean): Promise<ActionResult<{ id: nu
 export function readFailure(result: ActionResult<{ id: number }>): string | undefined {
   const id: number | undefined = result.success ? result.data?.id : undefined;
   return id === undefined ? result.error ?? result.fieldErrors?.body : undefined;
+}
+
+// notFound() / forbidden() imported from the server package in a server
+// action, where an agent writing server code reaches first (#1686).
+export async function guardedAction(found: boolean, allowed: boolean): Promise<string> {
+  if (!found) notFound();
+  if (!allowed) forbidden();
+  return 'ok';
 }
 
 // Route props the Next.js 15 way and the Next.js 14 way, and the route-handler

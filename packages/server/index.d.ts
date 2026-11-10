@@ -1395,6 +1395,13 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  * ```
  */
 export declare function createAuth<TUser = ResolvedAuthUser>(config: AuthConfig): AuthInstance<TUser>;
+/** Next.js's navigation helpers (`next/navigation`), re-exported from `@webjsdev/core` so server code can import them from either package. */
+export declare const notFound: typeof import('@webjsdev/core').notFound;
+export declare const forbidden: typeof import('@webjsdev/core').forbidden;
+export declare const unauthorized: typeof import('@webjsdev/core').unauthorized;
+export declare const redirect: typeof import('@webjsdev/core').redirect;
+export declare const permanentRedirect: typeof import('@webjsdev/core').permanentRedirect;
+
 /** Auth.js's base error: `error instanceof AuthError` and `error.type` say why a sign-in failed. */
 export declare class AuthError extends Error {
   type: string;

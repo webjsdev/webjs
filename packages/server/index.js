@@ -64,6 +64,11 @@ export { stream, streamResponse, acceptsStream, STREAM_MIME } from './src/stream
 export { attachWebSocket } from './src/websocket.js';
 export { getSerializer, setSerializer, defaultSerializer } from './src/serializer.js';
 
+// Next.js's navigation helpers (`next/navigation`), the same functions
+// `@webjsdev/core` exports, so a server action or route handler can import
+// them from the server package as well. (#1686)
+export { notFound, forbidden, unauthorized, redirect, permanentRedirect } from '@webjsdev/core';
+
 // Auth (NextAuth-style)
 export { createAuth, Credentials, Google, GitHub, AuthError, CredentialsSignin } from './src/auth.js';
 
