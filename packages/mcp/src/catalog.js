@@ -78,5 +78,12 @@ export function featureCatalog(catalog = FEATURE_CATALOG) {
       out.push(`  ${g.need}: ${g.names.join(', ')}${g.note ? ` (${g.note})` : ''}`);
     }
   }
+  // Commands, not exports, so they sit outside the name-checked sections.
+  out.push(
+    '',
+    'Generators, as in Rails (`npx webjs help generate`)',
+    '  A feature: npx webjs g scaffold post title:string! body:text (also resource, model, migration, controller)',
+    '  Auth: npx webjs g authentication (sign-up, log-in, a protected /dashboard)',
+  );
   return out.join('\n');
 }

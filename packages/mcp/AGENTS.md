@@ -90,7 +90,10 @@ src/
                          grouped by need (auth, sessions, caching, rate limits,
                          uploads, realtime, SEO, tests, the core component and
                          state APIs), the text a no-args `source` call and a
-                         bare `webjs source` print (#1686). Curated, since the
+                         bare `webjs source` print (#1686), ending with the
+                         `webjs generate` commands (#1692), which are commands
+                         rather than exports and so sit outside the
+                         name-checked sections. Curated, since the
                          export lists mix app-facing API with plumbing;
                          test/catalog.test.mjs holds every name to be a real
                          export of its section's module AND to resolve through

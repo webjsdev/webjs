@@ -873,9 +873,12 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /\n## This app\n\nReplace this paragraph with what /, 'ends with a This app section the agent fills in');
     assert.match(fs, /`CLAUDE\.md` imports this file, so notes go here\./, 'which says app notes live in AGENTS.md, not CLAUDE.md');
     // The brief plus the scaffold's rules plus the This app stub: still short,
-    // since every line is read on every turn.
+    // since every line is read on every turn. The generators line (#1692) is
+    // the last addition: three lines that save writing a feature's ten files.
     assert.match(fs, /run `npx webjs source`, which lists what WebJs provides for each need\./, 'names the feature catalogue');
-    assert.ok(fs.split('\n').length < 68, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
+    assert.match(fs, /`npx webjs g scaffold post title:string! body:text`/, 'names the generators');
+    assert.match(fs, /`npx webjs g authentication` adds sign-up and log-in/, 'names the auth generator');
+    assert.ok(fs.split('\n').length < 70, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);
     }
