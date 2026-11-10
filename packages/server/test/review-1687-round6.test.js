@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createAuth, Credentials } from '../src/auth.js';
 import { createRequestHandler } from '../src/dev.js';
+import { invokeActionForTest } from '../src/testing.js';
+import { runValidate } from '../src/actions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // A tmpdir fixture cannot resolve the bare specifiers, so it imports by URL.
@@ -162,4 +164,28 @@ test('a flash bound to a redirect written with the basePath mount prefix is show
   assert.equal(done.status, 303);
   const landing = await app.handle(new Request('http://x/app/done', { headers: { cookie: nextCookie('', done) } }));
   assert.match(await landing.text(), /<p id="r">MOUNTED_MSG<\/p>/, 'the mounted target shows it');
+});
+
+test('a schema validator that throws issues is invalid input on the RPC path too, not a thrown error', async () => {
+  const throwIssues = () => { const e = new Error('raw'); /** @type any */ (e).issues = [{ path: ['email'], message: 'EMAIL_MSG' }]; throw e; };
+  // runValidate, shared by the form, RPC and route() paths, maps it once.
+  const v = await runValidate(throwIssues, {});
+  assert.equal(v.ok, false);
+  assert.equal(v.invalid, true);
+  assert.deepEqual(v.result, { success: false, fieldErrors: { email: 'EMAIL_MSG' }, status: 422 });
+
+  // RPC: the client stub returns the failure envelope instead of throwing.
+  const { app } = await formApp(`export function validate() { const e = new Error('raw'); e.issues = [{ path: ['email'], message: 'EMAIL_MSG' }]; throw e; }
+export async function act(input) { return { success: true }; }`);
+  const result = await invokeActionForTest(app, join(app.appDir, 'modules/x/actions/act.server.ts'), 'act', [{ email: 'x' }]);
+  assert.equal(result.success, false);
+  assert.deepEqual(result.fieldErrors, { email: 'EMAIL_MSG' });
+
+  // What the crash path protects: any other validator throw is still an error over RPC.
+  const { app: crash } = await formApp(`export function validate() { throw new Error('VALIDATOR_CRASH'); }
+export async function act(input) { return { success: true }; }`, {}, { onError: () => {} });
+  await assert.rejects(
+    invokeActionForTest(crash, join(crash.appDir, 'modules/x/actions/act.server.ts'), 'act', [{ email: 'x' }]),
+    'a crashing validator still throws on the client',
+  );
 });

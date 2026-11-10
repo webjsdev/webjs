@@ -155,10 +155,15 @@ export function route(actionOrModule, opts = {}) {
       // Run the validator through the SHARED contract (#245) so the REST adapter
       // and the RPC path interpret a `{ success, fieldErrors }` envelope, a
       // throw, and a transform-return identically. A structured failure becomes
-      // a 422 JSON; a throw stays a 400 (keeping a schema lib's `issues`); a
+      // a 422 JSON, and so does a schema library's throw (its issues mapped to
+      // fieldErrors, the raw `issues` kept); any other throw is a 400; a
       // transform-return replaces the input.
       const v = await runValidate(validate, arg);
       if (!v.ok) {
+        if (v.invalid) {
+          const { status, ...payload } = v.result;
+          return Response.json({ ...payload, issues: /** @type any */ (v.thrown).issues }, { status });
+        }
         if (v.thrown !== undefined) {
           const msg = v.result.error || 'Invalid input';
           const issues = v.thrown && typeof v.thrown === 'object' && 'issues' in v.thrown

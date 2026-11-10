@@ -46,6 +46,49 @@ function jsonBodyLimit() {
 export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
 
 /**
+ * The `issues` array a schema library's validation error carries (zod, valibot,
+ * Standard Schema), or null for any other throw.
+ * @param {unknown} e
+ * @returns {Array<{ path?: unknown[], message?: string }> | null}
+ */
+function schemaIssues(e) {
+  const issues = e && typeof e === 'object' ? /** @type {any} */ (e).issues : undefined;
+  return Array.isArray(issues) && issues.length > 0 ? issues : null;
+}
+
+/**
+ * A failure result from a schema error's issues: the first message per field
+ * as `fieldErrors` (a nested path joined with dots), and a form-level `error`
+ * for an issue with no path.
+ * @param {unknown} e
+ */
+function issuesResult(e) {
+  /** @type {Record<string, string>} */
+  const fieldErrors = {};
+  let error;
+  for (const issue of schemaIssues(e) || []) {
+    // A segment is a key, or Standard Schema's { key }; a symbol key is
+    // converted explicitly, since join's implicit conversion throws on one.
+    const path = Array.isArray(issue.path)
+      ? issue.path.map((p) => {
+        const k = p && typeof p === 'object' && 'key' in p ? /** @type {any} */ (p).key : p;
+        return typeof k === 'symbol' ? (k.description ?? '') : String(k);
+      }).join('.')
+      : '';
+    const message = typeof issue.message === 'string' ? issue.message : 'Invalid value.';
+    if (path) {
+      // Own keys only (a field named `constructor` is not already present),
+      // and defined rather than assigned, so `__proto__` is a field, not the
+      // object's prototype.
+      if (!Object.hasOwn(fieldErrors, path)) {
+        Object.defineProperty(fieldErrors, path, { value: message, enumerable: true, writable: true, configurable: true });
+      }
+    } else if (!error) error = message;
+  }
+  return { success: false, fieldErrors, ...(error ? { error } : {}), status: 422 };
+}
+
+/**
  * Run an attached input validator against an action's input, shared by the RPC
  * path (`invokeAction`) and the `route()` REST adapter so the contract is
  * identical across transports (#245). The framework only CALLS the validator and
@@ -54,7 +97,7 @@ export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
  * @param {(input: any) => any} validate the attached validator
  * @param {any} input the value handed to the validator (the action's first arg
  *   on RPC, the merged query/params/body object on REST)
- * @returns {{ ok: true, value: any } | { ok: false, result: { success: false, fieldErrors?: Record<string,string>, error?: string, status: number }, thrown?: unknown }}
+ * @returns {{ ok: true, value: any } | { ok: false, result: { success: false, fieldErrors?: Record<string,string>, error?: string, status: number }, thrown?: unknown, invalid?: boolean }}
  *   `ok: true` carries the value to pass to the action (the validated `data`,
  *   the transformed return, or the original input). `ok: false` carries the
  *   structured failure result the caller serializes back; on a THROWN validator
@@ -68,9 +111,13 @@ export async function runValidate(validate, input) {
     // like a sync one; a returned Promise must never read as a transformed input.
     out = await validate(input);
   } catch (e) {
-    // Throw-to-reject (the classic `Schema.parse` contract). Map to a sanitized
-    // failure result; a thrown validator is a 400 (bad input), not a 500.
-    // Surface only the message; `thrown` lets the REST caller recover `issues`.
+    // A schema library's validation error (a throw carrying `issues`: zod's
+    // `.parse`, valibot, Standard Schema) is invalid INPUT, mapped once here so
+    // every transport answers it alike: the issues become fieldErrors with a
+    // 422, as a structured envelope failure is (`invalid` marks it).
+    if (schemaIssues(e)) return { ok: false, result: issuesResult(e), thrown: e, invalid: true };
+    // Any other throw-to-reject: a sanitized failure result, a 400 over REST;
+    // `thrown` lets the RPC path treat it as the crash it may be.
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, result: { success: false, error: msg, status: 400 }, thrown: e };
   }
@@ -532,14 +579,15 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
   if (typeof validate === 'function') {
     const v = await runValidate(validate, args[0]);
     if (!v.ok) {
-      if (v.thrown !== undefined) {
+      if (v.thrown !== undefined && !v.invalid) {
         // A THROWN validator behaves like a thrown action: a sanitized error
         // response (non-200, so the client stub throws), with prod stack
         // sanitization. The onError sink sees the original error too.
         if (typeof onError === 'function') onError(v.thrown);
         return actionErrorResponse(v.thrown, idx.dev);
       }
-      // A structured `{ success: false, fieldErrors }` envelope is a NORMAL
+      // A structured `{ success: false, fieldErrors }` envelope, or a schema
+      // error's issues mapped to one, is a NORMAL
       // result the action author renders (`result.fieldErrors`): serialized as
       // a 200 RPC payload so the client stub returns it as a real object rather
       // than throwing, the failure status riding inside the envelope.

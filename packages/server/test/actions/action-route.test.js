@@ -70,15 +70,25 @@ test('a structured validator failure yields a 422 JSON', async () => {
   assert.equal(ran, false, 'the action must not run on a validation failure');
 });
 
-test('a thrown validator yields a 400 keeping a schema lib issues array', async () => {
+test('a schema validator that throws issues yields a 422 with fieldErrors, keeping the raw issues', async () => {
+  // Invalid input, answered as a structured envelope failure is, the same on
+  // the form and RPC paths (runValidate maps it once).
   const handler = route(async (i) => i, {
-    validate: () => { const e = new Error('bad'); /** @type any */ (e).issues = [{ path: ['x'] }]; throw e; },
+    validate: () => { const e = new Error('bad'); /** @type any */ (e).issues = [{ path: ['x'], message: 'X_MSG' }]; throw e; },
   });
   const res = await handler(new Request('http://x/api/x?a=1'));
-  assert.equal(res.status, 400);
+  assert.equal(res.status, 422);
   const body = await res.json();
-  assert.equal(body.error, 'bad');
-  assert.deepEqual(body.issues, [{ path: ['x'] }]);
+  assert.equal(body.success, false);
+  assert.deepEqual(body.fieldErrors, { x: 'X_MSG' });
+  assert.deepEqual(body.issues, [{ path: ['x'], message: 'X_MSG' }]);
+});
+
+test('any other thrown validator is still a 400 with its message', async () => {
+  const handler = route(async (i) => i, { validate: () => { throw new Error('bad'); } });
+  const res = await handler(new Request('http://x/api/x?a=1'));
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error, 'bad');
 });
 
 test('a validator transform-return replaces the input', async () => {

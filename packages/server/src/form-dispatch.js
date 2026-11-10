@@ -427,49 +427,6 @@ function methodNotAllowed() {
 }
 
 /**
- * The `issues` array a schema library's validation error carries (zod, valibot,
- * Standard Schema), or null for any other throw.
- * @param {unknown} e
- * @returns {Array<{ path?: unknown[], message?: string }> | null}
- */
-function schemaIssues(e) {
-  const issues = e && typeof e === 'object' ? /** @type {any} */ (e).issues : undefined;
-  return Array.isArray(issues) && issues.length > 0 ? issues : null;
-}
-
-/**
- * A failure result from a schema error's issues: the first message per field
- * as `fieldErrors` (a nested path joined with dots), and a form-level `error`
- * for an issue with no path.
- * @param {unknown} e
- */
-function issuesResult(e) {
-  /** @type {Record<string, string>} */
-  const fieldErrors = {};
-  let error;
-  for (const issue of schemaIssues(e) || []) {
-    // A segment is a key, or Standard Schema's { key }; a symbol key is
-    // converted explicitly, since join's implicit conversion throws on one.
-    const path = Array.isArray(issue.path)
-      ? issue.path.map((p) => {
-        const k = p && typeof p === 'object' && 'key' in p ? /** @type {any} */ (p).key : p;
-        return typeof k === 'symbol' ? (k.description ?? '') : String(k);
-      }).join('.')
-      : '';
-    const message = typeof issue.message === 'string' ? issue.message : 'Invalid value.';
-    if (path) {
-      // Own keys only (a field named `constructor` is not already present),
-      // and defined rather than assigned, so `__proto__` is a field, not the
-      // object's prototype.
-      if (!Object.hasOwn(fieldErrors, path)) {
-        Object.defineProperty(fieldErrors, path, { value: message, enumerable: true, writable: true, configurable: true });
-      }
-    } else if (!error) error = message;
-  }
-  return { success: false, fieldErrors, ...(error ? { error } : {}), status: 422 };
-}
-
-/**
  * Run a bound form action for a non-GET/HEAD request to a page's own url and
  * produce the HTTP response. The caller has already matched the path to a page
  * route and confirmed the request carries a form body; this runs inside the
@@ -615,12 +572,12 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   if (typeof validate === 'function') {
     const v = await runValidate(validate, args[0]);
     if (!v.ok) {
-      if (v.thrown !== undefined && schemaIssues(v.thrown)) {
+      if (v.invalid) {
         // A schema library's validation error (zod's `.parse`, valibot,
-        // Standard Schema: a throw carrying `issues`) is invalid INPUT, the
-        // throw-to-reject contract runValidate documents, so it re-renders the
-        // form at 422 with the issues as fieldErrors, not the 500 error page.
-        return ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(issuesResult(v.thrown), formData), status: 422 });
+        // Standard Schema: a throw carrying `issues`) is invalid INPUT, mapped
+        // by runValidate to fieldErrors for every transport, so it re-renders
+        // the form at 422, not the 500 error page.
+        return ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(v.result, formData), status: 422 });
       }
       if (v.thrown !== undefined) {
         // Any other throw is a crash. A THROWN validator is answered here rather than rethrown. Letting it
