@@ -495,7 +495,12 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // text 500. The boundary sees a sanitized error in production, and the sink
   // hears it once, as an action error.
   /** @param {unknown} e */
-  const errorPage = (e) => ssrPage(route, params, url, { ...ssrOpts, req, onError, renderError: e });
+  // `throw undefined` would read as "no error" downstream (renderError is
+  // checked against undefined), so it becomes a real Error first.
+  const errorPage = (e) => ssrPage(route, params, url, {
+    ...ssrOpts, req, onError,
+    renderError: e === undefined ? new Error('[webjs] the action threw undefined') : e,
+  });
 
   // Not a form body at all (a stray JSON POST, a probe): the page path exists
   // and only renders. Answered before the body is touched.

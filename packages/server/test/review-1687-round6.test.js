@@ -107,3 +107,14 @@ test("a successful action's redirect target with non-Latin-1 characters is encod
   assert.equal(res.status, 303, 'the write succeeded and redirects');
   assert.equal(res.headers.get('location'), '/posts/%E6%97%A5%E6%9C%AC');
 });
+
+test('an action that throws undefined renders the error page and reaches onError', async () => {
+  const seen = [];
+  const { app, id } = await formApp(`export async function act() { throw undefined; }`, {}, { onError: (e) => seen.push(e) });
+  const quietErr = console.error;
+  console.error = () => {};
+  let res;
+  try { res = await app.handle(post('/f', { __webjs_action: id })); } finally { console.error = quietErr; }
+  assert.equal(res.status, 500, 'an error, not the page at 200');
+  assert.ok(seen.some((e) => e instanceof Error && /threw undefined/.test(e.message)), 'onError hears it, as an Error');
+});
