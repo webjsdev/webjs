@@ -7,7 +7,7 @@ import { createAuth, notFound, forbidden, getRequest, getSession, Credentials, G
 import { testRequest, loginAndGetCookies, submitForm } from '@webjsdev/server/testing';
 import type { ActionResult, AuthConfig, AuthInstance, Session } from '@webjsdev/server';
 import type { GenerateMetadata, LayoutProps, PageProps, RouteHandlerContext } from '@webjsdev/core';
-import { defaultConverter, notEqual, WebComponent, prop } from '@webjsdev/core';
+import { defaultConverter, notEqual, WebComponent, prop, html } from '@webjsdev/core';
 
 // getSession() reads the request in scope, the way cookies() and headers() do.
 // Agents also chained the two WebJs calls, getSession(getRequest()), and
@@ -98,6 +98,17 @@ export async function guardedAction(found: boolean, allowed: boolean): Promise<s
   if (!found) notFound();
   if (!allowed) forbidden();
   return 'ok';
+}
+
+// A bare Array / Object prop used with a typed callback, as an inbox eval
+// build wrote it before reaching for prop<T>() (#1686).
+interface MessageView { id: number; mine: boolean }
+export class ThreadHabit extends WebComponent({ messages: Array, meta: Object, ids: prop(Array) }) {
+  render() {
+    const mine = this.messages.filter((m: MessageView) => m.mine);
+    const title: string = this.meta.title;
+    return html`<p>${mine.length} ${title} ${this.ids.length}</p>`;
+  }
 }
 
 // Route props the Next.js 15 way and the Next.js 14 way, and the route-handler

@@ -225,6 +225,11 @@ export type Infer<C> =
   C extends BooleanConstructor ? boolean :
   C extends NumberConstructor ? number :
   C extends StringConstructor ? string :
+  // A bare Array / Object says nothing about the element type, so it is the
+  // open type an undeclared Lit property has, not unknown: a typed callback
+  // (`items.filter((m: Message) => ...)`) has to compile, as it would in Lit.
+  C extends ArrayConstructor ? any[] :
+  C extends ObjectConstructor ? any :
   C extends new (...a: any[]) => infer T ? T :
   C extends (v: any) => infer T ? T : unknown;
 
