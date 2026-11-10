@@ -11,6 +11,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createRequestHandler } from '../src/dev.js';
+import { createAuth, Credentials } from '../src/auth.js';
+import { setBasePath } from '../src/importmap.js';
+import { headerSafeLocation } from '../src/redirect-location.js';
+
+const SECRET = 'review-1687-round4-secret-at-least-32-bytes';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // A tmpdir fixture cannot resolve the bare specifiers, so it imports by URL.
@@ -130,4 +135,18 @@ export default ({ actionData }) => html\`<p id="f">\${actionData?.fieldErrors?.e
   let crash;
   try { crash = await app.handle(post('/j', { __webjs_action: id, email: 'crash' })); } finally { console.error = quietErr; }
   assert.equal(crash.status, 500, 'a validator that crashes still renders the error page');
+});
+
+test("signOut honours the app's own absolute redirectTo; the sign-out route still refuses a submitted one", async () => {
+  const auth = createAuth({ secret: SECRET, providers: [Credentials({ authorize: async () => null })] });
+  // No request in scope: signOut returns the route's Response.
+  const res = await auth.signOut({ redirectTo: 'https://idp.example/end-session?id_token_hint=t' });
+  assert.equal(res.headers.get('location'), 'https://idp.example/end-session?id_token_hint=t', 'an OIDC end-session URL survives');
+
+  const routed = await auth.handlers.POST(new Request('https://app.example/api/auth/signout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://app.example' },
+    body: 'redirectTo=https%3A%2F%2Fevil.example%2F',
+  }));
+  assert.equal(routed.headers.get('location'), '/', 'a submitted absolute target is still dropped');
 });

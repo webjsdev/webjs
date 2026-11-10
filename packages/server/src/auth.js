@@ -595,7 +595,11 @@ export function createAuth(config) {
 
   async function signOutFn(opts = {}) {
     const hdrs = new Headers();
-    hdrs.set('location', safeRedirectPath(opts.redirectTo) || '/');
+    // `opts.redirectTo` is the app's own server-side choice and is trusted, as
+    // in signInFn, so an absolute target such as an identity provider's
+    // end-session URL works. The one untrusted caller, the sign-out route
+    // reading a submitted form, checks its value before passing it in.
+    hdrs.set('location', opts.redirectTo || '/');
     hdrs.append('set-cookie', clearCookie(cookieName(AUTH_COOKIE, secure()), secure()));
 
     if (strategy === 'database' && dbStore) {
@@ -852,7 +856,7 @@ export function createAuth(config) {
       // submitted callbackUrl (#1686); otherwise "/".
       const body = await readAuthBody(req);
       if (body instanceof Response) return body;
-      return signOutFn({ req, redirectTo: /** @type {any} */ (body.redirectTo) });
+      return signOutFn({ req, redirectTo: safeRedirectPath(body.redirectTo) || undefined });
     }
     return new Response('Not found', { status: 404 });
   }
