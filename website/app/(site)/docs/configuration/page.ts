@@ -53,7 +53,8 @@ webjs routes --json             # structured JSON (matches the MCP list_routes t
     <h3>webjs source</h3>
     <code-block>webjs source                      # what WebJs provides, grouped by need
 webjs source createAuth           # one export: its signature plus the doc comment above it
-webjs source optimistic --pkg core   # narrow to one installed @webjsdev/* package</code-block>
+webjs source optimistic --pkg core   # narrow to one installed @webjsdev/* package
+webjs source --pkg core           # that package's source entry points</code-block>
     <p>With no name it prints the feature catalogue: one line per need (auth, sessions and cookies, caching, rate limits, file uploads, realtime, streaming, SEO, env validation, tests, then the core component, directive and state APIs) naming the exports that cover it, so an agent finds a feature before it writes its own. The MCP <code>source</code> tool returns the same list when called with no arguments, and the brief tells every agent to run it first.</p>
     <p>With a name it prints one export's declaration from the installed framework packages instead of the file around it: the typed declaration (<code>index.d.ts</code> or <code>src/*.d.ts</code>) with the doc comment above it, the authored JSDoc from <code>src/</code> when no typed declaration carries one, and every overload. A miss names the packages that were searched. The read-only MCP <code>source</code> tool returns the same text for <code>&#123; export: "createAuth" &#125;</code>, so an agent checks a contract for the price of the declaration, and opens the source file only for behaviour the signature does not state.</p>
 

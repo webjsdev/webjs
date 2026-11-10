@@ -33,6 +33,17 @@ test('a bare webjs source lists what WebJs provides, by need', () => {
   assert.match(r.stdout, /^  Rate limits and CORS: rateLimit, /m, 'and so is each feature the brief does not name');
 });
 
+test('webjs source --pkg <name> alone lists that package, as the MCP tool does for { package }', () => {
+  const r = run('--pkg', 'core');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /@webjsdev\/core\/src:/, 'the package listing, not a lookup of an export named core');
+  assert.doesNotMatch(r.stdout, /No export named/);
+  // A name after the flag's value is still the name.
+  const named = run('--pkg', 'core', 'optimistic');
+  assert.equal(named.status, 0, named.stderr);
+  assert.match(named.stdout, /@webjsdev\/core /);
+});
+
 test('webjs source --pkg narrows the search; a miss exits 1 and names the searched packages', () => {
   const ok = run('optimistic', '--pkg', 'core');
   assert.equal(ok.status, 0, ok.stderr);

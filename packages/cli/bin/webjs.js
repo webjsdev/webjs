@@ -319,12 +319,12 @@ const HELP = {
     usage: 'webjs source [<Export>] [--pkg <name>]',
     summary: 'With no name, list what WebJs provides by need (auth, sessions, caching, rate limits, uploads, realtime, SEO, test helpers). With a name, print that export\'s signature plus the doc comment above it, read from the installed @webjsdev/* packages (the typed declarations first, the authored JSDoc when none carries a doc; every overload). The cheap way to find a feature and check its contract before opening the source file.',
     options: [
-      { flag: '--pkg <name>', description: 'Search one package only: core, server, cli, ui or intellisense.' },
+      { flag: '--pkg <name>', description: 'Search one package only: core, server, cli, ui or intellisense. With no export name, list that package\'s source entry points.' },
     ],
     notesTitle: 'Exit status',
     notes: [
       '0 for the catalogue or when at least one declaration printed; 1 on a miss (the message names the packages that were searched).',
-      'The read-only MCP `source` tool returns the same text for { export: "<Export>" }, and the catalogue for no arguments.',
+      'The read-only MCP `source` tool returns the same text: { export: "<Export>" } for a name, { package: "<name>" } for --pkg alone, and the catalogue for no arguments.',
     ],
     examples: ['webjs source', 'webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
   },
@@ -1808,21 +1808,23 @@ Full docs: https://webjs.dev/docs`);
       // runs for its `export` arg, so a Bash-only agent (no MCP) checks a
       // contract for the price of the declaration instead of the whole file.
       // Read-only: it reads the resolved package roots and loads no module.
-      const name = rest.find((a) => !a.startsWith('--'));
       const pkgAt = rest.indexOf('--pkg');
       const pkg = pkgAt >= 0 ? rest[pkgAt + 1] : undefined;
-      if (!name) {
-        // No name: the feature catalogue, so an agent that does not know a
-        // name yet finds it in one call (#1686).
-        const { featureCatalog } = await import('@webjsdev/mcp');
-        console.log(featureCatalog());
-        break;
-      }
-      const { lookupExport, resolveFrameworkRoots, listDir } = await import('@webjsdev/mcp');
+      // The export name is the first argument that is neither a flag nor the
+      // value `--pkg` takes.
+      const name = rest.find((a, i) => !a.startsWith('--') && !(pkgAt >= 0 && i === pkgAt + 1));
+      const { lookupExport, resolveFrameworkRoots, listDir, listSources, featureCatalog } = await import('@webjsdev/mcp');
       const { existsSync } = await import('node:fs');
       const { readFile } = await import('node:fs/promises');
       const roots = resolveFrameworkRoots(process.cwd(), { exists: existsSync });
       const readdir = listDir;
+      if (!name) {
+        // No name: with --pkg, that package's entry points (as the MCP tool
+        // answers { package }); without, the feature catalogue, so an agent
+        // that does not know a name yet finds it in one call (#1686).
+        console.log(pkg ? listSources({ roots, readdir }, pkg) : featureCatalog());
+        break;
+      }
       const out = await lookupExport({ roots, readFile, readdir }, name, pkg);
       console.log(out);
       if (!/^@webjsdev\//m.test(out)) process.exit(1);

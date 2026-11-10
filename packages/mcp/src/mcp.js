@@ -27,7 +27,7 @@ import { initText } from './mcp-init.js';
 import { resolveFrameworkRoots, runSourceTool, listDir } from './mcp-source.js';
 // The export lookup behind the `source` tool's `export` arg, re-exported for
 // `webjs source <Export>` in the CLI (#1623), which shells the same text.
-export { lookupExport, resolveFrameworkRoots, listDir } from './mcp-source.js';
+export { lookupExport, resolveFrameworkRoots, listDir, listSources } from './mcp-source.js';
 export { featureCatalog, FEATURE_CATALOG } from './catalog.js';
 import { projectRoutes } from './routes-report.js';
 
