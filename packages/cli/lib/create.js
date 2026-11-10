@@ -1383,24 +1383,21 @@ export default function RootLayout({ children }: LayoutProps) {
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme: apply the saved choice, else the OS, before paint (no
-      // flash). The dark tokens and color-scheme both switch on the .dark class,
-      // so this sets .dark (and data-theme for a saved choice). With JavaScript
-      // off nothing sets .dark and the page is light throughout, controls
-      // included. Delete this block for a single-theme app.
+      // Light/dark theme, applied BEFORE first paint so a saved dark choice
+      // never flashes light. This is the one thing that cannot be a component:
+      // a component (the theme toggle included) upgrades only once its module
+      // has loaded, after the first paint. <theme-toggle> takes over from there
+      // (Lit's lifecycle), following the OS while the choice is "system". The
+      // dark tokens and color-scheme both switch on the .dark class; data-theme
+      // records a saved choice. With JavaScript off nothing sets .dark and the
+      // page is light throughout. Delete this block for a single-theme app.
       (function(){
         try {
-          var mq = window.matchMedia('(prefers-color-scheme: dark)');
-          function apply(){
-            var t = null;
-            try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
-            var el = document.documentElement;
-            if (t === 'light' || t === 'dark') el.dataset.theme = t;
-            else delete el.dataset.theme;
-            el.classList.toggle('dark', t === 'dark' || (t !== 'light' && mq.matches));
-          }
-          apply();
-          mq.addEventListener('change', apply);
+          var t = null;
+          try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
+          var el = document.documentElement;
+          if (t === 'light' || t === 'dark') el.dataset.theme = t;
+          el.classList.toggle('dark', t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches));
         } catch (_) {}
       })();
     </script>
@@ -1498,12 +1495,23 @@ type Theme = 'system' | 'light' | 'dark';
  */
 export class ThemeToggle extends WebComponent {
   readonly #theme = signal<Theme>('system');
+  #os: MediaQueryList | null = null;
+  readonly #onOsChange = () => this.#apply();
 
   connectedCallback() {
     super.connectedCallback();
     let saved: string | null = null;
     try { saved = localStorage.getItem('webjs_theme'); } catch {}
     this.#theme.set(saved === 'light' || saved === 'dark' ? saved : 'system');
+    // The head script in app/layout.ts applied the theme before paint; from
+    // here the toggle keeps it current, following the OS while on "system".
+    this.#os = window.matchMedia('(prefers-color-scheme: dark)');
+    this.#os.addEventListener('change', this.#onOsChange);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.#os?.removeEventListener('change', this.#onOsChange);
   }
 
   cycle() {
@@ -1515,14 +1523,16 @@ export class ThemeToggle extends WebComponent {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
     } catch {}
+    this.#apply();
+  }
+
+  /** The tokens in styles/globals.css and color-scheme both switch on .dark; data-theme records a saved choice. */
+  #apply() {
+    const t = this.#theme.get();
     const el = document.documentElement;
-    if (next === 'system') delete el.dataset.theme;
-    else el.dataset.theme = next;
-    // The tokens in styles/globals.css and color-scheme (native controls)
-    // both switch on the .dark class; data-theme records the saved choice.
-    const dark = next === 'dark'
-      || (next === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    el.classList.toggle('dark', dark);
+    if (t === 'system') delete el.dataset.theme;
+    else el.dataset.theme = t;
+    el.classList.toggle('dark', t === 'dark' || (t === 'system' && !!this.#os?.matches));
   }
 
   render() {

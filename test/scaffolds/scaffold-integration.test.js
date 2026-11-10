@@ -144,6 +144,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
     assert.doesNotMatch(toggleSrc, /\sstyle="/, 'the toggle carries no inline style (its icons use SVG attributes)');
     assert.doesNotMatch(toggleSrc, /document\.(getElementById|querySelector)/, 'and no document query');
+    // The head script only applies the theme before paint; following the OS is
+    // the toggle's job, on Lit's lifecycle (#1686).
+    assert.doesNotMatch(layoutSrc, /addEventListener/, 'the pre-paint script attaches no listener');
+    assert.match(toggleSrc, /connectedCallback\(\) \{[\s\S]*?matchMedia\('\(prefers-color-scheme: dark\)'\)[\s\S]*?addEventListener\('change'/, 'the toggle follows the OS from connectedCallback');
+    assert.match(toggleSrc, /disconnectedCallback\(\) \{[\s\S]*?removeEventListener\('change'/, 'and stops in disconnectedCallback');
     assert.match(toggleSrc, /<button\s+class=\$\{cn\('[^']*\bcursor-pointer\b/, 'the toggle shows the pointer cursor, as the kit\'s button does (Tailwind v4 resets buttons to the default cursor)');
 
     // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
