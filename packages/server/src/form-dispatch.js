@@ -769,7 +769,10 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
     const safe = result ? sameSiteRedirect(result.redirect) : null;
     const res = new Response(null, {
       status: 303,
-      headers: { location: safe || ownPath, ...invalidateHeader },
+      // Header-safe, as every thrown redirect() is: a non-Latin-1 target
+      // would otherwise throw while the Response is built and turn a
+      // successful write into a 500.
+      headers: { location: headerSafeLocation(safe || ownPath), ...invalidateHeader },
     });
     // The result survives the redirect (Next's useActionState shows a success
     // message after a submit): the page it lands on reads it as actionData

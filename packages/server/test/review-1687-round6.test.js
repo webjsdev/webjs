@@ -2,10 +2,60 @@
  * The findings of the owner's sixth review of PR #1687, each pinned by a test
  * that fails without its fix.
  */
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createAuth, Credentials } from '../src/auth.js';
+import { createRequestHandler } from '../src/dev.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// A tmpdir fixture cannot resolve the bare specifiers, so it imports by URL.
+const CORE = JSON.stringify(pathToFileURL(resolve(__dirname, '../../core/index.js')).toString());
+const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+
+let tmpRoot;
+before(() => { tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-review-r6-')); });
+after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
+
+function makeApp(files) {
+  const appDir = mkdtempSync(join(tmpRoot, 'app-'));
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = join(appDir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, body);
+  }
+  return appDir;
+}
+
+const identityOf = (html) => /name="__webjs_action" value="([^"]*)"/.exec(html)?.[1] ?? null;
+
+function post(path, fields, headers = {}) {
+  return new Request(`http://x${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers },
+    body: new URLSearchParams(fields).toString(),
+  });
+}
+
+/** A page at /f whose form binds `fn` from a 'use server' module with `body`. */
+async function formApp(body, extra = {}, handlerOpts = {}) {
+  const appDir = makeApp({
+    'modules/x/actions/act.server.ts': `'use server';\n${body}\n`,
+    'app/f/page.ts': `
+import { html } from ${CORE};
+import { act } from '../../modules/x/actions/act.server.ts';
+export default ({ actionData }) => html\`<p id="r">\${actionData?.message ?? 'none'}</p><form action=\${act}><button>go</button></form>\`;
+`,
+    ...extra,
+  });
+  const app = await createRequestHandler({ appDir, dev: true, logger: quiet, ...handlerOpts });
+  const id = identityOf(await (await app.handle(new Request('http://x/f'))).text());
+  return { app, id };
+}
 
 const SECRET = 'review-1687-round6-secret-at-least-32-bytes';
 const ORIGIN = 'https://app.example';
@@ -49,4 +99,11 @@ test("the signIn callback's returned URL goes through callbacks.redirect and is 
   // What the previous rule protects: another origin, with the default, is still denied.
   const off = await signIn({ signIn: () => 'https://evil.example/' });
   assert.match(off.headers.get('location') || '', /error=AccessDenied/);
+});
+
+test("a successful action's redirect target with non-Latin-1 characters is encoded, not a 500", async () => {
+  const { app, id } = await formApp(`export async function act() { return { success: true, redirect: '/posts/日本' }; }`);
+  const res = await app.handle(post('/f', { __webjs_action: id }));
+  assert.equal(res.status, 303, 'the write succeeded and redirects');
+  assert.equal(res.headers.get('location'), '/posts/%E6%97%A5%E6%9C%AC');
 });
