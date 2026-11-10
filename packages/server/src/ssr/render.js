@@ -1005,6 +1005,19 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
 }
 
 /**
+ * Whether a flash belongs to the page at `url`: the path its success redirect
+ * named, compared without a trailing slash. A flash with no recorded path (a
+ * cookie from before the path was recorded) is shown as before.
+ * @param {{ path?: string }} flash
+ * @param {URL} url
+ */
+function flashTargets(flash, url) {
+  if (!flash.path) return true;
+  const norm = (/** @type {string} */ p) => (p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p);
+  return norm(flash.path) === norm(url.pathname);
+}
+
+/**
  * SSR a matched page route to a Response.
  *
  * Mirrors NextJs semantics:
@@ -1018,22 +1031,11 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
  * @param {import('../router.js').PageRoute} route
  * @param {Record<string,string>} params
  * @param {URL} url
- * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('../module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown>, cspEnabled?: boolean }} opts
+ * @param {{ dev: boolean, appDir: string, req?: Request, moduleGraph?: import('../module-graph.js').ModuleGraph, serverFiles?: Map<string,string> | Set<string>, actionData?: unknown, status?: number, pageModule?: Record<string, unknown>, cspEnabled?: boolean, renderError?: unknown, onError?: (error: unknown) => void }} opts
+ *   `renderError`: a form action's throw (form-dispatch.js), answered with the
+ *   page's nearest error boundary and never from the HTML cache.
  * @returns {Promise<Response>}
  */
-/**
- * Whether a flash belongs to the page at `url`: the path its success redirect
- * named, compared without a trailing slash. A flash with no recorded path (a
- * cookie from before the path was recorded) is shown as before.
- * @param {{ path?: string }} flash
- * @param {URL} url
- */
-function flashTargets(flash, url) {
-  if (!flash.path) return true;
-  const norm = (/** @type {string} */ p) => (p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p);
-  return norm(flash.path) === norm(url.pathname);
-}
-
 export async function ssrPage(route, params, url, opts) {
   // A form action's result carried across its 303 (action-flash.js): shown
   // once as actionData on the page the redirect lands on, then marked shown

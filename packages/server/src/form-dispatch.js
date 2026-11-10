@@ -426,25 +426,6 @@ function methodNotAllowed() {
 }
 
 /**
- * Run a bound form action for a non-GET/HEAD request to a page's own url and
- * produce the HTTP response. The caller has already matched the path to a page
- * route and confirmed the request carries a form body; this runs inside the
- * page's segment middleware (the caller wraps it).
- *
- * @param {import('./router.js').PageRoute} route
- * @param {Record<string,string>} params
- * @param {URL} url
- * @param {Request} req
- * @param {object} ssrOpts the same opts object `ssrPage` receives in dev.js
- * @param {{
- *   actionIndex: import('./actions.js').ActionIndex,
- *   allowedOrigins?: string[],
- *   onError?: (error: unknown) => void,
- *   logger?: { warn?: (msg: string, meta?: Record<string, unknown>) => void },
- * }} deps
- * @returns {Promise<Response>}
- */
-/**
  * The `issues` array a schema library's validation error carries (zod, valibot,
  * Standard Schema), or null for any other throw.
  * @param {unknown} e
@@ -487,6 +468,25 @@ function issuesResult(e) {
   return { success: false, fieldErrors, ...(error ? { error } : {}), status: 422 };
 }
 
+/**
+ * Run a bound form action for a non-GET/HEAD request to a page's own url and
+ * produce the HTTP response. The caller has already matched the path to a page
+ * route and confirmed the request carries a form body; this runs inside the
+ * page's segment middleware (the caller wraps it).
+ *
+ * @param {import('./router.js').PageRoute} route
+ * @param {Record<string,string>} params
+ * @param {URL} url
+ * @param {Request} req
+ * @param {object} ssrOpts the same opts object `ssrPage` receives in dev.js
+ * @param {{
+ *   actionIndex: import('./actions.js').ActionIndex,
+ *   allowedOrigins?: string[],
+ *   onError?: (error: unknown) => void,
+ *   logger?: { warn?: (msg: string, meta?: Record<string, unknown>) => void },
+ * }} deps
+ * @returns {Promise<Response>}
+ */
 export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   const { actionIndex, allowedOrigins = [], onError, logger } = deps;
   // An action that throws answers with the page's nearest error.ts (else
