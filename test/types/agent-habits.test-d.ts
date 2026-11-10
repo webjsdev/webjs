@@ -79,6 +79,19 @@ export const callbackHabits = createAuth({
   },
 });
 
+// ActionResult the way the inbox eval builds wrote it (#1686): a shared bare
+// `ActionResult` failure returned from a typed action, and the failure fields
+// read before narrowing on `success`.
+const NOT_FOUND: ActionResult = { success: false, error: 'Not found.', status: 404 };
+export async function typedAction(found: boolean): Promise<ActionResult<{ id: number }>> {
+  if (!found) return NOT_FOUND;
+  return { success: true, data: { id: 1 } };
+}
+export function readFailure(result: ActionResult<{ id: number }>): string | undefined {
+  const id: number | undefined = result.success ? result.data?.id : undefined;
+  return id === undefined ? result.error ?? result.fieldErrors?.body : undefined;
+}
+
 // Route props the Next.js 15 way and the Next.js 14 way, and the route-handler
 // context written inline as Next documents it. (Plan workstream 3, #1686.)
 export async function routePropHabits(

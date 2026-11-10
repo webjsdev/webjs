@@ -52,8 +52,20 @@ export type MiddlewareRequest = Request & { readonly cookies: MiddlewareRequestC
  * Mirrors AGENTS.md's documented shape; `@webjsdev/core` does not export it,
  * so it is defined here (the one server-owned shared type).
  */
-export type ActionResult<T = unknown> =
-  | { success: true; data?: T; redirect?: string; message?: string }
+export type ActionResult<T = any> =
+  | {
+      success: true;
+      data?: T;
+      redirect?: string;
+      message?: string;
+      // The failure fields, absent here, so a read before narrowing on
+      // `success` (`result.error ?? result.fieldErrors?.body`) type-checks.
+      error?: undefined;
+      errors?: undefined;
+      fieldErrors?: undefined;
+      values?: undefined;
+      status?: undefined;
+    }
   | {
       success: false;
       error?: string;
