@@ -12,7 +12,7 @@
  *     default), `next()` is memoized so calling it twice runs the rest of the
  *     chain once, and `next.waitUntil(promise)` keeps background work going
  *     after the response without failing it.
- *   - `request.cookies` is the request's `cookies()` store, and reading
+ *   - `request.cookies` is Next's RequestCookies over the request's cookies, and reading
  *     `request.nextUrl` (Next's extended URL) throws in dev with the fix.
  *   - A load failure FAILS CLOSED: a middleware that guards a route and cannot
  *     load must never let the request through unguarded. The root one rejects
@@ -24,7 +24,7 @@ import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { devImport } from './dev-import.js';
 import { requestCookieStore, markDynamicAccess } from './context.js';
-import { parseCookieHeader } from './cookie-store.js';
+import { parseCookieHeader, requestCookiesView } from './cookie-store.js';
 
 const MIDDLEWARE_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'];
 const PROXY_FILES = ['proxy.ts', 'proxy.js', 'proxy.mts', 'proxy.mjs'];
@@ -136,8 +136,9 @@ export function compileMatcher(matcher, file) {
 
 /**
  * Give a middleware's or a route handler's request Next's extras (#1686:
- * `NextRequest` is what both receive in Next.js): `request.cookies` (the request's
- * cookie store, so a set there reaches the response) and, in dev, a
+ * `NextRequest` is what both receive in Next.js): `request.cookies` (Next's
+ * `RequestCookies`: a set there changes what the rest of this request reads and
+ * sends nothing to the browser, `cookies().set()` does that) and, in dev, a
  * `request.nextUrl` that throws naming `new URL(request.url)`.
  * @param {Request} req
  * @param {boolean} dev
@@ -145,7 +146,7 @@ export function compileMatcher(matcher, file) {
 export function decorateRequest(req, dev) {
   try {
     if (!Object.prototype.hasOwnProperty.call(req, 'cookies')) {
-      Object.defineProperty(req, 'cookies', { configurable: true, get: () => { markDynamicAccess(); return requestCookieStore(); } });
+      Object.defineProperty(req, 'cookies', { configurable: true, get: () => { markDynamicAccess(); return requestCookiesView(requestCookieStore()); } });
     }
     if (!Object.prototype.hasOwnProperty.call(req, 'nextUrl')) {
       Object.defineProperty(req, 'nextUrl', {

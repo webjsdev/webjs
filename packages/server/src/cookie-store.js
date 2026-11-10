@@ -216,3 +216,44 @@ export function applyPendingCookies(res, store) {
     return out;
   }
 }
+
+/**
+ * Next.js's `RequestCookies` (`request.cookies` in middleware and a route
+ * handler) over a request's cookie store (#1686). Reads are the store's.
+ * `set`, `delete` and `clear` change only the cookies the rest of THIS request
+ * sees, the page's `cookies()` included, and send nothing to the browser: in
+ * Next a response cookie goes on the response (`NextResponse.cookies.set`),
+ * which in WebJs is `cookies().set()`.
+ * @param {CookieStore} store
+ */
+export function requestCookiesView(store) {
+  /** @param {unknown} a */
+  const nameOf = (a) => String(a && typeof a === 'object' ? /** @type any */ (a).name : a);
+  const view = {
+    /** @param {any} a */
+    get: (a) => store.get(a),
+    /** @param {any} [a] */
+    getAll: (a) => store.getAll(a),
+    /** @param {string} name */
+    has: (name) => store.has(name),
+    get size() { return store.size; },
+    /**
+     * @param {string | { name: string, value: string }} a
+     * @param {string} [value]
+     */
+    set(a, value) {
+      const v = a && typeof a === 'object' ? a.value : value;
+      store.map.set(nameOf(a), String(v ?? ''));
+      return view;
+    },
+    /** @param {string | string[]} names */
+    delete(names) {
+      const removed = (Array.isArray(names) ? names : [names]).map((n) => store.map.delete(nameOf(n)));
+      return Array.isArray(names) ? removed : removed[0];
+    },
+    clear() { store.map.clear(); return view; },
+    [Symbol.iterator]: () => store[Symbol.iterator](),
+    toString: () => store.toString(),
+  };
+  return view;
+}

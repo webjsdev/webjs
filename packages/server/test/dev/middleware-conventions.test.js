@@ -12,6 +12,9 @@ import { dirname, join } from 'node:path';
 
 import { createRequestHandler } from '../../src/dev.js';
 import { compileMatcher, matchHas, loadMiddlewareFile } from '../../src/middleware-load.js';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const SERVER = pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), '../../index.js')).href;
 
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
 let tmpRoot;
@@ -64,7 +67,7 @@ test('both middleware and proxy files: a dev 500 naming both, a production boot 
   await assert.rejects(() => createRequestHandler({ appDir, dev: false, logger: quiet }), /both middleware\.js and proxy\.js exist/);
 });
 
-test('returning undefined continues; next() is memoized; request.cookies is the cookies() store', async () => {
+test('returning undefined continues; next() is memoized; request.cookies reads the request', async () => {
   const appDir = makeApp({
     ...PAGES,
     'middleware.js':
@@ -80,7 +83,28 @@ test('returning undefined continues; next() is memoized; request.cookies is the 
   assert.match(await r.text(), /home/);
   assert.equal(globalThis.__mwTheme, 'dark');
   assert.equal(globalThis.__mwSame, true, 'next() ran the chain once');
-  assert.match(r.headers.get('set-cookie') || '', /^seen=1; Path=\//);
+  assert.equal(r.headers.get('set-cookie'), null, 'request.cookies.set changes the request only, as in Next.js (#1686)');
+});
+
+// Next.js's RequestCookies (#1686): `request.cookies.set` / `delete` change the
+// cookies the rest of the request reads, the page's cookies() included, and
+// send nothing to the browser; `cookies().set()` is how a response cookie is set.
+test('request.cookies.set and delete are seen downstream and never become Set-Cookie', async () => {
+  const appDir = makeApp({
+    'app/page.js': `import { cookies } from ${JSON.stringify(SERVER)};\nexport default async () => { const c = await cookies(); return 'flag=' + (c.get('flag')?.value ?? '-') + ' gone=' + (c.get('gone')?.value ?? '-'); };\n`,
+    'middleware.js':
+      `export default async function mw(req) {\n` +
+      `  req.cookies.set('flag', 'on');\n` +
+      `  globalThis.__mwDeleted = req.cookies.delete('gone');\n` +
+      `  globalThis.__mwHas = req.cookies.has('gone');\n` +
+      `}\n`,
+  });
+  const r = await get(appDir, '/', { headers: { cookie: 'gone=1' } });
+  assert.equal(r.status, 200);
+  assert.match(await r.text(), /flag=on gone=-/, 'the page reads the request as middleware left it');
+  assert.equal(globalThis.__mwDeleted, true);
+  assert.equal(globalThis.__mwHas, false);
+  assert.equal(r.headers.get('set-cookie'), null, 'nothing is sent to the browser');
 });
 
 test('reading request.nextUrl throws in dev with the new URL(request.url) fix', async () => {

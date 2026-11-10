@@ -40,7 +40,7 @@ export type Middleware = (req: Request, next: () => Promise<Response>) => Promis
  * store `cookies()` returns. Annotate with it where Next.js code writes
  * `NextRequest`.
  */
-export type MiddlewareRequest = Request & { readonly cookies: RequestCookies };
+export type MiddlewareRequest = Request & { readonly cookies: MiddlewareRequestCookies };
 
 // `Handle` is re-exported from ./src/testing.js (the `export *` above), so it
 // is not re-declared here. It is IMPORTED as well, because `export *` re-exports
@@ -655,6 +655,25 @@ export interface ResponseCookie {
   priority?: 'low' | 'medium' | 'high';
 }
 /** The request's cookie store (Next.js's `cookies()` shape). */
+/**
+ * Next.js's `RequestCookies`, `request.cookies` in middleware and a route
+ * handler. Reads are the request's cookies; `set`, `delete` and `clear` change
+ * what the rest of this request reads (the page's `cookies()` included) and
+ * send nothing to the browser. Set a response cookie with `cookies().set()`.
+ */
+export interface MiddlewareRequestCookies {
+  get(name: string | { name: string }): RequestCookie | undefined;
+  getAll(name?: string | { name: string }): RequestCookie[];
+  has(name: string): boolean;
+  readonly size: number;
+  set(name: string, value: string): MiddlewareRequestCookies;
+  set(cookie: RequestCookie): MiddlewareRequestCookies;
+  delete(names: string): boolean;
+  delete(names: string[]): boolean[];
+  clear(): MiddlewareRequestCookies;
+  toString(): string;
+  [Symbol.iterator](): IterableIterator<[string, RequestCookie]>;
+}
 export interface RequestCookies {
   get(name: string | { name: string }): RequestCookie | undefined;
   getAll(name?: string | { name: string }): RequestCookie[];
