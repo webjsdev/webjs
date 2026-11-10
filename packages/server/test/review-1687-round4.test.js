@@ -72,7 +72,7 @@ export default () => html\`<form action=\${boom}><button>go</button></form>\`;
   assert.ok(seen.some((e) => e instanceof Error && e.message === 'ACTION_BOOM'), 'and onError hears it');
 });
 
-test('an action result is shown only on the page its redirect lands on, and a frame load leaves it', async () => {
+test('an action result is shown only on the page its redirect lands on, frame renders included', async () => {
   const appDir = makeApp({
     'modules/x/actions/save.server.ts': `'use server';\nexport async function save() { return { success: true, message: 'SAVED_MSG' }; }\n`,
     'app/a/page.ts': `
@@ -83,6 +83,12 @@ export default ({ actionData }) => html\`<p>\${actionData?.message ?? 'none'}</p
     'app/other/page.ts': `
 import { html } from ${CORE};
 export default ({ actionData }) => html\`<p>\${actionData?.message ?? 'none'}</p>\`;
+`,
+    // A page whose form sits inside a <webjs-frame>.
+    'app/framed/page.ts': `
+import { html } from ${CORE};
+import { save } from '../../modules/x/actions/save.server.ts';
+export default ({ actionData }) => html\`<webjs-frame id="f"><p>\${actionData?.message ?? 'none'}</p><form action=\${save}><button>go</button></form></webjs-frame>\`;
 `,
   });
   const app = await createRequestHandler({ appDir, dev: true, logger: quiet });
@@ -96,12 +102,22 @@ export default ({ actionData }) => html\`<p>\${actionData?.message ?? 'none'}</p
   assert.doesNotMatch(otherHtml, /SAVED_MSG/, 'another page never shows it');
   assert.equal(other.headers.getSetCookie().length, 0, 'and leaves it unconsumed');
 
-  const frame = await app.handle(new Request('http://x/a', { headers: { cookie, 'x-webjs-frame': 'f' } }));
-  await frame.text();
-  assert.equal(frame.headers.getSetCookie().length, 0, 'a frame load of the target leaves it too');
+  const otherFrame = await app.handle(new Request('http://x/other', { headers: { cookie, 'x-webjs-frame': 'f' } }));
+  await otherFrame.text();
+  assert.equal(otherFrame.headers.getSetCookie().length, 0, 'a frame loading another path leaves it too');
 
   const target = await app.handle(new Request('http://x/a', { headers: { cookie } }));
   assert.match(await target.text(), /SAVED_MSG/, 'the page the redirect named shows it');
+
+  // A form inside a frame: the router posts with x-webjs-frame and fetch
+  // follows the 303 with it, so the landing is a frame render of the path.
+  const framedHtml = await (await app.handle(new Request('http://x/framed'))).text();
+  const framedDone = await app.handle(post('/framed', { __webjs_action: identityOf(framedHtml) }, { 'x-webjs-frame': 'f' }));
+  assert.equal(framedDone.status, 303);
+  const landing = await app.handle(new Request('http://x/framed', { headers: { cookie: cookieOf(framedDone), 'x-webjs-frame': 'f' } }));
+  const landingHtml = await landing.text();
+  assert.match(landingHtml, /SAVED_MSG/, 'the frame render it lands on shows it');
+  assert.ok(landing.headers.getSetCookie().some((c) => c.startsWith('__webjs_flash=')), 'and marks it shown, so a later load does not repeat it');
 });
 
 test('a schema validator that throws issues re-renders the form at 422; any other throw is still an error', async () => {

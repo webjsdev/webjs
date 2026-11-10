@@ -1043,13 +1043,14 @@ export async function ssrPage(route, params, url, opts) {
   // consumes it.
   // Set when this render shows a flash: its body then carries one visitor's
   // action result, so the response must never reach a shared cache (below).
-  // Shown only on the page the success redirect named (flash.path), never on
-  // an error render, and never on a <webjs-frame> load, which would consume it
-  // before the page itself renders. Another page or tab rendered inside the
-  // 60 seconds leaves it for the right one.
+  // Shown only on the page the success redirect named (flash.path), and never
+  // on an error render. Another page or tab rendered inside the 60 seconds, or
+  // a <webjs-frame> loading another path, leaves it for the right one. A frame
+  // render OF that path is the landing of a form submitted inside the frame
+  // (the redirect is followed with x-webjs-frame), so it shows it.
   let showsFlash = false;
   if (!opts.actionData && opts.renderError === undefined && opts.req
-      && opts.req.headers.get('x-webjs-prefetch') !== '1' && !opts.req.headers.get('x-webjs-frame')) {
+      && opts.req.headers.get('x-webjs-prefetch') !== '1') {
     const flash = await readFlash(opts.req);
     if (flash && !flash.shown && flashTargets(flash, url)) {
       showsFlash = true;
