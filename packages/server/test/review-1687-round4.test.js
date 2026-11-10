@@ -137,18 +137,37 @@ export default ({ actionData }) => html\`<p id="f">\${actionData?.fieldErrors?.e
   assert.equal(crash.status, 500, 'a validator that crashes still renders the error page');
 });
 
-test("signOut honours the app's own absolute redirectTo; the sign-out route still refuses a submitted one", async () => {
-  const auth = createAuth({ secret: SECRET, providers: [Credentials({ authorize: async () => null })] });
-  // No request in scope: signOut returns the route's Response.
-  const res = await auth.signOut({ redirectTo: 'https://idp.example/end-session?id_token_hint=t' });
-  assert.equal(res.headers.get('location'), 'https://idp.example/end-session?id_token_hint=t', 'an OIDC end-session URL survives');
+test('sign-in and sign-out targets go through callbacks.redirect, whose default keeps this origin', async () => {
+  const providers = [Credentials({ authorize: async () => ({ id: '1', email: 'a@b.c' }) })];
+  const plain = createAuth({ secret: SECRET, providers });
+  const req = new Request('https://app.example/account');
+  const where = async (auth, redirectTo) =>
+    (await auth.signOut({ redirectTo, req })).headers.get('location');
 
-  const routed = await auth.handlers.POST(new Request('https://app.example/api/auth/signout', {
+  // The default (Auth.js's): a local path, or this origin's URL as its path.
+  assert.equal(await where(plain, '/bye'), '/bye');
+  assert.equal(await where(plain, 'https://app.example/bye?x=1'), '/bye?x=1', 'a same-origin URL keeps its path');
+  assert.equal(await where(plain, 'https://idp.example/end-session'), '/', 'another origin is dropped, even from server code');
+  assert.equal(await where(plain, '/日本'), '/%E6%97%A5%E6%9C%AC', 'a non-Latin-1 target is encoded, not a thrown header');
+
+  // The app allows its identity provider's end-session URL the Auth.js way.
+  const oidc = createAuth({
+    secret: SECRET, providers,
+    callbacks: { redirect: ({ url, baseUrl }) => (url.startsWith('https://idp.example/') ? url : new URL(url, baseUrl).pathname) },
+  });
+  assert.equal(await where(oidc, 'https://idp.example/end-session?id_token_hint=t'), 'https://idp.example/end-session?id_token_hint=t');
+
+  // A submitted target through the sign-out route takes the same default.
+  const routed = await plain.handlers.POST(new Request('https://app.example/api/auth/signout', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://app.example' },
     body: 'redirectTo=https%3A%2F%2Fevil.example%2F',
   }));
-  assert.equal(routed.headers.get('location'), '/', 'a submitted absolute target is still dropped');
+  assert.equal(routed.headers.get('location'), '/', 'a submitted absolute target is dropped');
+
+  // And so does a credentials sign-in, server-side value or not.
+  const signedIn = await plain.signIn('credentials', { email: 'a@b.c' }, { redirectTo: 'https://evil.example/', req });
+  assert.equal(signedIn.headers.get('location'), '/', 'signIn takes the same default');
 });
 
 test('the auth routes match their base path at a segment boundary, and under a webjs.basePath mount', async () => {

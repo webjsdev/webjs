@@ -15,6 +15,7 @@ import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY
 import { devSecret } from './dev-secret.js';
 import { encryptSession, decryptSession } from './jwe.js';
 import { basePath as appBasePath } from './importmap.js';
+import { headerSafeLocation } from './redirect-location.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -561,6 +562,38 @@ export function createAuth(config) {
     return r ? readSession(r) : Promise.resolve(null);
   }
 
+  // -- Where a sign-in or sign-out lands --------------------------------------
+
+  /**
+   * Auth.js's `callbacks.redirect({ url, baseUrl })` (#1686): every target a
+   * sign-in or sign-out lands on goes through it, whether the app's server
+   * code passed it or a form submitted it. The default keeps a local path or a
+   * same-origin URL (as its path) and sends anything else to "/", so no
+   * caller can become an open redirect; an app that needs another origin (an
+   * identity provider's end-session URL) returns it from the callback.
+   * @template F
+   * @param {unknown} url
+   * @param {Request | null | undefined} req
+   * @param {F} [fallback] what a dropped target becomes ("/" by default; the
+   *   OAuth leg passes null so it stores nothing and clears a stale target)
+   * @returns {Promise<string | F>}
+   */
+  async function resolveRedirect(url, req, fallback = /** @type {any} */ ('/')) {
+    if (typeof url !== 'string' || url === '') return fallback;
+    const baseUrl = authOrigin || (req ? new URL(req.url).origin : '');
+    if (typeof cb.redirect === 'function') {
+      const out = await cb.redirect({ url, baseUrl });
+      return typeof out === 'string' && out !== '' ? out : fallback;
+    }
+    const local = safeRedirectPath(url);
+    if (local) return local;
+    try {
+      const u = new URL(url);
+      if (baseUrl && u.origin === baseUrl) return u.pathname + u.search + u.hash;
+    } catch { /* not a URL: dropped */ }
+    return fallback;
+  }
+
   // -- signIn() -------------------------------------------------------------
 
   async function signInFn(providerId, data, opts = {}) {
@@ -579,11 +612,10 @@ export function createAuth(config) {
       if (refused) return refused;
       const cookie = await writeSession(user, account);
       if (!cookie) return new Response(null, { status: 302, headers: { location: withQuery(pages.error || '/', 'error', 'AccessDenied') } });
-      // `opts.redirectTo` is the app's own server-side choice and is trusted.
-      // `data.redirectTo` usually arrives from a submitted form, so it goes
-      // through the same local-path check the OAuth flow uses (#1495).
-      const redirectTo = opts.redirectTo || safeRedirectPath(data && data.redirectTo) || '/';
-      return new Response(null, { status: 302, headers: { location: /** @type {string} */ (redirectTo), 'set-cookie': cookie } });
+      // The app's own value and a submitted one both go through the redirect
+      // callback (its default allows only this origin), as in Auth.js.
+      const redirectTo = await resolveRedirect(opts.redirectTo || (data && data.redirectTo), opts.req || getRequest());
+      return new Response(null, { status: 302, headers: { location: headerSafeLocation(redirectTo), 'set-cookie': cookie } });
     }
 
     if (provider.type === 'oauth') {
@@ -596,11 +628,10 @@ export function createAuth(config) {
 
   async function signOutFn(opts = {}) {
     const hdrs = new Headers();
-    // `opts.redirectTo` is the app's own server-side choice and is trusted, as
-    // in signInFn, so an absolute target such as an identity provider's
-    // end-session URL works. The one untrusted caller, the sign-out route
-    // reading a submitted form, checks its value before passing it in.
-    hdrs.set('location', opts.redirectTo || '/');
+    // Through the redirect callback, as every sign-in target is: the default
+    // keeps this origin only, and an app allows an identity provider's
+    // end-session URL by returning it from `callbacks.redirect`.
+    hdrs.set('location', headerSafeLocation(await resolveRedirect(opts.redirectTo, opts.req || getRequest())));
     hdrs.append('set-cookie', clearCookie(cookieName(AUTH_COOKIE, secure()), secure()));
 
     if (strategy === 'database' && dbStore) {
@@ -639,7 +670,7 @@ export function createAuth(config) {
     // The post-sign-in target rides in its own signed cookie (#1495). With no
     // valid target, any leftover cookie from an abandoned earlier attempt is
     // cleared so it cannot steer this sign-in somewhere stale.
-    const target = safeRedirectPath(opts.redirectTo);
+    const target = await resolveRedirect(opts.redirectTo, req, null);
     hdrs.append('set-cookie', target
       ? setCookie(cookieName(REDIRECT_COOKIE, secure()), await sign(target, secret), 600_000, secure())
       : clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
@@ -647,9 +678,10 @@ export function createAuth(config) {
   }
 
   /**
-   * Read the signed post-sign-in target the redirect leg stored, re-checking it
-   * as a local path (defence in depth: the signature proves this app wrote it,
-   * the check proves it is still a safe target). Null when absent or invalid.
+   * Read the signed post-sign-in target the redirect leg stored. It went
+   * through the redirect callback before it was signed, so the signature
+   * proves it is a target this app allowed; it is still re-checked as a local
+   * path or an http(s) URL. Null when absent or invalid.
    *
    * @param {Request} req
    * @returns {Promise<string | null>}
@@ -657,7 +689,9 @@ export function createAuth(config) {
   async function readRedirectCookie(req) {
     const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(REDIRECT_COOKIE, secure())];
     if (!raw) return null;
-    return safeRedirectPath(await unsign(raw, secret));
+    const value = await unsign(raw, secret);
+    if (typeof value !== 'string') return null;
+    return safeRedirectPath(value) || (/^https?:\/\//i.test(value) ? value : null);
   }
 
   async function oauthCallback(req, provider) {
@@ -728,7 +762,7 @@ export function createAuth(config) {
     const sessionCookie = await writeSession(sessionUser, account, rawProfile);
     if (!sessionCookie) return oauthError('AccessDenied');
     const hdrs = new Headers();
-    hdrs.set('location', (await readRedirectCookie(req)) || '/');
+    hdrs.set('location', headerSafeLocation((await readRedirectCookie(req)) || '/'));
     hdrs.append('set-cookie', sessionCookie);
     hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
     hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
@@ -867,7 +901,7 @@ export function createAuth(config) {
       // submitted callbackUrl (#1686); otherwise "/".
       const body = await readAuthBody(req);
       if (body instanceof Response) return body;
-      return signOutFn({ req, redirectTo: safeRedirectPath(body.redirectTo) || undefined });
+      return signOutFn({ req, redirectTo: /** @type {any} */ (body.redirectTo) });
     }
     return new Response('Not found', { status: 404 });
   }
