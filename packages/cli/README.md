@@ -54,6 +54,10 @@ webjs ci                       # local CI: run the webjs.ci step list in package
                                # typecheck, audit, every test layer), one result line per step;
                                # --only <title>, --fail-fast, --json, --signoff (gh signoff after a green run)
 webjs create <name> --skip-ci  # omit the GitHub workflow (the local ci list always ships)
+webjs generate scaffold post title:string! body:text   # Rails-style generators (alias: webjs g): table + migration,
+                               # actions, pages and a test; also resource, model, migration, controller
+webjs generate authentication     # sign-up, log-in, a protected page and a test, the Auth.js way
+webjs destroy scaffold post       # remove what a generator wrote (alias: webjs d)
 webjs vendor pin [--download]  # pin client deps to a committable importmap (offline/reproducible)
 webjs db <generate|migrate|push|studio|seed>   # drizzle-kit passthrough (+ seed) by default; a package.json webjs.db block maps any verb to your own ORM's command
 
