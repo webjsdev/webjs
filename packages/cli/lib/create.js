@@ -1609,7 +1609,6 @@ export default async function Home({ actionData }: PageProps) {
     </section>
     <!-- The example module (modules/users/): replace it with your own features. -->
     <section class="mx-auto max-w-sm grid gap-4">
-      <h2 class="text-lg font-semibold m-0">Users</h2>
       <form action=\${addUser} class="grid gap-3">
         <div class="grid gap-2">
           <label class=\${labelClass()} for="email">Email</label>
