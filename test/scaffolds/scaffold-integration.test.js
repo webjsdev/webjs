@@ -880,6 +880,10 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     // build that wrote one, so every table goes through the model generator.
     assert.match(fs, /add every table with `npx webjs g model /, 'names the model generator for every table');
     assert.match(fs, /`npx webjs g authentication` adds sign-up and log-in/, 'names the auth generator');
+    // Every eval build opened the shipped hooks to learn what they enforce, so
+    // the file says it: check-on-edit, the refusals, and the soft flags.
+    assert.match(fs, /Hooks, so you need not open them: each edit returns that file's `webjs check` and type/, 'summarises the shipped hooks');
+    assert.match(fs, /`extends HTMLElement`, an em-dash/, 'naming what they refuse');
     assert.ok(fs.split('\n').length < 70, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);
