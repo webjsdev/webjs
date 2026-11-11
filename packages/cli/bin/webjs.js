@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
-import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordDevPort, recordedDevPort } from '../lib/port.js';
+import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordDevPort, recordedDevPort, recordServer } from '../lib/port.js';
 import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -84,6 +84,7 @@ const USAGE = `webjs commands:
                                                   exit 1 on any failure). The same list a cloud pipeline runs via "npm run ci".
                                                   --only runs one step or group by title; --signoff runs "gh signoff" after a green run
   webjs routes [--json|--table] [--no-headers]    Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape; --no-headers drops the --table header
+  webjs stop                                      Stop this app's running dev or start server (the one its .webjs/ record names)
   webjs status [path...] [--port N] [--json]      Wait for a running dev server to settle after an edit, request each path, and
                                                   report every error since the last rebuild; exit 1 on any problem, 2 if no server
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
@@ -361,6 +362,16 @@ const HELP = {
     ],
     examples: ['webjs source', 'webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
   },
+  stop: {
+    usage: 'webjs stop',
+    summary: "Stop this app's running `webjs dev` or `webjs start` server, found through the port and pid record each writes under .webjs/, so no pkill or kill is needed. A supervised dev server is stopped through its hot-reload supervisor, which takes its child and the dev.parallel tasks with it. A stale record (its process is gone) is removed and reported.",
+    notesTitle: 'Exit status',
+    notes: [
+      '0 when nothing is left running, including when no server was running.',
+      '1 when a server did not exit within 10 seconds of SIGTERM and a SIGKILL.',
+    ],
+    examples: ['webjs stop', 'npx webjs dev --port 8910 & npx webjs status /; npx webjs stop'],
+  },
   status: {
     usage: 'webjs status [path...] [--port N] [--boot] [--json] [--timeout <seconds>]',
     summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. With no dev server on the port it boots the app in-process instead and probes every route that needs no parameter, so no server has to be started or stopped. Use it after each edit instead of sleeping and fetching a page.',
@@ -595,7 +606,9 @@ async function main() {
           process.channel?.unref?.();
           process.on('disconnect', () => process.exit(0));
         }
-        if (!g.__webjsDevPortRecorded) { g.__webjsDevPortRecorded = true; recordDevPort(process.cwd(), port); }
+        // The supervisor is the parent: `webjs stop` signals it, since a
+        // stopped child would only be restarted.
+        if (!g.__webjsDevPortRecorded) { g.__webjsDevPortRecorded = true; recordDevPort(process.cwd(), port, { stopPid: process.ppid }); }
         await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }));
         break;
       }
@@ -676,6 +689,8 @@ async function main() {
       const { readAppTasks } = await import('../lib/app-tasks.js');
       await runPhaseBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
+      // So `webjs stop` finds it (a record of its own; `webjs status` reads only dev's).
+      recordServer(process.cwd(), port, { kind: 'start' });
       await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: false }));
       break;
     }
@@ -1884,6 +1899,10 @@ Full docs: https://webjs.dev/docs`);
       console.log(pointer ? `${out}\n\n${pointer}` : out);
       if (!/^@webjsdev\//m.test(out)) process.exit(1);
       break;
+    }
+    case 'stop': {
+      const { stopServers } = await import('../lib/stop.js');
+      process.exit(await stopServers({ cwd: process.cwd() }));
     }
     case 'status': {
       // Dev status (#1664): wait for the running dev server to settle, request

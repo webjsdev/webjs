@@ -68,6 +68,10 @@ webjs status --boot              # no dev server: boot in-process, probe every r
     <p>With no dev server on the port (or with <code>--boot</code>) it boots the app in-process with the dev handler instead, so there is no server to start, wait for, or stop. With no paths named it then probes every page and GET route handler that needs no parameter (an optional catch-all at its parent path), lists the dynamic routes it skipped so you can pass a real path for them, and fails only on a server error there, since a redirect or a signed-out <code>401</code> is an answer rather than a fault. A path you name still fails at 400.</p>
     <p> The same data is the dev-only <code>GET /__webjs/dev/status?wait=&lt;seconds&gt;</code>, which answers 404 in production.</p>
 
+    <h3>webjs stop</h3>
+    <code-block>webjs stop                        # stop this app's running dev or start server</code-block>
+    <p>Stops the <code>webjs dev</code> or <code>webjs start</code> server running for this app, so there is no <code>pkill</code> or <code>kill</code> to reach for. Each server records its port and process id under <code>.webjs/</code> while it runs, and this reads that record. A dev server running under the hot-reload supervisor is stopped through the supervisor, which takes the server and the <code>dev.parallel</code> tasks (a Tailwind watcher) with it, rather than only the server, which the supervisor would start again. With nothing running it says so and exits 0. A record left by a server that was killed outright is removed and reported, and a recorded process id now held by an unrelated process is never signalled.</p>
+
     <h3>webjs doctor</h3>
     <code-block>webjs doctor            # human-readable project-health checklist
 webjs doctor --json     # structured results (each with a stable code) + a summary

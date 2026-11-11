@@ -127,22 +127,35 @@ export async function failFastOnPortInUse(started, io = {}) {
  * again. An agent starts the dev server on a port of its choosing and then
  * runs `webjs status` after each edit; with the 8080 default it booted a
  * second, in-process copy instead of reporting on the server that was up.
+ * `webjs start` records itself the same way in a file of its own, so
+ * `webjs stop` finds either while `webjs status` only reads the dev one.
  */
-const DEV_SERVER_FILE = join('.webjs', 'dev-server.json');
+export const SERVER_RECORD_FILES = {
+  dev: join('.webjs', 'dev-server.json'),
+  start: join('.webjs', 'start-server.json'),
+};
+const DEV_SERVER_FILE = SERVER_RECORD_FILES.dev;
 
 /**
- * Record this process as the app's dev server on `port`, removed again on
- * exit. Best effort: a read-only app directory only loses the convenience. A
- * process killed by a signal skips its exit handler and leaves the record
- * behind, which `recordedDevPort` ignores once that pid is gone.
+ * Record this process as the app's server on `port`, removed again on exit.
+ * Best effort: a read-only app directory only loses the convenience. A process
+ * killed by a signal skips its exit handler and leaves the record behind,
+ * which `recordedDevPort` ignores once that pid is gone and `webjs stop`
+ * removes.
+ *
+ * `stopPid` is the process `webjs stop` signals when it is not this one: the
+ * hot-reload supervisor of a dev server running as its child. Stopping the
+ * child alone would only have the supervisor start another.
  * @param {string} cwd the app root
  * @param {number} port
+ * @param {{ kind?: 'dev' | 'start', stopPid?: number }} [opts]
  */
-export function recordDevPort(cwd, port) {
-  const file = join(cwd, DEV_SERVER_FILE);
+export function recordServer(cwd, port, { kind = 'dev', stopPid } = {}) {
+  const file = join(cwd, SERVER_RECORD_FILES[kind]);
   try {
     mkdirSync(join(cwd, '.webjs'), { recursive: true });
-    writeFileSync(file, JSON.stringify({ port, pid: process.pid }) + '\n');
+    const record = { port, pid: process.pid, ...(stopPid && stopPid !== process.pid ? { stopPid } : {}) };
+    writeFileSync(file, JSON.stringify(record) + '\n');
   } catch {
     return;
   }
@@ -151,6 +164,16 @@ export function recordDevPort(cwd, port) {
       if (JSON.parse(readFileSync(file, 'utf8')).pid === process.pid) rmSync(file, { force: true });
     } catch { /* gone already */ }
   });
+}
+
+/**
+ * Record this process as the app's dev server on `port` (see `recordServer`).
+ * @param {string} cwd the app root
+ * @param {number} port
+ * @param {{ stopPid?: number }} [opts]
+ */
+export function recordDevPort(cwd, port, opts = {}) {
+  recordServer(cwd, port, { ...opts, kind: 'dev' });
 }
 
 /**
