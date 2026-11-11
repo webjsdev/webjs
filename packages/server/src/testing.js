@@ -213,6 +213,10 @@ export async function loginAndGetCookies(handle, credentials, opts = {}) {
  * status is wrong, an assertion fails, and a `catch` around it reports a skip.
  * Hence a helper, so the identity is never the test's business.
  *
+ * Pass `opts.html` (the page's HTML the test fetched earlier) to submit the
+ * form as that earlier page load had it, the way a browser tab left open
+ * submits a stale form, rather than as the page renders now.
+ *
  * The form is located by INDEX (`opts.index`, default the first on the page),
  * which is enough for the common one-form page. For a page with several, pass
  * `opts.match`: a string or RegExp that must appear in the form's markup, so
@@ -226,6 +230,7 @@ export async function loginAndGetCookies(handle, credentials, opts = {}) {
  *   index?: number,
  *   match?: string | RegExp,
  *   cookies?: string,
+ *   html?: string,
  *   submitPath?: string,
  *   headers?: Record<string, string>,
  * }} [opts]
@@ -284,9 +289,18 @@ function formFieldNames(form) {
 }
 
 export async function submitForm(handle, path, fields = {}, opts = {}) {
-  const getInit = opts.cookies ? withCookies({}, opts.cookies) : {};
-  const page = await testRequest(handle, path, getInit);
-  const html = await page.text();
+  // `html`: the page as the test already fetched it. A form captured before
+  // the state changed (a poll closed since, a row deleted) is no longer on a
+  // fresh render, and the browser that loaded the page earlier can still
+  // submit it, so the test submits that copy instead of re-fetching.
+  let status = 'from opts.html';
+  let html = opts.html;
+  if (html === undefined) {
+    const getInit = opts.cookies ? withCookies({}, opts.cookies) : {};
+    const page = await testRequest(handle, path, getInit);
+    status = `status ${page.status}`;
+    html = await page.text();
+  }
 
   const forms = findForms(html);
   // Without `match`, a bound form is the one a test means: a layout's plain
@@ -323,7 +337,12 @@ export async function submitForm(handle, path, fields = {}, opts = {}) {
   if (!form) {
     throw new Error(
       `submitForm: no ${opts.match ? 'matching ' : ''}<form> found on ${path} `
-      + `(status ${page.status}, ${forms.length} form(s) on the page).`,
+      + `(${status}, ${forms.length} form(s) on the page).`
+      + (opts.html === undefined
+        ? ' submitForm renders the page afresh, so a form the page showed earlier and no longer does (a poll closed, '
+          + 'a row deleted) is gone. To submit the form as an earlier page load had it, pass that HTML: '
+          + 'const html = await (await testRequest(app.handle, path)).text(), then submitForm(app.handle, path, fields, { html }).'
+        : ''),
     );
   }
   const id = form.match(/name="__webjs_action"\s+value="([^"]*)"/);

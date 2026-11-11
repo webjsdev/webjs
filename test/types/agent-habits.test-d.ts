@@ -156,6 +156,9 @@ export async function requestHabits() {
   const res = await testRequest(app.handle, '/');
   const { cookies: jar } = await loginAndGetCookies(app.handle, { email: 'a@b.c', password: 'secret-123' });
   const sent = await submitForm(app.handle, '/rooms/1', { day: '2026-11-10', hours: ['1', '2'] }, { cookies: jar });
+  // A form captured before the state changed is submitted from the earlier HTML.
+  const earlier = await res.text();
+  await submitForm(app.handle, '/rooms/1', { day: '2026-11-10' }, { html: earlier, cookies: jar });
   return [ua, fromHeaders, theme, res.status, sent.headers.get('location')];
 }
 

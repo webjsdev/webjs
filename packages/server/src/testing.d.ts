@@ -83,6 +83,12 @@ export declare function submitForm(
     index?: number;
     match?: string | RegExp;
     cookies?: string;
+    /**
+     * The page's HTML as the test fetched it earlier. The form is taken from it
+     * instead of from a fresh render, so a test can submit a form the page no
+     * longer shows (a vote on a poll closed since the page loaded).
+     */
+    html?: string;
     submitPath?: string;
     headers?: Record<string, string>;
   },
