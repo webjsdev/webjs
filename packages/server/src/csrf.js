@@ -97,6 +97,23 @@ export function requestHost(req) {
   return hostOf(req.url);
 }
 
+/**
+ * The request's `Origin` as a clean `scheme://host[:port]` for a refusal
+ * message, so the message never echoes arbitrary header text. An origin
+ * carries no path, query or credentials, so nothing secret can reach it.
+ * @param {string | null} origin
+ */
+function originLabel(origin) {
+  if (!origin) return 'no Origin';
+  if (origin === 'null') return 'Origin null (a sandboxed frame or a file: page)';
+  try { return `Origin ${new URL(origin).origin}`; } catch { return 'an unparseable Origin'; }
+}
+
+/** What to do about a refused request, appended to every reason. */
+const ORIGIN_FIX = 'A browser form posted from this app passes; a hand-built request (curl, fetch in a test) '
+  + 'should send no Origin, or the origin of the host it addresses. A trusted other origin goes in '
+  + '"webjs": { "allowedOrigins": [...] } in package.json.';
+
 /** Is the request's `Origin` host in the configured allowlist? */
 function originAllowed(req, allowedOrigins) {
   const origin = req.headers.get('origin');
@@ -116,7 +133,8 @@ function originAllowed(req, allowedOrigins) {
  * Cross-origin (CSRF) verification for a state-changing action request.
  * @param {Request} req
  * @param {string[]} [allowedOrigins] hosts or full origins allowed cross-site
- * @returns {{ ok: boolean, reason?: string }}
+ * @returns {{ ok: boolean, reason?: string }} on a refusal, `reason` names the
+ *   headers that caused it and the fix, safe to send back in the 403
  */
 export function verifyOrigin(req, allowedOrigins = []) {
   // Primary: the Sec-Fetch-Site fetch-metadata header (browser-set, not
@@ -127,7 +145,7 @@ export function verifyOrigin(req, allowedOrigins = []) {
     // 'same-site' or 'cross-site': reject unless the source origin is trusted.
     return originAllowed(req, allowedOrigins)
       ? { ok: true }
-      : { ok: false, reason: `cross-origin request (Sec-Fetch-Site: ${secFetchSite})` };
+      : { ok: false, reason: `the browser marked it Sec-Fetch-Site: ${secFetchSite.slice(0, 32)} (${originLabel(req.headers.get('origin'))}, host ${requestHost(req).slice(0, 255) || '(none)'}), and that origin is not in webjs.allowedOrigins. ${ORIGIN_FIX}` };
   }
   // Fallback (no Sec-Fetch-Site, older browser): compare Origin host to host.
   const origin = req.headers.get('origin');
@@ -137,7 +155,7 @@ export function verifyOrigin(req, allowedOrigins = []) {
   if (sourceHost && host && sourceHost === host) return { ok: true };
   return originAllowed(req, allowedOrigins)
     ? { ok: true }
-    : { ok: false, reason: `origin ${sourceHost || '(none)'} does not match host ${host || '(none)'}` };
+    : { ok: false, reason: `${originLabel(origin)} does not match this request's host ${host.slice(0, 255) || '(none)'}. ${ORIGIN_FIX}` };
 }
 
 /**

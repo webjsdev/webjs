@@ -539,7 +539,7 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
   // CDN-cacheable. See csrf.js.
   if (!SAFE_VERBS.has(method)) {
     const v = verifyOrigin(req, allowedOrigins);
-    if (!v.ok) return rpcResponse({ error: 'CSRF validation failed' }, { status: 403 });
+    if (!v.ok) return rpcResponse({ error: `CSRF validation failed: ${v.reason}` }, { status: 403 });
   }
 
   // Args ride the URL for a URL-arg request (GET / DELETE), else the body.

@@ -469,7 +469,8 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // Sec-Fetch-Site check the RPC endpoint applies (`csrf.js`). The page `action`
   // export this replaces had none, and was shielded only by SameSite=Lax cookies.
   const origin = verifyOrigin(req, allowedOrigins);
-  if (!origin.ok) return new Response('CSRF validation failed', { status: 403 });
+  // The reason names the mismatched Origin / host and the fix, never a secret.
+  if (!origin.ok) return new Response(`CSRF validation failed: ${origin.reason}`, { status: 403 });
 
   let formData = new FormData();
   let actionReq = req;
