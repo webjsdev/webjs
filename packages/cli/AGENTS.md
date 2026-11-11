@@ -234,8 +234,11 @@ lib/
                          example in a comment), printing a note when one is
                          missing. `scaffold.js` writes the model, queries,
                          validation (`read<X>Input`, FormData or JSON) and
-                         actions; `scaffold-pages.js` the four pages and the
-                         shared fields helper (Rails' `_form`), with the UI kit
+                         actions; `scaffold-pages.js` the four pages, the
+                         shared fields helper (Rails' `_form`) and the index list
+                         component (seeded through a property, optimistic delete
+                         from a degrade-first form, pending buttons on aria-busy),
+                         with the UI kit
                          helpers when present (`webjs ui add textarea` when a
                          text field needs it); `scaffold-api.js` the JSON route
                          handlers (`resource`, or `scaffold` in an app with no

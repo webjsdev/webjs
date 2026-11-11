@@ -39,10 +39,10 @@ export default function LogInPage({ actionData, searchParams }: PageProps<'/logi
     <section class="mx-auto max-w-sm grid gap-6 py-10">
       <h1 class="text-2xl font-semibold m-0">Log in</h1>
       \${error ? html\`<p role="alert" class="text-sm text-destructive m-0">\${error}</p>\` : nothing}
-      <form action=\${logIn} class="grid gap-4">
+      <form action=\${logIn} class="group grid gap-4">
 ${field('email', 'Email', "type=\"email\" autocomplete=\"email\" value=${actionData?.values?.email ?? ''}", false)}
 ${field('password', 'Password', 'type="password" autocomplete="current-password"', false)}
-        <button ${cls.button} type="submit">Log in</button>
+        <button ${cls.submit} type="submit">Log in</button>
       </form>
       <p class="text-sm text-muted-foreground m-0">No account yet? <a class="underline" href="/signup">Sign up</a></p>
     </section>
@@ -64,10 +64,10 @@ export default function SignUpPage({ actionData }: PageProps<'/signup'>) {
   return html\`
     <section class="mx-auto max-w-sm grid gap-6 py-10">
       <h1 class="text-2xl font-semibold m-0">Sign up</h1>
-      <form action=\${signUp} class="grid gap-4">
+      <form action=\${signUp} class="group grid gap-4">
 ${field('email', 'Email', "type=\"email\" autocomplete=\"email\" value=${actionData?.values?.email ?? ''}", true)}
 ${field('password', 'Password', 'type="password" autocomplete="new-password" minlength="8"', true)}
-        <button ${cls.button} type="submit">Create account</button>
+        <button ${cls.submit} type="submit">Create account</button>
       </form>
       <p class="text-sm text-muted-foreground m-0">Already have an account? <a class="underline" href="/login">Log in</a></p>
     </section>
@@ -89,8 +89,8 @@ export default async function DashboardPage() {
     <section class="mx-auto max-w-sm grid gap-6 py-10">
       <h1 class="text-2xl font-semibold m-0">Dashboard</h1>
       <p class="m-0">Signed in as \${user?.email}.</p>
-      <form action=\${logOut}>
-        <button ${cls.outline} type="submit">Log out</button>
+      <form action=\${logOut} class="group">
+        <button ${cls.submitOutline} type="submit">Log out</button>
       </form>
     </section>
   \`;

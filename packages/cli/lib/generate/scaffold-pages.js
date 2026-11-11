@@ -18,6 +18,9 @@ const PLAIN_INPUT = 'w-full rounded-md border border-input bg-transparent px-3 p
 const PLAIN_LABEL = 'text-sm font-medium';
 const PLAIN_BUTTON = 'inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground';
 const PLAIN_OUTLINE = 'inline-flex items-center rounded-md border border-input px-4 py-2 text-sm font-medium';
+// While a bound form submits, the client router sets aria-busy on it; its
+// submit button dims and ignores a second click. Unused with JavaScript off.
+export const PENDING = 'group-aria-busy:opacity-50 group-aria-busy:pointer-events-none';
 
 /**
  * @param {AppContext} ctx
@@ -40,10 +43,13 @@ export function pageFiles(ctx, n, fields) {
 
   const index = `import { html } from '@webjsdev/core';
 ${buttonImport}import { list${n.Plural} } from '${mod}/queries/list-${n.kebabPlural}.server.ts';
+import '${mod}/components/${n.kebab}-list.ts';
 
 export const metadata = { title: '${cap(n.humanPlural)}' };
 
-// A thin route: the data and the mutations live in modules/${n.kebabPlural}/.
+// A thin route: the data and the mutations live in modules/${n.kebabPlural}/. The
+// list is a component seeded through .${n.plural}, so it is server-rendered and its
+// deletes are optimistic once JavaScript loads.
 export default async function ${n.Plural}Page() {
   const ${n.plural} = await list${n.Plural}();
   return html\`
@@ -52,13 +58,7 @@ export default async function ${n.Plural}Page() {
         <h1 class="text-2xl font-semibold m-0">${cap(n.humanPlural)}</h1>
         <a ${cls.button} href="/${n.kebabPlural}/new">New ${n.human}</a>
       </header>
-      \${${n.plural}.length === 0
-        ? html\`<p class="text-sm text-muted-foreground m-0">No ${n.humanPlural} yet.</p>\`
-        : html\`
-          <ul class="grid gap-2 m-0 p-0 list-none">
-            \${${n.plural}.map((${n.singular}) => html\`
-              <li><a class="font-medium hover:underline" href="/${n.kebabPlural}/\${${n.singular}.id}">\${${title}}</a></li>\`)}
-          </ul>\`}
+      <${n.kebab}-list .${n.plural}=\${${n.plural}}></${n.kebab}-list>
     </section>
   \`;
 }
@@ -77,10 +77,10 @@ export default function New${n.Singular}Page({ actionData }: PageProps<'/${n.keb
   return html\`
     <section class="mx-auto max-w-xl grid gap-6 py-10">
       <h1 class="text-2xl font-semibold m-0">New ${n.human}</h1>
-      <form action=\${create${n.Singular}} class="grid gap-4">
+      <form action=\${create${n.Singular}} class="group grid gap-4">
         \${${n.singular}Fields(actionData?.values ?? {}, actionData?.fieldErrors ?? {})}
         <div class="flex gap-2">
-          <button ${cls.button} type="submit">Create ${n.human}</button>
+          <button ${cls.submit} type="submit">Create ${n.human}</button>
           <a ${cls.outline} href="/${n.kebabPlural}">Cancel</a>
         </div>
       </form>
@@ -111,9 +111,9 @@ ${fields.map((f) => `        <div>
       <div class="flex gap-2">
         <a ${cls.outline} href="/${n.kebabPlural}/\${${n.singular}.id}/edit">Edit</a>
         <a ${cls.outline} href="/${n.kebabPlural}">Back to ${n.humanPlural}</a>
-        <form action=\${delete${n.Singular}} class="ml-auto">
+        <form action=\${delete${n.Singular}} class="group ml-auto">
           <input type="hidden" name="id" value=\${${n.singular}.id}>
-          <button ${cls.destructive} type="submit">Delete</button>
+          <button ${cls.submitDestructive} type="submit">Delete</button>
         </form>
       </div>
     </section>
@@ -137,11 +137,11 @@ export default async function Edit${n.Singular}Page({ params, actionData }: Page
     <section class="mx-auto max-w-xl grid gap-6 py-10">
       <h1 class="text-2xl font-semibold m-0">Edit ${n.human}</h1>
       \${actionData?.error ? html\`<p role="alert" class="text-sm text-destructive m-0">\${actionData.error}</p>\` : nothing}
-      <form action=\${update${n.Singular}} class="grid gap-4">
+      <form action=\${update${n.Singular}} class="group grid gap-4">
         <input type="hidden" name="id" value=\${${n.singular}.id}>
         \${${n.singular}Fields(actionData?.values ?? ${n.singular}FormValues(${n.singular}), actionData?.fieldErrors ?? {})}
         <div class="flex gap-2">
-          <button ${cls.button} type="submit">Update ${n.human}</button>
+          <button ${cls.submit} type="submit">Update ${n.human}</button>
           <a ${cls.outline} href="/${n.kebabPlural}/\${${n.singular}.id}">Cancel</a>
         </div>
       </form>
@@ -154,6 +154,7 @@ export default async function Edit${n.Singular}Page({ params, actionData }: Page
     uiAdd,
     files: [
       { path: `modules/${n.kebabPlural}/${n.kebab}-fields.ts`, content: fieldsFile },
+      { path: `modules/${n.kebabPlural}/components/${n.kebab}-list.ts`, content: listComponent(ctx, n, title) },
       { path: `${app}/page.ts`, content: index },
       { path: `${app}/new/page.ts`, content: newPage },
       { path: `${app}/[id]/page.ts`, content: show },
@@ -167,7 +168,7 @@ export default async function Edit${n.Singular}Page({ params, actionData }: Page
  * has it, plain Tailwind otherwise.
  * @param {AppContext} ctx
  * @param {boolean} [textarea] whether the kit's textarea helper is there
- * @returns {Record<'input'|'textarea'|'label'|'button'|'outline'|'destructive', string>}
+ * @returns {Record<'input'|'textarea'|'label'|'button'|'outline'|'destructive'|'submit'|'submitDestructive'|'submitOutline', string>}
  */
 export function uiClasses(ctx, textarea = false) {
   return {
@@ -177,6 +178,9 @@ export function uiClasses(ctx, textarea = false) {
     button: ctx.ui.button ? 'class=${buttonClass()}' : `class="${PLAIN_BUTTON}"`,
     outline: ctx.ui.button ? "class=${buttonClass({ variant: 'outline' })}" : `class="${PLAIN_OUTLINE}"`,
     destructive: ctx.ui.button ? "class=${buttonClass({ variant: 'destructive' })}" : `class="${PLAIN_OUTLINE}"`,
+    submit: ctx.ui.button ? `class="\${buttonClass()} ${PENDING}"` : `class="${PLAIN_BUTTON} ${PENDING}"`,
+    submitDestructive: ctx.ui.button ? `class="\${buttonClass({ variant: 'destructive' })} ${PENDING}"` : `class="${PLAIN_OUTLINE} ${PENDING}"`,
+    submitOutline: ctx.ui.button ? `class="\${buttonClass({ variant: 'outline' })} ${PENDING}"` : `class="${PLAIN_OUTLINE} ${PENDING}"`,
   };
 }
 
@@ -287,4 +291,74 @@ function toDateTimeLocal(date: Date): string {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 ` : ''}`;
+}
+
+/**
+ * The index list as a Lit component, the optimistic UI WebJs documents: the
+ * page seeds it through a property, so it is server-rendered, and each Delete
+ * is a degrade-first form, bound to the action (it works with JavaScript off)
+ * and intercepted with JavaScript on to remove the row at once.
+ * @param {AppContext} ctx
+ * @param {ResourceNames} n
+ * @param {string} title the expression naming one record
+ */
+function listComponent(ctx, n, title) {
+  const cls = uiClasses(ctx);
+  const tag = `${n.kebab}-list`;
+  return `import { WebComponent, html, optimistic } from '@webjsdev/core';
+${ctx.ui.button ? "import { buttonClass } from '#components/ui/button.ts';\n" : ''}import { delete${n.Singular} } from '../actions/delete-${n.kebab}.server.ts';
+import type { ${n.Singular} } from '../types.ts';
+
+/**
+ * The ${n.humanPlural} list, written as in Lit. app/${n.kebabPlural}/page.ts passes the rows
+ * in as a property (.${n.plural}=\${${n.plural}}), so the list is in the first paint.
+ * A component never queries the database itself, since it also runs in the
+ * browser; it calls the 'use server' action, which reaches the server by RPC.
+ */
+export class ${n.Singular}List extends WebComponent {
+  static properties = { ${n.plural}: { type: Array } };
+  declare ${n.plural}: ${n.Singular}[];
+
+  constructor() {
+    super();
+    this.${n.plural} = [];
+  }
+
+  // The rows on screen: the seeded ones minus any whose delete is in flight.
+  // The reducer stays pure (it only filters by the id in the payload), since it
+  // runs again on every render.
+  visible = optimistic(this, {
+    source: () => this.${n.plural},
+    update: (rows: ${n.Singular}[], removed: { id: number }) => rows.filter((row) => row.id !== removed.id),
+  });
+
+  // With JavaScript on, the row goes at once and delete${n.Singular} runs by RPC. Its
+  // redirect back to this list refreshes the page in place, and the optimistic
+  // entry releases when the call settles. With JavaScript off the form posts.
+  deleteRow(event: SubmitEvent, id: number) {
+    event.preventDefault();
+    this.visible.add({ id }, delete${n.Singular}(new FormData(event.target as HTMLFormElement)));
+  }
+
+  render() {
+    const rows = this.visible.value;
+    if (rows.length === 0) {
+      return html\`<p class="text-sm text-muted-foreground m-0">No ${n.humanPlural} yet.</p>\`;
+    }
+    return html\`
+      <ul class="grid gap-2 m-0 p-0 list-none">
+        \${rows.map((${n.singular}) => html\`
+          <li class="flex items-center justify-between gap-4">
+            <a class="font-medium hover:underline" href="/${n.kebabPlural}/\${${n.singular}.id}">\${${title}}</a>
+            <form action=\${delete${n.Singular}} class="group" @submit=\${(event: SubmitEvent) => this.deleteRow(event, ${n.singular}.id)}>
+              <input type="hidden" name="id" value=\${${n.singular}.id}>
+              <button ${cls.submitDestructive} type="submit">Delete</button>
+            </form>
+          </li>\`)}
+      </ul>
+    \`;
+  }
+}
+${n.Singular}List.register('${tag}');
+`;
 }

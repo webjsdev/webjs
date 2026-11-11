@@ -41,6 +41,7 @@ export function testFile(n, fields, mode) {
   const parents = fields.filter((f) => f.kind === 'references' && f.notNull);
   const required = fields.find((f) => f.notNull && f.kind !== 'boolean' && f.kind !== 'references');
   const changed = fields.find((f) => f.kind === 'string' || f.kind === 'text');
+  const named = fields.find((f) => f.kind === 'string');
   const valid = `{ ${fields.map((f) => `${f.name}: ${sample(f, json)}`).join(', ')} }`;
   const parentLookup = parents.map((f) => {
     const r = /** @type {NonNullable<Field['references']>} */ (f.references);
@@ -88,7 +89,9 @@ ${parentLookup}  const valid = ${valid};
   const path = new URL(created.headers.get('location') ?? '', 'http://localhost').pathname;
   const id = Number(path.split('/').pop());
   assert.ok(await get${n.Singular}(id), 'the ${n.human} was saved');
-
+${named ? `  // The list component is seeded by the page, so the new ${n.human} is in its server-rendered HTML.
+  assert.ok((await (await testRequest(app.handle, '/${n.kebabPlural}')).text()).includes(valid.${named.name}));
+` : ''}
   assert.equal((await testRequest(app.handle, path)).status, 200);
   assert.equal((await testRequest(app.handle, path + '/edit')).status, 200);
 
