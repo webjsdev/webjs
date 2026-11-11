@@ -160,7 +160,11 @@ export class CookieStore {
     this.assertWritable('delete');
     const opts = typeof a === 'string' ? { ...(options || {}), name: a } : a;
     this.map.delete(opts.name);
-    this.pending.set(opts.name, stringifyCookie(normalizeCookie({ ...opts, value: '', expires: new Date(0) })));
+    // A `maxAge` or `expires` the caller passed (options shared with `set`)
+    // would otherwise outlive the deletion: `normalizeCookie` lets `maxAge`
+    // replace the epoch `expires`, and the cookie stayed alive for that long.
+    const { maxAge: _maxAge, expires: _expires, ...scope } = /** @type {any} */ (opts);
+    this.pending.set(opts.name, stringifyCookie(normalizeCookie({ ...scope, value: '', expires: new Date(0) })));
     return this;
   }
 

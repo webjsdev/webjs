@@ -65,6 +65,16 @@ test('delete(name, { path, domain }) clears the cookie on that path and domain',
   assert.equal(store.pending.get('t'), 't=; Path=/admin; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
 });
 
+test('delete ignores a maxAge or expires passed with its options', () => {
+  // Options shared with set() carry a maxAge; before the fix it replaced the
+  // epoch Expires and the "deleted" cookie lived for another hour.
+  const store = new CookieStore('sid=1; t=2');
+  store.delete('sid', { path: '/app', maxAge: 3600 });
+  assert.equal(store.pending.get('sid'), 'sid=; Path=/app; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+  store.delete({ name: 't', path: '/app', maxAge: 3600, expires: new Date(Date.now() + 3600_000) });
+  assert.equal(store.pending.get('t'), 't=; Path=/app; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+});
+
 test('cookies().delete passes its options through the request-scoped view', async () => {
   await withRequest(new Request('http://x/', { headers: { cookie: 's=1' } }), async () => {
     const view = cookies().delete('s', { path: '/p' });
