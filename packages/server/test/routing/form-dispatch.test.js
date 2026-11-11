@@ -269,6 +269,11 @@ test('a page that binds no action answers 405 on POST, not 404', async () => {
   const post = await app.handle(new Request('http://x/info', form({ x: '1' })));
   assert.equal(post.status, 405);
   assert.equal(post.headers.get('allow'), 'GET, HEAD');
+  // #1697: the body names the missing field and the test helper, since agents
+  // verifying a form with curl read the framework source to learn why.
+  const body = await post.text();
+  assert.match(body, /__webjs_action/);
+  assert.match(body, /submitForm\(\)/);
 });
 
 test('a non-form POST to a page is 405, decided BEFORE the body is parsed', async () => {

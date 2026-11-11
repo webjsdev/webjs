@@ -417,11 +417,22 @@ function withSubmittedValues(result, formData) {
 }
 
 /**
+ * The body a page POST with no action identity gets, naming the fix (#1697):
+ * agents verifying a form with curl posted the visible fields alone and read
+ * the framework source to learn why the page answered 405.
+ */
+export const MISSING_ACTION_HINT =
+  'Method Not Allowed. A POST to a page runs the server action named by the form\'s ' +
+  `hidden ${FORM_ACTION_FIELD} field, so send that field with the others (copy its value ` +
+  'from the rendered form), or in a test call submitForm() from @webjsdev/server, which does.';
+
+/**
  * A page path exists but only renders: the method is the problem, not the url.
+ * @param {string} [body]
  * @returns {Response}
  */
-function methodNotAllowed() {
-  return new Response('Method Not Allowed', {
+function methodNotAllowed(body = 'Method Not Allowed') {
+  return new Response(body, {
     status: 405,
     headers: { allow: 'GET, HEAD' },
   });
@@ -499,7 +510,7 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // only as a bare 405. The dev-time client guard covers it instead.
   if (typeof id !== 'string' || !id) {
     reportFormActionMissing(url, req, formData, onError, logger, !!ssrOpts.dev, route);
-    return methodNotAllowed();
+    return methodNotAllowed(MISSING_ACTION_HINT);
   }
   // The field is framework wire, not app data. Removing it keeps an action
   // that iterates the FormData (building a record, echoing values back into a
