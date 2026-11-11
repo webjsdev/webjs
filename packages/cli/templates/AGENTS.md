@@ -44,19 +44,20 @@ delete it, its test and whatever uses it before you build the app.
 In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
 not `document.getElementById`, `document.querySelector` or `addEventListener`.
 
-For UI, add shadcn's components from the WebJs UI kit (class helpers such as
-`buttonClass()`, and `<ui-*>` elements where state matters) rather than writing
-them: `npx webjs ui add button dialog` copies each into `components/ui/`, and
-`npx webjs ui list` shows what exists.
+For UI, add shadcn's components from the WebJs UI kit (class helpers such as `buttonClass()`,
+`<ui-*>` elements where state matters) rather than writing them: `npx webjs ui add button dialog`
+copies each into `components/ui/`, and `npx webjs ui list` shows what exists.
+Style with Tailwind utilities on the kit's design tokens (`bg-background`, `text-muted-foreground`,
+`border-border`, `rounded-lg`; the theme lives in `styles/globals.css`), never hard-coded colours or hand-written
+CSS. Change the whole look with a theme: `npx webjs ui init --preset <code>` from webjs.dev/ui/create.
 
-Style with Tailwind utilities on the kit's design tokens (`bg-background`,
-`text-muted-foreground`, `border-border`, `rounded-lg`; the theme lives in
-`styles/globals.css`), never hard-coded colours or hand-written CSS. Change the
-whole look with a theme: `npx webjs ui init --preset <code>` from webjs.dev/ui/create.
-
-`npx webjs help` lists every CLI command. The `webjs` MCP server in `.claude.json`
-(`npx @webjsdev/mcp`) answers the same questions as tools: `list_routes`,
-`list_actions`, `list_components`, `check`, `source` and `ui`.
+`npx webjs help` lists every CLI command, and `npx webjs stop` stops a server you started. The `webjs`
+MCP server in `.claude.json` answers the same questions as tools (`list_routes`, `list_actions`,
+`list_components`, `check`, `source`, `ui`).
+Hooks, so you need not open them: each edit returns that file's `webjs check` and type
+errors (fix them at once); `extends HTMLElement`, an em-dash, a spaced hyphen or semicolon
+as a pause in comments or markdown, and a commit on `main` are refused; a server-only import
+in a page or component, a commit with no test and a stop with uncommitted work are flagged.
 
 ## This app
 

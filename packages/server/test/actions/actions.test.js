@@ -121,7 +121,11 @@ test('stubs server module and invokes action by hash/fn', async () => {
       headers: { 'content-type': RPC_CONTENT_TYPE, origin: 'https://evil.example' },
       body: await wjStringify([2, 3]),
     });
-    assert.equal((await invokeAction(idx, hash, 'add', crossOrigin)).status, 403);
+    const refused = await invokeAction(idx, hash, 'add', crossOrigin);
+    assert.equal(refused.status, 403);
+    // The refusal names its cause rather than a bare "CSRF validation failed".
+    const text = await refused.text();
+    assert.match(text, /CSRF validation failed: Origin https:\/\/evil\.example does not match this request's host x\./);
 
     // Allowlisting the origin lets the same cross-origin request through.
     const allowed = await invokeAction(idx, hash, 'add', crossOrigin, undefined, ['evil.example']);

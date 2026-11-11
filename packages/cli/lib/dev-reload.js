@@ -23,6 +23,7 @@ import { watch, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { watchRecursive } from './watch-recursive.js';
 import { PORT_IN_USE_EXIT_CODE } from './port.js';
+import { DEV_LISTENING_MESSAGE } from './server-record.js';
 
 /**
  * Quiet window between a file event and the restart. `node --watch` used
@@ -429,9 +430,12 @@ export function inPlaceRestarts(plan) {
  *   plan: { args: string[], restartOnChange: boolean, restartFor?: (path: string) => boolean, inPlaceRestartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] },
  *   env: NodeJS.ProcessEnv,
  *   onExit: (code: number) => void,
+ *   onListening?: (port: number) => void,
  * }} opts
+ *   `onListening` receives the port each child reports once bound
+ *   (`DEV_LISTENING_MESSAGE`), after every respawn too.
  */
-export function superviseDevServer({ cwd, plan, env, onExit }) {
+export function superviseDevServer({ cwd, plan, env, onExit, onListening }) {
   const log = (line) => console.log(`[webjs] ${line}`);
   // A watcher error here is NOT logged: the server child watches the whole app
   // tree (a superset of these paths) and prints one warning per unwatchable
@@ -467,6 +471,8 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
         env,
       });
       c.on('message', (msg) => {
+        const m = /** @type {any} */ (msg);
+        if (m && m.webjs === DEV_LISTENING_MESSAGE && Number.isInteger(m.port) && onListening) onListening(m.port);
         // A child asking for a restart (#1689) reports its path as a change,
         // which `restartFor` then answers with a restart.
         const path = restarts.onMessage(msg);

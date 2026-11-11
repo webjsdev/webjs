@@ -36,6 +36,7 @@ async function makeApp() {
   await mkdir(join(dir, 'app/two'), { recursive: true });
   await mkdir(join(dir, 'app/plain'), { recursive: true });
   await mkdir(join(dir, 'app/tricky'), { recursive: true });
+  await mkdir(join(dir, 'app/poll'), { recursive: true });
   await mkdir(join(dir, 'modules/acct/actions'), { recursive: true });
 
   await writeFile(join(dir, 'modules/acct/actions/signup.server.ts'),
@@ -79,6 +80,14 @@ export default () => html\`
   <!-- <form id="ghost"><input name="__webjs_action" value="ghost/nope"></form> -->
   <form data-note="a note ending in </form> text" action=\${signup}><input name="email"></form>
 \`;
+`);
+  // A poll whose vote form disappears once it closes, as an app's page does.
+  await writeFile(join(dir, 'app/poll/page.ts'),
+    `import { html } from ${CORE};
+import { signup } from '../../modules/acct/actions/signup.server.ts';
+export default () => globalThis.__pollClosed
+  ? html\`<p>This poll is closed.</p>\`
+  : html\`<form action=\${signup}><input name="email"></form>\`;
 `);
   await writeFile(join(dir, 'app/plain/page.ts'),
     `import { html } from ${CORE};
@@ -177,6 +186,30 @@ test('an unbound form is reported as unbound, not silently submitted', async () 
 test('a page with no form at all says so', async () => {
   const a = await handler();
   await assert.rejects(() => submitForm(a.handle, '/welcome', {}), /no <form> found/);
+});
+
+test('opts.html submits a form the page showed earlier and no longer renders', async () => {
+  const a = await handler();
+  const html = await (await testRequest(a.handle, '/poll')).text();
+  globalThis.__pollClosed = true;
+  try {
+    // A fresh render has no form, and the error names the way out.
+    await assert.rejects(
+      submitForm(a.handle, '/poll', { email: 'ada@example.com' }),
+      /no <form> found on \/poll \(status 200, 0 form\(s\) on the page\)\..*submitForm\(app\.handle, path, fields, \{ html \}\)/,
+    );
+    // The page as the test loaded it still carries the form, as a browser tab would.
+    const res = await submitForm(a.handle, '/poll', { email: 'ada@example.com' }, { html });
+    assert.equal(res.status, 303);
+    assert.equal(res.headers.get('location'), '/welcome');
+    // HTML with no form says where the form was looked for.
+    await assert.rejects(
+      submitForm(a.handle, '/poll', {}, { html: '<p>closed</p>' }),
+      /no <form> found on \/poll \(from opts\.html, 0 form\(s\) on the page\)\.$/,
+    );
+  } finally {
+    delete globalThis.__pollClosed;
+  }
 });
 
 test('the form scan ignores a commented-out form and a close tag in an attribute', async () => {

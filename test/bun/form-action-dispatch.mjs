@@ -155,6 +155,20 @@ function urlencoded(fields) {
     body: new URLSearchParams({ [FIELD]: id, email: 'a@b.com' }).toString(),
   }));
   assert.equal(res.status, 403, `[${runtime}] a cross-origin submission is refused`);
+  const body = await res.text();
+  assert.match(body, /^CSRF validation failed: the browser marked it Sec-Fetch-Site: cross-site \(Origin https:\/\/evil\.example\.com, host /, `[${runtime}] the 403 names its cause`);
+  assert.match(body, /allowedOrigins/, `[${runtime}] and the fix`);
+}
+
+// A hand-built POST with a hard-coded Origin for another host names both.
+{
+  const res = await app.handle(new Request('http://127.0.0.1:3000/signup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://localhost:3000', host: '127.0.0.1:3000' },
+    body: new URLSearchParams({ [FIELD]: id, email: 'a@b.com' }).toString(),
+  }));
+  assert.equal(res.status, 403, `[${runtime}] a mismatched Origin is refused`);
+  assert.match(await res.text(), /^CSRF validation failed: Origin http:\/\/localhost:3000 does not match this request's host 127\.0\.0\.1:3000\. /, `[${runtime}] the 403 names the Origin and the host`);
 }
 
 // An unknown hash is deploy skew: a 422 re-render, never a silent no-op.

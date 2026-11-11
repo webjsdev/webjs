@@ -126,6 +126,18 @@ test('fallback: no Sec-Fetch-Site, Origin host differs -> reject', () => {
   assert.equal(verifyOrigin(req).ok, false);
 });
 
+test('a refusal names the Origin, the host and the fix, and never echoes raw header text', () => {
+  const mismatch = verifyOrigin(reqWith({ origin: 'http://localhost:3000', host: '127.0.0.1:3000' }));
+  assert.equal(mismatch.ok, false);
+  assert.match(mismatch.reason, /^Origin http:\/\/localhost:3000 does not match this request's host 127\.0\.0\.1:3000\. /);
+  assert.match(mismatch.reason, /should send no Origin, or the origin of the host it addresses/);
+  assert.match(mismatch.reason, /"webjs": \{ "allowedOrigins": \[\.\.\.\] \}/);
+  const site = verifyOrigin(reqWith({ 'sec-fetch-site': 'cross-site', origin: 'https://evil.example/path?token=s3cret', host: 'app.example' }));
+  assert.match(site.reason, /Sec-Fetch-Site: cross-site \(Origin https:\/\/evil\.example, host app\.example\)/);
+  assert.doesNotMatch(site.reason, /s3cret|\/path/, 'only the origin is echoed, never a path or query');
+  assert.match(verifyOrigin(reqWith({ origin: 'null', host: 'app.example' })).reason, /^Origin null \(a sandboxed frame/);
+});
+
 test('fallback honors x-forwarded-host (proxy / CDN)', () => {
   const req = reqWith({ origin: 'https://app.example', 'x-forwarded-host': 'app.example', host: 'internal:8080' });
   assert.equal(verifyOrigin(req).ok, true);

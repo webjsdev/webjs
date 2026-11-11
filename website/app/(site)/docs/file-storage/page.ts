@@ -35,7 +35,7 @@ export default function FileStorage() {
 const { key, size, contentType } = await getFileStore().put(generateKey(file.name), file);</code-block>
 
     <h2>diskStore (the default adapter)</h2>
-    <p>The default store is a <code>diskStore</code> rooted at <code>&lt;cwd&gt;/.webjs/uploads</code>, served under <code>/uploads</code>. Override the root and base URL at startup:</p>
+    <p>The default store is a <code>diskStore</code> rooted at <code>&lt;cwd&gt;/.webjs/uploads</code>, whose <code>url(key)</code> is <code>/uploads/&lt;key&gt;</code>. That is only the URL it reports: no route serves it until the app adds one (the recipe below serves <code>/files/[key]</code>). Override the root and base URL at startup:</p>
 
     <code-block>import { setFileStore, diskStore } from '@webjsdev/server';
 
@@ -127,11 +127,12 @@ export async function GET(request: Request, { params }: { params: { key: string 
   });
 }</code-block>
 
-    <p>Mint the signed URL where you render the link (a page or component):</p>
+    <p>Mint the signed URL where you render the link (a page, which runs on the server). Pass <code>base</code> as the serving route's path: without it the URL is built on the store's own <code>url(key)</code>, <code>/uploads/&lt;key&gt;</code> for the default <code>diskStore</code>, and nothing in the framework serves <code>/uploads</code>, so the link would 404.</p>
 
     <code-block>import { signedUrl } from '@webjsdev/server';
 
-const href = signedUrl(user.avatarKey, { secret: process.env.AUTH_SECRET!, expiresIn: 3600 });</code-block>
+// /files/&lt;key&gt;?key=&lt;key&gt;&amp;exp=...&amp;sig=..., answered by app/files/[key]/route.ts above
+const href = signedUrl(user.avatarKey, { secret: process.env.AUTH_SECRET!, base: '/files/' + user.avatarKey, expiresIn: 3600 });</code-block>
 
     <h2>Serving user uploads safely</h2>
     <p>The content-type a store records is the one the BROWSER sent at upload time, so it is attacker-controlled. A serving route that reflects it inline lets an attacker run script in your origin (stored XSS) by uploading HTML or <code>image/svg+xml</code> tagged <code>text/html</code> under an innocent-looking key. The serving route MUST send <code>X-Content-Type-Options: nosniff</code>, and SHOULD send <code>Content-Disposition: attachment</code> for anything a user uploaded (the recipe above does both). Only serve a user upload inline when you have validated the bytes server-side and emit a content-type from a strict inert allowlist (<code>image/png</code>, <code>image/jpeg</code>), never <code>text/html</code> / <code>image/svg+xml</code>. Serving uploads from a separate cookieless origin is the strongest mitigation.</p>

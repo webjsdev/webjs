@@ -1,7 +1,7 @@
 {
   "cn-accordion": "flex flex-col",
   "cn-accordion-content": "overflow-hidden",
-  "cn-accordion-trigger": "relative flex-1 items-start border border-transparent disabled:pointer-events-none disabled:opacity-50",
+  "cn-accordion-trigger": "relative flex-1 items-start border border-transparent cursor-default disabled:pointer-events-none disabled:opacity-50",
   "cn-alert-description": "[&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
   "cn-alert-dialog-content": "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 outline-none",
   "cn-alert-title": "[&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",

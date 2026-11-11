@@ -51,6 +51,34 @@ test('every catalogued name resolves through lookupExport, the follow-up call', 
   }
 });
 
+// The WebJs-specific exports, the ones no Lit or Next.js habit covers. The
+// catalogue promises each comes back with a working example, so the lookup an
+// agent makes instead of reading the source answers "how do I use this" in one
+// call. Explicit rather than derived from the catalogue: a name added there
+// that a habit does cover (html, redirect) needs no example of its own. The
+// package is pinned where a name exists in both (`cache` is also a core
+// directive, `cspNonce` is also a server export).
+const NEEDS_EXAMPLE = [
+  ['Credentials', 'server'], ['rateLimit', 'server'], ['cors', 'server'], ['clientIp', 'server'],
+  ['cache', 'server'], ['revalidateTag', 'server'], ['setFileStore', 'server'], ['diskStore', 'server'],
+  ['generateKey', 'server'], ['signedUrl', 'server'], ['verifySignedUrl', 'server'], ['broadcast', 'server'],
+  ['stream', 'server'], ['streamResponse', 'server'], ['acceptsStream', 'server'], ['json', 'server'],
+  ['readBody', 'server'], ['route', 'server'], ['sitemap', 'server'], ['robots', 'server'],
+  ['validateEnv', 'server'], ['testRequest', 'server'], ['loginAndGetCookies', 'server'],
+  ['createRequestHandler', 'server'],
+  ['connectWS', 'core'], ['asset', 'core'], ['cspNonce', 'core'], ['fixture', 'core'], ['ssrFixture', 'core'],
+];
+
+test('every WebJs-specific export comes back from lookupExport with an @example', async () => {
+  const roots = resolveFrameworkRoots(REPO, { exists: existsSync });
+  const deps = { roots, readFile, readdir: listDir };
+  for (const [name, pkg] of NEEDS_EXAMPLE) {
+    const out = await lookupExport(deps, name, pkg);
+    assert.match(out, /^@webjsdev\//m, `source ${name} --pkg ${pkg} finds a declaration`);
+    assert.match(out, /@example/, `source ${name} --pkg ${pkg} prints an example`);
+  }
+});
+
 test('the catalogue text names every entry and stays short', () => {
   const text = featureCatalog();
   for (const section of FEATURE_CATALOG) {

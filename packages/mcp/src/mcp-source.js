@@ -29,6 +29,7 @@ import { createRequire } from 'node:module';
 import { join, resolve, sep, relative } from 'node:path';
 import { readdirSync, statSync } from 'node:fs';
 import { featureCatalog } from './catalog.js';
+import { guide, conventionPointer } from './guides.js';
 
 /** The published framework packages whose source an agent may want to read. */
 export const FRAMEWORK_PACKAGES = ['core', 'server', 'cli', 'intellisense', 'ui'];
@@ -465,7 +466,8 @@ async function lookupMember(deps, roots, n) {
  * The `source` tool entry point. Dispatches on the args: `export` looks up one
  * export's signature and doc, `path` reads a file, `query` greps, `package`
  * lists that package's entry points, and no args prints the feature catalogue
- * (what WebJs provides, by need). PURE given `deps`
+ * (what WebJs provides, by need). An `export` that names a pattern guide
+ * (`modules`, `optimistic-ui`, ...) returns the guide. PURE given `deps`
  * (`{ roots, readFile, readdir }`).
  *
  * @param {object} deps
@@ -474,7 +476,14 @@ async function lookupMember(deps, roots, n) {
  */
 export async function runSourceTool(deps, args) {
   const a = args || {};
-  if (a.export) return lookupExport(deps, a.export, a.package);
+  // A guide name (`optimistic-ui`, `modules`) is a slug no package exports.
+  if (a.export) {
+    const g = a.package ? null : guide(a.export);
+    if (g) return g;
+    const out = await lookupExport(deps, a.export, a.package);
+    const pointer = conventionPointer(a.export);
+    return pointer ? `${out}\n\n${pointer}` : out;
+  }
   if (a.path) return readSource(deps, a.path);
   if (a.query) return grepSources(deps, a.query);
   if (a.package) return listSources(deps, a.package);

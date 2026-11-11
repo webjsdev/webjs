@@ -86,7 +86,7 @@ export async function currentUser() {
   const token = cookies().get(SESSION_COOKIE)?.value;
   return getUserByToken(token);
 }</code-block>
-    <p>The <code>cookies()</code> helper from <code>@webjsdev/server</code> reads the in-flight Request via AsyncLocalStorage, so no parameter passing needed. It has Next.js's shape: <code>get(name)</code> returns <code>{ name, value }</code>, and <code>cookies().set(name, value, options)</code> / <code>cookies().delete(name)</code> write a <code>Set-Cookie</code> onto the response from a server action or route handler.</p>
+    <p>The <code>cookies()</code> helper from <code>@webjsdev/server</code> reads the in-flight Request via AsyncLocalStorage, so no parameter passing needed. It has Next.js's shape: <code>get(name)</code> returns <code>{ name, value }</code>, and <code>cookies().set(name, value, options)</code> / <code>cookies().delete(name)</code> write a <code>Set-Cookie</code> onto the response from a server action or route handler. A cookie set on a path or domain is cleared with <code>cookies().delete(name, { path, domain })</code>, which always expires it, even when the options you pass (the ones you set it with) carry a <code>maxAge</code>.</p>
 
     <h2>Route Protection via Middleware</h2>
     <code-block>// app/dashboard/middleware.ts

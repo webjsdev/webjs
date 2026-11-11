@@ -883,6 +883,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 //     posts: { author: r.one.users({ from: r.posts.userId, to: r.users.id }) },
 //     users: { posts: r.many.posts() },
 //   }));
+// Drizzle 1.0's db.query takes plain objects, not the eq() / asc() helpers of
+// Drizzle 0.x (those still go in db.select().where(...)):
+//   db.query.posts.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, with: { author: true } })
 export const relations = defineRelations({ users }, () => ({}));
 
 // Derived types, never hand-written.
@@ -961,6 +964,16 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
 // query builder, but typed as a union of the two, TypeScript cannot resolve an
 // overloaded method across it and db.select({ id: users.id }) fails to compile.
 type Db = NodeSQLiteDatabase<typeof schema.relations>;
+
+// Transactions: both drivers are synchronous, so db.transaction takes a
+// SYNCHRONOUS callback whose queries end in .all(), .get() or .run(). An async
+// callback fails typecheck with "Sync drivers can't use async functions in
+// transactions!":
+//   const booking = db.transaction((tx) => {
+//     const room = tx.select().from(rooms).where(eq(rooms.id, roomId)).get();
+//     if (!room) throw new Error('No such room.'); // a throw rolls it back
+//     return tx.insert(bookings).values({ roomId, startsAt }).returning().get();
+//   });
 
 async function connect(): Promise<Db> {
   if ((globalThis as { Bun?: unknown }).Bun) {

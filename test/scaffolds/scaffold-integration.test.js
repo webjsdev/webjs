@@ -875,7 +875,11 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     // The brief plus the scaffold's rules plus the This app stub: still short,
     // since every line is read on every turn.
     assert.match(fs, /run `npx webjs source`, which lists what WebJs provides for each need\./, 'names the feature catalogue');
-    assert.ok(fs.split('\n').length < 68, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
+    // Every eval build opened the shipped hooks to learn what they enforce, so
+    // the file says it: check-on-edit, the refusals, and the soft flags.
+    assert.match(fs, /Hooks, so you need not open them: each edit returns that file's `webjs check` and type/, 'summarises the shipped hooks');
+    assert.match(fs, /`extends HTMLElement`, an em-dash/, 'naming what they refuse');
+    assert.ok(fs.split('\n').length < 70, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);
     }

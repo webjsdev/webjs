@@ -149,10 +149,16 @@ export async function requestHabits() {
   headers().set('x-a', '1');
   for (const [k] of headers()) void k;
   const theme: string = cookies().get('theme')?.value ?? 'light';
+  // A cookie set on a path is cleared by naming that path, as agents write it.
+  cookies().delete('session', { path: '/admin', domain: 'example.com' });
+  cookies().delete({ name: 'session', path: '/admin' });
   const app = await createRequestHandler({ appDir: '.', dev: true });
   const res = await testRequest(app.handle, '/');
   const { cookies: jar } = await loginAndGetCookies(app.handle, { email: 'a@b.c', password: 'secret-123' });
   const sent = await submitForm(app.handle, '/rooms/1', { day: '2026-11-10', hours: ['1', '2'] }, { cookies: jar });
+  // A form captured before the state changed is submitted from the earlier HTML.
+  const earlier = await res.text();
+  await submitForm(app.handle, '/rooms/1', { day: '2026-11-10' }, { html: earlier, cookies: jar });
   return [ua, fromHeaders, theme, res.status, sent.headers.get('location')];
 }
 

@@ -1,0 +1,319 @@
+/**
+ * Pattern guides: how WebJs wants a feature built, one short page per need
+ * (routing, the module layout, progressive enhancement, optimistic UI, type
+ * safety, data flow, authentication, testing, uploads). `npx webjs source <guide>` prints one,
+ * as does the MCP `source` tool given the guide's name as `export`.
+ *
+ * These are not a docs corpus (the removed `docs` tool served the whole site).
+ * Each guide is capped (under 40 lines, held by test/guides.test.mjs) and
+ * ends in actions, never prose: the exports to look up next and the docs page
+ * for the long version. Every export a guide names is checked to exist. A
+ * guide is printed only when asked for by name; nothing lists them up front.
+ *
+ * Guide names are slugs no package exports (`optimistic-ui`, not
+ * `optimistic`), so a lookup of an export never lands on a guide.
+ *
+ * @module guides
+ */
+
+/** @type {Record<string, { need: string, text: string }>} */
+export const GUIDES = {
+  routing: {
+    need: 'the app/ file conventions: pages, layouts, route.ts, middleware.ts, boundaries',
+    text: `Guide: routing (the app/ file conventions, as in the Next.js App Router)
+
+  app/page.ts                   /          default export (ctx) => html, server only
+  app/layout.ts                 wraps every page below it; only the root one writes <html>
+  app/posts/[id]/page.ts        /posts/1   params.id, or const { id } = await params
+  app/docs/[...slug]/page.ts    /docs/a/b  params.slug is a string[] ([[...slug]] matches /docs too)
+  app/(admin)/users/page.ts     /users     a (group) adds no URL segment; _folders are not routed
+  app/api/posts/[id]/route.ts   export async function GET(req: Request, { params }) {
+                                  const { id } = await params; return Response.json(...) }
+                                GET, POST, PUT, PATCH, DELETE, each returning a Response
+  app/middleware.ts             export default async function middleware(request: Request),
+                                run before every page, form post and route.ts under it;
+                                return a Response to answer, nothing to continue
+  app/admin/middleware.ts       the same for /admin and everything under it
+  middleware.ts beside app/     the app-wide one, which also sees action RPC calls
+
+Gate a section in a middleware.ts, not in a layout: a page renders before its
+layouts, and a client navigation skips the layouts the browser already has.
+
+Boundaries, the nearest one up the folders renders inside the layouts above it:
+  loading.ts      shown while the page loads
+  error.ts        a render that throws, given { error }
+  not-found.ts    notFound(), or (at the root) no route matched
+  forbidden.ts    forbidden(), a 403      unauthorized.ts  unauthorized(), a 401
+Throw them, or redirect('/login'), from a page, a layout or a form action.
+
+Metadata: export const metadata = { title, description } from a page or a
+layout, or export async function generateMetadata({ params }) for a dynamic one.
+
+Look up: npx webjs source redirect, npx webjs source notFound, npx webjs source generateMetadata
+Docs: https://webjs.dev/docs/routing`,
+  },
+
+  modules: {
+    need: 'how an app is laid out',
+    text: `Guide: modules (how a WebJs app is laid out)
+
+One folder per feature under modules/<feature>/, and thin routes:
+  modules/posts/actions/create-post.server.ts   'use server', one action per file
+  modules/posts/queries/list-posts.server.ts    server-only reads, called by pages
+  modules/posts/components/post-list.ts         Lit components (these ship)
+  modules/posts/types.ts                        types derived from the schema
+  app/posts/page.ts                             awaits a query, renders components
+  db/schema.server.ts                           every table, one defineRelations
+
+Each table goes in db/schema.server.ts with its row type beside it
+(export type Post = typeof posts.$inferSelect), and its relations in the one
+defineRelations call. modules/users/ in a fresh app is a working example of
+the whole shape: read it, then replace it with the app's own features.
+
+Next: npx webjs source progressive-enhancement (or optimistic-ui, type-safety, data-flow)
+Docs: https://webjs.dev/docs/conventions`,
+  },
+
+  'progressive-enhancement': {
+    need: 'forms that work with and without JavaScript',
+    text: `Guide: progressive-enhancement (forms that work before and after JavaScript)
+
+Bind every write to a 'use server' action, never fetch() plus a click handler:
+  <form action=\${createPost} class="group">
+    <input name="title" value=\${actionData?.values?.title ?? ''}>
+    \${actionData?.fieldErrors?.title ? html\`<p role="alert">\${actionData.fieldErrors.title}</p>\` : nothing}
+    <button class="group-aria-busy:opacity-50" type="submit">Save</button>
+  </form>
+
+- JavaScript off: the browser posts; a success that calls redirect() is a 303,
+  and a failure re-renders the page at 422 with the result on actionData.
+- JavaScript on: the client router posts the same body and applies the result
+  in place (no reload, scroll and focus kept, the form reset on success), with
+  aria-busy on the form while it is in flight.
+- Invalid input: return { success: false, fieldErrors, values, status: 422 }.
+- Several actions on one form: <button formaction=\${deletePost}>.
+
+Look up: npx webjs source ActionResult, npx webjs source PageProps
+Docs: https://webjs.dev/docs/progressive-enhancement`,
+  },
+
+  'optimistic-ui': {
+    need: 'show a write before the server confirms it',
+    text: `Guide: optimistic-ui (show a write before the server confirms it)
+
+Inside a Lit component that owns the list, seeded by its page as a property:
+  pending = optimistic(this, { source: () => this.posts, update: (rows, p) => ... });
+  onDelete(e, id) { e.preventDefault(); this.pending.add({ id }, deletePost(new FormData(e.target))); }
+
+- Keep the reducer pure (it runs on every render); mint a temp id in the handler.
+- The entry drops when the promise settles; on success write the server's row
+  into the seeded property.
+- Keep the form bound to the action (action=\${deletePost}) so it posts with
+  JavaScript off; @submit only intercepts it.
+- One value (a like, a toggle): optimistic(signal, value, () => action()).
+- Skip it when the result cannot be predicted from the input.
+
+Look up: npx webjs source optimistic (a full component example)
+Docs: https://webjs.dev/docs/optimistic-ui`,
+  },
+
+  'type-safety': {
+    need: 'one set of types from the database to the page',
+    text: `Guide: type-safety (one set of types from the database to the page)
+
+TypeScript must be erasable: no enum, decorator, value namespace or parameter
+property. Types are stripped to whitespace and nothing is compiled.
+- Rows: export type Post = typeof posts.$inferSelect beside the table;
+  inserts use typeof posts.$inferInsert. Never hand-write a row type.
+- Actions return ActionResult<Post>, and the one function is typed for a form
+  binding, an RPC call from a component and a route handler alike.
+- Pages: PageProps<'/posts/[id]'> types params from the route; actionData is a
+  failed action's result (pass its type as the second parameter).
+- Components take types with import type, which is erased, so a server
+  module never reaches the browser.
+- npx webjs types writes typed hrefs; npx webjs typecheck runs tsc.
+
+Look up: npx webjs source ActionResult, npx webjs source PageProps
+Docs: https://webjs.dev/docs/typescript`,
+  },
+
+  'data-flow': {
+    need: 'queries, actions, RPC and route handlers',
+    text: `Guide: data-flow (where server code goes and how the browser reaches it)
+
+- Reads: queries/*.server.ts with no 'use server', called from a page or a
+  layout, which run only on the server (as Next.js server components do).
+- Drizzle 1.0's db.query takes objects, not Drizzle 0.x's eq() / asc():
+    db.query.posts.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, with: { author: true } })
+  eq(), and() and lt() go in db.select().from(posts).where(...).
+- SQLite's drivers are synchronous: db.transaction((tx) => { ... }) takes a
+  sync callback whose queries end in .all(), .get() or .run() (never async).
+- Writes: actions/*.server.ts with 'use server'. A form binds one; a component
+  imports and calls it, which goes over RPC (a Date or a Map survives).
+- Public HTTP API: app/api/<name>/route.ts exporting GET, POST and the rest,
+  calling the same actions (or wrap one with route()):
+    // app/api/polls/[slug]/route.ts
+    export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+      const poll = await findPoll((await params).slug);
+      return poll ? Response.json(poll) : Response.json({ error: 'Not found' }, { status: 404 });
+    }
+- Components never import the database or a server-only module: data arrives
+  as a property from the page, or through an action call.
+- After a write: revalidatePath('/posts') refreshes cached pages, redirect()
+  navigates, and a returned failure re-renders with its message.
+- Cache a read with cache(fn, { key, ttl, tags }) and revalidateTag(tag).
+
+Look up: npx webjs source route, npx webjs source cache, npx webjs source revalidatePath
+Docs: https://webjs.dev/docs/server-actions`,
+  },
+
+  authentication: {
+    need: 'accounts, sign-in and protected pages',
+    text: `Guide: authentication (accounts, sign-in, protected pages)
+
+createAuth is Auth.js's API, written once in a server-only module:
+  // modules/auth/auth.server.ts
+  export const { auth, signIn, signOut, handlers } = createAuth({
+    providers: [Credentials({ async authorize(c: { email: string; password: string }) {
+      const user = await findUserByEmail(c.email);   // your own query
+      if (!user || !(await verifyPassword(c.password, user.passwordHash))) return null;
+      return { id: String(user.id), email: user.email };
+    } })],
+  });
+  // app/api/auth/[...path]/route.ts
+  export const { GET, POST } = handlers;
+- Keep a password hash on users, never the password: scrypt from node:crypto
+  with a random salt, compared with timingSafeEqual.
+- Log in: a 'use server' action awaits signIn('credentials', formData,
+  { redirectTo: '/' }). A wrong password throws CredentialsSignin: catch it and
+  return { success: false, error }. Log out: await signOut({ redirectTo: '/login' }).
+- Gate pages in app/middleware.ts, not in a layout:
+    const PUBLIC = ['/login', '/signup', '/api/auth'];
+    export default async function middleware(request: Request) {
+      const { pathname } = new URL(request.url);
+      if (PUBLIC.some((p) => pathname === p || pathname.startsWith(p + '/'))) return;
+      if (!(await auth())?.user) return Response.redirect(new URL('/login', request.url), 303);
+    }
+- An action a component calls directly skips app/middleware.ts: check
+  (await auth())?.user inside it.
+- Add GitHub or Google: providers: [GitHub({ clientId, clientSecret })].
+  AUTH_SECRET signs the session; development and tests generate one.
+
+Look up: npx webjs source createAuth, npx webjs source Credentials
+Docs: https://webjs.dev/docs/auth`,
+  },
+
+  testing: {
+    need: 'server tests against a real database',
+    text: `Guide: testing (server tests against a real database)
+
+npx webjs test runs test/**/*.test.ts (node --test, or bun test on Bun) on a
+fresh migrated SQLite database, so a test never touches db/dev.db.
+- Pages and forms, through the real request handler:
+    const app = await createRequestHandler({ appDir, dev: true });
+    const res = await submitForm(app.handle, '/posts/new', { title: 'Hi' });
+    assert.equal(res.status, 303);
+- testRequest(app.handle, '/posts') for a GET or a JSON route. Carry a cookie
+  the app set into the next request:
+    const cookie = cookiesToHeader(getSetCookies(res));
+    await submitForm(app.handle, '/p/abc', { option: '1' }, { cookies: cookie });
+  loginAndGetCookies signs in with credentials and returns the same header.
+- Call a query or an action directly for its logic; an action that redirects
+  throws, so test that one through submitForm.
+- Components: npx webjs test --browser, with fixture() from @webjsdev/core/testing.
+
+Look up: npx webjs source submitForm, npx webjs source testRequest
+Docs: https://webjs.dev/docs/testing`,
+  },
+
+  uploads: {
+    need: 'attach a file to a record, store it and serve it back',
+    text: `Guide: uploads (attach a file to a record, store it and serve it back)
+
+The row keeps the storage key, never the bytes, so the table gets a
+fileKey: text() column beside the record's own fields.
+- The form: <form action=\${attachFile}> holding <input type="file" name="file"
+  accept="image/png,image/jpeg,application/pdf">. A bound form gets
+  enctype="multipart/form-data" from the renderer (writing it is harmless).
+- The 'use server' action checks the file before storing it:
+    const file = formData.get('file');
+    const fail = (msg: string) => ({ success: false as const, fieldErrors: { file: msg }, status: 422 });
+    if (!(file instanceof File) || file.size === 0) return fail('Choose a file.');
+    if (file.size > 5 * 1024 * 1024) return fail('At most 5 MB.');
+    if (!['image/png', 'image/jpeg', 'application/pdf'].includes(file.type)) return fail('An image or a PDF.');
+    const key = generateKey(file.name);   // <uuid>.<ext>, safe as a path
+    await getFileStore().put(key, file);  // streamed into .webjs/uploads
+    await db.update(documents).set({ fileKey: key }).where(eq(documents.id, id));
+- Serving: nothing serves stored files by default, so the app adds a route:
+    // app/files/[key]/route.ts
+    export async function GET(req: Request, { params }: { params: Promise<{ key: string }> }) {
+      const { key } = await params;
+      const check = verifySignedUrl(new URL(req.url), process.env.FILE_URL_SECRET!);
+      if (!check.valid || check.key !== key) return new Response('Forbidden', { status: 403 });
+      const stored = await getFileStore().get(key);
+      if (!stored) return new Response('Not found', { status: 404 });
+      return new Response(stored.body, { headers: { 'content-type': stored.contentType,
+        'x-content-type-options': 'nosniff', 'content-disposition': 'attachment' } });
+    }
+- The link, minted in a page: base is that route's path, since the default is
+  the store's /uploads/<key>, which nothing serves.
+    signedUrl(doc.fileKey, { secret: process.env.FILE_URL_SECRET!, base: '/files/' + doc.fileKey, expiresIn: 3600 })
+- file.type is what the browser claims, so keep nosniff and attachment on
+  anything a user sent. Set FILE_URL_SECRET in .env.
+
+Look up: npx webjs source signedUrl, npx webjs source getFileStore, npx webjs source generateKey
+Docs: https://webjs.dev/docs/file-storage`,
+  },
+};
+
+/**
+ * File convention names, as an agent looks them up, onto the guide that
+ * explains them. In the #1692 evals agents ran `webjs source not-found`,
+ * `route` and `middleware` and then read the router to learn the conventions.
+ * Matched case-sensitively, so a name that differs from an export only in case
+ * stays the export (`notfound` is the guide, `notFound` the function). None
+ * of these is an export: test/guides.test.mjs holds that. `route` and
+ * `middleware` are exports (the `route()` adapter, the middleware type), so
+ * they print the export with a pointer here (`conventionPointer`). The words
+ * for a file upload (`upload`, `attachments`) find the `uploads` guide.
+ * @type {Record<string, string>}
+ */
+export const GUIDE_ALIASES = Object.fromEntries([
+  'routes', 'router', 'app-router', 'file-conventions',
+  'page', 'page.ts', 'layout', 'layout.ts', 'route.ts', 'route-handler', 'route-handlers',
+  'middleware.ts', 'proxy.ts', 'not-found', 'not-found.ts', 'notfound', 'error', 'error.ts',
+  'loading', 'loading.ts', 'forbidden.ts', 'unauthorized.ts', 'global-error', 'global-error.ts',
+  'global-not-found', 'boundaries', 'dynamic-routes', 'catch-all', 'route-groups',
+].map((alias) => [alias, 'routing']).concat(
+  ['upload', 'file-upload', 'file-uploads', 'attachments', 'attachment'].map((alias) => [alias, 'uploads']),
+));
+
+/** The exports whose name is also a file convention (`route.ts`, `middleware.ts`). */
+const CONVENTION_EXPORTS = new Set(['route', 'middleware']);
+
+/**
+ * The line an export lookup appends when the name is also a file convention,
+ * so `webjs source route` (the `route()` adapter) still leads to `route.ts`.
+ * @param {string} name
+ * @returns {string | null}
+ */
+export function conventionPointer(name) {
+  return CONVENTION_EXPORTS.has(String(name ?? '').trim())
+    ? 'For the route.ts / middleware.ts file convention: npx webjs source routing'
+    : null;
+}
+
+/**
+ * One guide's text, or null when the name is not a guide. Case and spaces are
+ * forgiven for a guide's own name (`Optimistic UI` finds `optimistic-ui`); an
+ * alias (`not-found`, `middleware.ts`, `app/page.ts`) matches as written.
+ * @param {string} name
+ * @returns {string | null}
+ */
+export function guide(name) {
+  const raw = String(name ?? '').trim();
+  const key = raw.toLowerCase().replace(/[\s_]+/g, '-');
+  if (Object.hasOwn(GUIDES, key)) return GUIDES[key].text;
+  const alias = raw.replace(/^\.?\/?app\//, '').replace(/\.(?:m?js|mts)$/, '.ts');
+  return Object.hasOwn(GUIDE_ALIASES, alias) ? GUIDES[GUIDE_ALIASES[alias]].text : null;
+}

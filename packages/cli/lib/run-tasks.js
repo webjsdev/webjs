@@ -30,11 +30,13 @@ export function envWithLocalBin(cwd, env = process.env) {
  * the FIRST failure so the caller can abort the boot, or `{ ok: true }`. Pure of
  * `process.exit` and `console` (the bin owns the exit code + logging via the
  * `onStep` hook) so the orchestration is deterministically unit-testable, with
- * `spawn` injectable for tests.
+ * `spawn` injectable for tests. `onSpawn` receives each step's child process,
+ * so a caller stopped mid-step (`webjs stop` during `dev.before`) can take the
+ * running step down with it.
  *
  * @param {string[]} steps
  * @param {string} cwd
- * @param {{ spawn?: typeof nodeSpawn, onStep?: (step: string) => void }} [opts]
+ * @param {{ spawn?: typeof nodeSpawn, onStep?: (step: string) => void, onSpawn?: (child: import('node:child_process').ChildProcess) => void }} [opts]
  * @returns {Promise<{ ok: true } | { ok: false, step: string, code: number }>}
  */
 export async function runBeforeSteps(steps, cwd, opts = {}) {
@@ -44,6 +46,7 @@ export async function runBeforeSteps(steps, cwd, opts = {}) {
     if (opts.onStep) opts.onStep(step);
     const code = await new Promise((res) => {
       const c = spawn(step, { shell: true, stdio: 'inherit', cwd, env });
+      if (opts.onSpawn) opts.onSpawn(c);
       // A child killed by a signal exits with `code` null and `signal` set.
       // That is a failure (an OOM-killed `db migrate` must not boot the
       // server over a half-applied schema), so it maps to 1, never 0.

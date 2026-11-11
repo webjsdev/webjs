@@ -1838,7 +1838,7 @@
     @apply overflow-hidden;
   }
   .cn-accordion-trigger {
-    @apply relative flex-1 items-start border border-transparent disabled:pointer-events-none disabled:opacity-50;
+    @apply relative flex-1 items-start border border-transparent cursor-default disabled:pointer-events-none disabled:opacity-50;
   }
   .cn-alert-description {
     @apply [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground;

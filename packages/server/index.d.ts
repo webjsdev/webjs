@@ -205,6 +205,21 @@ export interface ServerHandle {
  * Create an embeddable request handler. Returns `{ handle, rebuild, routeFor,
  * warmup, getRouteTable, appDir, dev, logger }`. Throws at boot on an
  * unsupported Node version or a failed `env.{js,ts}` validation.
+ *
+ * @example
+ * ```ts
+ * // test/home.test.ts, run with `webjs test`: the whole pipeline, no server, no network
+ * import { test } from 'node:test';
+ * import assert from 'node:assert/strict';
+ * import { createRequestHandler } from '@webjsdev/server';
+ *
+ * test('the home page renders', async () => {
+ *   const app = await createRequestHandler({ appDir: process.cwd() });
+ *   const res = await app.handle(new Request('http://localhost/'));
+ *   assert.equal(res.status, 200);
+ *   assert.match(await res.text(), /<h1/);
+ * });
+ * ```
  */
 export declare function createRequestHandler(opts: RequestHandlerOptions): Promise<RequestHandler>;
 
@@ -237,7 +252,25 @@ export declare function assertNodeVersion(opts?: {
 // env-schema.js (#236)
 // ---------------------------------------------------------------------------
 
-/** Pure env validator: check an env object against a schema or validator function. */
+/**
+ * Pure env validator: check an env object against a schema or validator function.
+ *
+ * @example
+ * ```ts
+ * // env.ts at the app root: WebJs runs validateEnv(schema, process.env) at boot
+ * // and refuses to start, listing every missing or invalid variable at once.
+ * export default {
+ *   DATABASE_URL: 'url',
+ *   AUTH_SECRET: { type: 'string', minLength: 32 },
+ *   PORT: { type: 'number', default: 3000 },           // a default makes it optional
+ *   NODE_ENV: { type: 'enum', values: ['development', 'production', 'test'] },
+ * };
+ *
+ * // Calling it yourself (a test, a script) returns the verdict instead of throwing:
+ * import { validateEnv } from '@webjsdev/server';
+ * const { ok, errors } = validateEnv({ API_KEY: 'string' }, process.env);
+ * ```
+ */
 export declare function validateEnv(
   schema: object | ((env: Record<string, string | undefined>) => void),
   env: Record<string, string | undefined>,
@@ -363,6 +396,22 @@ export declare function invokeAction(
  * optional boundary validator, and dispatches through the request abort signal
  * + the optional middleware chain. The always-works baseline is a hand-written
  * `route.ts` that imports and calls the action; this is the convenience.
+ *
+ * @example
+ * ```ts
+ * // app/api/posts/[id]/route.ts: GET /api/posts/7 calls getPost({ id: '7' })
+ * import { route } from '@webjsdev/server';
+ * import { getPost } from '#modules/posts/actions/get-post.server.ts';       // 'use server' actions
+ * import { updatePost } from '#modules/posts/actions/update-post.server.ts';
+ *
+ * export const GET = route(getPost);        // the result is sent as JSON, a returned Response as is
+ * export const PUT = route(updatePost, {    // the JSON body merges into the same input object
+ *   validate: (input) => {
+ *     if (typeof input.title !== 'string') throw new Error('title is required');  // a throw answers 400
+ *     return { id: String(input.id), title: input.title };
+ *   },
+ * });
+ * ```
  */
 export declare function route<A, R>(
   action: (input: A, ctx: { req: Request; params: Record<string, string> }) => R | Promise<R>,
@@ -693,7 +742,9 @@ export interface RequestCookies {
   readonly size: number;
   set(name: string, value: string, options?: Omit<ResponseCookie, 'name' | 'value'>): RequestCookies;
   set(cookie: ResponseCookie): RequestCookies;
-  delete(name: string | { name: string; path?: string; domain?: string }): RequestCookies;
+  /** Expire a cookie. Pass the `path` / `domain` it was set with, or the browser keeps it. */
+  delete(name: string, options?: Omit<ResponseCookie, 'name' | 'value' | 'expires' | 'maxAge'>): RequestCookies;
+  delete(cookie: { name: string; path?: string; domain?: string }): RequestCookies;
   toString(): string;
   [Symbol.iterator](): IterableIterator<[string, RequestCookie]>;
 }
@@ -734,7 +785,18 @@ export declare function defaultLogger(opts?: { dev?: boolean }): Logger;
 // rate-limit.js
 // ---------------------------------------------------------------------------
 
-/** Build a rate-limit middleware `(req, next) => Response`. */
+/**
+ * Build a rate-limit middleware `(req, next) => Response`.
+ *
+ * @example
+ * ```ts
+ * // app/api/auth/middleware.ts: 10 requests a minute per client on every /api/auth route
+ * import { rateLimit } from '@webjsdev/server';
+ * export default rateLimit({ window: '1m', max: 10 });   // over it answers 429 + retry-after
+ * // Behind Cloudflare, key on the visitor rather than the edge:
+ * // rateLimit({ window: '1m', max: 10, trustProxy: true, clientIpHeader: 'cf-connecting-ip' })
+ * ```
+ */
 export declare function rateLimit(opts?: {
   window?: number | string;
   max?: number;
@@ -781,6 +843,19 @@ export declare function parseWindow(w: number | string): number;
  * whenever a CDN sits in front: the default chain's leftmost
  * `X-Forwarded-For` entry is then the CDN's egress address rather than the
  * visitor.
+ *
+ * @example
+ * ```ts
+ * // app/api/votes/route.ts: one vote per client address
+ * import { clientIp } from '@webjsdev/server';
+ * import { recordVote } from '#modules/votes/queries/record-vote.server.ts';
+ *
+ * export async function POST(req: Request) {
+ *   const ip = clientIp(req);   // the socket peer, never a client-sent header
+ *   // Behind Cloudflare: clientIp(req, { trustProxy: true, header: 'cf-connecting-ip' })
+ *   return Response.json({ counted: await recordVote(ip) });
+ * }
+ * ```
  */
 export declare function clientIp(
   req: Request,
@@ -806,7 +881,22 @@ export interface CorsOptions {
   maxAge?: number;
 }
 
-/** Build a CORS middleware `(req, next) => Response`. */
+/**
+ * Build a CORS middleware `(req, next) => Response`.
+ *
+ * @example
+ * ```ts
+ * // app/api/public/middleware.ts: CORS for every route.ts under /api/public,
+ * // the OPTIONS preflight answered for you
+ * import { cors } from '@webjsdev/server';
+ *
+ * export default cors({
+ *   origin: ['https://app.example.com', /\.example\.com$/],   // or '*' for a public, cookie-free API
+ *   credentials: true,                                        // needs a listed origin, never '*'
+ *   maxAge: 600,                                              // preflight cache, in seconds
+ * });
+ * ```
+ */
 export declare function cors(options?: CorsOptions): Middleware;
 /** Resolve the allowed origin for a request given a policy (shared CORS core). */
 export declare function resolveOrigin(
@@ -838,6 +928,21 @@ export declare function setStore(store: CacheStore): void;
  * Wrap an async function with TTL caching. Preserves the wrapped signature and
  * adds an `invalidate()` member. `tags` (static `string[]` or a per-arg
  * `(...args) => string[]`) enable `revalidateTag` cross-module eviction.
+ *
+ * @example
+ * ```ts
+ * // modules/posts/queries/get-post.server.ts
+ * import { cache } from '@webjsdev/server';
+ * import { eq } from 'drizzle-orm';
+ * import { db } from '#db/connection.server.ts';
+ * import { posts } from '#db/schema.server.ts';
+ *
+ * export const getPost = cache(
+ *   async (id: number) => (await db.select().from(posts).where(eq(posts.id, id)).limit(1))[0],
+ *   { key: 'post', ttl: 300, tags: (id) => ['post:' + id] },   // ttl in seconds, default 60
+ * );
+ * // A write elsewhere evicts just that id: await revalidateTag('post:' + id)
+ * ```
  */
 export declare function cache<T extends (...args: any[]) => Promise<any>>(
   fn: T,
@@ -857,6 +962,20 @@ export declare function cache<T extends (...args: any[]) => Promise<any>>(
  * argument, `revalidateTag(tag, 'max')` (a cache-life profile, or
  * `{ expire }`), for source compatibility: WebJs evicts at once whatever the
  * profile, since `cache()` has no stale-while-revalidate window to honour.
+ *
+ * @example
+ * ```ts
+ * // modules/posts/actions/rename-post.server.ts
+ * 'use server';
+ * import { revalidateTag } from '@webjsdev/server';
+ * import { updatePostTitle } from '../queries/update-post-title.server.ts';
+ *
+ * export async function renamePost(input: { id: number; title: string }) {
+ *   await updatePostTitle(input.id, input.title);
+ *   await revalidateTag('post:' + input.id);   // every cache() read tagged 'post:<id>' recomputes
+ *   return { success: true };
+ * }
+ * ```
  */
 export declare function revalidateTag(tag: string, profile?: string | { expire?: number }): Promise<void>;
 /** Evict every `cache()` entry tagged with any of `tags`. */
@@ -968,7 +1087,25 @@ export declare function getSession(req?: Request | null): Session;
 // broadcast.js
 // ---------------------------------------------------------------------------
 
-/** Broadcast data to all WebSocket clients connected to a route path. */
+/**
+ * Broadcast data to all WebSocket clients connected to a route path.
+ *
+ * @example
+ * ```ts
+ * // app/api/chat/route.ts: each socket that connects here is registered under '/api/chat'
+ * import { broadcast } from '@webjsdev/server';
+ *
+ * type Socket = { on(event: 'message', cb: (data: Buffer) => void): void };   // or ws's own WebSocket type
+ * export function WS(ws: Socket) {
+ *   ws.on('message', (data) => broadcast('/api/chat', data.toString(), { except: ws }));
+ * }
+ * // A 'use server' action can push to the same sockets after a write:
+ * // broadcast('/api/chat', JSON.stringify({ kind: 'joined', name }))
+ * ```
+ * The path is the connected URL's pathname, so a dynamic route broadcasts to
+ * its concrete path (`'/api/rooms/' + params.roomId`). One process only: fan out
+ * across instances yourself (Redis pub/sub).
+ */
 export declare function broadcast(
   path: string,
   data: string | Uint8Array,
@@ -1016,9 +1153,36 @@ export interface FileStore {
 
 /** The default uploads directory (relative to cwd), gitignore-friendly. */
 export declare const DEFAULT_UPLOAD_DIR: string;
-/** Local-disk file store (the default adapter). Streams writes. */
+/**
+ * Local-disk file store (the default adapter). Streams writes.
+ *
+ * @example
+ * ```ts
+ * // instrumentation.ts at the app root: register() runs once at boot
+ * import { setFileStore, diskStore } from '@webjsdev/server';
+ *
+ * export function register() {
+ *   // Defaults: dir '<cwd>/.webjs/uploads', baseUrl '/uploads'. url(key) is baseUrl + '/' + key,
+ *   // and nothing serves it for you: add the route.ts at that path (see verifySignedUrl).
+ *   setFileStore(diskStore({ dir: '/var/data/uploads', baseUrl: '/files' }));
+ * }
+ * ```
+ */
 export declare function diskStore(opts?: { dir?: string; baseUrl?: string }): FileStore;
-/** Set the default file store (call at startup to use a custom dir or S3). */
+/**
+ * Set the default file store (call at startup to use a custom dir or S3).
+ *
+ * @example
+ * ```ts
+ * // instrumentation.ts at the app root: every getFileStore() call follows the swap
+ * import { setFileStore, diskStore } from '@webjsdev/server';
+ * import { r2Store } from '#lib/r2-store.server.ts';   // your adapter: put, get, delete, url
+ *
+ * export function register() {
+ *   setFileStore(process.env.R2_BUCKET ? r2Store(process.env.R2_BUCKET) : diskStore());
+ * }
+ * ```
+ */
 export declare function setFileStore(store: FileStore): void;
 /**
  * Get the default file store (`diskStore` under `<cwd>/.webjs/uploads` unless set).
@@ -1041,16 +1205,65 @@ export declare function setFileStore(store: FileStore): void;
  * ```
  */
 export declare function getFileStore(): FileStore;
-/** Generate a random, opaque, traversal-safe key, preserving a whitelisted extension. */
+/**
+ * Generate a random, opaque, traversal-safe key, preserving a whitelisted extension.
+ *
+ * @example
+ * ```ts
+ * // modules/photos/actions/upload-photo.server.ts, bound as <form action=${uploadPhoto}>
+ * // holding <input type="file" name="photo">
+ * 'use server';
+ * import { getFileStore, generateKey, type FormInput } from '@webjsdev/server';
+ *
+ * export async function uploadPhoto(input: FormInput<{ photo: File }>) {
+ *   const key = generateKey(input.photo.name);   // '<uuid>.jpg': never the user's own name or path
+ *   await getFileStore().put(key, input.photo);
+ *   return { success: true, data: { key } };    // store the key on the row
+ * }
+ * ```
+ */
 export declare function generateKey(filename?: string): string;
 /** Validate a key and return the absolute path it resolves to (throws on traversal). */
 export declare function assertSafeKey(dir: string, key: string): string;
-/** Mint a signed, expiring URL for a stored object (HMAC-SHA256). */
+/**
+ * Mint a signed, expiring URL for a stored object (HMAC-SHA256).
+ *
+ * @example
+ * ```ts
+ * // modules/photos/utils/photo-url.server.ts: a link that works for an hour, no session needed
+ * import { signedUrl } from '@webjsdev/server';
+ *
+ * export function photoUrl(key: string) {
+ *   return signedUrl(key, {
+ *     secret: process.env.FILE_URL_SECRET!,
+ *     base: '/files/' + encodeURIComponent(key),   // the route.ts serving it (default getFileStore().url(key))
+ *     expiresIn: 3600,                              // seconds, the default (0 or less is already expired)
+ *   });
+ * }
+ * // returns '/files/<key>?key=<key>&exp=<unix seconds>&sig=<hmac>', checked by verifySignedUrl
+ * ```
+ */
 export declare function signedUrl(
   key: string,
   opts: { secret: string; expiresIn?: number; base?: string },
 ): string;
-/** Verify a signed URL (or parsed params); constant-time, checks expiry + tamper. */
+/**
+ * Verify a signed URL (or parsed params); constant-time, checks expiry + tamper.
+ *
+ * @example
+ * ```ts
+ * // app/files/[key]/route.ts: serve a stored file only to a valid, unexpired signed link
+ * import { getFileStore, verifySignedUrl } from '@webjsdev/server';
+ *
+ * export async function GET(req: Request, { params }: { params: { key: string } }) {
+ *   const check = verifySignedUrl(req.url, process.env.FILE_URL_SECRET!);   // { valid, key, reason? }
+ *   if (!check.valid || check.key !== params.key) return new Response('Forbidden', { status: 403 });
+ *   const file = await getFileStore().get(params.key);
+ *   if (!file) return new Response('Not found', { status: 404 });
+ *   return new Response(file.body, { headers: { 'content-type': file.contentType, 'x-content-type-options': 'nosniff' } });
+ * }
+ * ```
+ */
 export declare function verifySignedUrl(
   input: string | URL | URLSearchParams | { key?: string; exp?: string | number; sig?: string },
   secret: string,
@@ -1060,9 +1273,39 @@ export declare function verifySignedUrl(
 // json.js
 // ---------------------------------------------------------------------------
 
-/** Content-negotiated JSON response (rich wire format when the client asks for it). */
+/**
+ * Content-negotiated JSON response (rich wire format when the client asks for it).
+ *
+ * @example
+ * ```ts
+ * // app/api/posts/route.ts
+ * import { json } from '@webjsdev/server';
+ * import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
+ *
+ * export async function GET() {
+ *   // Plain JSON for curl and fetch; richFetch from @webjsdev/core gets Date, Map and BigInt back intact.
+ *   return json(await listPosts(), { headers: { 'cache-control': 'max-age=60' } });
+ * }
+ * ```
+ */
 export declare function json<T>(data: T, init?: ResponseInit): Promise<Response>;
-/** Parse a request body (webjs rich format or plain JSON); enforces the body-size limit. */
+/**
+ * Parse a request body (WebJs rich format or plain JSON); enforces the body-size limit.
+ *
+ * @example
+ * ```ts
+ * // app/api/posts/route.ts
+ * import { json, readBody } from '@webjsdev/server';
+ * import { createPost } from '#modules/posts/queries/create-post.server.ts';
+ *
+ * export async function POST(req: Request) {
+ *   const body = (await readBody(req)) as { title?: unknown } | null;   // null for an empty body
+ *   if (typeof body?.title !== 'string' || !body.title) return json({ error: 'title is required' }, { status: 422 });
+ *   return json(await createPost({ title: body.title }), { status: 201 });
+ * }
+ * // A body over the limit (1 MiB by default) is answered 413 before it is parsed.
+ * ```
+ */
 export declare function readBody(req: Request): Promise<unknown>;
 
 // ---------------------------------------------------------------------------
@@ -1081,7 +1324,25 @@ export interface SitemapIndexEntry {
   url: string;
   lastModified?: string | Date;
 }
-/** Serialize entries into a spec-valid `<urlset>` XML document. */
+/**
+ * Serialize entries into a spec-valid `<urlset>` XML document.
+ *
+ * @example
+ * ```ts
+ * // app/sitemap.ts, served at /sitemap.xml. Returning the entries array also works,
+ * // sitemap() is for when you want the XML string yourself.
+ * import { sitemap, type MetadataRouteContext } from '@webjsdev/server';
+ * import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
+ *
+ * export default async function ({ siteUrl, pages }: MetadataRouteContext) {
+ *   const posts = await listPosts();
+ *   return sitemap([
+ *     ...(await pages()),   // every static page, already absolute
+ *     ...posts.map((p) => ({ url: siteUrl + '/posts/' + p.id, lastModified: p.updatedAt, priority: 0.7 })),
+ *   ]);
+ * }
+ * ```
+ */
 export declare function sitemap(entries: SitemapEntry[]): string;
 /** Serialize child sitemaps into a `<sitemapindex>` XML document. */
 export declare function sitemapIndex(sitemaps: SitemapIndexEntry[]): string;
@@ -1100,7 +1361,23 @@ export interface RobotsConfig {
   sitemap?: string | string[];
   host?: string;
 }
-/** Serialize a robots config into robots.txt text. */
+/**
+ * Serialize a robots config into robots.txt text.
+ *
+ * @example
+ * ```ts
+ * // app/robots.ts, served at /robots.txt. Return the config and WebJs runs robots() on it.
+ * import type { MetadataRouteContext } from '@webjsdev/server';
+ *
+ * export default function ({ siteUrl }: MetadataRouteContext) {
+ *   return { rules: { userAgent: '*', disallow: ['/api/', '/account'] }, sitemap: siteUrl + '/sitemap.xml' };
+ * }
+ *
+ * // Calling it yourself returns the text, for a handler building its own Response:
+ * import { robots } from '@webjsdev/server';
+ * robots({ rules: [{ userAgent: '*', allow: '/' }, { userAgent: 'GPTBot', disallow: '/' }] });
+ * ```
+ */
 export declare function robots(config?: RobotsConfig): string;
 
 /**
@@ -1134,9 +1411,42 @@ export type RobotsRouteResult = RobotsConfig | string | Response;
 
 /** The content type that negotiates and carries a stream-action response. */
 export declare const STREAM_MIME: string;
-/** Report whether a request opted into a stream-action response (its `Accept` carries the stream MIME). */
+/**
+ * Report whether a request opted into a stream-action response (its `Accept` carries the stream MIME).
+ *
+ * @example
+ * ```ts
+ * // app/todos/[id]/done/route.ts, posted by <form method="post" action="/todos/7/done">
+ * import { acceptsStream, stream, streamResponse } from '@webjsdev/server';
+ * import { completeTodo } from '#modules/todos/queries/complete-todo.server.ts';
+ *
+ * export async function POST(req: Request, { params }: { params: { id: string } }) {
+ *   await completeTodo(Number(params.id));
+ *   // The client router asks for a stream on a form submit, a browser with JS off does not.
+ *   if (acceptsStream(req)) return streamResponse(stream.remove('todo-' + params.id));
+ *   return Response.redirect(new URL('/todos', req.url), 303);
+ * }
+ * ```
+ */
 export declare function acceptsStream(req: Request | { headers?: Headers }): boolean;
-/** The stream-action builder; each method returns one `<webjs-stream>` HTML string. */
+/**
+ * The stream-action builder; each method returns one `<webjs-stream>` HTML string.
+ *
+ * @example
+ * ```ts
+ * // modules/comments/utils/comment-streams.server.ts
+ * import { stream } from '@webjsdev/server';
+ * import { escapeText } from '@webjsdev/core';
+ *
+ * // The target is an element id. It is escaped, the content is not: escape user text yourself.
+ * export const commentAdded = (c: { id: number; body: string }) =>
+ *   stream.append('comments', '<li id="comment-' + c.id + '">' + escapeText(c.body) + '</li>');
+ * export const commentDeleted = (id: number) => stream.remove('comment-' + id);
+ * // Also prepend, before, after, replace (the element itself) and update (its children).
+ * // Send them with streamResponse(...) to a form submit, or broadcast(path, html) to sockets,
+ * // where connectWS(path, { onMessage: (m) => renderStream(m) }) applies them.
+ * ```
+ */
 export declare const stream: {
   append(target: string, content: string): string;
   prepend(target: string, content: string): string;
@@ -1146,7 +1456,25 @@ export declare const stream: {
   update(target: string, content: string): string;
   remove(target: string): string;
 };
-/** Wrap one or more stream-action strings in a `Response` carrying the stream content type. */
+/**
+ * Wrap one or more stream-action strings in a `Response` carrying the stream content type.
+ *
+ * @example
+ * ```ts
+ * // modules/todos/actions/add-todo.server.ts, bound as <form action=${addTodo}> beside <ul id="todos">
+ * 'use server';
+ * import { acceptsStream, getRequest, stream, streamResponse, type FormInput } from '@webjsdev/server';
+ * import { escapeText } from '@webjsdev/core';
+ * import { insertTodo } from '../queries/insert-todo.server.ts';
+ *
+ * export async function addTodo(input: FormInput<{ title: string }>) {
+ *   const todo = await insertTodo(input.title);
+ *   const req = getRequest();
+ *   if (req && acceptsStream(req)) return streamResponse(stream.append('todos', '<li>' + escapeText(todo.title) + '</li>'));
+ *   return { success: true, redirect: '/todos' };   // JS off: the usual redirect and full render
+ * }
+ * ```
+ */
 export declare function streamResponse(...parts: string[]): Response;
 
 // ---------------------------------------------------------------------------
@@ -1375,6 +1703,7 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  * @example
  * ```ts
  * // modules/auth/auth.server.ts
+ * import { createAuth, Credentials, AuthError } from '@webjsdev/server';
  * export const { auth, signIn, signOut, handlers } = createAuth({
  *   providers: [Credentials({
  *     async authorize(c: { email: string; password: string }) {
@@ -1388,7 +1717,8 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
  * // app/api/auth/[...path]/route.ts: export const { GET, POST } = handlers;
  * // Read the user anywhere on the server: const session = await auth();
  *
- * // A 'use server' action bound as <form action=${logIn}>, as with Auth.js in Next:
+ * // A 'use server' action bound as <form action=${logIn}>, as with Auth.js in Next.
+ * // AuthError comes from '@webjsdev/server' (as above), never from auth.server.ts:
  * export async function logIn(formData: FormData) {
  *   try {
  *     await signIn('credentials', formData, { redirectTo: '/dashboard' });
@@ -1431,7 +1761,27 @@ export interface CredentialsOptions<C extends Record<string, unknown> = Record<s
   authorize: (credentials: C) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
   [key: string]: unknown;
 }
-/** The credentials (email/password) provider, Auth.js's `Credentials`. */
+/**
+ * The credentials (email/password) provider, Auth.js's `Credentials`.
+ *
+ * @example
+ * ```ts
+ * // modules/auth/auth.server.ts
+ * import { createAuth, Credentials } from '@webjsdev/server';
+ * import { findUserByEmail } from '#modules/users/queries/find-user-by-email.server.ts';
+ * import { verifyPassword } from './password.server.ts';
+ *
+ * export const { auth, signIn, signOut, handlers } = createAuth({
+ *   providers: [Credentials({
+ *     async authorize(credentials: { email: string; password: string }) {
+ *       const user = await findUserByEmail(credentials.email);
+ *       if (!user || !(await verifyPassword(credentials.password, user.passwordHash))) return null;
+ *       return { id: String(user.id), email: user.email };   // the session user, null refuses
+ *     },
+ *   })],
+ * });
+ * ```
+ */
 export declare function Credentials<C extends Record<string, unknown> = Record<string, unknown>>(
   opts: CredentialsOptions<C>,
 ): ProviderConfig;

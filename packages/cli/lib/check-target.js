@@ -97,21 +97,58 @@ export async function workspaceApps(cwd) {
 }
 
 /**
- * The nearest STRICT ancestor of `cwd` that holds an `app/` directory, or
- * `null`. Started from inside an app (its `app/` or `components/` dir), this is
- * the app the user meant.
+ * Whether `dir` holds a `package.json` file.
+ *
+ * @param {string} dir
+ * @returns {boolean}
+ */
+function hasPackageJson(dir) {
+  try {
+    return statSync(join(dir, 'package.json')).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The app root at or above `start`: the nearest directory holding BOTH an
+ * `app/` directory and a `package.json`, else (an app with no manifest) the
+ * nearest holding `app/`, else `null`.
+ *
+ * `app/` alone is not enough while walking up, because a route segment can be
+ * named `app` too: with `app/app/page.ts` (a `/app` dashboard route), the
+ * app's own `app/` directory holds an `app/` directory, so the first match
+ * from inside it was the route folder rather than the app.
+ *
+ * @param {string} start
+ * @returns {string | null}
+ */
+function nearestAppRoot(start) {
+  /** @type {string | null} */
+  let bare = null;
+  let dir = start;
+  for (;;) {
+    if (hasAppDir(dir)) {
+      if (hasPackageJson(dir)) return dir;
+      bare ??= dir;
+    }
+    const up = dirname(dir);
+    if (up === dir) return bare;
+    dir = up;
+  }
+}
+
+/**
+ * The nearest STRICT ancestor of `cwd` that is an app root (see
+ * `nearestAppRoot`), or `null`. Started from inside an app (its `app/` or
+ * `components/` dir), this is the app the user meant.
  *
  * @param {string} cwd
  * @returns {string | null}
  */
 export function findAncestorApp(cwd) {
-  let dir = dirname(cwd);
-  for (;;) {
-    if (hasAppDir(dir)) return dir;
-    const up = dirname(dir);
-    if (up === dir) return null;
-    dir = up;
-  }
+  const up = dirname(cwd);
+  return up === cwd ? null : nearestAppRoot(up);
 }
 
 /**
@@ -125,8 +162,55 @@ export function findAncestorApp(cwd) {
  */
 export async function findServeTarget(cwd) {
   const target = await findCheckTarget(cwd);
-  if (target.isApp) return { ...target, ancestorApp: null };
+  if (target.isApp) {
+    // An `app/` here can be a route folder (`<root>/app/app/page.ts`). Serving
+    // it would record under the wrong `.webjs/`, where `webjs stop` and
+    // `webjs status` (which resolve `nearestAppRoot`) never look.
+    const root = nearestAppRoot(cwd);
+    if (root && root !== cwd) return { ...target, isApp: false, ancestorApp: root };
+    return { ...target, ancestorApp: null };
+  }
   return { ...target, ancestorApp: target.workspaceApps.length ? null : findAncestorApp(cwd) };
+}
+
+/**
+ * The app root a command that acts on a RUNNING app (`webjs stop`,
+ * `webjs status`) resolves: the nearest directory at or above `cwd` holding
+ * both `app/` and `package.json` (see `nearestAppRoot`, which is what keeps a
+ * route folder named `app` from passing for the app). `root` is null outside
+ * any app, a workspace root included, since which member app is meant is
+ * ambiguous there; the member apps come back in `workspaceApps` for the
+ * message.
+ *
+ * Unlike `webjs dev` / `webjs start`, which refuse inside a subdirectory
+ * (they would serve the wrong directory), these only read the app's record
+ * and config, so the ancestor is unambiguous.
+ *
+ * @param {string} cwd
+ * @returns {Promise<{ root: string | null, workspaceApps: string[] }>}
+ */
+export async function findAppRoot(cwd) {
+  if (!hasAppDir(cwd)) {
+    const apps = await workspaceApps(cwd);
+    if (apps.length) return { root: null, workspaceApps: apps };
+  }
+  return { root: nearestAppRoot(cwd), workspaceApps: [] };
+}
+
+/**
+ * The refusal `webjs stop` / `webjs status` print outside any app.
+ *
+ * @param {'stop' | 'status'} command
+ * @param {string[]} workspaceApps
+ * @returns {string}
+ */
+export function notInsideAppMessage(command, workspaceApps) {
+  const lines = [`webjs ${command}: this directory is not inside a WebJs app (no \`app/\` directory here or above), so there is no server to ${command === 'stop' ? 'stop' : 'check'}.`];
+  if (workspaceApps.length) {
+    lines.push('', `This is a workspace root. Run it inside the app:`, '');
+    for (const app of workspaceApps) lines.push(`  cd ${app} && webjs ${command}`);
+  }
+  return lines.join('\n');
 }
 
 /**
@@ -140,7 +224,15 @@ export async function findServeTarget(cwd) {
  * @returns {string}
  */
 export function notAnAppServeMessage(command, cwd, { workspaceApps, ancestorApp }) {
-  const lines = [
+  const lines = ancestorApp && hasAppDir(cwd) ? [
+    `webjs ${command}: this directory is inside an app, not the app root.`,
+    '',
+    `  ${cwd}`,
+    '',
+    'Its `app/` is a route folder of the app above, which holds both `app/` and',
+    '`package.json`. Started here, the server would serve the route folder as the app.',
+    '',
+  ] : [
     `webjs ${command}: this directory is not a WebJs app, so there is nothing to serve.`,
     '',
     `  ${cwd}`,
