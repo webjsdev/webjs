@@ -147,6 +147,37 @@ export interface OptimisticState<State, Action> {
 }
 
 // Declarative Signature with custom update reducer
+/**
+ * Show a mutation's result before the server confirms it. The declarative form
+ * keeps a queue of pending payloads on a component; `.value` is `source()` with
+ * each folded in by `update` (keep it pure: it runs on every render), and an
+ * entry drops when the promise passed to `.add()` settles. Use it in a
+ * degrade-first form: bound to the action, so it posts with JavaScript off.
+ *
+ * @example
+ * class TodoList extends WebComponent {
+ *   static properties = { todos: { type: Array } };
+ *   declare todos: Todo[];                          // seeded by the page: .todos=${todos}
+ *   pending = optimistic(this, {
+ *     source: () => this.todos,
+ *     update: (rows: Todo[], add: { id: string; title: string }) => [...rows, { ...add, done: false }],
+ *   });
+ *   async add(e: SubmitEvent) {
+ *     e.preventDefault();
+ *     const form = e.target as HTMLFormElement;
+ *     const title = String(new FormData(form).get('title'));
+ *     form.reset();
+ *     const promise = createTodo({ title });        // a 'use server' action, by RPC
+ *     this.pending.add({ id: crypto.randomUUID(), title }, promise);
+ *     const result = await promise;
+ *     if (result.success && result.data) this.todos = [...this.todos, result.data];
+ *   }
+ *   render() {
+ *     return html`<form action=${createTodo} @submit=${(e: SubmitEvent) => this.add(e)}>...</form>
+ *       <ul>${this.pending.value.map((t) => html`<li>${t.title}</li>`)}</ul>`;
+ *   }
+ * }
+ */
 export function optimistic<State, Action>(
   host: { requestUpdate?(): void },
   options: {
