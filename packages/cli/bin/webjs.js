@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
-import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordDevPort, recordedDevPort, recordServer } from '../lib/port.js';
+import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordedDevPort, recordServer } from '../lib/port.js';
 import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -331,11 +331,11 @@ const HELP = {
   },
   stop: {
     usage: 'webjs stop',
-    summary: "Stop this app's running `webjs dev` or `webjs start` server, found through the port and pid record each writes under .webjs/, so no pkill or kill is needed. A supervised dev server is stopped through its hot-reload supervisor, which takes its child and the dev.parallel tasks with it. A stale record (its process is gone) is removed and reported.",
+    summary: "Stop this app's running `webjs dev` or `webjs start` server, found through the port and pid record each writes under .webjs/, so no pkill or kill is needed. A supervised dev server is stopped through its hot-reload supervisor, which records itself before the dev.before steps and takes its child and the dev.parallel tasks with it. A stale record (its process is gone, or its pid now runs something else) is removed and reported. Works from any directory inside the app.",
     notesTitle: 'Exit status',
     notes: [
       '0 when nothing is left running, including when no server was running.',
-      '1 when a server did not exit within 10 seconds of SIGTERM and a SIGKILL.',
+      '1 when a server did not exit within 10 seconds of SIGTERM and a SIGKILL, or when run outside any app.',
     ],
     examples: ['webjs stop', 'npx webjs dev --port 8910 & npx webjs status /; npx webjs stop'],
   },
@@ -446,10 +446,11 @@ function flag(args, name, def) {
  * @param {string[]} steps
  * @param {string} cwd
  */
-async function runPhaseBeforeSteps(phase, steps, cwd) {
+async function runPhaseBeforeSteps(phase, steps, cwd, onSpawn) {
   const { runBeforeSteps } = await import('../lib/run-tasks.js');
   const r = await runBeforeSteps(steps, cwd, {
     onStep: (step) => console.log(`webjs ${phase}: running before-step \`${step}\`…`),
+    onSpawn,
   });
   if (!r.ok) {
     console.error(`webjs ${phase}: before-step failed (exit ${r.code}): ${r.step}`);
@@ -470,6 +471,24 @@ async function startDevParallelTasks(commands, cwd) {
   return startParallelTasks(commands, cwd, {
     onStart: (cmd) => console.log(`webjs dev: starting parallel task \`${cmd}\`…`),
   });
+}
+
+/**
+ * Record this process as the app's `kind` server on `port` so `webjs stop` and
+ * `webjs status` find it. When another server for this app is still running,
+ * its record is kept (see `recordServer`) and this says so, since stop and
+ * status keep pointing at that one.
+ *
+ * @param {'dev' | 'start'} kind
+ * @param {number} port
+ */
+function recordThisServer(kind, port) {
+  const record = recordServer(process.cwd(), port, { kind });
+  // On the same port this server is about to fail to bind, and the port-in-use
+  // message names the holder, so the note would only mislead.
+  if (record && record.pid !== process.pid && record.port !== port) {
+    console.error(`[webjs] another ${kind} server for this app is running (pid ${record.pid}, port ${record.port}), so stop and status keep pointing at it.`);
+  }
 }
 
 /**
@@ -573,9 +592,9 @@ async function main() {
           process.channel?.unref?.();
           process.on('disconnect', () => process.exit(0));
         }
-        // The supervisor is the parent: `webjs stop` signals it, since a
-        // stopped child would only be restarted.
-        if (!g.__webjsDevPortRecorded) { g.__webjsDevPortRecorded = true; recordDevPort(process.cwd(), port, { stopPid: process.ppid }); }
+        // No record here: the supervisor that spawned this child owns it for
+        // its whole lifetime, through restarts and crash backoffs, and is the
+        // process `webjs stop` signals (a stopped child would be restarted).
         await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }));
         break;
       }
@@ -602,8 +621,6 @@ async function main() {
       // `.env` itself before any code runs, `shellEnvOf` drops those values.
       const shellEnv = shellEnvOf(process.env, process.cwd());
       loadAppEnv(process.cwd());
-      await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd());
-      const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
 
       // Decide how to run: in-process (`--no-hot`), or in a child under WebJs's
       // reload supervisor (#1521). On Node the child re-evaluates edits in place
@@ -618,17 +635,48 @@ async function main() {
         noHot: rest.includes('--no-hot'),
         sourceLocations: sourceLocationsOn(process.env, readDevSourceLocations(process.cwd())),
       });
+      const port = resolvePort(flag(rest, '--port'));
+
+      // The supervisor records itself NOW, before the before-steps, and keeps
+      // the record until it exits, so `webjs stop` during a slow `dev.before`
+      // or a crash-restart backoff finds a server to stop instead of reporting
+      // nothing running while one boots. The child resolves the same port from
+      // the same argv and env. `recordServer` never replaces the record of
+      // another dev server that is still running, so a second `webjs dev` that
+      // will fail to bind leaves the first one's record alone.
+      if (plan.mode === 'supervise') recordThisServer('dev', port);
+
+      // Until the supervisor (or the inline server) installs its own signal
+      // handlers, a stop takes the running before-step and any started
+      // `dev.parallel` task down with this process, which then exits through
+      // its exit handlers (a default-action SIGTERM would skip them and leave
+      // the record behind).
+      /** @type {import('node:child_process').ChildProcess | null} */
+      let step = null;
+      /** @type {() => void} */
+      let killTasks = () => {};
+      const earlyStop = () => {
+        try { step?.kill('SIGTERM'); } catch { /* exited */ }
+        killTasks();
+        process.exit(0);
+      };
+      const earlySignals = /** @type {const} */ (['SIGINT', 'SIGTERM', 'SIGHUP']);
+      for (const sig of earlySignals) process.on(sig, earlyStop);
+      await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd(), (c) => { step = c; });
+      step = null;
+      killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
+      for (const sig of earlySignals) process.off(sig, earlyStop);
 
       if (plan.mode === 'inline') {
         process.on('SIGINT', () => { killTasks(); process.exit(0); });
         process.on('SIGTERM', () => { killTasks(); process.exit(0); });
         const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
-        const port = resolvePort(flag(rest, '--port'));
-        recordDevPort(process.cwd(), port);
         await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }), {
           exit: (code) => { killTasks(); process.exit(code); },
         });
+        // Recorded once bound, so a server that failed to bind never writes.
+        recordThisServer('dev', port);
         killTasks();
         break;
       }
@@ -656,9 +704,11 @@ async function main() {
       const { readAppTasks } = await import('../lib/app-tasks.js');
       await runPhaseBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
-      // So `webjs stop` finds it (a record of its own; `webjs status` reads only dev's).
-      recordServer(process.cwd(), port, { kind: 'start' });
       await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: false }));
+      // So `webjs stop` finds it (a record of its own; `webjs status` reads
+      // only dev's). Written once bound, so a second `webjs start` that fails
+      // on the taken port never touches the running one's record.
+      recordThisServer('start', port);
       break;
     }
     case 'db': {
