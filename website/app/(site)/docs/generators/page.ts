@@ -42,7 +42,7 @@ npx webjs generate controller pages home about
 npx webjs generate authentication</code-block>
     <ul>
       <li><strong>resource</strong> is scaffold with JSON route handlers under <code>app/api/</code> in place of pages: <code>GET</code> and <code>POST</code> on the collection, <code>GET</code>, <code>PATCH</code> and <code>DELETE</code> on one record.</li>
-      <li><strong>model</strong> writes the table, its type and its migration.</li>
+      <li><strong>model</strong> writes the table, its row type beside it in the schema, and its migration, and no module folder, so a child table (a poll's options) belongs to its parent's feature. Use it for every table, so no Drizzle table is written by hand.</li>
       <li><strong>migration</strong> reads the change from its name, as in Rails. <code>AddXToTable</code> adds the listed columns to that table, <code>RemoveXFromTable</code> drops them, and <code>CreateTable</code> is the model generator. Drizzle derives the SQL from the schema, so the generator edits the table in <code>db/schema.server.ts</code> and names the migration after the change. Forms and validation are left alone, and a note says where to add the column.</li>
       <li><strong>controller</strong> takes a name and its actions and writes one page per action (<code>index</code> is the segment root) with a test that each renders.</li>
       <li><strong>authentication</strong> is described below.</li>

@@ -118,7 +118,12 @@ Docs: https://webjs.dev/docs/typescript`,
 - Writes: actions/*.server.ts with 'use server'. A form binds one; a component
   imports and calls it, which goes over RPC (a Date or a Map survives).
 - Public HTTP API: app/api/<name>/route.ts exporting GET, POST and the rest,
-  calling the same actions (or wrap one with route()).
+  calling the same actions (or wrap one with route()):
+    // app/api/polls/[slug]/route.ts
+    export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+      const poll = await findPoll((await params).slug);
+      return poll ? Response.json(poll) : Response.json({ error: 'Not found' }, { status: 404 });
+    }
 - Components never import the database or a server-only module: data arrives
   as a property from the page, or through an action call.
 - After a write: revalidatePath('/posts') refreshes cached pages, redirect()
@@ -159,8 +164,11 @@ fresh migrated SQLite database, so a test never touches db/dev.db.
     const app = await createRequestHandler({ appDir, dev: true });
     const res = await submitForm(app.handle, '/posts/new', { title: 'Hi' });
     assert.equal(res.status, 303);
-- testRequest(app.handle, '/posts') for a GET or a JSON route, and
-  loginAndGetCookies for a signed-in request.
+- testRequest(app.handle, '/posts') for a GET or a JSON route. Carry a cookie
+  the app set into the next request:
+    const cookie = cookiesToHeader(getSetCookies(res));
+    await submitForm(app.handle, '/p/abc', { option: '1' }, { cookies: cookie });
+  loginAndGetCookies signs in with credentials and returns the same header.
 - Call a query or an action directly for its logic; an action that redirects
   throws, so test that one through submitForm.
 - Components: npx webjs test --browser, with fixture() from @webjsdev/core/testing.

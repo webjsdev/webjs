@@ -46,8 +46,11 @@ export function planScaffold(ctx, opts) {
     plan.migrationName = `create_${n.table}`;
   }
   const mod = `modules/${n.kebabPlural}`;
-  plan.files.push({ path: `${mod}/types.ts`, content: typesFile(n) });
+  // A model is the table and its migration, as `rails g model` is: no module
+  // folder, since a child table (a poll's options, its votes) belongs to its
+  // parent's feature module, and the row type is exported beside the table.
   if (opts.kind === 'model') return plan;
+  plan.files.push({ path: `${mod}/types.ts`, content: typesFile(n) });
 
   plan.files.push(
     { path: `${mod}/queries/list-${n.kebabPlural}.server.ts`, content: listQuery(n) },
