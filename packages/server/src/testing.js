@@ -33,7 +33,7 @@
  */
 
 import { hashFile, RPC_CONTENT_TYPE } from './actions.js';
-import { FORM_ACTION_FIELD, redirect } from '@webjsdev/core';
+import { FORM_ACTION_FIELD, redirect, notFound, forbidden, unauthorized } from '@webjsdev/core';
 import { getSerializer } from './serializer.js';
 import { join, sep } from 'node:path';
 
@@ -487,6 +487,12 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
     const type = rd.slice(cut + 1) === 'replace' ? 'replace' : 'push';
     redirect(cut === -1 ? rd : rd.slice(0, cut), type);
   }
+  // notFound() / forbidden() / unauthorized(): rethrow the sentinel, as the
+  // client stub does, so a test asserts with isForbidden(err).
+  const cf = res.headers.get('x-webjs-control');
+  if (cf === 'not-found') notFound();
+  if (cf === 'forbidden') forbidden();
+  if (cf === 'unauthorized') unauthorized();
   const ct = res.headers.get('content-type') || '';
   let parsed;
   if (ct.includes(RPC_CONTENT_TYPE)) parsed = serializer.deserialize(text);

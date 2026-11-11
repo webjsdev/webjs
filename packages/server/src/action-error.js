@@ -42,6 +42,30 @@ export function isControlFlowThrow(err) {
 }
 
 /**
+ * The response header that names a `notFound()` / `forbidden()` /
+ * `unauthorized()` thrown by an action called over RPC. The generated stub
+ * reads it and rejects with the same sentinel, so `isForbidden(err)` holds on
+ * the client the way it does on the server.
+ */
+export const CONTROL_HEADER = 'x-webjs-control';
+
+/**
+ * The status an RPC answers for a boundary sentinel thrown in an action: the
+ * same 404 / 403 / 401 the no-JS form path renders. Not an error, so it is
+ * never logged or sanitized. `null` for anything else (a redirect has its own
+ * branch).
+ *
+ * @param {unknown} err
+ * @returns {{ kind: 'not-found' | 'forbidden' | 'unauthorized', status: number } | null}
+ */
+export function controlFlowStatus(err) {
+  if (isNotFound(err)) return { kind: 'not-found', status: 404 };
+  if (isForbidden(err)) return { kind: 'forbidden', status: 403 };
+  if (isUnauthorized(err)) return { kind: 'unauthorized', status: 401 };
+  return null;
+}
+
+/**
  * A short, stable correlation digest for a thrown error (a hash of its message
  * and stack). The SAME value is logged server-side and returned to the client,
  * so a generic client error maps back to the full server log line, and two

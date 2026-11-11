@@ -101,7 +101,8 @@ test('prod: a redirect()/notFound() control-flow throw passes through (not gener
   const orig = console.error; console.error = () => {};
   try {
     const { res, body } = await callBoom(dir, false, 'cf');
-    assert.equal(res.status, 500);
+    // A 404 since #1697, the status the no-JS form path renders.
+    assert.equal(res.status, 404);
     assert.equal(body.error, 'webjs: notFound()', 'control-flow message preserved');
     assert.equal(body.digest, undefined, 'no digest for a control-flow sentinel');
   } finally {
