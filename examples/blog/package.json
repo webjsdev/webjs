@@ -59,9 +59,9 @@
     }
   },
   "dependencies": {
-    "@webjsdev/cli": "^0.12.0",
-    "@webjsdev/core": "^0.9.0",
-    "@webjsdev/server": "^0.10.0",
+    "@webjsdev/cli": "^0.12.1",
+    "@webjsdev/core": "^0.9.1",
+    "@webjsdev/server": "^0.10.1",
     "dayjs": "^1.11.21",
     "drizzle-orm": "1.0.0-rc.5"
   },

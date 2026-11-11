@@ -1,6 +1,6 @@
 {
   "name": "@webjsdev/mcp",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "type": "module",
   "description": "The Model Context Protocol server for WebJs, a full-stack JavaScript framework built on web components with server-side rendering and no build step. Gives AI coding agents the WebJs brief, live app introspection over routes, actions, components, and convention checks, and the framework source.",
   "bin": {
@@ -24,8 +24,8 @@
     "README.md"
   ],
   "dependencies": {
-    "@webjsdev/server": "^0.10.0",
-    "@webjsdev/ui": "^0.5.0"
+    "@webjsdev/server": "^0.10.1",
+    "@webjsdev/ui": "^0.5.1"
   },
   "publishConfig": {
     "access": "public"
