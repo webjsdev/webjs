@@ -162,7 +162,14 @@ export function findAncestorApp(cwd) {
  */
 export async function findServeTarget(cwd) {
   const target = await findCheckTarget(cwd);
-  if (target.isApp) return { ...target, ancestorApp: null };
+  if (target.isApp) {
+    // An `app/` here can be a route folder (`<root>/app/app/page.ts`). Serving
+    // it would record under the wrong `.webjs/`, where `webjs stop` and
+    // `webjs status` (which resolve `nearestAppRoot`) never look.
+    const root = nearestAppRoot(cwd);
+    if (root && root !== cwd) return { ...target, isApp: false, ancestorApp: root };
+    return { ...target, ancestorApp: null };
+  }
   return { ...target, ancestorApp: target.workspaceApps.length ? null : findAncestorApp(cwd) };
 }
 
@@ -217,7 +224,15 @@ export function notInsideAppMessage(command, workspaceApps) {
  * @returns {string}
  */
 export function notAnAppServeMessage(command, cwd, { workspaceApps, ancestorApp }) {
-  const lines = [
+  const lines = ancestorApp && hasAppDir(cwd) ? [
+    `webjs ${command}: this directory is inside an app, not the app root.`,
+    '',
+    `  ${cwd}`,
+    '',
+    'Its `app/` is a route folder of the app above, which holds both `app/` and',
+    '`package.json`. Started here, the server would serve the route folder as the app.',
+    '',
+  ] : [
     `webjs ${command}: this directory is not a WebJs app, so there is nothing to serve.`,
     '',
     `  ${cwd}`,

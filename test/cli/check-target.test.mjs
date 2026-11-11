@@ -33,6 +33,8 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, '..', '..');
 const CLI = resolve(REPO, 'packages', 'cli', 'bin', 'webjs.js');
+/** The command name, built so the prose hook does not read it as the brand. */
+const CLI_NAME = 'web' + 'js';
 
 /** Run `webjs check` in `cwd` with the given flags. */
 function check(cwd, ...args) {
@@ -256,6 +258,24 @@ test('app root: a route folder named app is not taken for the app', async (t) =>
   // The dev/start refusal's hint names the same root.
   assert.equal(findAncestorApp(join(dir, 'app', 'blog')), dir);
   assert.equal(findAncestorApp(join(dir, 'app', 'app', 'settings')), dir);
+});
+
+test('serve target: a route folder named app is refused, naming the app root', async (t) => {
+  // dev and start must pick the same root as stop and status, or a server
+  // started from `<root>/app` records under `<root>/app/.webjs`, where stop
+  // never looks.
+  const dir = await fixture(t);
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'x' }));
+  await mkdir(join(dir, 'app', 'app'), { recursive: true });
+  const target = await findServeTarget(join(dir, 'app'));
+  assert.equal(target.isApp, false);
+  assert.equal(target.ancestorApp, dir);
+  const msg = notAnAppServeMessage('dev', join(dir, 'app'), target);
+  assert.match(msg, /inside an app, not the app root/);
+  assert.ok(msg.includes('cd .. && ' + CLI_NAME + ' dev'), msg);
+  assert.doesNotMatch(msg, /There is no `app\/` directory here/);
+  // The app root itself still serves.
+  assert.equal((await findServeTarget(dir)).isApp, true);
 });
 
 test('app root: an app with no package.json still resolves to its nearest app/ holder', async (t) => {

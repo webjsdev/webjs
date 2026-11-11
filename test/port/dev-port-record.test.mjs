@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, rmSync, readFileSync, chmodSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
@@ -179,6 +179,65 @@ test('a server refused the record by a live one takes it over once that one is g
     assert.equal(record?.port, 8912, 'with the port it serves on now');
   } finally {
     holder.kill('SIGKILL');
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const SERVER_RECORD_JS = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), '../../packages/cli/lib/server-record.js')).href;
+const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+const pidIn = (file) => { try { return JSON.parse(readFileSync(file, 'utf8')).pid; } catch { return null; } };
+
+test('stop leaves a record another server took over while the stopped one exited', async () => {
+  // A second server's claim can land between the stopped server exiting and
+  // stop's delete; deleting it then left a running server nothing could find.
+  // The holder below writes that takeover itself, just before it exits.
+  const { stopServers } = await import('../../packages/cli/lib/stop.js');
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-stop-race-'));
+  mkdirSync(join(dir, 'app'));
+  writeFileSync(join(dir, 'package.json'), '{"name":"x"}');
+  const file = join(dir, '.webjs/dev-server.json');
+  const takeover = JSON.stringify({ port: 2222, pid: process.pid }) + '\n';
+  const holder = spawn(process.execPath, ['--input-type=module', '-e',
+    `import { writeFileSync } from 'node:fs';
+     const { recordServer } = await import(${JSON.stringify(SERVER_RECORD_JS)});
+     recordServer(${JSON.stringify(dir)}, 1111, { kind: 'dev' });
+     process.on('SIGTERM', () => { writeFileSync(${JSON.stringify(file)}, ${JSON.stringify(takeover)}); process.exit(0); });
+     setInterval(() => {}, 1e9);`], { stdio: 'ignore' });
+  try {
+    const deadline = Date.now() + 10_000;
+    while (pidIn(file) !== holder.pid && Date.now() < deadline) await nap(50);
+    assert.equal(pidIn(file), holder.pid);
+    const code = await stopServers({ cwd: dir, out: () => {}, err: () => {} });
+    assert.equal(code, 0);
+    assert.equal(pidIn(file), process.pid, 'the record the other server took over was deleted');
+  } finally {
+    holder.kill('SIGKILL');
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('claimServerRecord keeps retrying after a failed write', async () => {
+  // A write failure (EACCES, ENOSPC) returns null, which used to stop the
+  // retry for good, so the server was never recorded once the disk recovered.
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-claim-retry-'));
+  const file = join(dir, '.webjs/dev-server.json');
+  const holder = spawn(process.execPath, ['--input-type=module', '-e',
+    `const { recordServer } = await import(${JSON.stringify(SERVER_RECORD_JS)}); recordServer(${JSON.stringify(dir)}, 1111, { kind: 'dev' }); setInterval(() => {}, 1e9);`], { stdio: 'ignore' });
+  try {
+    const deadline = Date.now() + 10_000;
+    while (pidIn(file) !== holder.pid && Date.now() < deadline) await nap(50);
+    const first = claimServerRecord(dir, () => 3333, { kind: 'dev', intervalMs: 50 });
+    assert.equal(first?.pid, holder.pid);
+    chmodSync(file, 0o444);
+    holder.kill('SIGKILL');
+    await nap(400); // several retries, each failing to write
+    chmodSync(file, 0o644);
+    const until = Date.now() + 3000;
+    while (pidIn(file) !== process.pid && Date.now() < until) await nap(50);
+    assert.equal(pidIn(file), process.pid, 'the claim gave up after a failed write');
+  } finally {
+    holder.kill('SIGKILL');
+    try { chmodSync(file, 0o644); } catch { /* removed */ }
     rmSync(dir, { recursive: true, force: true });
   }
 });

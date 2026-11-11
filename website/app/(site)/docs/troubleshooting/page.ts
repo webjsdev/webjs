@@ -176,7 +176,7 @@ export default function Troubleshooting() {
 
     <h2 id="webjs-dev-exits-saying-the-directory-is-not-a-webjs-app"><code>webjs dev</code> exits saying the directory is not a WebJs app</h2>
     <p><strong>Symptom:</strong> <code>webjs dev</code> or <code>webjs start</code> exits 1 with <code>webjs dev: this directory is not a WebJs app, so there is nothing to serve.</code></p>
-    <p><strong>Cause:</strong> the command was started where there is no <code>app/</code> directory, usually a workspace root (a monorepo whose app lives in <code>apps/web</code>) or a folder inside the app. A server started there would answer 404 for every route, so it refuses instead.</p>
+    <p><strong>Cause:</strong> the command was started where there is no <code>app/</code> directory, usually a workspace root (a monorepo whose app lives in <code>apps/web</code>) or a folder inside the app. A server started there would answer 404 for every route, so it refuses instead. Inside an app, a route folder that happens to be named <code>app</code> (<code>app/app/page.ts</code>, a <code>/app</code> route) is refused too, with <code>this directory is inside an app, not the app root</code>, because it would be served as the app.</p>
     <p><strong>Fix:</strong> change into the app directory the message names and run the command there, for example <code>cd apps/web &amp;&amp; webjs dev</code>. In a workspace this works with the CLI hoisted to the root <code>node_modules</code>, on Node and on Bun.</p>
 
     <h2 id="a-webjs-dev-before-webjs-start-before-step-fails-and-aborts">A <code>webjs.dev.before</code> / <code>webjs.start.before</code> step fails and aborts the boot</h2>

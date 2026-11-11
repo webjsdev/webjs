@@ -61,7 +61,7 @@ export async function stopServers(opts) {
     if (!record) continue;
     found++;
     if (!isLiveServer(record)) {
-      rmSync(file, { force: true });
+      removeIfStill(cwd, kind, file, record.pid);
       out(`${name}: no ${kind} server running (removed the stale record ${rel} left by pid ${record.pid}).`);
       continue;
     }
@@ -78,9 +78,20 @@ export async function stopServers(opts) {
       code = 1;
       continue;
     }
-    rmSync(file, { force: true });
+    removeIfStill(cwd, kind, file, target);
     out(`${name}: stopped the ${kind} server on port ${record.port} (pid ${target}).`);
   }
   if (!found) out(`${name}: no server is running for this app (nothing recorded under .webjs/).`);
   return code;
+}
+
+/**
+ * Remove a record only while it still names `pid`. Between the stopped
+ * server exiting and this delete, another running server can take the
+ * record over (`claimServerRecord`), and deleting that one would leave a
+ * live server nothing can find.
+ * @param {string} cwd @param {'dev' | 'start'} kind @param {string} file @param {number} pid
+ */
+function removeIfStill(cwd, kind, file, pid) {
+  if (readServerRecord(cwd, kind)?.pid === pid) rmSync(file, { force: true });
 }

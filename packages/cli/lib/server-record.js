@@ -214,8 +214,9 @@ export function claimServerRecord(cwd, getPort, { kind = 'dev', intervalMs = REC
   const first = recordServer(cwd, getPort(), { kind });
   if (!first || first.pid === process.pid) return first;
   const timer = setInterval(() => {
+    // Stop only once the record is ours: a failed write (null) is retried.
     const now = recordServer(cwd, getPort(), { kind });
-    if (!now || now.pid === process.pid) clearInterval(timer);
+    if (now?.pid === process.pid) clearInterval(timer);
   }, intervalMs);
   timer.unref?.();
   return first;
