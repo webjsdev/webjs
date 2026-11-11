@@ -28,7 +28,8 @@
  *
  * Local only: it calls a model and costs money per build.
  */
-import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, createWriteStream } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, createWriteStream } from 'node:fs';
+import { createServer } from 'node:net';
 import { parse as parsePath } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -146,20 +147,43 @@ export async function prepareApp({ framework, parent, appName, template = 'full-
 
 /**
  * The environment a headless agent runs in: none of this session's markers,
- * and, given a build directory, a temp directory of its own inside it.
- * Concurrent builds shared /tmp, so one build's curl cookie jar was read by
- * another, which then chased a session it never created for about 45 turns.
+ * and, given a build directory, a temp directory of its own. Concurrent builds
+ * shared /tmp, so one build's curl cookie jar was read by another, which then
+ * chased a session it never created for about 45 turns. The directory is a
+ * short one under /tmp, linked from `<buildDir>/tmp`: inside the build
+ * directory its path was long enough that Playwright's socket under it passed
+ * the 108-byte Unix socket limit, and the browser never launched (#1697, nine
+ * turns over four builds).
  * @param {string} [buildDir]
  */
 export function agentEnv(buildDir) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_CODE') || k === 'CLAUDECODE') delete env[k];
   if (buildDir) {
-    const tmp = join(buildDir, 'tmp');
-    mkdirSync(tmp, { recursive: true });
+    mkdirSync(buildDir, { recursive: true });
+    const tmp = mkdtempSync(join(existsSync('/tmp') ? '/tmp' : tmpdir(), 'wje-'));
+    const link = join(buildDir, 'tmp');
+    if (!existsSync(link)) symlinkSync(tmp, link);
     env.TMPDIR = env.TMP = env.TEMP = tmp;
   }
   return env;
+}
+
+/**
+ * A port nothing is listening on, from the OS. Builds started as separate
+ * runs used the same fixed port base, so two dev servers met on one port and
+ * an agent wrote into another build's database (#1697, eleven turns).
+ * @returns {Promise<number>}
+ */
+export function freePort() {
+  return new Promise((ok, fail) => {
+    const srv = createServer();
+    srv.once('error', fail);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = /** @type {import('node:net').AddressInfo} */ (srv.address());
+      srv.close(() => ok(port));
+    });
+  });
 }
 
 /** Where the eval host keeps a system Chromium, which Playwright's MCP cannot find on its own. */
@@ -306,21 +330,22 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     process.exit(0);
   }
   const specName = arg('spec');
-  if (!specName) { console.error('usage: build.mjs --spec <roomly|pollster|trackr|inbox> [--runs N] [--jobs N] [--model haiku] [--framework <checkout>] [--label after] [--out <dir>] [--port-base 8900]'); process.exit(2); }
+  if (!specName) { console.error('usage: build.mjs --spec <roomly|pollster|trackr|inbox> [--runs N] [--jobs N] [--model haiku] [--framework <checkout>] [--label after] [--out <dir>] [--port-base <n>]'); process.exit(2); }
   const spec = readFileSync(join(HERE, 'specs', `${specName}.md`), 'utf8');
   const runs = Number(arg('runs', '1'));
   const jobs = Number(arg('jobs', '3'));
   const out = resolve(arg('out', join('/var/tmp', 'webjs-builds')));
   assertNoAncestorInstructions(out);
   const opts = { spec, specName, out, framework: resolve(arg('framework', REPO)), model: arg('model', 'haiku'), label: arg('label', 'after'), timeoutS: Number(arg('timeout', '5400')) };
-  // A distinct --port-base per concurrent invocation keeps two arms' dev servers apart.
-  const portBase = Number(arg('port-base', '8900'));
+  // Each build asks the OS for a free port; --port-base pins them instead.
+  const portBase = arg('port-base') ? Number(arg('port-base')) : null;
   const results = [];
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(jobs, runs) }, async (_, w) => {
     while (next < runs) {
       const index = ++next;
-      results.push(await oneBuild({ ...opts, index, port: portBase + index * 10 + w }));
+      const port = portBase === null ? await freePort() : portBase + index * 10 + w;
+      results.push(await oneBuild({ ...opts, index, port }));
     }
   }));
   results.sort((a, b) => a.name.localeCompare(b.name));

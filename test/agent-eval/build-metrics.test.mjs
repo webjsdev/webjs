@@ -10,7 +10,9 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync, existsSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { metricsOf, promptFor, agentEnv, evalMcpConfig } from '../../scripts/agent-eval/build.mjs';
+import { realpathSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { metricsOf, promptFor, agentEnv, evalMcpConfig, freePort } from '../../scripts/agent-eval/build.mjs';
 
 /** A stream-json transcript from a list of events. */
 function transcript(events) {
@@ -62,13 +64,27 @@ test('each build gets a temp directory of its own, so concurrent builds never sh
   const dir = mkdtempSync(join(tmpdir(), 'eval-env-'));
   try {
     const env = agentEnv(dir);
-    assert.equal(env.TMPDIR, join(dir, 'tmp'));
     assert.equal(env.TMP, env.TMPDIR);
     assert.ok(existsSync(env.TMPDIR), 'and it exists');
-    assert.notEqual(agentEnv(join(dir, 'b')).TMPDIR, env.TMPDIR, 'a second build gets another');
+    assert.equal(realpathSync(join(dir, 'tmp')), realpathSync(env.TMPDIR), 'linked from the build directory');
+    // #1697: Playwright puts a Unix socket under TMPDIR, and a socket path
+    // has a 108-byte limit, so the directory has to be short.
+    assert.ok(env.TMPDIR.length < 32, `a short path (${env.TMPDIR})`);
+    const other = agentEnv(join(dir, 'b'));
+    assert.notEqual(other.TMPDIR, env.TMPDIR, 'a second build gets another');
+    rmSync(env.TMPDIR, { recursive: true, force: true });
+    rmSync(other.TMPDIR, { recursive: true, force: true });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('freePort hands out a port nothing is listening on', async () => {
+  const port = await freePort();
+  assert.ok(port > 0);
+  const srv = createServer();
+  await new Promise((ok, fail) => { srv.once('error', fail); srv.listen(port, '127.0.0.1', ok); });
+  await new Promise((ok) => srv.close(ok));
 });
 
 test('the agent MCP config is a copy pointing Playwright at the system Chromium', () => {
