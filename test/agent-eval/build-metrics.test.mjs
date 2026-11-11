@@ -12,7 +12,8 @@ import { join } from 'node:path';
 
 import { realpathSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { metricsOf, promptFor, agentEnv, evalMcpConfig, freePort } from '../../scripts/agent-eval/build.mjs';
+import { symlinkSync } from 'node:fs';
+import { metricsOf, promptFor, agentEnv, evalMcpConfig, freePort, linkNodeModules } from '../../scripts/agent-eval/build.mjs';
 
 /** A stream-json transcript from a list of events. */
 function transcript(events) {
@@ -104,5 +105,40 @@ test('the agent MCP config is a copy pointing Playwright at the system Chromium'
     assert.deepEqual(JSON.parse(readFileSync(evalMcpConfig(app, dir, null), 'utf8')), original);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// #1697: a framework checkout whose node_modules is a link into another
+// checkout (a linked worktree) must still hand the app ITS CLI through npx.
+test('an eval app runs the framework under test through npx, not the checkout its .bin lives in', () => {
+  const root = mkdtempSync(join(tmpdir(), 'eval-bin-'));
+  try {
+    const mk = (dir, ver) => {
+      mkdirSync(join(dir, 'packages/cli/bin'), { recursive: true });
+      writeFileSync(join(dir, 'packages/cli/package.json'), JSON.stringify({ name: '@webjsdev/cli', files: ['bin'] }));
+      writeFileSync(join(dir, 'packages/cli/bin/webjs.js'), `// ${ver}\n`);
+    };
+    const primary = join(root, 'primary');
+    const worktree = join(root, 'worktree');
+    mk(primary, 'primary');
+    mk(worktree, 'worktree');
+    // The primary's install: npm's relative bin link and a workspace link.
+    mkdirSync(join(primary, 'node_modules/.bin'), { recursive: true });
+    mkdirSync(join(primary, 'node_modules/@webjsdev'), { recursive: true });
+    symlinkSync('../../packages/cli', join(primary, 'node_modules/@webjsdev/cli'));
+    symlinkSync('../@webjsdev/cli/bin/webjs.js', join(primary, 'node_modules/.bin/webjs'));
+    mkdirSync(join(primary, 'node_modules/left-pad'));
+    // The worktree: .bin linked whole into the primary, @webjsdev its own.
+    mkdirSync(join(worktree, 'node_modules/@webjsdev'), { recursive: true });
+    symlinkSync(join(primary, 'node_modules/.bin'), join(worktree, 'node_modules/.bin'));
+    symlinkSync(join(primary, 'node_modules/left-pad'), join(worktree, 'node_modules/left-pad'));
+    symlinkSync(join(worktree, 'packages/cli'), join(worktree, 'node_modules/@webjsdev/cli'));
+    const app = join(root, 'app');
+    mkdirSync(app);
+    linkNodeModules(worktree, app);
+    assert.match(readFileSync(join(app, 'node_modules/.bin/webjs'), 'utf8'), /worktree/, 'the bin resolves to the worktree CLI');
+    assert.ok(existsSync(join(app, 'node_modules/left-pad')), 'other packages are still linked');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

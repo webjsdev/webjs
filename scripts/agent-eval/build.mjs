@@ -28,7 +28,7 @@
  *
  * Local only: it calls a model and costs money per build.
  */
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, createWriteStream } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, readlinkSync, createWriteStream } from 'node:fs';
 import { createServer } from 'node:net';
 import { parse as parsePath } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -255,17 +255,39 @@ const WORKSPACE_APPS = new Set(['example-blog', 'gallery', 'website']);
  * the workspace apps.
  * @param {string} framework @param {string} app
  */
-function linkNodeModules(framework, app) {
+export function linkNodeModules(framework, app) {
   const src = join(framework, 'node_modules');
   const dst = join(app, 'node_modules');
   mkdirSync(dst);
   for (const name of readdirSync(src)) {
+    if (name === '.bin') { linkBin(join(src, name), join(dst, name)); continue; }
     if (name !== '@webjsdev') { symlinkSync(join(src, name), join(dst, name)); continue; }
     mkdirSync(join(dst, name));
     for (const pkg of readdirSync(join(src, name))) {
       if (WORKSPACE_APPS.has(pkg)) continue;
       linkPublished(join(src, name, pkg), join(dst, name, pkg));
     }
+  }
+}
+
+/**
+ * `node_modules/.bin`, entry by entry. npm writes each bin as a relative link
+ * (`../@webjsdev/cli/bin/webjs.js`), and linking the directory whole resolved
+ * those against the checkout it physically lives in, so in a linked worktree
+ * every eval app's `npx webjs` ran the PRIMARY checkout's CLI instead of the
+ * framework under test (#1697). A framework package's bin keeps its relative
+ * target, which now lands on the app's own link to that package; any other
+ * bin links to the original entry.
+ * @param {string} srcBin @param {string} dstBin
+ */
+function linkBin(srcBin, dstBin) {
+  mkdirSync(dstBin);
+  for (const entry of readdirSync(srcBin)) {
+    const from = join(srcBin, entry);
+    let target = null;
+    try { target = readlinkSync(from); } catch { /* a real file */ }
+    if (target && target.startsWith('../@webjsdev/')) symlinkSync(target, join(dstBin, entry));
+    else symlinkSync(from, join(dstBin, entry));
   }
 }
 
