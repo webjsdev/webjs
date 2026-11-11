@@ -27,20 +27,7 @@
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { SERVER_RECORD_FILES, readServerRecord, isLiveServer, processAlive } from './server-record.js';
-import { findServeTarget } from './check-target.js';
-
-/**
- * The app root `webjs stop` acts on: `cwd` when it holds `app/`, else the
- * nearest ancestor that does. Null outside any app (a workspace root
- * included, since which member app is meant is ambiguous there).
- * @param {string} cwd
- * @returns {Promise<{ root: string | null, workspaceApps: string[] }>}
- */
-export async function stopTarget(cwd) {
-  const target = await findServeTarget(cwd);
-  if (target.isApp) return { root: cwd, workspaceApps: [] };
-  return { root: target.ancestorApp, workspaceApps: target.workspaceApps };
-}
+import { findAppRoot, notInsideAppMessage } from './check-target.js';
 
 /**
  * @param {{
@@ -60,14 +47,9 @@ export async function stopServers(opts) {
     sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   } = opts;
   const name = `webjs stop`;
-  const { root: cwd, workspaceApps } = await stopTarget(opts.cwd);
+  const { root: cwd, workspaceApps } = await findAppRoot(opts.cwd);
   if (!cwd) {
-    const lines = [`${name}: this directory is not inside a WebJs app (no \`app/\` directory here or above), so there is no server to stop.`];
-    if (workspaceApps.length) {
-      lines.push('', 'This is a workspace root. Stop the server inside the app:', '');
-      for (const app of workspaceApps) lines.push(`  cd ${app} && webjs stop`);
-    }
-    err(lines.join('\n'));
+    err(notInsideAppMessage('stop', workspaceApps));
     return 1;
   }
   let found = 0;

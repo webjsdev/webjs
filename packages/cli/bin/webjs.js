@@ -7,6 +7,7 @@ import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordedDevPort, recordServer } from '../lib/port.js';
+import { boundPort, updateRecordedPort, DEV_LISTENING_MESSAGE } from '../lib/server-record.js';
 import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -343,7 +344,7 @@ const HELP = {
     usage: 'webjs status [path...] [--port N] [--boot] [--json] [--timeout <seconds>]',
     summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. With no dev server on the port it boots the app in-process instead and probes every route that needs no parameter, so no server has to be started or stopped. Use it after each edit instead of sleeping and fetching a page.',
     options: [
-      { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then the port a running `webjs dev` for this app recorded (so `webjs dev --port 8910` is found without repeating it), then 8080.' },
+      { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then the port a running `webjs dev` for this app recorded, which is the port its server bound (so `webjs dev --port 8910`, or `--port 0`, is found without repeating it), then 8080. Run from any directory inside the app.' },
       { flag: '--boot', description: 'Skip the dev server: boot the app in-process with the dev handler. With no paths it probes every page and GET route handler that needs no parameter (an optional catch-all at its parent path), lists the routes it skipped, and fails only on a server error there; a path you name still fails at 400.' },
       { flag: '--json', description: 'Print one JSON document: { ok, url, settled, ready, rebuilds, paths, errors }, each error carrying kind, message, file, line, column and codeFrame.' },
       { flag: '--timeout <seconds>', description: 'How long to wait for the server to settle (default 30). A restarting dev server (after a .env, package.json, lockfile, instrumentation or env edit) is retried until then.' },
@@ -351,7 +352,7 @@ const HELP = {
     notesTitle: 'Exit status',
     notes: [
       '0 when settled, ready, error-free, and every requested path answered below 400.',
-      '1 on any recorded error, a path at 400 or above, or no settle before the timeout.',
+      '1 on any recorded error, a path at 400 or above, no settle before the timeout, or when run outside any app.',
       'With no dev server on the port the command boots the app in-process (as --boot) rather than failing.',
       'The same data is GET /__webjs/dev/status?wait=<seconds> on the dev server, which answers 404 in production.',
     ],
@@ -595,7 +596,11 @@ async function main() {
         // No record here: the supervisor that spawned this child owns it for
         // its whole lifetime, through restarts and crash backoffs, and is the
         // process `webjs stop` signals (a stopped child would be restarted).
-        await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }));
+        const started = await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }));
+        // Tell the supervisor the port actually bound, which its record can
+        // only guess before the bind: `--port 0`, or a `.env` PORT edit that
+        // restarted this child on another port.
+        if (process.connected && process.send) process.send({ webjs: DEV_LISTENING_MESSAGE, port: boundPort(started, port) });
         break;
       }
 
@@ -672,11 +677,12 @@ async function main() {
         process.on('SIGTERM', () => { killTasks(); process.exit(0); });
         const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
-        await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }), {
+        const started = await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }), {
           exit: (code) => { killTasks(); process.exit(code); },
         });
-        // Recorded once bound, so a server that failed to bind never writes.
-        recordThisServer('dev', port);
+        // Recorded once bound, so a server that failed to bind never writes,
+        // and with the port it bound (`--port 0` picks one).
+        recordThisServer('dev', boundPort(started, port));
         killTasks();
         break;
       }
@@ -687,6 +693,8 @@ async function main() {
         plan,
         env: { ...shellEnv, ...plan.env, __WEBJS_DEV_CHILD: '1' },
         onExit: (code) => { killTasks(); process.exit(code); },
+        // Each child reports the port it bound; the record follows it.
+        onListening: (bound) => { updateRecordedPort(process.cwd(), 'dev', bound); },
       });
       break;
     }
@@ -704,11 +712,11 @@ async function main() {
       const { readAppTasks } = await import('../lib/app-tasks.js');
       await runPhaseBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
-      await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: false }));
+      const started = await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: false }));
       // So `webjs stop` finds it (a record of its own; `webjs status` reads
       // only dev's). Written once bound, so a second `webjs start` that fails
       // on the taken port never touches the running one's record.
-      recordThisServer('start', port);
+      recordThisServer('start', boundPort(started, port));
       break;
     }
     case 'db': {
@@ -1920,17 +1928,31 @@ Full docs: https://webjs.dev/docs`);
       // the given paths, report every error since the last rebuild.
       const { runStatus } = await import('../lib/status.js');
       const { readAppBasePath } = await import('../lib/doctor.js');
-      loadAppEnv(process.cwd());
+      // The app root, found the way `webjs stop` finds it: the cwd or its
+      // nearest ancestor holding `app/`, so status works from any directory
+      // inside the app and refuses outside one.
+      const { findAppRoot, notInsideAppMessage } = await import('../lib/check-target.js');
+      const { root: appDir, workspaceApps } = await findAppRoot(process.cwd());
+      if (!appDir) {
+        const message = notInsideAppMessage('status', workspaceApps);
+        if (rest.includes('--json')) console.log(JSON.stringify({ error: { code: 'NOT_AN_APP', message, cwd: process.cwd(), apps: workspaceApps } }));
+        else console.error(message);
+        process.exit(1);
+      }
+      // An in-process boot reads cwd-relative files too (the dev secret under
+      // `.webjs/`), so run from the root as if started there.
+      process.chdir(appDir);
+      loadAppEnv(appDir);
       const valued = new Set(['--port', '--timeout']);
       const paths = rest.filter((a, i) => !a.startsWith('--') && !valued.has(rest[i - 1]));
       const timeout = Number(flag(rest, '--timeout')) || 30;
       let basePath = '';
-      try { basePath = (await readAppBasePath(process.cwd())) || ''; } catch { /* root mount */ }
+      try { basePath = (await readAppBasePath(appDir)) || ''; } catch { /* root mount */ }
       // An explicit --port or PORT wins; otherwise the port a running
       // `webjs dev` for this app recorded, so a server started on another
       // port is found without repeating it (#1686).
       const explicitPort = flag(rest, '--port') !== undefined || !!process.env.PORT;
-      const port = (!explicitPort && recordedDevPort(process.cwd())) || resolvePort(flag(rest, '--port'));
+      const port = (!explicitPort && recordedDevPort(appDir)) || resolvePort(flag(rest, '--port'));
       // With no dev server answering on the port, boot the app in-process
       // instead of retrying for the whole timeout: the brief tells agents to
       // run `webjs status` after every edit, whether or not a server is up.
@@ -1953,7 +1975,7 @@ Full docs: https://webjs.dev/docs`);
         const { readFile } = await import('node:fs/promises');
         const quiet = { info() {}, warn() {}, error() {}, debug() {} };
         const code = await runStatusBoot({
-          appDir: process.cwd(),
+          appDir,
           paths,
           basePath,
           json: rest.includes('--json'),

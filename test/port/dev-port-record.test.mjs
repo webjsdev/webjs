@@ -13,7 +13,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { recordDevPort, recordedDevPort } from '../../packages/cli/lib/port.js';
-import { isLiveServer, processStartTime } from '../../packages/cli/lib/server-record.js';
+import { isLiveServer, processStartTime, updateRecordedPort, boundPort } from '../../packages/cli/lib/server-record.js';
 
 const PORT_JS = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), '../../packages/cli/lib/port.js')).href;
 
@@ -96,4 +96,31 @@ test('a live server record is never overwritten, nor removed by a process that d
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('updateRecordedPort moves only this process\'s record to the bound port, keeping pid and start time', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-dev-port-'));
+  try {
+    // A supervisor started with --port 0 records 0, which status never probes.
+    recordDevPort(dir, 0);
+    assert.equal(recordedDevPort(dir), null, 'port 0 is not a port to probe');
+    const file = join(dir, '.webjs', 'dev-server.json');
+    const { pid, startTime } = JSON.parse(readFileSync(file, 'utf8'));
+    assert.equal(updateRecordedPort(dir, 'dev', 43210), true);
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), { port: 43210, pid, ...(startTime ? { startTime } : {}) });
+    assert.equal(recordedDevPort(dir), 43210);
+    // Another process's record is not ours to move.
+    writeFileSync(file, JSON.stringify({ port: 8910, pid: 2 ** 30 }));
+    assert.equal(updateRecordedPort(dir, 'dev', 43211), false);
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).port, 8910);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('boundPort reads a node:http or Bun.serve handle, else falls back', () => {
+  assert.equal(boundPort({ server: { address: () => ({ port: 5123 }) } }, 0), 5123);
+  assert.equal(boundPort({ server: { port: 5124 } }, 0), 5124);
+  assert.equal(boundPort(undefined, 8080), 8080);
+  assert.equal(boundPort({ server: { address: () => null } }, 8080), 8080);
 });

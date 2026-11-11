@@ -179,11 +179,60 @@ export function recordServer(cwd, port, { kind = 'dev' } = {}) {
 }
 
 /**
+ * The IPC message a supervised dev child sends once its listener is bound:
+ * `{ webjs: DEV_LISTENING_MESSAGE, port }`. The supervisor writes the record
+ * before the child exists, with the port from argv and env; the bound port
+ * can differ (`--port 0`, or a `.env` `PORT` edit that restarted the child on
+ * another port), so the supervisor rewrites the record's port on each report.
+ */
+export const DEV_LISTENING_MESSAGE = 'listening';
+
+/**
+ * Point this process's record at the port it is now serving on, keeping the
+ * pid and start time. A record this process did not write (another live
+ * server kept its own) is left alone.
+ * @param {string} cwd the app root
+ * @param {'dev' | 'start'} kind
+ * @param {number} port
+ * @returns {boolean} whether the record was rewritten
+ */
+export function updateRecordedPort(cwd, kind, port) {
+  const record = readServerRecord(cwd, kind);
+  if (!record || record.pid !== process.pid || !Number.isInteger(port) || port <= 0) return false;
+  if (record.port === port) return true;
+  try {
+    writeFileSync(join(cwd, SERVER_RECORD_FILES[kind]), JSON.stringify({ ...record, port }) + '\n');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The port a started server actually bound, read from the handle
+ * `startServer` resolves with (a `node:http` server's `address()`, or
+ * `Bun.serve`'s `port`), else `fallback`. What `--port 0` makes differ.
+ * @param {any} started
+ * @param {number} fallback
+ * @returns {number}
+ */
+export function boundPort(started, fallback) {
+  const server = started?.server;
+  if (typeof server?.port === 'number' && server.port > 0) return server.port;
+  try {
+    const addr = server?.address?.();
+    if (addr && typeof addr === 'object' && addr.port > 0) return addr.port;
+  } catch { /* not a node:http server */ }
+  return fallback;
+}
+
+/**
  * The port a still-running `webjs dev` recorded for this app, or null.
  * @param {string} cwd
  * @returns {number | null}
  */
 export function recordedDevPort(cwd) {
   const record = liveServerRecord(cwd, 'dev');
-  return record && Number.isInteger(record.port) ? /** @type {number} */ (record.port) : null;
+  // Port 0 is a `--port 0` supervisor whose child has not reported its bind yet.
+  return record && Number.isInteger(record.port) && Number(record.port) > 0 ? /** @type {number} */ (record.port) : null;
 }

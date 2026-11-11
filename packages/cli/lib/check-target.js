@@ -130,6 +130,42 @@ export async function findServeTarget(cwd) {
 }
 
 /**
+ * The app root a command that acts on a RUNNING app (`webjs stop`,
+ * `webjs status`) resolves: `cwd` when it holds `app/`, else the nearest
+ * ancestor that does. `root` is null outside any app, a workspace root
+ * included, since which member app is meant is ambiguous there; the member
+ * apps come back in `workspaceApps` for the message.
+ *
+ * Unlike `webjs dev` / `webjs start`, which refuse inside a subdirectory
+ * (they would serve the wrong directory), these only read the app's record
+ * and config, so the ancestor is unambiguous.
+ *
+ * @param {string} cwd
+ * @returns {Promise<{ root: string | null, workspaceApps: string[] }>}
+ */
+export async function findAppRoot(cwd) {
+  const target = await findServeTarget(cwd);
+  if (target.isApp) return { root: cwd, workspaceApps: [] };
+  return { root: target.ancestorApp, workspaceApps: target.workspaceApps };
+}
+
+/**
+ * The refusal `webjs stop` / `webjs status` print outside any app.
+ *
+ * @param {'stop' | 'status'} command
+ * @param {string[]} workspaceApps
+ * @returns {string}
+ */
+export function notInsideAppMessage(command, workspaceApps) {
+  const lines = [`webjs ${command}: this directory is not inside a WebJs app (no \`app/\` directory here or above), so there is no server to ${command === 'stop' ? 'stop' : 'check'}.`];
+  if (workspaceApps.length) {
+    lines.push('', `This is a workspace root. Run it inside the app:`, '');
+    for (const app of workspaceApps) lines.push(`  cd ${app} && webjs ${command}`);
+  }
+  return lines.join('\n');
+}
+
+/**
  * The refusal `webjs dev` / `webjs start` print when started where there is no
  * app (#1526). Without it the server boots, says it is ready, and answers 404
  * for every route, which is how a launch from a workspace root used to look.
