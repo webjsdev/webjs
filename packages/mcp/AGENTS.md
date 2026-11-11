@@ -91,8 +91,10 @@ src/
                          `optimistic-ui`, `type-safety`, `data-flow`,
                          `authentication`, `testing`, `uploads`), each how WebJs wants
                          one need built. A guide is printed only when looked
-                         up by name; the catalogue does not list them, since
-                         a list had agents read several up front.
+                         up by name; neither the catalogue nor any tool
+                         description lists them (an agent reads every
+                         description at session start), since a list had
+                         agents read several up front.
                          GUIDE_ALIASES maps the file
                          convention names agents look up (`not-found`,
                          `error`, `middleware.ts`, `route.ts`, `page`, ...)
@@ -149,7 +151,8 @@ src/
    40 lines) on how WebJs wants one need built, and ends in actions (the
    exports to look up next, the docs page), all checked to exist by
    `test/guides.test.mjs`. A guide is returned only for a lookup by its name
-   or an alias, never listed up front. A new guide must keep to that shape;
+   or an alias, never listed up front: not in the catalogue and not in a tool
+   description, which `test/mcp.test.mjs` holds. A new guide must keep to that shape;
    anything longer belongs on the docs site.
 
 ## Tests

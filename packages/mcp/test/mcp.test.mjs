@@ -126,6 +126,25 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   assert.ok(byName.ui.inputSchema.properties.name, 'ui takes an optional component name');
 });
 
+test('mcp: no tool description lists the pattern guides (they are read by name only)', async () => {
+  // An agent reads every tool description at session start, so a guide named
+  // there is a guide listed up front (invariant 3). Only the two file
+  // conventions that illustrate the lookup may appear.
+  const dir = tmpDir();
+  const { frames } = await driveMcp(dir, [{ jsonrpc: '2.0', id: 4, method: 'tools/list' }]);
+  const { GUIDES } = await import('../src/guides.js');
+  const text = frames[0].result.tools.map((t) => t.description).join('\n');
+  for (const name of Object.keys(GUIDES)) {
+    assert.ok(!text.includes(`\`${name}\``), `no description names the ${name} guide`);
+  }
+  // The slugs no prose would use. (`uploads`, `testing` and `modules` are
+  // ordinary words, and the catalogue line names uploads as a need, so the
+  // check above holds them to the quoted form a guide list used.)
+  for (const name of ['progressive-enhancement', 'optimistic-ui', 'type-safety', 'data-flow']) {
+    assert.ok(!text.includes(name), `no description mentions ${name}`);
+  }
+});
+
 test('mcp: tools/call check returns a content array parsing to { violations, summary }', async () => {
   const dir = tmpDir();
   // Trip a violation so the report is non-trivial.
