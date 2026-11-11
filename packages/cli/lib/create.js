@@ -883,6 +883,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 //     posts: { author: r.one.users({ from: r.posts.userId, to: r.users.id }) },
 //     users: { posts: r.many.posts() },
 //   }));
+// Drizzle 1.0's db.query takes plain objects, not the eq() / asc() helpers of
+// Drizzle 0.x (those still go in db.select().where(...)):
+//   db.query.posts.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, with: { author: true } })
 export const relations = defineRelations({ users }, () => ({}));
 
 // Derived types, never hand-written.

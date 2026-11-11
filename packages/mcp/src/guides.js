@@ -115,6 +115,9 @@ Docs: https://webjs.dev/docs/typescript`,
 
 - Reads: queries/*.server.ts with no 'use server', called from a page or a
   layout, which run only on the server (as Next.js server components do).
+- Drizzle 1.0's db.query takes objects, not Drizzle 0.x's eq() / asc():
+    db.query.posts.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, with: { author: true } })
+  eq(), and() and lt() go in db.select().from(posts).where(...).
 - Writes: actions/*.server.ts with 'use server'. A form binds one; a component
   imports and calls it, which goes over RPC (a Date or a Map survives).
 - Public HTTP API: app/api/<name>/route.ts exporting GET, POST and the rest,
