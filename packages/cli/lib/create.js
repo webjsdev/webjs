@@ -965,6 +965,16 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
 // overloaded method across it and db.select({ id: users.id }) fails to compile.
 type Db = NodeSQLiteDatabase<typeof schema.relations>;
 
+// Transactions: both drivers are synchronous, so db.transaction takes a
+// SYNCHRONOUS callback whose queries end in .all(), .get() or .run(). An async
+// callback fails typecheck with "Sync drivers can't use async functions in
+// transactions!":
+//   const booking = db.transaction((tx) => {
+//     const room = tx.select().from(rooms).where(eq(rooms.id, roomId)).get();
+//     if (!room) throw new Error('No such room.'); // a throw rolls it back
+//     return tx.insert(bookings).values({ roomId, startsAt }).returning().get();
+//   });
+
 async function connect(): Promise<Db> {
   if ((globalThis as { Bun?: unknown }).Bun) {
     // @ts-expect-error bun:sqlite is a Bun builtin with no Node typings
