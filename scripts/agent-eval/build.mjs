@@ -14,7 +14,8 @@
  * that checkout's `node_modules`, commit the scaffold as the root commit, then
  * run `claude -p` in the app with `--setting-sources project,local` (the
  * machine's user settings, hooks and CLAUDE.md never apply) and
- * `--strict-mcp-config` over the app's own `.claude.json`. The transcript is
+ * `--strict-mcp-config` over a copy of the app's own `.claude.json` (Playwright
+ * pointed at the system Chromium), with a TMPDIR of its own. The transcript is
  * stream-json, the same shape `replay.mjs` reads.
  *
  * Graded per build, into `<out>/<build>/result.json` and the printed table:
@@ -143,11 +144,47 @@ export async function prepareApp({ framework, parent, appName, template = 'full-
   return app;
 }
 
-/** The environment a headless agent runs in: none of this session's markers. */
-export function agentEnv() {
+/**
+ * The environment a headless agent runs in: none of this session's markers,
+ * and, given a build directory, a temp directory of its own inside it.
+ * Concurrent builds shared /tmp, so one build's curl cookie jar was read by
+ * another, which then chased a session it never created for about 45 turns.
+ * @param {string} [buildDir]
+ */
+export function agentEnv(buildDir) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_CODE') || k === 'CLAUDECODE') delete env[k];
+  if (buildDir) {
+    const tmp = join(buildDir, 'tmp');
+    mkdirSync(tmp, { recursive: true });
+    env.TMPDIR = env.TMP = env.TEMP = tmp;
+  }
   return env;
+}
+
+/** Where the eval host keeps a system Chromium, which Playwright's MCP cannot find on its own. */
+export const SYSTEM_CHROMIUM = '/usr/bin/chromium';
+
+/**
+ * The MCP config a build's agent runs with: the app's own `.claude.json`, with
+ * the Playwright server pointed at the system Chromium when there is one. In 18
+ * builds the Playwright tool looked for its own Chrome download, found none,
+ * and the agent fell back to curl. Written beside the app, never into it, so
+ * the scaffold the agent commits stays the one users get.
+ * @param {string} app the app directory
+ * @param {string} buildDir where to write the copy
+ * @param {string | null} [chromium] the browser binary, or null for none
+ * @returns {string} the config path to pass to --mcp-config
+ */
+export function evalMcpConfig(app, buildDir, chromium = existsSync(SYSTEM_CHROMIUM) ? SYSTEM_CHROMIUM : null) {
+  const config = JSON.parse(readFileSync(join(app, '.claude.json'), 'utf8'));
+  const pw = config.mcpServers && config.mcpServers.playwright;
+  if (pw && chromium && !(pw.args || []).includes('--executable-path')) {
+    pw.args = [...(pw.args || []), '--executable-path', chromium];
+  }
+  const file = join(buildDir, 'mcp.json');
+  writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+  return file;
 }
 
 async function oneBuild({ spec, specName, index, out, framework, model, label, timeoutS, port }) {
@@ -155,10 +192,10 @@ async function oneBuild({ spec, specName, index, out, framework, model, label, t
   const parent = join(out, name);
   const app = await prepareApp({ framework, parent, appName: specName });
   const transcript = join(parent, 'transcript.jsonl');
-  const env = agentEnv();
+  const env = agentEnv(parent);
   const args = ['-p', promptFor(spec, app, port), '--model', model, '--output-format', 'stream-json', '--verbose',
     '--permission-mode', 'bypassPermissions', '--setting-sources', 'project,local',
-    '--strict-mcp-config', '--mcp-config', join(app, '.claude.json'), '--no-session-persistence'];
+    '--strict-mcp-config', '--mcp-config', evalMcpConfig(app, parent), '--no-session-persistence'];
   const started = Date.now();
   // --no-agent: scaffold, link and grade the untouched app, calling no model
   // (checks the runner's layout for free).

@@ -6,11 +6,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { metricsOf, promptFor } from '../../scripts/agent-eval/build.mjs';
+import { metricsOf, promptFor, agentEnv, evalMcpConfig } from '../../scripts/agent-eval/build.mjs';
 
 /** A stream-json transcript from a list of events. */
 function transcript(events) {
@@ -56,4 +56,37 @@ test('the prompt carries the spec and names no WebJs API beyond its CLI', () => 
   assert.match(p, /\/tmp\/app/);
   assert.match(p, /webjs dev --port 8900/);
   assert.doesNotMatch(p, /WebComponent|createAuth|html`|'use server'/, 'the frame teaches nothing the brief should');
+});
+
+test('each build gets a temp directory of its own, so concurrent builds never share a cookie jar', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'eval-env-'));
+  try {
+    const env = agentEnv(dir);
+    assert.equal(env.TMPDIR, join(dir, 'tmp'));
+    assert.equal(env.TMP, env.TMPDIR);
+    assert.ok(existsSync(env.TMPDIR), 'and it exists');
+    assert.notEqual(agentEnv(join(dir, 'b')).TMPDIR, env.TMPDIR, 'a second build gets another');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the agent MCP config is a copy pointing Playwright at the system Chromium', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'eval-mcp-'));
+  try {
+    const app = join(dir, 'app');
+    mkdirSync(app);
+    const original = { mcpServers: { playwright: { type: 'stdio', command: 'npx', args: ['@playwright/mcp@latest'] }, webjs: { command: 'npx', args: ['@webjsdev/mcp'] } } };
+    writeFileSync(join(app, '.claude.json'), JSON.stringify(original));
+    const file = evalMcpConfig(app, dir, '/usr/bin/chromium');
+    assert.equal(file, join(dir, 'mcp.json'), 'written beside the app');
+    const copy = JSON.parse(readFileSync(file, 'utf8'));
+    assert.deepEqual(copy.mcpServers.playwright.args, ['@playwright/mcp@latest', '--executable-path', '/usr/bin/chromium']);
+    assert.deepEqual(copy.mcpServers.webjs, original.mcpServers.webjs);
+    assert.deepEqual(JSON.parse(readFileSync(join(app, '.claude.json'), 'utf8')), original, 'the app is untouched');
+    // With no browser on the host the copy is the app's config as it is.
+    assert.deepEqual(JSON.parse(readFileSync(evalMcpConfig(app, dir, null), 'utf8')), original);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
