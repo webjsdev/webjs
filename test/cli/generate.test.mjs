@@ -13,6 +13,7 @@ import { parseGenerateArgs, applyPlan, migrationStamp, waitForNextMigrationSecon
 import { removeTable } from '../../packages/cli/lib/generate/destroy.js';
 import { planMigration } from '../../packages/cli/lib/generate/migration.js';
 import { planController } from '../../packages/cli/lib/generate/controller.js';
+import { modelSummary } from '../../packages/cli/lib/generate/scaffold.js';
 
 test('pluralize follows the common English rules and the irregulars', () => {
   assert.equal(pluralize('post'), 'posts');
@@ -183,6 +184,14 @@ test('a migration generated in the same second as the last one still sorts after
   assert.ok(migrationStamp(new Date()) > planted, 'the next stamp is a later second');
   assert.equal(migrationStamp(new Date(Date.UTC(2026, 0, 2, 3, 4, 5))), '20260102030405');
   waitForNextMigrationSecond(join(dir, 'missing'));
+});
+
+test('the model summary prints the row type the agent would otherwise read back from the schema', () => {
+  const lines = modelSummary(resourceNames('booking'), parseFields(['user:references!', 'title:string!', 'notes:text', 'paid:boolean', 'at:datetime', 'meta:json']));
+  assert.equal(lines[0], "table bookings ('bookings'), row type Booking:");
+  assert.equal(lines[1], '  { id: number; userId: number; title: string; notes: string | null; paid: boolean; at: Date | null; meta: unknown; createdAt: Date; updatedAt: Date }');
+  assert.equal(lines[2], "import { bookings, type Booking } from '#db/schema.server.ts';");
+  assert.match(lines[3], /^relations: booking\.user -> users \(db\.query\.bookings\.findMany\(\{ with: \{ user: true \} \}\)\)$/);
 });
 
 test('parseGenerateArgs reads the generator, the name, the fields and the Rails flags', () => {

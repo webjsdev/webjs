@@ -49,6 +49,7 @@ export function planScaffold(ctx, opts) {
   // A model is the table and its migration, as `rails g model` is: no module
   // folder, since a child table (a poll's options, its votes) belongs to its
   // parent's feature module, and the row type is exported beside the table.
+  plan.summary = modelSummary(n, fields);
   if (opts.kind === 'model') return plan;
   plan.files.push({ path: `${mod}/types.ts`, content: typesFile(n) });
 
@@ -67,7 +68,64 @@ export function planScaffold(ctx, opts) {
     plan.files.push(...apiFiles(n));
   }
   if (!ctx.skipTests) plan.files.push(testFile(n, fields, pages ? 'pages' : 'api'));
+  plan.summary.push(...featureSummary(n, pages));
   return plan;
+}
+
+/** The TypeScript type a field's column reads as. */
+function tsType(/** @type {Field} */ f) {
+  const base = { string: 'string', text: 'string', integer: 'number', float: 'number', references: 'number', boolean: 'boolean', datetime: 'Date', json: 'unknown' }[f.kind];
+  return f.notNull || f.kind === 'boolean' || f.kind === 'json' ? base : `${base} | null`;
+}
+
+/**
+ * What the agent would otherwise open the schema to learn: the table's export,
+ * its row type column by column, the relations and the import line. Printed
+ * after the generator runs, so the generated files need not be read back.
+ * @param {ResourceNames} n
+ * @param {Field[]} fields
+ * @returns {string[]}
+ */
+export function modelSummary(n, fields) {
+  const cols = ['id: number', ...fields.map((f) => `${f.name}: ${tsType(f)}`), 'createdAt: Date', 'updatedAt: Date'];
+  const lines = [
+    `table ${n.plural} ('${n.table}'), row type ${n.Singular}:`,
+    `  { ${cols.join('; ')} }`,
+    `import { ${n.plural}, type ${n.Singular} } from '#db/schema.server.ts';`,
+  ];
+  const rels = fields.filter((f) => f.references);
+  if (rels.length) {
+    lines.push(`relations: ${rels.map((f) => `${n.singular}.${f.references?.relation} -> ${f.references?.table}`).join(', ')}`
+      + ` (db.query.${n.plural}.findMany({ with: { ${rels[0].references?.relation}: true } }))`);
+  }
+  return lines;
+}
+
+/**
+ * The feature's API: each generated export with its signature and module.
+ * @param {ResourceNames} n
+ * @param {boolean} pages
+ * @returns {string[]}
+ */
+function featureSummary(n, pages) {
+  const mod = `#modules/${n.kebabPlural}`;
+  const lines = [
+    `list${n.Plural}(): Promise<${n.Singular}[]>   ${mod}/queries/list-${n.kebabPlural}.server.ts`,
+    `get${n.Singular}(id: number): Promise<${n.Singular} | undefined>   ${mod}/queries/get-${n.kebab}.server.ts`,
+    `read${n.Singular}Input(input: FormData | Record<string, unknown>)   ${mod}/read-${n.kebab}-input.server.ts (the shared validation)`,
+  ];
+  if (pages) {
+    lines.push(
+      `create${n.Singular}(form: FormData), update${n.Singular}(form: FormData), delete${n.Singular}(form: FormData): 'use server', bound by forms, redirect on success`,
+      `pages: /${n.kebabPlural}, /${n.kebabPlural}/new, /${n.kebabPlural}/[id], /${n.kebabPlural}/[id]/edit; list component <${n.kebab}-list> (${mod}/components/${n.kebab}-list.ts)`,
+    );
+  } else {
+    lines.push(
+      `create${n.Singular}(input), update${n.Singular}(input, id), delete${n.Singular}(id): 'use server', return ActionResult<${n.Singular}>`,
+      `routes: GET, POST /api/${n.kebabPlural}; GET, PATCH, DELETE /api/${n.kebabPlural}/[id]`,
+    );
+  }
+  return lines;
 }
 
 /**

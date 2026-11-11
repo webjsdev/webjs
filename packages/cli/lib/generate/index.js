@@ -36,6 +36,8 @@ export const GENERATORS = ['scaffold', 'resource', 'model', 'migration', 'contro
  * @property {string[]} notes printed after the files, e.g. an edit to make by hand
  * @property {string} [migrationName] the `--name` handed to `db generate`
  * @property {string[]} [uiAdd] UI kit components to add with `webjs ui add`
+ * @property {string[]} [summary] what was written, as names and signatures, so the
+ *   agent that ran it does not have to open the files to learn them
  */
 
 /**
@@ -216,6 +218,11 @@ export function runGenerate(argv, opts = {}) {
     for (const c of conflicts) error(`  ${c}`);
     error('Pass --force to overwrite them.');
     return 1;
+  }
+  if (plan.summary?.length) {
+    log('');
+    log(`${'summary'.padStart(12)}  ${plan.summary[0]}`);
+    for (const line of plan.summary.slice(1)) log(`${''.padStart(12)}  ${line}`);
   }
   for (const n of plan.notes) log(n);
   if (args.pretend || args.skipMigration || !plan.migrationName) return 0;

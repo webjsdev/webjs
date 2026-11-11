@@ -38,6 +38,14 @@ export function planAuthentication(ctx) {
     { path: 'app/api/auth/[...path]/route.ts', content: ROUTE },
     ...authPageFiles(ctx),
   );
+  plan.summary = [
+    `users gains passwordHash: string | null${hasName ? ' (email, name kept)' : ''}`,
+    "auth(), signIn, signOut, handlers, signedInPath ('/dashboard')   #modules/auth/auth.server.ts",
+    'currentUser(): Promise<SessionUser | null>   #modules/auth/queries/current-user.server.ts',
+    'logIn(form), signUp(form), logOut(): \'use server\', bound by the /login, /signup and /dashboard forms',
+    'hashPassword(password), verifyPassword(password, stored)   #modules/auth/password.server.ts',
+    'pages: /login, /signup, /dashboard (protected by app/dashboard/middleware.ts); route: /api/auth/[...path]',
+  ];
   plan.notes.push(
     '        note  Set AUTH_SECRET in .env for any deployment (development and tests generate one).',
     '        note  To protect another section, copy app/dashboard/middleware.ts into its folder.',
