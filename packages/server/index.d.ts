@@ -742,7 +742,9 @@ export interface RequestCookies {
   readonly size: number;
   set(name: string, value: string, options?: Omit<ResponseCookie, 'name' | 'value'>): RequestCookies;
   set(cookie: ResponseCookie): RequestCookies;
-  delete(name: string | { name: string; path?: string; domain?: string }): RequestCookies;
+  /** Expire a cookie. Pass the `path` / `domain` it was set with, or the browser keeps it. */
+  delete(name: string, options?: Omit<ResponseCookie, 'name' | 'value' | 'expires' | 'maxAge'>): RequestCookies;
+  delete(cookie: { name: string; path?: string; domain?: string }): RequestCookies;
   toString(): string;
   [Symbol.iterator](): IterableIterator<[string, RequestCookie]>;
 }

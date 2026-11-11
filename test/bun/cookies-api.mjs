@@ -27,6 +27,7 @@ try {
   w('app/api/c/route.ts',
     `import { cookies } from ${JSON.stringify(SERVER)};\n` +
     `export async function POST(req: Request) { const c = await cookies(); c.set('a', '1', { httpOnly: true }); c.set('b', '2'); return Response.redirect(new URL('/api/c', req.url), 303); }\n` +
+    `export function DELETE() { cookies().delete('s', { path: '/admin' }); return new Response(null, { status: 204 }); }\n` +
     `export function GET() { return { a: cookies().get('a') ?? null }; }\n`);
   let server;
   ({ server, close } = await startServer({ appDir: dir, dev: false, port: 0, logger: quiet }));
@@ -39,6 +40,10 @@ try {
   assert.deepEqual(set, ['a=1; Path=/; HttpOnly', 'b=2; Path=/'], `two Set-Cookie headers on ${runtime}`);
   const g = await fetch(`${base}/api/c`, { headers: { cookie: 'a=1' } });
   assert.deepEqual(await g.json(), { a: { name: 'a', value: '1' } }, `get() shape on ${runtime}`);
+  // delete(name, { path }) clears the cookie on the path it was set on.
+  const d = await fetch(`${base}/api/c`, { method: 'DELETE', headers: { 'sec-fetch-site': 'same-origin', cookie: 's=1' } });
+  await d.text();
+  assert.deepEqual(d.headers.getSetCookie(), ['s=; Path=/admin; Expires=Thu, 01 Jan 1970 00:00:00 GMT'], `delete with a path on ${runtime}`);
   console.log(`ok cookies() api on ${runtime}`);
 } catch (e) {
   failure = e;

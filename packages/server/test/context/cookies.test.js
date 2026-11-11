@@ -55,6 +55,24 @@ test('stringifyCookie matches Next: path defaults to /, maxAge in seconds sets E
   assert.deepEqual([...parseCookieHeader('a=1; a=2; b')], [['a', '1'], ['b', 'true']]);
 });
 
+test('delete(name, { path, domain }) clears the cookie on that path and domain', () => {
+  const store = new CookieStore('s=1; t=2');
+  store.delete('s', { path: '/admin', domain: 'example.com' });
+  assert.equal(store.pending.get('s'), 's=; Path=/admin; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Domain=example.com');
+  assert.equal(store.has('s'), false);
+  // The object form says the same thing.
+  store.delete({ name: 't', path: '/admin' });
+  assert.equal(store.pending.get('t'), 't=; Path=/admin; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+});
+
+test('cookies().delete passes its options through the request-scoped view', async () => {
+  await withRequest(new Request('http://x/', { headers: { cookie: 's=1' } }), async () => {
+    const view = cookies().delete('s', { path: '/p' });
+    assert.equal(typeof view.get, 'function', 'chainable, as set() is');
+    assert.equal(cookies().has('s'), false);
+  });
+});
+
 test('applyPendingCookies adds to an immutable redirect response', () => {
   const store = new CookieStore(null);
   store.set('x', '1');

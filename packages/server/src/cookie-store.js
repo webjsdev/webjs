@@ -10,7 +10,7 @@
  * `ResponseCookies` (`@edge-runtime/cookies`): `get(name)` returns
  * `{ name, value }`, `set(name, value, options)` or `set({ name, value, ... })`
  * with `maxAge` in SECONDS, `path` defaulting to `/`, and `delete(name)`
- * expiring the cookie.
+ * (or `delete(name, { path, domain })`) expiring the cookie.
  *
  * @module cookie-store
  */
@@ -150,12 +150,15 @@ export class CookieStore {
   }
 
   /**
-   * Expire a cookie: `delete(name)` or `delete({ name, path, domain })`.
+   * Expire a cookie: `delete(name)`, `delete(name, { path, domain })` or
+   * `delete({ name, path, domain })`. A cookie set on a path or domain is only
+   * cleared by a `Set-Cookie` naming the same one, so both forms carry them.
    * @param {string | { name: string, path?: string, domain?: string }} a
+   * @param {{ path?: string, domain?: string, secure?: boolean, httpOnly?: boolean, sameSite?: ResponseCookie['sameSite'], partitioned?: boolean }} [options]
    */
-  delete(a) {
+  delete(a, options) {
     this.assertWritable('delete');
-    const opts = typeof a === 'string' ? { name: a } : a;
+    const opts = typeof a === 'string' ? { ...(options || {}), name: a } : a;
     this.map.delete(opts.name);
     this.pending.set(opts.name, stringifyCookie(normalizeCookie({ ...opts, value: '', expires: new Date(0) })));
     return this;
@@ -182,7 +185,7 @@ export function cookiesView(store) {
     getAll: store.getAll.bind(store),
     has: store.has.bind(store),
     set: (/** @type {any} */ a, /** @type {any} */ v, /** @type {any} */ o) => { store.set(a, v, o); return view; },
-    delete: (/** @type {any} */ a) => { store.delete(a); return view; },
+    delete: (/** @type {any} */ a, /** @type {any} */ o) => { store.delete(a, o); return view; },
     toString: () => store.toString(),
     [Symbol.iterator]: () => store[Symbol.iterator](),
   };
