@@ -109,6 +109,10 @@ import { verifyPassword } from './password.server.ts';
 
 export type SessionUser = { id: string; email: string${hasName ? '; name: string | null' : ''} };
 
+// Where signing in or up lands. The protected section is app/dashboard/; to
+// protect another one, move it (its middleware.ts goes along) and change this.
+export const signedInPath = '/dashboard';
+
 export const { auth, signIn, signOut, handlers } = createAuth<SessionUser>({
   providers: [
     Credentials({
@@ -152,7 +156,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 const LOG_IN = `'use server';
 
 import { AuthError } from '@webjsdev/server';
-import { signIn } from '../auth.server.ts';
+import { signIn, signedInPath } from '../auth.server.ts';
 
 // Bound by app/login/page.ts as <form action=\${logIn}>, written as Auth.js has
 // it in a Next.js app. On success signIn sets the session cookie and throws a
@@ -161,7 +165,7 @@ import { signIn } from '../auth.server.ts';
 // success redirect above all, is rethrown.
 export async function logIn(formData: FormData) {
   try {
-    await signIn('credentials', formData, { redirectTo: '/dashboard' });
+    await signIn('credentials', formData, { redirectTo: signedInPath });
   } catch (error) {
     if (error instanceof AuthError) {
       return { success: false as const, error: 'Wrong email or password.', values: { email: String(formData.get('email') ?? '') } };
@@ -177,11 +181,11 @@ import type { ActionResult } from '@webjsdev/server';
 import { db } from '#db/connection.server.ts';
 import { users } from '#db/schema.server.ts';
 import { hashPassword } from '../password.server.ts';
-import { signIn } from '../auth.server.ts';
+import { signIn, signedInPath } from '../auth.server.ts';
 
 // Bound by app/signup/page.ts. A failure re-renders the page with a message per
 // field and the typed email; a success stores the user with a hashed password,
-// then signs them in and redirects to the dashboard.
+// then signs them in and redirects to signedInPath.
 export async function signUp(formData: FormData): Promise<ActionResult> {
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const password = String(formData.get('password') ?? '');
@@ -195,7 +199,7 @@ export async function signUp(formData: FormData): Promise<ActionResult> {
   const [user] = await db.insert(users).values({ email, passwordHash: await hashPassword(password) })
     .onConflictDoNothing().returning({ id: users.id });
   if (!user) return { success: false, fieldErrors: { email: 'That email is already registered.' }, values, status: 422 };
-  await signIn('credentials', { email, password }, { redirectTo: '/dashboard' });
+  await signIn('credentials', { email, password }, { redirectTo: signedInPath });
   return { success: true };
 }
 `;

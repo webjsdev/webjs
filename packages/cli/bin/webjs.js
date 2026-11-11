@@ -306,12 +306,12 @@ const HELP = {
     notes: [
       'name[:type][!][:uniq|:index], the Rails grammar. type: string (the default), text, integer, float, decimal, boolean, datetime, date, json, references.',
       '! makes the column not null (title:string!), :uniq adds a unique constraint, :index a plain index.',
-      'user:references adds a userId foreign key to users and a user relation in defineRelations.',
+      'user:references adds a userId foreign key to users and a user relation in defineRelations; user:references! makes it required.',
       'Every table gets id, createdAt and updatedAt. The migration is applied on the next `webjs dev`, `webjs start` or `webjs test`.',
     ],
     examples: [
       'webjs g scaffold post title:string! body:text published:boolean',
-      'webjs g scaffold comment body:text! post:references',
+      'webjs g scaffold comment body:text! post:references!',
       'webjs g resource product name:string! price:float sku:string:uniq',
       'webjs g model tag name:string!:uniq',
       'webjs g migration AddPublishedAtToPosts published_at:datetime',

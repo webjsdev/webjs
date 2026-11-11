@@ -28,7 +28,7 @@ export default function Generators() {
       <li><code>type</code> is one of <code>string</code> (the default), <code>text</code>, <code>integer</code>, <code>float</code>, <code>decimal</code>, <code>boolean</code>, <code>datetime</code>, <code>date</code>, <code>json</code> and <code>references</code>.</li>
       <li><code>!</code> makes the column not null and the field required: <code>title:string!</code>.</li>
       <li><code>:uniq</code> adds a unique constraint, which create and update check with a field message. <code>:index</code> adds a plain index.</li>
-      <li><code>user:references</code> adds a <code>userId</code> foreign key to <code>users</code>, an index, and a <code>user</code> relation in <code>defineRelations</code>, so <code>db.query</code> can load it with <code>with</code>.</li>
+      <li><code>user:references</code> adds a <code>userId</code> foreign key to <code>users</code>, an index, and a <code>user</code> relation in <code>defineRelations</code>, so <code>db.query</code> can load it with <code>with</code>. <code>user:references!</code> makes it required.</li>
       <li>Names may be written <code>published_at</code> or <code>publishedAt</code>; both become the <code>publishedAt</code> column.</li>
     </ul>
 
@@ -53,7 +53,7 @@ npx webjs generate authentication</code-block>
       <li>a <code>passwordHash</code> column on <code>users</code> (or the <code>users</code> table itself when the app has none), hashed with scrypt from <code>node:crypto</code>, so there is no dependency and it runs on Bun;</li>
       <li><code>modules/auth/auth.server.ts</code>: <code>createAuth</code> with a credentials provider and a typed session user, and the <code>/api/auth</code> route;</li>
       <li><code>logIn</code>, <code>signUp</code> and <code>logOut</code> actions that await <code>signIn</code> and <code>signOut</code>, with <code>app/login</code> and <code>app/signup</code> pages bound to them;</li>
-      <li>a <code>/dashboard</code> segment whose <code>middleware.ts</code> sends a signed-out visitor to <code>/login</code>, Rails' <code>require_authentication</code>. Copy that file into any folder to protect it;</li>
+      <li>a <code>/dashboard</code> segment whose <code>middleware.ts</code> sends a signed-out visitor to <code>/login</code>, Rails' <code>require_authentication</code>. Copy that file into any folder to protect it, and change <code>signedInPath</code> in <code>auth.server.ts</code> to land somewhere else after signing in;</li>
       <li>a test that signs up, logs out and in, and checks the protected page.</li>
     </ul>
     <p>No secret is written into the code: <code>createAuth</code> reads <code>AUTH_SECRET</code>, and development and tests generate one when it is unset. Password reset by mail is left out, since WebJs ships no mailer. See <a href="/docs/auth">Auth Providers</a> to add GitHub or Google.</p>
