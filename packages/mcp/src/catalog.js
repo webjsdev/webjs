@@ -74,7 +74,8 @@ export function featureCatalog(catalog = FEATURE_CATALOG) {
   const out = [
     'Start a feature by generating it, as in Rails, then edit what it wrote',
     '(`npx webjs help generate`):',
-    '  A feature: npx webjs g scaffold post title:string! body:text (also resource, model, migration, controller)',
+    '  Every table: npx webjs g model booking room:references! startsAt:datetime! (never hand-write a Drizzle table)',
+    '  A list/new/edit feature: npx webjs g scaffold post title:string! body:text (also resource, migration, controller)',
     '  Auth: npx webjs g authentication (sign-up, log-in, a protected /dashboard)',
     '',
     'What WebJs provides, by need. `npx webjs source <Name>` (or the MCP `source`',

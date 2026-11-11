@@ -877,6 +877,9 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     // the last addition: three lines that save writing a feature's ten files.
     assert.match(fs, /run `npx webjs source`, which lists what WebJs provides for each need\./, 'names the feature catalogue');
     assert.match(fs, /`npx webjs g scaffold post title:string! body:text`/, 'names the generators');
+    // A hand-written Drizzle table was the first-draft type error in every A/B
+    // build that wrote one, so every table goes through the model generator.
+    assert.match(fs, /add every table with `npx webjs g model /, 'names the model generator for every table');
     assert.match(fs, /`npx webjs g authentication` adds sign-up and log-in/, 'names the auth generator');
     assert.ok(fs.split('\n').length < 70, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
