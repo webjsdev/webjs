@@ -92,6 +92,16 @@ test('the catalogue text names every entry and stays short', () => {
   assert.ok(text.length < 2500, `the catalogue stays under 2500 characters (${text.length})`);
 });
 
+// #1697: the facts agents in the eval builds grepped node_modules for, after
+// reading this very listing. Each cost one to sixteen turns across builds.
+test('the catalogue answers the lookups agents grepped the framework source for', () => {
+  const text = featureCatalog();
+  assert.match(text, /fresh migrated database, never db\/dev\.db/, 'which database `webjs test` uses');
+  assert.match(text, /webjs db seed runs db\/seed\.server\.ts/, 'which file the seed command runs');
+  assert.match(text, /renders per request unless it exports revalidate/, 'whether pages are cached by default');
+  assert.match(text, /GET\(req, \{ params \}\)/, 'what a route handler receives');
+});
+
 test('the MCP source tool returns the catalogue for no arguments, and a listing for `package`', async () => {
   const deps = { roots: [], readFile, readdir: listDir };
   assert.equal(await runSourceTool(deps, {}), featureCatalog());

@@ -869,7 +869,10 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /document\.getElementById/, 'naming the raw DOM calls to avoid');
     assert.match(fs, /Style with Tailwind utilities on the kit's design tokens/, 'steers styling to Tailwind on the kit tokens');
     assert.match(fs, /npx webjs ui init --preset/, 'and theming to a kit preset');
-    assert.match(fs, /`modules\/users\/` is an example of that shape: read it, then\ndelete it, its test and whatever uses it before you build the app\./, 'tells the agent to delete the example module before building');
+    assert.match(fs, /`modules\/users\/` is an example of that shape: read it, then\nremove it with `git rm -r modules\/users test\/users`/, 'tells the agent to delete the example module before building');
+    // #1697: five of eight eval builds ran `git add` on the removed paths and
+    // spent turns on the pathspec error.
+    assert.match(fs, /already staged, so never\n`git add` those paths/, 'and that the removal is already staged');
     assert.match(fs, /\n## This app\n\nReplace this paragraph with what /, 'ends with a This app section the agent fills in');
     assert.match(fs, /`CLAUDE\.md` imports this file, so notes go here\./, 'which says app notes live in AGENTS.md, not CLAUDE.md');
     // The brief plus the scaffold's rules plus the This app stub: still short,

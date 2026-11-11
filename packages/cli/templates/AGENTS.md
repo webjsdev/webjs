@@ -39,7 +39,8 @@ Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
 or an in-memory array. Put each feature in `modules/<feature>/` (`actions/` with
 one `'use server'` action per `*.server.ts`, `queries/`, `components/`, `types.ts`)
 and keep routes thin. `modules/users/` is an example of that shape: read it, then
-delete it, its test and whatever uses it before you build the app.
+remove it with `git rm -r modules/users test/users` (already staged, so never
+`git add` those paths) and whatever uses it before you build the app.
 
 In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
 not `document.getElementById`, `document.querySelector` or `addEventListener`.
