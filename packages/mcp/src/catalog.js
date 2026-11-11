@@ -68,7 +68,15 @@ export const FEATURE_CATALOG = [
  * @returns {string}
  */
 export function featureCatalog(catalog = FEATURE_CATALOG) {
+  // Generate first, look up second: the generators lead, since starting a
+  // feature by writing it is the costliest mistake. They are commands, not
+  // exports, so they sit outside the name-checked sections.
   const out = [
+    'Start a feature by generating it, as in Rails, then edit what it wrote',
+    '(`npx webjs help generate`):',
+    '  A feature: npx webjs g scaffold post title:string! body:text (also resource, model, migration, controller)',
+    '  Auth: npx webjs g authentication (sign-up, log-in, a protected /dashboard)',
+    '',
     'What WebJs provides, by need. `npx webjs source <Name>` (or the MCP `source`',
     'tool with `export`) prints one name\'s signature and a working example. Use',
     'these before writing your own.',
@@ -79,13 +87,6 @@ export function featureCatalog(catalog = FEATURE_CATALOG) {
       out.push(`  ${g.need}: ${g.names.join(', ')}${g.note ? ` (${g.note})` : ''}`);
     }
   }
-  // Commands, not exports, so they sit outside the name-checked sections.
-  out.push(
-    '',
-    'Generators, as in Rails (`npx webjs help generate`)',
-    '  A feature: npx webjs g scaffold post title:string! body:text (also resource, model, migration, controller)',
-    '  Auth: npx webjs g authentication (sign-up, log-in, a protected /dashboard)',
-  );
   out.push('', 'Guides, how WebJs wants it built (`npx webjs source <guide>`)');
   for (const [name, g] of Object.entries(GUIDES)) out.push(`  ${name}: ${g.need}`);
   return out.join('\n');
