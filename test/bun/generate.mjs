@@ -42,11 +42,11 @@ try {
   const cli = (...args) => spawnSync(process.execPath, [CLI, ...args], { cwd: app, env, encoding: 'utf8' });
   const out = (r) => r.stdout + r.stderr;
 
-  const post = cli('g', 'scaffold', 'post', 'title:string!', 'body:text', 'published:boolean', 'slug:string:uniq');
+  const post = cli('g', 'model', 'post', 'title:string!', 'body:text', 'published:boolean', 'slug:string:uniq');
   assert.equal(post.status, 0, out(post));
   assert.ok(existsSync(join(app, 'db', 'migrations')), 'db generate ran under ' + runtime);
-  const product = cli('g', 'resource', 'product', 'name:string!', 'price:float');
-  assert.equal(product.status, 0, out(product));
+  const comment = cli('g', 'model', 'comment', 'body:text!', 'post:references!');
+  assert.equal(comment.status, 0, out(comment));
   // scrypt from node:crypto and the signed session cookie are runtime-sensitive.
   const auth = cli('g', 'authentication');
   assert.equal(auth.status, 0, out(auth));
@@ -56,16 +56,12 @@ try {
   const text = out(tests);
   // `bun test` names the files it ran; `node --test` names each passing test.
   if (process.versions.bun) {
-    assert.match(text, /test\/posts\/posts\.test\.ts:/);
-    assert.match(text, /test\/products\/products\.test\.ts:/);
     assert.match(text, /test\/auth\/auth\.test\.ts:/);
     assert.match(text, /\n\s*0 fail\n/);
   } else {
-    assert.match(text, /create, show, edit and delete a post through its forms/);
-    assert.match(text, /create, read, update and delete a product over JSON/);
     assert.match(text, /sign up, see the dashboard, log out, then log in again/);
   }
-  console.log(`ok generate: scaffold and resource output passes its tests on ${runtime}`);
+  console.log(`ok generate: model and authentication output passes its tests on ${runtime}`);
 } finally {
   rmSync(cwd, { recursive: true, force: true });
 }

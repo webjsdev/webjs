@@ -1,13 +1,14 @@
 /**
- * `webjs generate` in freshly scaffolded apps: each generator's output must
- * pass `webjs check`, `webjs typecheck` and its own generated tests, and every
- * generated page must render. The generators emit strings, so an escaping or
- * typing mistake only shows in a generated app, which is why this drives a
- * real one rather than inspecting the emitted text.
+ * `webjs generate` in freshly scaffolded apps: the model and authentication
+ * generators' output must pass `webjs check`, `webjs typecheck` and the app's
+ * tests, its migrations must apply, and every generated page must render. The
+ * generators emit strings, so an escaping or typing mistake only shows in a
+ * generated app, which is why this drives a real one rather than inspecting
+ * the emitted text.
  *
- * Counterfactual: break any emitter (drop the `values` the uniqueness check
- * reads, or a closing backtick in a page) and the typecheck or test step
- * here goes red.
+ * Counterfactual: break any emitter (a column the schema edit writes wrong, or
+ * a closing backtick in an auth page) and the typecheck or test step here
+ * goes red.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,87 +58,53 @@ const out = (r) => r.stdout + r.stderr;
  */
 const ran = (r, name, file) => assert.match(out(r), process.versions.bun ? new RegExp(file.replace(/[./]/g, '\\$&') + ':') : name);
 
-test('scaffold, references and resource generate an app that checks, typechecks and passes its tests', { timeout: 300_000 }, async () => {
+test('model and references generate tables that check, typecheck and migrate', { timeout: 300_000 }, async () => {
   const { cwd, app, cli } = await makeApp({});
   try {
-    const post = cli('g', 'scaffold', 'post', 'title:string!', 'body:text', 'views:integer', 'published:boolean', 'publishedAt:datetime', 'slug:string:uniq', 'meta:json');
+    const post = cli('g', 'model', 'post', 'title:string!', 'body:text', 'views:integer', 'published:boolean', 'publishedAt:datetime', 'slug:string:uniq', 'meta:json');
     assert.equal(post.status, 0, out(post));
-    for (const f of ['app/posts/page.ts', 'app/posts/new/page.ts', 'app/posts/[id]/page.ts', 'app/posts/[id]/edit/page.ts',
-      'modules/posts/actions/create-post.server.ts', 'modules/posts/queries/list-posts.server.ts', 'test/posts/posts.test.ts', 'components/ui/textarea.ts']) {
-      assert.ok(existsSync(join(app, f)), f);
-    }
     assert.match(out(post), /migration {2}webjs db generate --name=create_posts/);
+    assert.match(out(post), /row type Post:/, 'prints the model summary');
+    assert.ok(!existsSync(join(app, 'modules/posts')), 'a model writes no module folder');
 
-    const comment = cli('g', 'scaffold', 'comment', 'body:text!', 'post:references');
+    const comment = cli('g', 'model', 'comment', 'body:text!', 'post:references!');
     assert.equal(comment.status, 0, out(comment));
-    const product = cli('g', 'resource', 'product', 'name:string!', 'price:float', 'sku:string:uniq');
-    assert.equal(product.status, 0, out(product));
-    assert.ok(existsSync(join(app, 'app/api/products/[id]/route.ts')));
-    assert.ok(!existsSync(join(app, 'app/products')), 'resource writes no pages');
+    const tag = cli('g', 'model', 'tag', 'name:string!:uniq', 'rank:integer:index');
+    assert.equal(tag.status, 0, out(tag));
 
     const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
-    assert.match(schema, /^export const relations = defineRelations\(\{ users, posts, comments, products \}, \(r\) => \(\{\n {2}comments: \{ post: r\.one\.posts\(/m);
+    assert.match(schema, /^export type Post = typeof posts\.\$inferSelect;$/m);
+    assert.match(schema, /^export const relations = defineRelations\(\{ users, posts, comments, tags \}, \(r\) => \(\{\n {2}comments: \{ post: r\.one\.posts\(/m);
+    const migrations = readdirSync(join(app, 'db', 'migrations')).join(' ');
+    for (const name of ['create_posts', 'create_comments', 'create_tags']) assert.match(migrations, new RegExp(`_${name}`));
+
+    // The same table again is left alone, with a note.
+    const again = cli('g', 'model', 'post', 'title:string!');
+    assert.equal(again.status, 0, out(again));
+    assert.match(out(again), /already defines posts/);
 
     const check = cli('check');
     assert.equal(check.status, 0, out(check));
     const tc = cli('typecheck');
     assert.equal(tc.status, 0, out(tc));
+    // The app's own tests run on a test database the migrations build.
     const tests = cli('test', '--server');
     assert.equal(tests.status, 0, out(tests));
-    ran(tests, /create, show, edit and delete a post through its forms/, 'test/posts/posts.test.ts');
-    ran(tests, /create, read, update and delete a product over JSON/, 'test/products/products.test.ts');
-
-    // Every generated page that takes no parameter renders (status --boot runs
-    // no before-steps, so the dev database is migrated first).
     const migrate = cli('db', 'migrate');
     assert.equal(migrate.status, 0, out(migrate));
-    const status = cli('status', '--boot', '/posts', '/posts/new', '/comments', '/comments/new');
-    assert.equal(status.status, 0, out(status));
-
-    // Re-running over an edited file refuses, names it, and writes nothing.
-    appendFileSync(join(app, 'app/posts/page.ts'), '// mine\n');
-    const again = cli('g', 'scaffold', 'post', 'title:string!');
-    assert.equal(again.status, 1);
-    assert.match(out(again), /app\/posts\/page\.ts/);
-    assert.match(readFileSync(join(app, 'app/posts/page.ts'), 'utf8'), /\/\/ mine\n$/);
-
-    // destroy removes what resource wrote, and the app still typechecks.
-    const destroyed = cli('d', 'resource', 'product');
-    assert.equal(destroyed.status, 0, out(destroyed));
-    assert.ok(!existsSync(join(app, 'app/api/products')));
-    assert.doesNotMatch(readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8'), /products/);
-    const tc2 = cli('typecheck');
-    assert.equal(tc2.status, 0, out(tc2));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
 
-test('scaffold in the api template writes JSON route handlers and they pass their test', { timeout: 300_000 }, async () => {
-  const { cwd, app, cli } = await makeApp({ template: 'api' });
-  try {
-    const r = cli('g', 'scaffold', 'widget', 'name:string!', 'qty:integer');
-    assert.equal(r.status, 0, out(r));
-    assert.ok(existsSync(join(app, 'app/api/widgets/route.ts')));
-    assert.ok(!existsSync(join(app, 'app/widgets')), 'no pages without a root layout');
-    const tc = cli('typecheck');
-    assert.equal(tc.status, 0, out(tc));
-    const tests = cli('test', '--server');
-    assert.equal(tests.status, 0, out(tests));
-    ran(tests, /create, read, update and delete a widget over JSON/, 'test/widgets/widgets.test.ts');
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
-  }
-});
-
-test('scaffold on Postgres writes pg columns that check and typecheck', { timeout: 300_000 }, async () => {
+test('model on Postgres writes pg columns that check and typecheck', { timeout: 300_000 }, async () => {
   const { cwd, app, cli } = await makeApp({ db: 'postgres' });
   try {
-    const r = cli('g', 'scaffold', 'post', 'title:string!', 'published:boolean', 'publishedAt:datetime', 'meta:json', 'author:references', '--plural', 'posts');
+    const r = cli('g', 'model', 'post', 'title:string!', 'published:boolean', 'publishedAt:datetime', 'meta:json', 'author:references', '--plural', 'posts');
     // author:references needs an authors table, which this app does not have.
     assert.equal(r.status, 1);
     assert.match(out(r), /needs a authors table/);
-    const ok = cli('g', 'scaffold', 'post', 'title:string!', 'published:boolean', 'publishedAt:datetime', 'meta:json', 'user:references');
+    const ok = cli('g', 'model', 'post', 'title:string!', 'published:boolean', 'publishedAt:datetime', 'meta:json', 'user:references');
     assert.equal(ok.status, 0, out(ok));
     const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
     assert.match(schema, /pgTable\('posts', \{\n {2}id: serial\(\)\.primaryKey\(\),/);
@@ -174,9 +141,17 @@ test('authentication adds a password hash to users, and its pages, middleware an
     assert.match(out(again), /identical {2}app\/login\/page\.ts/);
     assert.match(out(again), /users already has passwordHash/);
 
-    // A resource that belongs to a user.
-    const notes = cli('g', 'scaffold', 'note', 'body:text!', 'user:references');
+    // Re-running over an edited file refuses, names it, and writes nothing.
+    appendFileSync(join(app, 'app/login/page.ts'), '// mine\n');
+    const edited = cli('g', 'authentication');
+    assert.equal(edited.status, 1);
+    assert.match(out(edited), /app\/login\/page\.ts/);
+    assert.match(readFileSync(join(app, 'app/login/page.ts'), 'utf8'), /\/\/ mine\n$/);
+
+    // A table that belongs to a user.
+    const notes = cli('g', 'model', 'note', 'body:text!', 'user:references');
     assert.equal(notes.status, 0, out(notes));
+    assert.match(out(notes), /relations: note\.user -> users/);
 
     const check = cli('check');
     assert.equal(check.status, 0, out(check));
@@ -190,34 +165,6 @@ test('authentication adds a password hash to users, and its pages, middleware an
     assert.equal(migrate.status, 0, out(migrate));
     const status = cli('status', '--boot', '/login', '/signup');
     assert.equal(status.status, 0, out(status));
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
-  }
-});
-
-test('migration edits a table with Rails-named migrations, and controller pages render', { timeout: 300_000 }, async () => {
-  const { cwd, app, cli } = await makeApp({});
-  try {
-    assert.equal(cli('g', 'scaffold', 'post', 'title:string!').status, 0);
-    const add = cli('g', 'migration', 'AddPublishedAtToPosts', 'published_at:datetime', 'views:integer');
-    assert.equal(add.status, 0, out(add));
-    const remove = cli('g', 'migration', 'RemoveViewsFromPosts', 'views');
-    assert.equal(remove.status, 0, out(remove));
-    const migrations = readdirSync(join(app, 'db', 'migrations')).join(' ');
-    assert.match(migrations, /_create_posts/);
-    assert.match(migrations, /_add_published_at_to_posts/);
-    assert.match(migrations, /_remove_views_from_posts/);
-    const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
-    assert.match(schema, /publishedAt: integer\(\{ mode: 'timestamp_ms' \}\),/);
-    assert.doesNotMatch(schema, /views:/);
-
-    const pages = cli('g', 'controller', 'pages', 'home', 'about');
-    assert.equal(pages.status, 0, out(pages));
-    const tc = cli('typecheck');
-    assert.equal(tc.status, 0, out(tc));
-    const tests = cli('test', '--server');
-    assert.equal(tests.status, 0, out(tests));
-    ran(tests, /\/pages\/about renders/, 'test/pages/pages.test.ts');
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

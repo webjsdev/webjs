@@ -1,10 +1,9 @@
 /**
  * `webjs generate` (alias `webjs g`): Rails-style generators that write a
- * working, tested, conventional slice of an app in one command, so an agent
- * generates and then edits instead of writing ten files from memory.
+ * working, conventional slice of an app in one command, so an agent
+ * generates and then edits instead of writing it from memory.
  *
  * ```sh
- * webjs generate scaffold post title:string! body:text published:boolean
  * webjs generate model comment body:text! post:references
  * webjs generate authentication
  * ```
@@ -18,16 +17,13 @@ import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 import { dialectOf } from './schema-edit.js';
-import { planScaffold } from './scaffold.js';
+import { planModel } from './model.js';
 import { planAuthentication } from './authentication.js';
-import { planMigration } from './migration.js';
-import { planController } from './controller.js';
 
 const CLI_BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'webjs.js');
 
-export const GENERATORS = ['scaffold', 'resource', 'model', 'migration', 'controller', 'authentication'];
+export const GENERATORS = ['model', 'authentication'];
 
 /**
  * @typedef {object} Plan
@@ -35,7 +31,6 @@ export const GENERATORS = ['scaffold', 'resource', 'model', 'migration', 'contro
  * @property {{ path: string, content: string }[]} edits whole new contents of existing files
  * @property {string[]} notes printed after the files, e.g. an edit to make by hand
  * @property {string} [migrationName] the `--name` handed to `db generate`
- * @property {string[]} [uiAdd] UI kit components to add with `webjs ui add`
  * @property {string[]} [summary] what was written, as names and signatures, so the
  *   agent that ran it does not have to open the files to learn them
  */
@@ -88,8 +83,7 @@ export function parseGenerateArgs(argv) {
  * @property {string} appDir
  * @property {string} schema the text of db/schema.server.ts
  * @property {'sqlite'|'postgres'} dialect
- * @property {boolean} hasPages whether the app has a root layout (the api template has none)
- * @property {{ button: boolean, input: boolean, label: boolean, textarea: boolean, kit: boolean }} ui which UI kit helpers exist, and whether the kit is set up (components.json)
+ * @property {{ button: boolean, input: boolean, label: boolean }} ui which UI kit helpers exist
  * @property {boolean} skipTests
  */
 
@@ -101,7 +95,8 @@ export function parseGenerateArgs(argv) {
  */
 export function planGenerate(appDir, args) {
   if (!args.generator || !GENERATORS.includes(args.generator)) {
-    throw new Error(`Pick a generator: ${GENERATORS.join(', ')}. Run \`webjs help generate\`.`);
+    const unknown = args.generator ? `There is no ${args.generator} generator. ` : '';
+    throw new Error(`${unknown}Pick a generator: ${GENERATORS.join(', ')}. Run \`webjs help generate\`.`);
   }
   const schemaPath = join(appDir, 'db', 'schema.server.ts');
   if (!existsSync(join(appDir, 'app')) || !existsSync(schemaPath)) {
@@ -112,28 +107,16 @@ export function planGenerate(appDir, args) {
     appDir,
     schema: readFileSync(schemaPath, 'utf8'),
     dialect: dialectOf(readIfExists(join(appDir, 'drizzle.config.ts'))),
-    hasPages: existsSync(join(appDir, 'app', 'layout.ts')) || existsSync(join(appDir, 'app', 'layout.js')),
     ui: {
       button: existsSync(join(appDir, 'components', 'ui', 'button.ts')),
       input: existsSync(join(appDir, 'components', 'ui', 'input.ts')),
       label: existsSync(join(appDir, 'components', 'ui', 'label.ts')),
-      textarea: existsSync(join(appDir, 'components', 'ui', 'textarea.ts')),
-      kit: existsSync(join(appDir, 'components.json')),
     },
     skipTests: args.skipTests,
   };
   if (args.generator === 'authentication') return planAuthentication(ctx);
-  if (!args.name) throw new Error(`Name it, for example \`webjs generate ${args.generator} ${args.generator === 'migration' ? 'AddTitleToPosts title:string' : args.generator === 'controller' ? 'pages home about' : 'post title:string body:text'}\`.`);
-  if (args.generator === 'controller') return planController(ctx, { name: args.name, actions: args.fields });
-  if (args.generator === 'migration') {
-    return planMigration(ctx, { name: args.name, fields: args.fields }, (c, o) => planScaffold(c, /** @type {any} */ (o)));
-  }
-  return planScaffold(ctx, {
-    name: args.name,
-    plural: args.plural,
-    fields: args.fields,
-    kind: /** @type {'scaffold'|'resource'|'model'} */ (args.generator),
-  });
+  if (!args.name) throw new Error('Name it, for example `webjs generate model post title:string body:text`.');
+  return planModel(ctx, { name: args.name, plural: args.plural, fields: args.fields });
 }
 
 /** @param {string} p */
@@ -171,26 +154,7 @@ export function applyPlan(appDir, plan, opts = {}) {
     writeFileSync(join(appDir, f.path), f.content);
     written.push(f.path);
   });
-  if (plan.uiAdd?.length) {
-    log(`${'ui add'.padStart(12)}  ${plan.uiAdd.join(' ')}`);
-    if (!opts.pretend) addUiComponents(appDir, plan.uiAdd);
-  }
   return { written, conflicts: [] };
-}
-
-/**
- * Add UI kit components the way `webjs ui add` does, through the kit's own
- * CLI with the current runtime. The registry ships inside @webjsdev/ui, so
- * this makes no network call.
- * @param {string} appDir
- * @param {string[]} names
- */
-function addUiComponents(appDir, names) {
-  const require = createRequire(import.meta.url);
-  let dir = dirname(require.resolve('@webjsdev/ui'));
-  while (!existsSync(join(dir, 'package.json')) && dirname(dir) !== dir) dir = dirname(dir);
-  const r = spawnSync(process.execPath, [join(dir, 'bin', 'webjsui.js'), 'add', ...names, '--cwd', appDir, '--yes', '--no-deps'], { encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`Could not add ${names.join(', ')} from the UI kit: ${(r.stderr || r.stdout || '').trim()}`);
 }
 
 /**

@@ -6,6 +6,6 @@
  */
 import { test } from 'node:test';
 
-test('generated scaffold and resource code passes its own tests on this runtime (#1692)', { timeout: 300_000 }, async () => {
+test('generated model and authentication code passes its tests on this runtime (#1692)', { timeout: 300_000 }, async () => {
   await import('./generate.mjs');
 });

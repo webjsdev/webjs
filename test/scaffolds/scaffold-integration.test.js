@@ -873,10 +873,9 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /\n## This app\n\nReplace this paragraph with what /, 'ends with a This app section the agent fills in');
     assert.match(fs, /`CLAUDE\.md` imports this file, so notes go here\./, 'which says app notes live in AGENTS.md, not CLAUDE.md');
     // The brief plus the scaffold's rules plus the This app stub: still short,
-    // since every line is read on every turn. The generators line (#1692) is
-    // the last addition: three lines that save writing a feature's ten files.
+    // since every line is read on every turn. The generators lines (#1692)
+    // are the last addition.
     assert.match(fs, /run `npx webjs source`, which lists what WebJs provides for each need\./, 'names the feature catalogue');
-    assert.match(fs, /`npx webjs g scaffold post title:string! body:text`/, 'names the generators');
     // A hand-written Drizzle table was the first-draft type error in every A/B
     // build that wrote one, so every table goes through the model generator.
     assert.match(fs, /add every table with `npx webjs g model /, 'names the model generator for every table');

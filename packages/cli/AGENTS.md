@@ -216,14 +216,15 @@ lib/
                          `workspaces` key is not part of it, it only enriches the
                          message with the member directories that ARE apps.
                          Tests: `test/cli/check-target.test.mjs`.
-  generate/              `webjs generate` / `webjs g` and `webjs destroy` / `webjs d`
-                         (#1692), Rails' generators with Rails' grammar.
-                         `index.js` parses args (`--force`, `--pretend`,
-                         `--skip-tests`, `--skip-migration`, `--plural`), builds
-                         a PLAN (files, edits, notes, `uiAdd`) through a
-                         generator, applies it (a differing existing file
-                         refuses the whole plan unless `--force`), then runs
-                         this CLI's own `db generate --name=<...>`.
+  generate/              `webjs generate` / `webjs g` (#1692), Rails' generators
+                         with Rails' grammar, two of them: `model` and
+                         `authentication`. `index.js` parses args (`--force`,
+                         `--pretend`, `--skip-tests`, `--skip-migration`,
+                         `--plural`), builds a PLAN (files, edits, notes, a
+                         summary) through a generator, applies it (a differing
+                         existing file refuses the whole plan unless
+                         `--force`), then runs this CLI's own
+                         `db generate --name=<...>`.
                          `names.js` inflects the resource name (validated, since
                          it is written into code; tiny pluralizer, `--plural`
                          override). `fields.js` parses `name:type!:uniq` and
@@ -232,20 +233,12 @@ lib/
                          `db/schema.server.ts` at real anchors only (the
                          `export const ... = defineRelations(` line, never an
                          example in a comment), printing a note when one is
-                         missing. `scaffold.js` writes the model, queries,
-                         validation (`read<X>Input`, FormData or JSON) and
-                         actions; `scaffold-pages.js` the four pages, the
-                         shared fields helper (Rails' `_form`) and the index list
-                         component (seeded through a property, optimistic delete
-                         from a degrade-first form, pending buttons on aria-busy),
-                         with the UI kit
-                         helpers when present (`webjs ui add textarea` when a
-                         text field needs it); `scaffold-api.js` the JSON route
-                         handlers (`resource`, or `scaffold` in an app with no
-                         root layout); `scaffold-test.js` the test, through
-                         `submitForm` / `testRequest`. `destroy.js` removes the
-                         same paths and the table, then writes the drop
-                         migration. Tests: `test/cli/generate.test.mjs`.
+                         missing. `model.js` writes the table, its row type
+                         and its relations, and prints the model summary.
+                         `authentication.js` and `authentication-pages.js`
+                         write the auth module, actions, pages and test, with
+                         the UI kit helpers when present.
+                         Tests: `test/cli/generate.test.mjs`.
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Drizzle db layer,
@@ -309,7 +302,7 @@ README.md                npm-facing package readme.
 | `webjs regenerate` | `regenerateOutputs()` from `@webjsdev/server` (#1672): builds every `webjs.dev.regenerate` output that is not fresh against the build record in `.webjs/regenerate.json`, one at a time, and records each build, so a build in `dev.before`, `start.before` or a CI step counts as fresh for the dev server and for `webjs doctor` (`STATIC_ASSET_FRESHNESS`). The ONE way a build outside the dev request path records freshness: an app lists `webjs regenerate` in its `before` steps instead of the raw compile command. `--force` rebuilds every rule, `--json` prints one result per rule. Exit 1 when a rule fails or exits 0 without writing its `output` (the output is moved aside first, so a rule pointing at a path its command does not write is caught). Tests: `test/cli/regenerate.test.mjs` |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |
 | `webjs create <name> [--template …] [--db …] [--runtime node\|bun]` | `scaffoldApp()` from `lib/create.js`. `<name>` is validated by `lib/app-name.js` BEFORE any file is written (#1066; npm package-name rules minus the lowercase-only clause, which never protected anything and which `webjs create MyApp` relied on), at all three entries (this bin, `scaffoldApp()`, and the `create-webjs` wrapper). `--runtime bun` (or `bun create webjs`, auto-detected) emits a Bun-flavored app (#541): `dev`/`start` scripts force `bun --bun`, `bun.lock`, a pure `oven/bun:1` Dockerfile + bun-install CI, and bun-command agent docs. Orthogonal to `--template` (invariant 1 stays exactly 3 templates). |
-| `webjs generate <generator> [name] [fields...]` (alias `g`), `webjs destroy` (alias `d`) | `runGenerate` / `runDestroy` in `lib/generate/` (#1692), Rails' generators with Rails' names, field grammar and flags: `scaffold` (table + migration, queries, the shared validation, create / update / delete actions, index / new / show / edit pages bound to them, a `submitForm` test; JSON route handlers instead in an app with no root layout), `resource` (the same with route handlers), `model`, `migration` (`AddXToTable` / `RemoveXFromTable` / `CreateTable`), `controller` (one page per action) and `authentication` (a password hash on `users`, `createAuth` with credentials, log-in / sign-up / log-out actions and pages, a `/dashboard` segment `middleware.ts`, a test). A plan is refused whole when any file it would write exists and differs, unless `--force`; `--pretend` prints it. Then this CLI's own `db generate --name=<rails_name>`. Tests: `test/cli/generate.test.mjs`, `test/scaffolds/generate-scaffold.test.js` (real apps on both dialects and the api template), `test/bun/generate.mjs` |
+| `webjs generate <generator> [name] [fields...]` (alias `g`) | `runGenerate` in `lib/generate/` (#1692), Rails' generators with Rails' names, field grammar and flags: `model` (the table in `db/schema.server.ts`, its row type, the relations its `references` fields name, and the migration; no module folder) and `authentication` (a password hash on `users`, `createAuth` with credentials, log-in / sign-up / log-out actions and pages, a `/dashboard` segment `middleware.ts`, a test). A plan is refused whole when any file it would write exists and differs, unless `--force`; `--pretend` prints it. Then this CLI's own `db generate --name=<rails_name>`. Tests: `test/cli/generate.test.mjs`, `test/scaffolds/generate.test.js` (real apps on both dialects), `test/bun/generate.mjs` |
 | `webjs db <generate\|migrate\|push\|studio>` | Runs the app's resolved `drizzle-kit` bin via `process.execPath` (no codegen step; `generate` is schema-to-SQL). Resolves the bin from the app's node_modules + spawns it with the current runtime (no `npx`, #570), so it works on Node and Bun, including a Node-less `oven/bun` image. `webjs db seed` runs the app's `db/seed.server.ts` directly. |
 | `webjs ui <init\|add\|list\|view\|diff\|info\|lint>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
 | `webjs version` | Prints the installed `@webjsdev/cli` version (#975, `readCliVersion()` reads the package's own package.json). Also reachable as the top-level `webjs --version` / `-v` flag, handled at the top of `main()` before the Node preflight so it works on an old Node. Tests: `test/cli/help.test.mjs` |

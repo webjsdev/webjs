@@ -2,9 +2,30 @@
  * The authentication generator's pages and test: log in, sign up, and a
  * `/dashboard` segment whose `middleware.ts` requires a session.
  */
-import { uiClasses } from './scaffold-pages.js';
-
 /** @typedef {import('./index.js').AppContext} AppContext */
+
+const PLAIN_INPUT = 'w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm';
+const PLAIN_LABEL = 'text-sm font-medium';
+const PLAIN_BUTTON = 'inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground';
+const PLAIN_OUTLINE = 'inline-flex items-center rounded-md border border-input px-4 py-2 text-sm font-medium';
+// While a bound form submits, the client router sets aria-busy on it; its
+// submit button dims and ignores a second click. Unused with JavaScript off.
+const PENDING = 'group-aria-busy:opacity-50 group-aria-busy:pointer-events-none';
+
+/**
+ * The `class=...` attribute for each control: the UI kit helper when the app
+ * has it, plain Tailwind otherwise.
+ * @param {AppContext} ctx
+ * @returns {Record<'input'|'label'|'submit'|'submitOutline', string>}
+ */
+function uiClasses(ctx) {
+  return {
+    input: ctx.ui.input ? 'class=${inputClass()}' : `class="${PLAIN_INPUT}"`,
+    label: ctx.ui.label ? 'class=${labelClass()}' : `class="${PLAIN_LABEL}"`,
+    submit: ctx.ui.button ? `class="\${buttonClass()} ${PENDING}"` : `class="${PLAIN_BUTTON} ${PENDING}"`,
+    submitOutline: ctx.ui.button ? `class="\${buttonClass({ variant: 'outline' })} ${PENDING}"` : `class="${PLAIN_OUTLINE} ${PENDING}"`,
+  };
+}
 
 /**
  * @param {AppContext} ctx
