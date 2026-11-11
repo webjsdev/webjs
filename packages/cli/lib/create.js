@@ -1392,38 +1392,16 @@ html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-to
 import type { LayoutProps } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
 
-/**
- * Root layout: the ONLY file that writes the document shell. It wires a neutral
- * design-token palette, the light/dark theme, and the Tailwind stylesheet, then
- * renders \${children} in a bare container. Grow it in place: add a header, nav,
- * footer, or reading column here as your app needs them. Design tokens live as
- * plain CSS custom properties (they resolve with JavaScript disabled) and are
- * mapped into Tailwind via @theme in public/input.css, so bg-background,
- * text-foreground, bg-card, bg-primary, and border-border all work.
- */
-
-// The favicon and manifest are app/icon.svg and app/manifest.webmanifest: the
-// framework links them into <head> itself, so nothing is declared here. Replace
-// the placeholder icon with this app's own.
-
-// LayoutProps types every layout argument (children, params, searchParams,
-// url) from the framework, so children is a TemplateResult rather than an
-// untyped value. Derive types like this everywhere instead of widening to
-// unknown.
+// The root layout, the only file that writes the document shell. Grow it in
+// place (header, nav, footer). The favicon and manifest are app/icon.svg and
+// app/manifest.webmanifest, which the framework links itself. Design tokens
+// are in styles/globals.css, mapped into Tailwind by public/input.css.
 export default function RootLayout({ children }: LayoutProps) {
-  // Read the in-flight request's CSP nonce so the theme-detection inline script
-  // passes strict CSP. Returns '' when no CSP nonce is set.
-  const nonce = cspNonce();
+  const nonce = cspNonce(); // '' unless CSP is on
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme, applied BEFORE first paint so a saved dark choice
-      // never flashes light. This is the one thing that cannot be a component:
-      // a component (the theme toggle included) upgrades only once its module
-      // has loaded, after the first paint. <theme-toggle> takes over from there
-      // (Lit's lifecycle), following the OS while the choice is "system". The
-      // dark tokens and color-scheme both switch on the .dark class; data-theme
-      // records a saved choice. With JavaScript off nothing sets .dark and the
-      // page is light throughout. Delete this block for a single-theme app.
+      // The saved theme, set before first paint so dark never flashes light;
+      // <theme-toggle> takes over once it loads. Delete for a single theme.
       (function(){
         try {
           var t = null;
@@ -1435,36 +1413,15 @@ export default function RootLayout({ children }: LayoutProps) {
       })();
     </script>
     <meta name="color-scheme" content="light">
-    <!-- Geist for text and headings and Geist Mono for code, the webjs.dev/ui
-         type. Swap these for your own fonts (and update --font-sans in
-         styles/globals.css, or apply a preset with webjs ui init --preset,
-         which prints the faces to load). -->
+    <!-- Geist and Geist Mono; swap them with --font-sans in styles/globals.css. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@400;500;700&display=swap">
-    <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
-         public/tailwind.css by css:build (run automatically by the dev and start
-         tasks; in dev it is also recompiled on request when a source changes, so
-         it never goes stale). A real stylesheet, so the app is fully styled with
-         JavaScript DISABLED (no in-browser compile).
-
-         asset() adds a content hash in production (/tailwind.css?v=...)
-         and the framework then serves it immutable for a year, so a deploy that
-         changes the CSS changes the url and no browser or CDN can serve the old
-         bytes. Mark the thing that FETCHES: do not wrap a <link rel="preload">
-         whose asset is really fetched by an @font-face url() in the CSS, or the
-         preload can never match the request and the file downloads twice. -->
-
+    <!-- Compiled from public/input.css by css:build, so the page is styled
+         with JavaScript off. asset() versions the url in production. -->
     <link rel="stylesheet" href=\${asset('/tailwind.css')}>
-    <!-- No style block here: the base styles, color-scheme and the pinned-header
-         offset are in public/input.css, on the kit's tokens, and every token
-         (the --header-h navbar height included) is in styles/globals.css. -->
-    <!-- Top navbar, on every page: brand on the left, links + theme toggle on
-         the right. It floats (no separator) and is in normal flow, so it just
-         scrolls with the page. To pin it, add fixed inset-x-0 top-0 z-20 to its
-         class (position: fixed, never sticky, which flickers on iOS during a nav).
-         Its height is the --header-h token, so keep it one row: nothing measures
-         it, which is what keeps the offset right after a client-router swap. -->
+    <!-- One row, --header-h tall. To pin it, add fixed inset-x-0 top-0 z-20
+         (fixed, never sticky, which flickers on iOS). -->
     <header class="max-w-5xl mx-auto px-4 sm:px-6 h-(--header-h) flex items-center justify-between gap-4">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-display font-bold tracking-tight">
         <span class="size-5.5 rounded-md bg-linear-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
@@ -1476,11 +1433,10 @@ export default function RootLayout({ children }: LayoutProps) {
         <theme-toggle></theme-toggle>
       </nav>
     </header>
-    <!-- Fill the viewport minus the navbar, so a short page has no spurious
-         scrollbar (min-h-dvh alone would overflow by the navbar height). -->
-    <main class="min-h-[calc(100dvh-var(--header-h))] max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    <!-- The viewport minus the header. Each page renders its own main element. -->
+    <div class="min-h-[calc(100dvh-var(--header-h))] max-w-5xl mx-auto px-4 sm:px-6 py-8">
       \${children}
-    </main>
+    </div>
   \`;
 }
 `);
@@ -1647,31 +1603,33 @@ export default async function Home({ actionData }: PageProps) {
   const latest = await listUsers();
   const error = actionData?.fieldErrors?.email;
   return html\`
-    <section class="py-16 flex flex-col items-center text-center gap-4">
-      <!-- The WebJs logo, one file per theme (public/brand/), as the heading. -->
-      <h1 class="m-0">
-        <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="228" height="60" class="block h-15 w-auto dark:hidden">
-        <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-15 w-auto dark:block">
-      </h1>
-      <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
-    </section>
-    <!-- The example module (modules/users/): replace it with your own features. -->
-    <section class="mx-auto max-w-sm grid gap-4">
-      <form action=\${addUser} class="grid gap-3">
-        <div class="grid gap-2">
-          <label class=\${labelClass()} for="email">Email</label>
-          <input class=\${inputClass()} id="email" name="email" type="email" required
-            aria-invalid=\${error ? 'true' : nothing} aria-describedby=\${error ? 'email-error' : nothing}>
-          \${error ? html\`<p id="email-error" role="alert" class="text-sm text-destructive m-0">\${error}</p>\` : nothing}
-        </div>
-        <button class=\${buttonClass()} type="submit">Add user</button>
-      </form>
-      <user-list .users=\${latest}></user-list>
-      \${latest.length > 0 ? html\`
-        <form action=\${clearUsers}>
-          <button class=\${buttonClass({ variant: 'outline' })} type="submit">Clear list</button>
-        </form>\` : nothing}
-    </section>
+    <main>
+      <section class="py-16 flex flex-col items-center text-center gap-4">
+        <!-- The WebJs logo, one file per theme (public/brand/), as the heading. -->
+        <h1 class="m-0">
+          <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="228" height="60" class="block h-15 w-auto dark:hidden">
+          <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-15 w-auto dark:block">
+        </h1>
+        <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
+      </section>
+      <!-- The example module (modules/users/): replace it with your own features. -->
+      <section class="mx-auto max-w-sm grid gap-4">
+        <form action=\${addUser} class="grid gap-3">
+          <div class="grid gap-2">
+            <label class=\${labelClass()} for="email">Email</label>
+            <input class=\${inputClass()} id="email" name="email" type="email" required
+              aria-invalid=\${error ? 'true' : nothing} aria-describedby=\${error ? 'email-error' : nothing}>
+            \${error ? html\`<p id="email-error" role="alert" class="text-sm text-destructive m-0">\${error}</p>\` : nothing}
+          </div>
+          <button class=\${buttonClass()} type="submit">Add user</button>
+        </form>
+        <user-list .users=\${latest}></user-list>
+        \${latest.length > 0 ? html\`
+          <form action=\${clearUsers}>
+            <button class=\${buttonClass({ variant: 'outline' })} type="submit">Clear list</button>
+          </form>\` : nothing}
+      </section>
+    </main>
   \`;
 }
 `);

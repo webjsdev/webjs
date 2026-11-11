@@ -157,10 +157,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(toggleSrc, /static properties = \{ theme: \{ state: true \} \};/, 'its theme is Lit reactive state');
 
     // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
-    // Geist), with a floating top navbar and a main that fills the viewport
-    // minus the navbar.
-    assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
-      'layout main fills the viewport minus the navbar');
+    // Geist), with a floating top navbar and a container that fills the
+    // viewport minus the navbar. The page renders its own <main>, as a
+    // create-next-app page does (#1697: agents nested one inside the layout's).
+    assert.match(layoutSrc, /<div class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
+      'layout container fills the viewport minus the navbar');
+    assert.doesNotMatch(layoutSrc, /<main\b/, 'the layout leaves <main> to the page');
+    assert.match(readFileSync(join(appDir, 'app', 'page.ts'), 'utf8'), /<main>/, 'the home page renders its own <main>');
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
     // #1660: the navbar is sized by --header-h and nothing measures it, so a
     // client-router swap that replaces the header cannot zero the offset.
@@ -502,6 +505,37 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(envExample, /DATABASE_URL/, '.env.example carries DATABASE_URL');
   } finally {
     restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+// #1697: an agent's first move on a fresh app is one `cat` of the source it
+// will build on. Eval agents read 43 to 60 KB that way, went past the 50 KB
+// tool-output limit, and re-read file by file, after which the text sat in
+// context for the rest of the run. lib/utils/cn.ts alone was 24.7 KB of
+// mostly commentary on the class merger.
+test('scaffoldApp full-stack: the source an agent reads first fits one tool call', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'webjs-first-read-'));
+  try {
+    await scaffoldApp('first-read', cwd, { template: 'full-stack' });
+    const appDir = join(cwd, 'first-read');
+    const sizes = [];
+    const walk = (rel) => {
+      const abs = join(appDir, rel);
+      if (!existsSync(abs)) return;
+      if (statSync(abs).isDirectory()) {
+        for (const e of readdirSync(abs)) walk(join(rel, e));
+      } else if (/\.(ts|js)$/.test(rel)) {
+        sizes.push([rel, statSync(abs).size]);
+      }
+    };
+    for (const rel of ['app', 'db', 'modules', 'test/users', 'components', 'lib', 'drizzle.config.ts', 'instrumentation.ts']) walk(rel);
+    const total = sizes.reduce((n, [, s]) => n + s, 0);
+    const largest = sizes.sort((a, b) => b[1] - a[1]).slice(0, 3).map(([f, s]) => `${f} ${s}`).join(', ');
+    assert.ok(total < 45_000, `the first-read source totals ${total} bytes, over 45 KB (largest: ${largest})`);
+    const cn = statSync(join(appDir, 'lib', 'utils', 'cn.ts')).size;
+    assert.ok(cn < 14_000, `lib/utils/cn.ts is ${cn} bytes, so its commentary grew back`);
+  } finally {
     await rm(cwd, { recursive: true, force: true });
   }
 });
