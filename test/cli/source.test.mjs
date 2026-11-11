@@ -67,3 +67,21 @@ test('webjs source --pkg narrows the search; a miss exits 1 and names the search
   assert.match(none.stdout, /searched @webjsdev\/\* packages \(core, server/);
 });
 
+test('a file convention name prints the routing guide; the exports named after one keep their lookup', () => {
+  for (const name of ['not-found', 'middleware.ts', 'route.ts', 'error', 'routing']) {
+    const r = run(name);
+    assert.equal(r.status, 0, `${name}: ${r.stderr}`);
+    assert.match(r.stdout, /^Guide: routing \(/, `${name} prints the routing guide`);
+  }
+  for (const name of ['route', 'middleware']) {
+    const r = run(name);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^@webjsdev\/server /m, `${name} still prints the export`);
+    assert.match(r.stdout, /For the route\.ts \/ middleware\.ts file convention: npx webjs source routing\n$/, `${name} points at the guide`);
+  }
+  const nf = run('notFound');
+  assert.equal(nf.status, 0, nf.stderr);
+  assert.match(nf.stdout, /^@webjsdev\/core /m, 'notFound is the function, not the guide');
+  assert.doesNotMatch(nf.stdout, /Guide: routing/);
+});
+

@@ -75,7 +75,7 @@ export function featureCatalog(catalog = FEATURE_CATALOG) {
     'Start a feature by generating it, as in Rails, then edit what it wrote',
     '(`npx webjs help generate`):',
     '  Every table: npx webjs g model booking room:references! startsAt:datetime! (never hand-write a Drizzle table)',
-    '  Auth: npx webjs g authentication (sign-up, log-in, a protected /dashboard)',
+    '  Auth: npx webjs g authentication (sign-up, log-in, log-out, every page behind sign-in)',
     '',
     'What WebJs provides, by need. `npx webjs source <Name>` (or the MCP `source`',
     'tool with `export`) prints one name\'s signature and a working example. Use',

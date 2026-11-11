@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GUIDES, guide } from '../src/guides.js';
+import { GUIDES, GUIDE_ALIASES, guide, conventionPointer } from '../src/guides.js';
 import { featureCatalog } from '../src/catalog.js';
 import { lookupExport, resolveFrameworkRoots, listDir, runSourceTool } from '../src/mcp-source.js';
 import { GENERATORS } from '../../cli/lib/generate/index.js';
@@ -57,4 +57,43 @@ test('the source tool answers a guide name through `export`, and the catalogue l
   assert.match(await runSourceTool(deps, { export: 'optimistic' }), /^@webjsdev\/core/m);
   const catalogue = featureCatalog();
   for (const [name, g] of Object.entries(GUIDES)) assert.ok(catalogue.includes(`  ${name}: ${g.need}`), `lists ${name}`);
+});
+
+test('a file convention name finds the routing guide, and no alias shadows an export', async () => {
+  for (const name of ['not-found', 'notfound', 'error', 'loading', 'middleware.ts', 'route.ts', 'routing', 'layout', 'page', 'forbidden.ts', 'unauthorized.ts', 'app/page.ts', 'layout.js']) {
+    assert.equal(guide(name), GUIDES.routing.text, `${name} prints the routing guide`);
+    assert.equal(await runSourceTool(deps, { export: name }), GUIDES.routing.text, `the MCP tool answers ${name} the same`);
+  }
+  for (const alias of Object.keys(GUIDE_ALIASES)) {
+    const out = await lookupExport(deps, alias);
+    assert.doesNotMatch(out, /^@webjsdev\//m, `${alias} is not an export of any package, so the guide hides nothing`);
+  }
+});
+
+test('the exports a convention is named after still print the export', async () => {
+  for (const name of ['notFound', 'forbidden', 'unauthorized', 'redirect', 'route', 'middleware']) {
+    assert.equal(guide(name), null, `${name} is not answered by a guide`);
+    assert.match(await runSourceTool(deps, { export: name }), /^@webjsdev\//m, `${name} prints its declaration`);
+  }
+  // route() and the Middleware type share a name with route.ts and middleware.ts.
+  for (const name of ['route', 'middleware']) {
+    assert.match(await runSourceTool(deps, { export: name }), /\n\nFor the route\.ts \/ middleware\.ts file convention: npx webjs source routing$/);
+  }
+  assert.equal(conventionPointer('notFound'), null);
+  assert.doesNotMatch(await runSourceTool(deps, { export: 'notFound' }), /file convention/);
+});
+
+test('the upload words find the uploads guide, which serves from its own route with a matching signed base', async () => {
+  for (const name of ['uploads', 'upload', 'file-upload', 'attachments', 'Uploads']) {
+    assert.equal(guide(name), GUIDES.uploads.text, `${name} prints the uploads guide`);
+    assert.equal(await runSourceTool(deps, { export: name }), GUIDES.uploads.text);
+  }
+  const text = GUIDES.uploads.text;
+  // The default base is the store's /uploads/<key>, which nothing serves, so the
+  // link must name the route that does.
+  assert.match(text, /\/\/ app\/files\/\[key\]\/route\.ts/);
+  assert.match(text, /signedUrl\([^)]*base: '\/files\/' \+/);
+  assert.match(text, /verifySignedUrl\(/);
+  assert.match(text, /'x-content-type-options': 'nosniff'/);
+  assert.match(text, /5 \* 1024 \* 1024/);
 });

@@ -87,10 +87,19 @@ src/
                          swapped, so a convention (`generateMetadata`) finds its
                          type (`GenerateMetadata`).
   guides.js              GUIDES + guide(name) (#1692): the pattern guides
-                         (`modules`, `progressive-enhancement`, `optimistic-ui`,
-                         `type-safety`, `data-flow`, `authentication`,
-                         `testing`), each how WebJs wants one need built and,
-                         where one does, the generator that writes it.
+                         (`routing`, `modules`, `progressive-enhancement`,
+                         `optimistic-ui`, `type-safety`, `data-flow`,
+                         `authentication`, `testing`, `uploads`), each how WebJs wants
+                         one need built and, where one does, the generator
+                         that writes it. GUIDE_ALIASES maps the file
+                         convention names agents look up (`not-found`,
+                         `error`, `middleware.ts`, `route.ts`, `page`, ...)
+                         onto `routing` (and `upload`, `attachments` onto
+                         `uploads`), case-sensitively so `notFound` stays
+                         the export; none is an export (guides.test.mjs).
+                         conventionPointer(name) is the line an export lookup
+                         of `route` or `middleware` appends, since those are
+                         exports AND file conventions.
                          `runSourceTool` answers a
                          guide name given as `export`, and the CLI's
                          `webjs source <name>` checks guides before exports.
