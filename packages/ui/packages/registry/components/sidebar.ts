@@ -164,7 +164,8 @@ export type SidebarMenuButtonVariant = keyof typeof MENU_BUTTON_VARIANTS;
 export type SidebarMenuButtonSize = keyof typeof MENU_BUTTON_SIZES;
 
 /** A menu button (an <a> or a <button>); mark the current one `data-active="true"`. */
-export function sidebarMenuButtonClass(opts: { variant?: SidebarMenuButtonVariant; size?: SidebarMenuButtonSize } = {}): string {
+export function sidebarMenuButtonClass(opts: { variant?: SidebarMenuButtonVariant; size?: SidebarMenuButtonSize } & { className?: string } = {}): string {
+  if (opts.className) return cn(sidebarMenuButtonClass({ ...opts, className: undefined }), opts.className);
   return cn(
     'cn-sidebar-menu-button peer/menu-button group/menu-button flex w-full items-center overflow-hidden outline-hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
     MENU_BUTTON_VARIANTS[opts.variant ?? 'default'],
@@ -174,7 +175,7 @@ export function sidebarMenuButtonClass(opts: { variant?: SidebarMenuButtonVarian
 
 /** shadcn's name for {@link sidebarMenuButtonClass}. Like cva, it merges a `className`. */
 export function sidebarMenuButtonVariants(opts: { variant?: SidebarMenuButtonVariant; size?: SidebarMenuButtonSize; className?: string } = {}): string {
-  return cn(sidebarMenuButtonClass(opts), opts.className);
+  return sidebarMenuButtonClass(opts);
 }
 
 /** A menu item's action button; `showOnHover` hides it until the item is hovered or focused. */

@@ -39,7 +39,8 @@ const VARIANTS = {
 
 export type BadgeVariant = keyof typeof VARIANTS;
 
-export function badgeClass(opts: { variant?: BadgeVariant } = {}): string {
+export function badgeClass(opts: { variant?: BadgeVariant } & { className?: string } = {}): string {
+  if (opts.className) return cn(badgeClass({ ...opts, className: undefined }), opts.className);
   return cn(BASE, VARIANTS[opts.variant ?? 'default']);
 }
 
@@ -49,5 +50,5 @@ export function badgeClass(opts: { variant?: BadgeVariant } = {}): string {
  * merges a `className` into the result.
  */
 export function badgeVariants(opts: { variant?: BadgeVariant } & { className?: string } = {}): string {
-  return cn(badgeClass(opts), opts.className);
+  return badgeClass(opts);
 }

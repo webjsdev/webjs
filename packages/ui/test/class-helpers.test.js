@@ -359,6 +359,29 @@ test('the shadcn style-function aliases return the helper output, plus a merged 
   }
 });
 
+// #1697: an eval agent wrote `buttonClass({ variant: 'link', className })`,
+// the shadcn `buttonVariants` habit under the kit's own name, and spent a
+// typecheck round on it. Every helper that has a shadcn alias takes it too.
+test('a helper with a shadcn alias takes className itself, and is unchanged without it', { skip }, async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const files = readdirSync(COMPONENTS_DIR).filter((f) => f.endsWith('.ts'));
+  let checked = 0;
+  for (const file of files) {
+    const src = readFileSync(join(COMPONENTS_DIR, file), 'utf8');
+    const mod = await import(join(COMPONENTS_DIR, file));
+    for (const [, base] of src.matchAll(/export function ([a-zA-Z]+)Variants\(/g)) {
+      const helper = mod[`${base}Class`];
+      assert.equal(typeof helper, 'function', `${base}Class is exported beside ${base}Variants`);
+      const plain = helper();
+      assert.equal(helper({ className: '' }), plain, `${base}Class with an empty className is unchanged`);
+      assert.match(helper({ className: 'wj-extra' }), /(^|\s)wj-extra(\s|$)/, `${base}Class merges className`);
+      assert.equal(helper({ className: 'wj-extra' }), mod[`${base}Variants`]({ className: 'wj-extra' }), `${base}Class matches its alias`);
+      checked += 1;
+    }
+  }
+  assert.ok(checked >= 17, `checked ${checked} helpers`);
+});
+
 test('alertDialogMediaClass: the header media slot', { skip }, async () => {
   const { alertDialogMediaClass } = await import(join(COMPONENTS_DIR, 'alert-dialog.ts'));
   const s = alertDialogMediaClass();

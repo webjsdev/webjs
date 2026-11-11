@@ -51,7 +51,8 @@ const BUBBLE_VARIANTS = {
 } as const;
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function bubbleClass(opts: { variant?: keyof typeof BUBBLE_VARIANTS } = {}): string {
+export function bubbleClass(opts: { variant?: keyof typeof BUBBLE_VARIANTS } & { className?: string } = {}): string {
+  if (opts.className) return cn(bubbleClass({ ...opts, className: undefined }), opts.className);
   return cn(BUBBLE_BASE, BUBBLE_VARIANTS[opts.variant ?? 'default']);
 }
 
@@ -60,7 +61,7 @@ export function bubbleClass(opts: { variant?: keyof typeof BUBBLE_VARIANTS } = {
  * it merges a `className` into the result.
  */
 export function bubbleVariants(opts: { variant?: keyof typeof BUBBLE_VARIANTS } & { className?: string } = {}): string {
-  return cn(bubbleClass(opts), opts.className);
+  return bubbleClass(opts);
 }
 
 /** Set `data-slot="bubble-content"` on the element. */
@@ -82,7 +83,8 @@ const BUBBLE_REACTIONS_ALIGNS = {
 } as const;
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function bubbleReactionsClass(opts: { side?: keyof typeof BUBBLE_REACTIONS_SIDES; align?: keyof typeof BUBBLE_REACTIONS_ALIGNS } = {}): string {
+export function bubbleReactionsClass(opts: { side?: keyof typeof BUBBLE_REACTIONS_SIDES; align?: keyof typeof BUBBLE_REACTIONS_ALIGNS } & { className?: string } = {}): string {
+  if (opts.className) return cn(bubbleReactionsClass({ ...opts, className: undefined }), opts.className);
   return cn(BUBBLE_REACTIONS_BASE, BUBBLE_REACTIONS_SIDES[opts.side ?? 'bottom'], BUBBLE_REACTIONS_ALIGNS[opts.align ?? 'end']);
 }
 
@@ -91,5 +93,5 @@ export function bubbleReactionsClass(opts: { side?: keyof typeof BUBBLE_REACTION
  * it merges a `className` into the result.
  */
 export function bubbleReactionsVariants(opts: { side?: keyof typeof BUBBLE_REACTIONS_SIDES; align?: keyof typeof BUBBLE_REACTIONS_ALIGNS } & { className?: string } = {}): string {
-  return cn(bubbleReactionsClass(opts), opts.className);
+  return bubbleReactionsClass(opts);
 }

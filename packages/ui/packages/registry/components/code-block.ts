@@ -56,13 +56,14 @@ const CODE_BLOCK_VARIANTS = {
 export type CodeBlockVariant = keyof typeof CODE_BLOCK_VARIANTS;
 
 /** The frame's classes. */
-export function codeBlockClass(opts: { variant?: CodeBlockVariant } = {}): string {
+export function codeBlockClass(opts: { variant?: CodeBlockVariant } & { className?: string } = {}): string {
+  if (opts.className) return cn(codeBlockClass({ ...opts, className: undefined }), opts.className);
   return cn('cn-code-block group/code-block relative flex w-full min-w-0 flex-col overflow-hidden', CODE_BLOCK_VARIANTS[opts.variant ?? 'default']);
 }
 
 /** shadcn's name for {@link codeBlockClass}. Like cva, it merges a `className`. */
 export function codeBlockVariants(opts: { variant?: CodeBlockVariant; className?: string } = {}): string {
-  return cn(codeBlockClass(opts), opts.className);
+  return codeBlockClass(opts);
 }
 
 /** The header row. */
@@ -100,7 +101,8 @@ const CODE_BLOCK_LINE_VARIANTS = {
 export type CodeBlockLineVariant = keyof typeof CODE_BLOCK_LINE_VARIANTS;
 
 /** One line's classes. */
-export function codeBlockLineClass(opts: { variant?: CodeBlockLineVariant } = {}): string {
+export function codeBlockLineClass(opts: { variant?: CodeBlockLineVariant } & { className?: string } = {}): string {
+  if (opts.className) return cn(codeBlockLineClass({ ...opts, className: undefined }), opts.className);
   return cn(
     "cn-code-block-line relative block min-h-lh after:absolute after:top-0 after:select-none in-data-numbered:col-span-2 in-data-numbered:grid in-data-numbered:grid-cols-subgrid in-data-numbered:[counter-increment:line] in-data-numbered:before:content-[counter(line)] in-data-numbered:before:select-none in-data-numbered:supports-[content:counter(line)_/_'']:before:content-[counter(line)_/_'']",
     CODE_BLOCK_LINE_VARIANTS[opts.variant ?? 'default'],
@@ -109,7 +111,7 @@ export function codeBlockLineClass(opts: { variant?: CodeBlockLineVariant } = {}
 
 /** shadcn's name for {@link codeBlockLineClass}. Like cva, it merges a `className`. */
 export function codeBlockLineVariants(opts: { variant?: CodeBlockLineVariant; className?: string } = {}): string {
-  return cn(codeBlockLineClass(opts), opts.className);
+  return codeBlockLineClass(opts);
 }
 
 /** The footer row. */

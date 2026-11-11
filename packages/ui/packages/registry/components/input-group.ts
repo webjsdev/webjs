@@ -55,7 +55,8 @@ const INPUT_GROUP_ADDON_ALIGNS = {
 } as const;
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function inputGroupAddonClass(opts: { align?: keyof typeof INPUT_GROUP_ADDON_ALIGNS } = {}): string {
+export function inputGroupAddonClass(opts: { align?: keyof typeof INPUT_GROUP_ADDON_ALIGNS } & { className?: string } = {}): string {
+  if (opts.className) return cn(inputGroupAddonClass({ ...opts, className: undefined }), opts.className);
   return cn(INPUT_GROUP_ADDON_BASE, INPUT_GROUP_ADDON_ALIGNS[opts.align ?? 'inline-start']);
 }
 
@@ -64,7 +65,7 @@ export function inputGroupAddonClass(opts: { align?: keyof typeof INPUT_GROUP_AD
  * it merges a `className` into the result.
  */
 export function inputGroupAddonVariants(opts: { align?: keyof typeof INPUT_GROUP_ADDON_ALIGNS } & { className?: string } = {}): string {
-  return cn(inputGroupAddonClass(opts), opts.className);
+  return inputGroupAddonClass(opts);
 }
 
 const INPUT_GROUP_BUTTON_BASE =
@@ -84,7 +85,8 @@ const INPUT_GROUP_BUTTON_SIZES = {
  * with these classes on top, so the button's own classes come first and the
  * group's size wins a conflict.
  */
-export function inputGroupButtonClass(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES; variant?: ButtonVariant } = {}): string {
+export function inputGroupButtonClass(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES; variant?: ButtonVariant } & { className?: string } = {}): string {
+  if (opts.className) return cn(inputGroupButtonClass({ ...opts, className: undefined }), opts.className);
   return cn(buttonClass({ variant: opts.variant ?? 'ghost' }), INPUT_GROUP_BUTTON_BASE, INPUT_GROUP_BUTTON_SIZES[opts.size ?? 'xs']);
 }
 
@@ -93,7 +95,7 @@ export function inputGroupButtonClass(opts: { size?: keyof typeof INPUT_GROUP_BU
  * it merges a `className` into the result.
  */
 export function inputGroupButtonVariants(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES; variant?: ButtonVariant } & { className?: string } = {}): string {
-  return cn(inputGroupButtonClass(opts), opts.className);
+  return inputGroupButtonClass(opts);
 }
 
 /** A part with no `data-slot` of its own. */

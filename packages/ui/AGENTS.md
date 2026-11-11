@@ -284,7 +284,10 @@ function per component (`buttonVariants`, `badgeVariants`, `toggleVariants`,
 `tabsListVariants`, and later `buttonGroupVariants`, `markerVariants`,
 `navigationMenuTriggerStyle`). The kit exports each under the same name, beside
 its own helper, so shadcn code ports verbatim. Each returns exactly what the
-helper returns, and like `cva` it merges a `className` option into the result.
+helper returns, and like `cva` both merge a `className` option into the result
+(#1697: the kit's own name takes it too, since an agent writes
+`buttonClass({ variant, className })` from the same habit). With no
+`className` the helper's output is unchanged.
 
 ## Blocks and charts (#1666, D18)
 
