@@ -23,6 +23,23 @@ export declare function toRequest(input: string | Request, init?: RequestInit): 
 /**
  * Fire a request through the real `handle()` pipeline and return the `Response`.
  * The documented one-liner: `await testRequest(app.handle, '/about')`.
+ *
+ * @example
+ * ```ts
+ * // test/posts/posts.test.ts, run with `webjs test`
+ * import { test } from 'node:test';
+ * import assert from 'node:assert/strict';
+ * import { createRequestHandler } from '@webjsdev/server';
+ * import { testRequest } from '@webjsdev/server/testing';
+ *
+ * test('the posts API creates a post', async () => {
+ *   const app = await createRequestHandler({ appDir: process.cwd() });
+ *   const res = await testRequest(app.handle, '/api/posts', {   // a bare path is fine
+ *     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Hi' }),
+ *   });
+ *   assert.equal(res.status, 201);
+ * });
+ * ```
  */
 export declare function testRequest(
   handle: Handle,
@@ -74,6 +91,23 @@ export declare function submitForm(
 /**
  * Drive the REAL credentials login (`POST /api/auth/signin/credentials` by
  * default) and capture the genuine signed session `Set-Cookie`.
+ *
+ * @example
+ * ```ts
+ * // test/dashboard.test.ts, run with `webjs test`. Needs createAuth's handlers at
+ * // app/api/auth/[...path]/route.ts (`npx webjs g authentication` writes it).
+ * import { test } from 'node:test';
+ * import assert from 'node:assert/strict';
+ * import { createRequestHandler } from '@webjsdev/server';
+ * import { loginAndGetCookies, testRequest, withSessionCookie } from '@webjsdev/server/testing';
+ *
+ * test('a signed-in user sees the dashboard', async () => {
+ *   const app = await createRequestHandler({ appDir: process.cwd() });
+ *   const { cookies } = await loginAndGetCookies(app.handle, { email: 'ada@example.com', password: 'correct horse' });
+ *   const res = await testRequest(app.handle, '/dashboard', withSessionCookie({}, cookies));
+ *   assert.equal(res.status, 200);   // the user must exist first: seed it or sign up in the test
+ * });
+ * ```
  */
 export declare function loginAndGetCookies(
   handle: Handle,
