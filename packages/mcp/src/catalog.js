@@ -18,6 +18,7 @@
  *
  * @module catalog
  */
+import { GUIDES } from './guides.js';
 
 /**
  * @typedef {{ need: string, names: string[], note?: string }} CatalogGroup
@@ -85,5 +86,7 @@ export function featureCatalog(catalog = FEATURE_CATALOG) {
     '  A feature: npx webjs g scaffold post title:string! body:text (also resource, model, migration, controller)',
     '  Auth: npx webjs g authentication (sign-up, log-in, a protected /dashboard)',
   );
+  out.push('', 'Guides, how WebJs wants it built (`npx webjs source <guide>`)');
+  for (const [name, g] of Object.entries(GUIDES)) out.push(`  ${name}: ${g.need}`);
   return out.join('\n');
 }

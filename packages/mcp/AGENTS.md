@@ -86,6 +86,15 @@ src/
                          nothing is retried once with its first letter's case
                          swapped, so a convention (`generateMetadata`) finds its
                          type (`GenerateMetadata`).
+  guides.js              GUIDES + guide(name) (#1692): the pattern guides
+                         (`modules`, `progressive-enhancement`, `optimistic-ui`,
+                         `type-safety`, `data-flow`, `authentication`,
+                         `testing`), each how WebJs wants one need built and
+                         which generator writes it. `runSourceTool` answers a
+                         guide name given as `export`, and the CLI's
+                         `webjs source <name>` checks guides before exports.
+                         Names are slugs no package exports (`optimistic-ui`,
+                         never `optimistic`). See invariant 3.
   catalog.js             FEATURE_CATALOG + featureCatalog(): what WebJs provides,
                          grouped by need (auth, sessions, caching, rate limits,
                          uploads, realtime, SEO, tests, the core component and
@@ -121,11 +130,17 @@ src/
 2. **Read-only.** Every tool projects an existing `@webjsdev/server` data
    function (or reads the framework source) and mutates nothing. No app module is loaded
    (export names are extracted lexically) so there are no DB-init side effects.
-3. **No docs corpus.** The `docs` tool, the `webjs-docs://*` resources and the
-   recipe prompts were removed along with the agent skill they served: Lit and
-   Next.js habits plus the brief are meant to be enough, and `webjs check` and
-   the runtime refuse what is not, with the fix in the message. Do not bring a
-   bundled corpus back; an exact contract is the `source` tool's job.
+3. **No docs corpus; short pattern guides only.** The `docs` tool, the
+   `webjs-docs://*` resources and the recipe prompts were removed along with the
+   agent skill they served: Lit and Next.js habits plus the brief are meant to
+   be enough, and `webjs check` and the runtime refuse what is not, with the
+   fix in the message. Do not bring a bundled corpus back; an exact contract is
+   the `source` tool's job. The pattern guides in `guides.js` (#1692, added at
+   the owner's direction) are not that corpus: each is one capped page (under
+   40 lines) on how WebJs wants one need built, and ends in actions (the
+   generator that writes it, the exports to look up next, the docs page), all
+   checked to exist by `test/guides.test.mjs`. A new guide must keep to that
+   shape; anything longer belongs on the docs site.
 
 ## Tests
 

@@ -1867,7 +1867,7 @@ Full docs: https://webjs.dev/docs`);
       // The export name is the first argument that is neither a flag nor the
       // value `--pkg` takes.
       const name = rest.find((a, i) => !a.startsWith('--') && !(pkgAt >= 0 && i === pkgAt + 1));
-      const { lookupExport, resolveFrameworkRoots, listDir, listSources, featureCatalog } = await import('@webjsdev/mcp');
+      const { lookupExport, resolveFrameworkRoots, listDir, listSources, featureCatalog, guide } = await import('@webjsdev/mcp');
       const { existsSync } = await import('node:fs');
       const { readFile } = await import('node:fs/promises');
       const roots = resolveFrameworkRoots(process.cwd(), { exists: existsSync });
@@ -1889,6 +1889,10 @@ Full docs: https://webjs.dev/docs`);
         }));
         break;
       }
+      // A pattern guide (`modules`, `optimistic-ui`, ...): how WebJs wants it
+      // built and which generator writes it. Its name is a slug no package exports.
+      const guideText = pkg ? null : guide(name);
+      if (guideText) { console.log(guideText); break; }
       const out = await lookupExport({ roots, readFile, readdir }, name, pkg);
       console.log(out);
       if (!/^@webjsdev\//m.test(out)) process.exit(1);

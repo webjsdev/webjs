@@ -68,6 +68,17 @@ npx webjs generate authentication</code-block>
       <li><code>--plural &lt;word&gt;</code>: the plural when the built-in rules get it wrong (<code>person</code> to <code>people</code> is built in).</li>
     </ul>
 
+    <h2>Which command for which need</h2>
+    <p>A bare <code>npx webjs source</code> prints what WebJs provides by need, the generators, and a short guide for each pattern WebJs wants an app built with. A guide is one page that ends in the generator that writes the pattern and the exports to look up next:</p>
+    <code-block>npx webjs source modules                   # the feature layout, and which generator writes what
+npx webjs source progressive-enhancement   # forms that work with and without JavaScript
+npx webjs source optimistic-ui             # show a write before the server confirms it
+npx webjs source type-safety               # one set of types from the database to the page
+npx webjs source data-flow                 # queries, actions, RPC and route handlers
+npx webjs source authentication            # accounts and protected pages
+npx webjs source testing                   # server tests against a real database</code-block>
+    <p>The MCP <code>source</code> tool answers the same names, so an agent with the MCP server gets the same guidance as one with a shell.</p>
+
     <h2>Undoing a generator</h2>
     <p>The <code>destroy</code> command, with the same short alias Rails has, removes what the same generate command wrote: the files, and for scaffold, resource and model the table, its type and its relations, followed by the migration that drops it. As in Rails, the files go whether or not they were edited since, so commit first.</p>
     <code-block>npx webjs destroy scaffold post</code-block>
