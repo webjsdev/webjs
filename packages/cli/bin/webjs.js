@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
-import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordedDevPort, recordServer } from '../lib/port.js';
-import { boundPort, updateRecordedPort, DEV_LISTENING_MESSAGE } from '../lib/server-record.js';
+import { loadAppEnv, shellEnvOf, resolvePort, failFastOnPortInUse, recordedDevPort } from '../lib/port.js';
+import { boundPort, claimServerRecord, updateRecordedPort, DEV_LISTENING_MESSAGE } from '../lib/server-record.js';
 import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -475,20 +475,22 @@ async function startDevParallelTasks(commands, cwd) {
 }
 
 /**
- * Record this process as the app's `kind` server on `port` so `webjs stop` and
+ * Record this process as the app's `kind` server so `webjs stop` and
  * `webjs status` find it. When another server for this app is still running,
- * its record is kept (see `recordServer`) and this says so, since stop and
- * status keep pointing at that one.
+ * its record is kept (see `recordServer`) and this says so; this server takes
+ * the record over once that one exits (`claimServerRecord`), recording the
+ * port `getPort` returns then.
  *
  * @param {'dev' | 'start'} kind
- * @param {number} port
+ * @param {() => number} getPort
  */
-function recordThisServer(kind, port) {
-  const record = recordServer(process.cwd(), port, { kind });
+function recordThisServer(kind, getPort) {
+  const port = getPort();
+  const record = claimServerRecord(process.cwd(), getPort, { kind });
   // On the same port this server is about to fail to bind, and the port-in-use
   // message names the holder, so the note would only mislead.
   if (record && record.pid !== process.pid && record.port !== port) {
-    console.error(`[webjs] another ${kind} server for this app is running (pid ${record.pid}, port ${record.port}), so stop and status keep pointing at it.`);
+    console.error(`[webjs] another ${kind} server for this app is running (pid ${record.pid}, port ${record.port}), so stop and status point at it until it exits.`);
   }
 }
 
@@ -648,8 +650,12 @@ async function main() {
       // nothing running while one boots. The child resolves the same port from
       // the same argv and env. `recordServer` never replaces the record of
       // another dev server that is still running, so a second `webjs dev` that
-      // will fail to bind leaves the first one's record alone.
-      if (plan.mode === 'supervise') recordThisServer('dev', port);
+      // will fail to bind leaves the first one's record alone, and one that
+      // binds another port takes the record over once the first exits.
+      // `recordPort` is the port to record: argv/env until a child reports
+      // the port it bound.
+      let recordPort = port;
+      if (plan.mode === 'supervise') recordThisServer('dev', () => recordPort);
 
       // Until the supervisor (or the inline server) installs its own signal
       // handlers, a stop takes the running before-step and any started
@@ -660,6 +666,10 @@ async function main() {
       let step = null;
       /** @type {() => void} */
       let killTasks = () => {};
+      // The `dev.parallel` tasks live exactly as long as this process. They
+      // are spawned detached, so nothing else reaches them, and an exit on any
+      // path (a crash included) has to take them down.
+      process.once('exit', () => killTasks());
       const earlyStop = () => {
         try { step?.kill('SIGTERM'); } catch { /* exited */ }
         killTasks();
@@ -670,32 +680,41 @@ async function main() {
       await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd(), (c) => { step = c; });
       step = null;
       killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
-      for (const sig of earlySignals) process.off(sig, earlyStop);
 
+      // `earlyStop` comes off only once the handlers that replace it are
+      // installed, with nothing awaited in between, so no signal ever lands
+      // while neither is (it would take the default action: no exit handler,
+      // so the record stays behind and the detached tasks are orphaned).
       if (plan.mode === 'inline') {
-        process.on('SIGINT', () => { killTasks(); process.exit(0); });
-        process.on('SIGTERM', () => { killTasks(); process.exit(0); });
+        for (const sig of earlySignals) process.on(sig, () => { killTasks(); process.exit(0); });
+        for (const sig of earlySignals) process.off(sig, earlyStop);
         const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
         const started = await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }), {
           exit: (code) => { killTasks(); process.exit(code); },
         });
         // Recorded once bound, so a server that failed to bind never writes,
-        // and with the port it bound (`--port 0` picks one).
-        recordThisServer('dev', boundPort(started, port));
-        killTasks();
+        // and with the port it bound (`--port 0` picks one). The parallel
+        // tasks keep running alongside it until it exits.
+        const bound = boundPort(started, port);
+        recordThisServer('dev', () => bound);
         break;
       }
 
       const { superviseDevServer } = await import('../lib/dev-reload.js');
+      // Installs its signal handlers before it returns.
       superviseDevServer({
         cwd: process.cwd(),
         plan,
         env: { ...shellEnv, ...plan.env, __WEBJS_DEV_CHILD: '1' },
         onExit: (code) => { killTasks(); process.exit(code); },
         // Each child reports the port it bound; the record follows it.
-        onListening: (bound) => { updateRecordedPort(process.cwd(), 'dev', bound); },
+        onListening: (bound) => {
+          recordPort = bound;
+          updateRecordedPort(process.cwd(), 'dev', bound);
+        },
       });
+      for (const sig of earlySignals) process.off(sig, earlyStop);
       break;
     }
     case 'start': {
@@ -716,7 +735,8 @@ async function main() {
       // So `webjs stop` finds it (a record of its own; `webjs status` reads
       // only dev's). Written once bound, so a second `webjs start` that fails
       // on the taken port never touches the running one's record.
-      recordThisServer('start', boundPort(started, port));
+      const bound = boundPort(started, port);
+      recordThisServer('start', () => bound);
       break;
     }
     case 'db': {
@@ -1928,9 +1948,10 @@ Full docs: https://webjs.dev/docs`);
       // the given paths, report every error since the last rebuild.
       const { runStatus } = await import('../lib/status.js');
       const { readAppBasePath } = await import('../lib/doctor.js');
-      // The app root, found the way `webjs stop` finds it: the cwd or its
-      // nearest ancestor holding `app/`, so status works from any directory
-      // inside the app and refuses outside one.
+      // The app root, found the way `webjs stop` finds it (the nearest
+      // directory at or above the cwd holding both `app/` and `package.json`),
+      // so status works from any directory inside the app and refuses
+      // outside one.
       const { findAppRoot, notInsideAppMessage } = await import('../lib/check-target.js');
       const { root: appDir, workspaceApps } = await findAppRoot(process.cwd());
       if (!appDir) {

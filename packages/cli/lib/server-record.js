@@ -61,18 +61,29 @@ function procStat(pid) {
 /**
  * When `pid` started, as an opaque string compared for equality, or null when
  * the OS will not say. Linux gives clock ticks since boot (field 22 of
- * `/proc/<pid>/stat`, the third after the state); macOS and the BSDs give
- * `ps -o lstart=`. Windows has neither, and a record there is judged on
- * liveness alone.
+ * `/proc/<pid>/stat`, the third after the state), which no time zone touches;
+ * macOS and the BSDs give `ps -o lstart=`. Windows has neither, and a record
+ * there is judged on liveness alone.
+ *
+ * `lstart` is printed in the local time zone and (on macOS) the `LC_TIME`
+ * locale, both read from the environment `ps` inherits. The writer and the
+ * reader of a record do not share one: the dev supervisor has loaded the
+ * app's `.env` (which may set `TZ`) by the time it records, and `webjs stop`
+ * never loads it. So `ps` runs with the zone and locale pinned, and the same
+ * process reads the same string from either side. The string is kept as is
+ * rather than parsed: it carries no zone, so a parse would read it in the
+ * caller's zone and bring the mismatch back.
  * @param {number} pid
+ * @param {{ ps?: boolean }} [opts] `ps: true` skips `/proc` (a test of the `ps` path on Linux)
  * @returns {string | null}
  */
-export function processStartTime(pid) {
-  const stat = procStat(pid);
+export function processStartTime(pid, { ps = false } = {}) {
+  const stat = ps ? null : procStat(pid);
   if (stat) return stat[19] || null;
   if (process.platform === 'win32') return null;
   try {
-    const out = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const env = { ...process.env, TZ: 'UTC', LC_ALL: 'C', LANG: 'C' };
+    const out = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env }).trim();
     return out || null;
   } catch {
     return null;
@@ -148,6 +159,8 @@ export function liveServerRecord(cwd, kind) {
  * so a second server that then fails to bind (the port is taken) cannot
  * replace the running one's record and then delete it on its way out. The
  * exit handler removes the record only while it still names this process.
+ * A server that keeps running after being refused this way takes the record
+ * over once the other one is gone (see `claimServerRecord`).
  *
  * A process killed by a signal skips its exit handler and leaves the record
  * behind; every reader ignores it once `isLiveServer` says it is gone, and
@@ -176,6 +189,36 @@ export function recordServer(cwd, port, { kind = 'dev' } = {}) {
     } catch { /* gone already */ }
   });
   return record;
+}
+
+/**
+ * How often a server that found another live server's record checks whether
+ * that one has gone, so it can take the record over.
+ */
+export const RECLAIM_INTERVAL_MS = 2000;
+
+/**
+ * Record this process as `recordServer` does, and when another live server
+ * holds the record, keep checking on an unref'd timer and take it over once
+ * that server is gone. Without this, two dev servers for one app on different
+ * ports left the second unrecorded after the first exited, so `webjs stop`
+ * and `webjs status` could no longer find a server that was still running.
+ * The timer stops once the record is this process's, and never keeps the
+ * process alive.
+ * @param {string} cwd the app root
+ * @param {() => number} getPort the port to record when the claim succeeds (a dev supervisor's moves with its child's bind)
+ * @param {{ kind?: 'dev' | 'start', intervalMs?: number }} [opts]
+ * @returns {ServerRecord | null} what `recordServer` returned on the first attempt
+ */
+export function claimServerRecord(cwd, getPort, { kind = 'dev', intervalMs = RECLAIM_INTERVAL_MS } = {}) {
+  const first = recordServer(cwd, getPort(), { kind });
+  if (!first || first.pid === process.pid) return first;
+  const timer = setInterval(() => {
+    const now = recordServer(cwd, getPort(), { kind });
+    if (!now || now.pid === process.pid) clearInterval(timer);
+  }, intervalMs);
+  timer.unref?.();
+  return first;
 }
 
 /**

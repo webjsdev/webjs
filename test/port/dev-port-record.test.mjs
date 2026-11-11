@@ -13,7 +13,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { recordDevPort, recordedDevPort } from '../../packages/cli/lib/port.js';
-import { isLiveServer, processStartTime, updateRecordedPort, boundPort } from '../../packages/cli/lib/server-record.js';
+import { isLiveServer, processStartTime, updateRecordedPort, boundPort, claimServerRecord } from '../../packages/cli/lib/server-record.js';
 
 const PORT_JS = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), '../../packages/cli/lib/port.js')).href;
 
@@ -123,4 +123,62 @@ test('boundPort reads a node:http or Bun.serve handle, else falls back', () => {
   assert.equal(boundPort({ server: { port: 5124 } }, 0), 5124);
   assert.equal(boundPort(undefined, 8080), 8080);
   assert.equal(boundPort({ server: { address: () => null } }, 8080), 8080);
+});
+
+test('a process start time reads the same whatever TZ the reader runs in, on the ps path and the /proc path', (t) => {
+  // The dev supervisor records after loading the app's `.env` (which may set
+  // TZ); `webjs stop` never loads it. `ps -o lstart=` prints local time, so
+  // without a pinned zone the two sides read different strings for one live
+  // server, and stop called it stale and deleted its record.
+  const saved = process.env.TZ;
+  const read = (tz, opts) => {
+    process.env.TZ = tz;
+    return processStartTime(process.pid, opts);
+  };
+  try {
+    const viaPs = [read('UTC', { ps: true }), read('Asia/Kolkata', { ps: true }), read('America/Los_Angeles', { ps: true })];
+    if (viaPs[0] === null) t.diagnostic('no ps on this host, so the ps path is not exercised');
+    else assert.deepEqual(viaPs, [viaPs[0], viaPs[0], viaPs[0]], 'the ps start time ignores the caller\'s TZ');
+    // On Linux the default path reads clock ticks since boot, which no zone touches.
+    const viaDefault = [read('UTC'), read('Asia/Kolkata')];
+    assert.equal(viaDefault[0], viaDefault[1]);
+  } finally {
+    if (saved === undefined) delete process.env.TZ;
+    else process.env.TZ = saved;
+  }
+});
+
+test('a server refused the record by a live one takes it over once that one is gone', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-dev-port-'));
+  const file = join(dir, '.webjs', 'dev-server.json');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Another live server holds the record (a child process, so it can die).
+  const holder = spawn(process.execPath, ['--input-type=module', '-e',
+    `const { recordDevPort } = await import(${JSON.stringify(PORT_JS)}); recordDevPort(${JSON.stringify(dir)}, 8910); setInterval(() => {}, 1e9);`], { stdio: 'ignore' });
+  try {
+    const deadline = Date.now() + 10_000;
+    while (!existsSync(file) && Date.now() < deadline) await sleep(50);
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).pid, holder.pid);
+    let port = 8911;
+    const first = claimServerRecord(dir, () => port, { kind: 'dev', intervalMs: 100 });
+    assert.equal(first?.pid, holder.pid, 'the live holder keeps the record');
+    await sleep(300);
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).pid, holder.pid, 'still the holder\'s while it lives');
+    // The port to record moves (a dev child reported its bind) before the claim.
+    port = 8912;
+    // SIGKILL skips the holder's exit handler, so its stale record stays behind.
+    holder.kill('SIGKILL');
+    const until = Date.now() + 5000;
+    let record = null;
+    while (Date.now() < until) {
+      record = JSON.parse(readFileSync(file, 'utf8'));
+      if (record.pid === process.pid) break;
+      await sleep(50);
+    }
+    assert.equal(record?.pid, process.pid, 'this process took the record over');
+    assert.equal(record?.port, 8912, 'with the port it serves on now');
+  } finally {
+    holder.kill('SIGKILL');
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

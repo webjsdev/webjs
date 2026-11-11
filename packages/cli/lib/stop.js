@@ -18,9 +18,10 @@
  * is one whose pid now belongs to an unrelated process. The test is
  * `isLiveServer`, the same one `webjs status` reads the port through.
  *
- * Run from a subdirectory of the app, it finds the app root the way the
- * `webjs dev` refusal does (the nearest ancestor holding `app/`); outside any
- * app it says so and exits 1.
+ * Run from a subdirectory of the app, it finds the app root with
+ * `findAppRoot` (the nearest directory holding both `app/` and
+ * `package.json`, so a route folder named `app` is not taken for it); outside
+ * any app it says so and exits 1.
  *
  * @module
  */

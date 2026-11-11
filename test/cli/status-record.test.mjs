@@ -11,10 +11,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * A port nothing is listening on, from the OS. A port derived from the pid
+ * collides when `bun test` runs several of these files in one process, and
+ * an unrelated WebJs server already on it answers the probe before the test
+ * server exists.
+ */
+async function freePort() {
+  const srv = createServer();
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const { port } = srv.address();
+  await new Promise((r) => srv.close(r));
+  return port;
+}
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = join(ROOT, 'packages/cli/bin/webjs.js');
@@ -92,15 +107,18 @@ test('dev --port 0: the record ends up with the port the child bound, and status
 
 test('a .env PORT edit restarts the child on the new port, and the record follows it', async () => {
   const dir = makeApp();
-  const base = 9900 + (process.pid % 40) * 2;
+  const base = await freePort();
   writeFileSync(join(dir, '.env'), `PORT=${base}\n`);
   const { child, out, exited } = startDev(dir, []);
   try {
-    assert.ok(await until(() => answers(base), 30_000), `the first child never came up on ${base}\n${out.log}`);
+    assert.ok(await until(async () => existsSync(join(dir, '.webjs/dev-server.json')) && readRecord(dir).port === base && await answers(base), 30_000),
+      `the first child never came up on ${base}\n${out.log}`);
     assert.equal(readRecord(dir).port, base);
 
-    writeFileSync(join(dir, '.env'), `PORT=${base + 1}\n`);
-    const moved = await until(async () => readRecord(dir).port === base + 1 && await answers(base + 1), 30_000);
+    let next = await freePort();
+    while (next === base) next = await freePort();
+    writeFileSync(join(dir, '.env'), `PORT=${next}\n`);
+    const moved = await until(async () => readRecord(dir).port === next && await answers(next), 30_000);
     assert.ok(moved, `the record did not follow the restarted child (record ${JSON.stringify(readRecord(dir))})\n${out.log}`);
     assert.equal(readRecord(dir).pid, child.pid);
 
