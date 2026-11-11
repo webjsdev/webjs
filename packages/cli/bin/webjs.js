@@ -109,8 +109,9 @@ const USAGE = `webjs commands:
                                                   unless --no-install is passed.
   webjs generate <generator> [name] [field:type...]  Write a slice of the app in one command, as Rails does (alias: webjs g).
                                                   model (a table, its row type and relations, and the migration),
-                                                  authentication (sign-up, log-in, a protected /dashboard and a test).
+                                                  authentication (sign-up, log-in, log-out, every page behind sign-in, a test).
                                                   Fields are Rails': title:string! (not null) slug:string:uniq user:references
+                                                  assignee:references{users} (the brace names the referenced table)
   webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
   webjs db migrate                                Apply pending migrations (drizzle-kit migrate)
   webjs db push                                   Push the schema straight to the dev DB (drizzle-kit push)
@@ -292,10 +293,10 @@ const HELP = {
   },
   generate: {
     usage: 'webjs generate <model|authentication> [name] [field[:type][!][:uniq|:index]...]',
-    summary: 'Write a slice of the app, the way Rails generators do (alias `webjs g`). model: the table in db/schema.server.ts with its row type beside it, the relations its references fields name, and its migration; use it for every table, so no Drizzle table is written by hand. authentication: a password hash on users, Auth.js credentials sign-in through createAuth, sign-up and log-in pages, a protected /dashboard and a test. Generate, then edit the result.',
+    summary: 'Write a slice of the app, the way Rails generators do (alias `webjs g`). model: the table in db/schema.server.ts with its row type beside it, the relations its references fields name, and its migration; use it for every table, so no Drizzle table is written by hand. authentication: a password hash on users, Auth.js credentials sign-in through createAuth, sign-up, log-in and log-out pages, an app/middleware.ts that sends a signed-out visitor to /login from every page except its publicPaths list (Rails\' require_authentication), and a test. Generate, then edit the result.',
     options: [
       { flag: '-f, --force', description: 'Overwrite files that already exist and differ (without it nothing is written and the files are named).' },
-      { flag: '-p, --pretend', description: 'Print what would be written, and write nothing.' },
+      { flag: '-p, --pretend', description: 'Print what would be written, and write nothing. A table a references field names that is not generated yet is a note, so a chain of --pretend runs completes.' },
       { flag: '--skip-tests', description: 'Write no test file (authentication).' },
       { flag: '--skip-migration', description: 'Edit db/schema.server.ts but do not run `webjs db generate`.' },
       { flag: '--plural <word>', description: 'The plural when the built-in rules get it wrong (person/people is built in).' },
@@ -305,11 +306,13 @@ const HELP = {
       'name[:type][!][:uniq|:index], the Rails grammar. type: string (the default), text, integer, float, decimal, boolean, datetime, date, json, references.',
       '! makes the column not null (title:string!), :uniq adds a unique constraint, :index a plain index.',
       'user:references adds a userId foreign key to users and a user relation in defineRelations; user:references! makes it required.',
+      'assignee:references{users} names the table when it is not the plural of the field: an assigneeId foreign key to users and an assignee relation.',
       'Every table gets id, createdAt and updatedAt. The migration is applied on the next `webjs dev`, `webjs start` or `webjs test`.',
     ],
     examples: [
       'webjs g model post title:string! body:text published:boolean',
       'webjs g model comment body:text! post:references!',
+      'webjs g model task title:string! assignee:references{users}',
       'webjs g model tag name:string!:uniq',
       'webjs g authentication',
     ],
@@ -1847,7 +1850,7 @@ Full docs: https://webjs.dev/docs`);
       // The export name is the first argument that is neither a flag nor the
       // value `--pkg` takes.
       const name = rest.find((a, i) => !a.startsWith('--') && !(pkgAt >= 0 && i === pkgAt + 1));
-      const { lookupExport, resolveFrameworkRoots, listDir, listSources, featureCatalog, guide } = await import('@webjsdev/mcp');
+      const { lookupExport, resolveFrameworkRoots, listDir, listSources, featureCatalog, guide, conventionPointer } = await import('@webjsdev/mcp');
       const { existsSync } = await import('node:fs');
       const { readFile } = await import('node:fs/promises');
       const roots = resolveFrameworkRoots(process.cwd(), { exists: existsSync });
@@ -1870,11 +1873,15 @@ Full docs: https://webjs.dev/docs`);
         break;
       }
       // A pattern guide (`modules`, `optimistic-ui`, ...): how WebJs wants it
-      // built and which generator writes it. Its name is a slug no package exports.
+      // built and which generator writes it. Its name is a slug no package
+      // exports, and so is each file convention it answers (`not-found`,
+      // `middleware.ts`, `route.ts` print the routing guide).
       const guideText = pkg ? null : guide(name);
       if (guideText) { console.log(guideText); break; }
       const out = await lookupExport({ roots, readFile, readdir }, name, pkg);
-      console.log(out);
+      // `route` and `middleware` are exports AND file conventions.
+      const pointer = conventionPointer(name);
+      console.log(pointer ? `${out}\n\n${pointer}` : out);
       if (!/^@webjsdev\//m.test(out)) process.exit(1);
       break;
     }

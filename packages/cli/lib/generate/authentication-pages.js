@@ -1,6 +1,7 @@
 /**
- * The authentication generator's pages and test: log in, sign up, and a
- * `/dashboard` segment whose `middleware.ts` requires a session.
+ * The authentication generator's pages, gate and test: log in, sign up, log
+ * out, and the `app/middleware.ts` that requires a session on every route but
+ * its public list.
  */
 /** @typedef {import('./index.js').AppContext} AppContext */
 
@@ -96,19 +97,20 @@ ${field('password', 'Password', 'type="password" autocomplete="new-password" min
 }
 `;
 
-  const dashboard = `import { html } from '@webjsdev/core';
+  const logout = `import { html } from '@webjsdev/core';
 ${ctx.ui.button ? "import { buttonClass } from '#components/ui/button.ts';\n" : ''}import { currentUser } from '#modules/auth/queries/current-user.server.ts';
 import { logOut } from '#modules/auth/actions/log-out.server.ts';
 
-export const metadata = { title: 'Dashboard' };
+export const metadata = { title: 'Log out' };
 
-// Signed in only: middleware.ts beside this page sends a signed-out visitor to
-// /login before this renders.
-export default async function DashboardPage() {
+// Link here from your layout (<a href="/logout">), or put this same form in
+// it: any form bound to logOut logs out. Signed in only, like every page
+// app/middleware.ts does not list as public.
+export default async function LogOutPage() {
   const user = await currentUser();
   return html\`
     <section class="mx-auto max-w-sm grid gap-6 py-10">
-      <h1 class="text-2xl font-semibold m-0">Dashboard</h1>
+      <h1 class="text-2xl font-semibold m-0">Log out</h1>
       <p class="m-0">Signed in as \${user?.email}.</p>
       <form action=\${logOut} class="group">
         <button ${cls.submitOutline} type="submit">Log out</button>
@@ -118,58 +120,99 @@ export default async function DashboardPage() {
 }
 `;
 
-  const middleware = `import { auth } from '#modules/auth/auth.server.ts';
-
-// Rails' require_authentication, the Next.js way: a segment middleware.ts runs
-// before every page under /dashboard, so a signed-out visitor goes to /login
-// before anything renders. Copy this file into any folder to protect it.
-export default async function middleware(request: Request) {
-  if (!(await auth(request))) return Response.redirect(new URL('/login', request.url), 302);
-}
-`;
-
   const files = [
     { path: 'app/login/page.ts', content: login },
     { path: 'app/signup/page.ts', content: signup },
-    { path: 'app/dashboard/page.ts', content: dashboard },
-    { path: 'app/dashboard/middleware.ts', content: middleware },
+    { path: 'app/logout/page.ts', content: logout },
+    { path: 'app/middleware.ts', content: MIDDLEWARE },
   ];
   if (!ctx.skipTests) files.push({ path: 'test/auth/auth.test.ts', content: TEST });
   return files;
 }
 
-const TEST = `// The authentication generator's test: sign up, log in and out, and the
-// protected dashboard, each through the real request handler and the forms a
-// browser with JavaScript off submits.
+/**
+ * The root segment's middleware: it wraps every page, form post and route.ts
+ * handler in the app, and nothing else (static files, /__webjs/ and metadata
+ * routes are served before segment middleware), so the public list never
+ * needs an asset in it.
+ */
+export const MIDDLEWARE = `import { auth, signedInPath } from '#modules/auth/auth.server.ts';
+
+// Rails' require_authentication, the Next.js way. A middleware.ts at the root
+// of app/ runs before every page, form post and route.ts handler, so a
+// signed-out visitor goes to /login before anything renders. Gate here rather
+// than in a layout: a page renders before its layouts, and a client navigation
+// skips the layouts the browser already has. Static files, the client runtime
+// (/__webjs/) and metadata routes (robots.txt, sitemap.xml, icons) never pass
+// through it. Neither does an action a component calls directly, so check
+// await currentUser() inside an action that needs a user.
+
+// What anyone may open signed out, Rails' allow_unauthenticated_access. Each
+// entry matches that path and every path below it ('/api/auth' covers
+// /api/auth/session); '/' matches the home page alone. Add your own public
+// pages here: '/' for a landing page, '/about', '/blog'.
+const publicPaths = ['/login', '/signup', '/api/auth'];
+
+const isPublic = (path: string) =>
+  publicPaths.some((p) => path === p || (p !== '/' && path.startsWith(p + '/')));
+
+export default async function middleware(request: Request) {
+  const path = new URL(request.url).pathname.replace(/(.)\\/+$/, '$1');
+  if (isPublic(path)) {
+    // A signed-in visitor has no use for the log-in and sign-up pages.
+    if (request.method === 'GET' && (path === '/login' || path === '/signup') && (await auth(request))) {
+      return Response.redirect(new URL(signedInPath, request.url), 302);
+    }
+    return;
+  }
+  if (!(await auth(request))) return Response.redirect(new URL('/login', request.url), 302);
+}
+`;
+
+const TEST = `// The authentication generator's test: the sign-in gate, sign up, log out and
+// in again, each through the real request handler and the forms a browser with
+// JavaScript off submits.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
 import { submitForm, testRequest, getSetCookies, cookiesToHeader } from '@webjsdev/server/testing';
+import { signedInPath } from '#modules/auth/auth.server.ts';
 
 const app = await createRequestHandler({ appDir: fileURLToPath(new URL('../..', import.meta.url)), dev: true });
 const email = 'ada-' + Date.now() + '@example.com';
 const password = 'correct horse battery';
 const pathOf = (res: Response) => new URL(res.headers.get('location') ?? '', 'http://localhost').pathname;
+const withCookie = (cookie: string) => ({ headers: { cookie } });
+// Any form bound to logOut, whether it sits on /logout or in a layout: the
+// value of its action field ends in /logOut.
+const logOutForm = { match: '/logOut"', index: 0 };
 
-test('the dashboard sends a signed-out visitor to log in', async () => {
-  const res = await testRequest(app.handle, '/dashboard');
-  assert.equal(res.status, 302);
-  assert.equal(pathOf(res), '/login');
+test('a signed-out visitor is sent to log in, except on the public pages', async () => {
+  // Once '/' is public (a landing page in publicPaths), probe a page that is not.
+  const home = await testRequest(app.handle, '/');
+  assert.equal(home.status, 302);
+  assert.equal(pathOf(home), '/login');
+  assert.equal((await testRequest(app.handle, '/login')).status, 200);
+  assert.equal((await testRequest(app.handle, '/signup')).status, 200);
 });
 
-test('sign up, see the dashboard, log out, then log in again', async () => {
+test('sign up, see the app, log out, then log in again', async () => {
   const signedUp = await submitForm(app.handle, '/signup', { email, password });
   assert.equal(signedUp.status, 303);
-  assert.equal(pathOf(signedUp), '/dashboard');
+  assert.equal(pathOf(signedUp), signedInPath);
   const cookies = cookiesToHeader(getSetCookies(signedUp));
 
-  const dashboard = await testRequest(app.handle, '/dashboard', { headers: { cookie: cookies } });
-  assert.equal(dashboard.status, 200);
-  assert.ok((await dashboard.text()).includes(email));
+  assert.equal((await testRequest(app.handle, signedInPath, withCookie(cookies))).status, 200);
+  const backToApp = await testRequest(app.handle, '/login', withCookie(cookies));
+  assert.equal(backToApp.status, 302, 'a signed-in visitor skips the log-in page');
+  assert.equal(pathOf(backToApp), signedInPath);
 
-  const loggedOut = await submitForm(app.handle, '/dashboard', {}, { cookies });
+  const loggedOut = await submitForm(app.handle, '/logout', {}, { cookies, ...logOutForm });
   assert.equal(loggedOut.status, 303);
+  assert.equal(pathOf(loggedOut), '/login');
+  const after = await testRequest(app.handle, '/', withCookie(cookiesToHeader(getSetCookies(loggedOut))));
+  assert.equal(after.status, 302, 'the cleared cookie is signed out');
 
   const wrong = await submitForm(app.handle, '/login', { email, password: 'not the password' });
   assert.equal(wrong.status, 422);
@@ -177,7 +220,7 @@ test('sign up, see the dashboard, log out, then log in again', async () => {
 
   const right = await submitForm(app.handle, '/login', { email, password });
   assert.equal(right.status, 303);
-  assert.equal(pathOf(right), '/dashboard');
+  assert.equal(pathOf(right), signedInPath);
 });
 
 test('a second sign-up with the same email is refused', async () => {

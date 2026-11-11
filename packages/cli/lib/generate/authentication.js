@@ -1,14 +1,17 @@
 /**
  * The `authentication` generator, Rails 8's, written the Auth.js way:
  * a hashed password on `users`, `createAuth` with a credentials provider,
- * sign-up and log-in pages with forms bound to actions, a log-out action, a
- * `/dashboard` segment whose `middleware.ts` requires a session (Rails'
- * `require_authentication`), and a test. Password reset by mail is left out,
- * as WebJs ships no mailer.
+ * sign-up, log-in and log-out pages with forms bound to actions, an
+ * `app/middleware.ts` that requires a session on every route except a short
+ * public list (Rails' `require_authentication` on every controller, with
+ * `allow_unauthenticated_access` as the list), and a test. Password reset by
+ * mail is left out, as WebJs ships no mailer.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { baseColumns } from './fields.js';
 import { coreModule, hasExport, addImports, insertBlock, registerTable } from './schema-edit.js';
-import { authPageFiles } from './authentication-pages.js';
+import { authPageFiles, MIDDLEWARE } from './authentication-pages.js';
 
 /**
  * @typedef {import('./index.js').AppContext} AppContext
@@ -20,6 +23,7 @@ import { authPageFiles } from './authentication-pages.js';
  * @returns {Plan}
  */
 export function planAuthentication(ctx) {
+  refuseOwnMiddleware(ctx);
   /** @type {Plan} */
   const plan = { files: [], edits: [], notes: [] };
   const users = usersEdit(ctx, plan.notes);
@@ -40,17 +44,40 @@ export function planAuthentication(ctx) {
   );
   plan.summary = [
     `users gains passwordHash: string | null${hasName ? ' (email, name kept)' : ''}`,
-    "auth(), signIn, signOut, handlers, signedInPath ('/dashboard')   #modules/auth/auth.server.ts",
+    "auth(), signIn, signOut, handlers, signedInPath ('/')   #modules/auth/auth.server.ts",
     'currentUser(): Promise<SessionUser | null>   #modules/auth/queries/current-user.server.ts',
-    'logIn(form), signUp(form), logOut(): \'use server\', bound by the /login, /signup and /dashboard forms',
+    "logIn(form), signUp(form), logOut(): 'use server', bound by the /login, /signup and /logout forms",
     'hashPassword(password), verifyPassword(password, stored)   #modules/auth/password.server.ts',
-    'pages: /login, /signup, /dashboard (protected by app/dashboard/middleware.ts); route: /api/auth/[...path]',
+    'app/middleware.ts: every page and route.ts requires a session; publicPaths there lists the exceptions',
+    'pages: /login, /signup, /logout (a log-out button; link to it, or bind logOut in a form of your own); route: /api/auth/[...path]',
   ];
   plan.notes.push(
+    '        note  Every page now needs a session. Add public pages (a landing page at /) to publicPaths in app/middleware.ts.',
+    '        note  An action a component calls directly skips middleware: check await currentUser() inside it.',
     '        note  Set AUTH_SECRET in .env for any deployment (development and tests generate one).',
-    '        note  To protect another section, copy app/dashboard/middleware.ts into its folder.',
   );
   return plan;
+}
+
+const MIDDLEWARE_NAMES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'];
+
+/**
+ * The gate lives in app/middleware.ts, the root segment's middleware. An app
+ * that has one already keeps it: the plan is refused with the way to merge,
+ * unless --force replaces a middleware.ts (a .js one is never replaced, since
+ * writing middleware.ts beside it would leave two).
+ * @param {AppContext} ctx
+ */
+function refuseOwnMiddleware(ctx) {
+  for (const name of MIDDLEWARE_NAMES) {
+    const abs = join(ctx.appDir, 'app', name);
+    if (!existsSync(abs)) continue;
+    if (name === 'middleware.ts' && (ctx.force || readFileSync(abs, 'utf8') === MIDDLEWARE)) continue;
+    throw new Error(`app/${name} already exists, and the authentication generator writes its sign-in gate to app/middleware.ts, so nothing was written. `
+      + `Rename yours (to app/middleware.mine.${name.split('.').pop()}, say), run the generator again, then move your code into the generated `
+      + "app/middleware.ts after its sign-in check and delete the renamed file."
+      + (name === 'middleware.ts' ? ' Or pass --force to replace it.' : ''));
+  }
 }
 
 /**
@@ -117,9 +144,10 @@ import { verifyPassword } from './password.server.ts';
 
 export type SessionUser = { id: string; email: string${hasName ? '; name: string | null' : ''} };
 
-// Where signing in or up lands. The protected section is app/dashboard/; to
-// protect another one, move it (its middleware.ts goes along) and change this.
-export const signedInPath = '/dashboard';
+// Where signing in or up lands, and where a signed-in visitor opening /login
+// or /signup goes. app/middleware.ts requires a session everywhere else, so
+// '/' is the app's home page seen signed in. Change it here only.
+export const signedInPath = '/';
 
 export const { auth, signIn, signOut, handlers } = createAuth<SessionUser>({
   providers: [
@@ -216,10 +244,11 @@ const LOG_OUT = `'use server';
 
 import { signOut } from '../auth.server.ts';
 
-// Bound by the Log out button on app/dashboard/page.ts. Clears the session
-// cookie and redirects home.
+// Bound by the Log out button on app/logout/page.ts, and by any form of your
+// own (<form action=\${logOut}> in a layout). Clears the session cookie and
+// redirects to the log-in page.
 export async function logOut() {
-  await signOut({ redirectTo: '/' });
+  await signOut({ redirectTo: '/login' });
 }
 `;
 

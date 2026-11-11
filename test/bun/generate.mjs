@@ -59,7 +59,8 @@ try {
     assert.match(text, /test\/auth\/auth\.test\.ts:/);
     assert.match(text, /\n\s*0 fail\n/);
   } else {
-    assert.match(text, /sign up, see the dashboard, log out, then log in again/);
+    assert.match(text, /a signed-out visitor is sent to log in, except on the public pages/);
+    assert.match(text, /sign up, see the app, log out, then log in again/);
   }
   console.log(`ok generate: model and authentication output passes its tests on ${runtime}`);
 } finally {

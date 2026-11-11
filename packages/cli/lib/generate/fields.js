@@ -6,7 +6,10 @@
  * `type` defaults to `string`; `!` after the type (or the name) makes the
  * column NOT NULL, as in Rails 8; `:uniq` adds a unique constraint and
  * `:index` a plain index. `user:references` adds a `userId` foreign key to the
- * `users` table and a relation named `user`.
+ * `users` table and a relation named `user`. A brace names the target table
+ * when it is not the field's plural, in Rails' option position:
+ * `assignee:references{users}` adds `assigneeId` referencing `users.id` and a
+ * relation named `assignee`.
  *
  * Each field maps onto plain Drizzle column builders, per dialect, written the
  * way the scaffold's own `db/schema.server.ts` writes them.
@@ -61,6 +64,15 @@ export function parseField(arg) {
   if (rawName.endsWith('!')) { notNull = true; rawName = rawName.slice(0, -1); }
   if (rawType.endsWith('!')) { notNull = true; rawType = rawType.slice(0, -1); }
   if (rawType === '') rawType = 'string';
+  // `assignee:references{users}`: the brace names the referenced table.
+  let target = null;
+  const braced = /^([A-Za-z_]+)\{([^}]*)\}$/.exec(rawType);
+  if (braced) {
+    rawType = braced[1];
+    const t = splitWords(braced[2]);
+    if (!t) throw new Error(`"${arg}": "{${braced[2]}}" is not a table name. Write the table's export, e.g. assignee:references{users}.`);
+    target = camel(t);
+  }
   // `title:uniq` is Rails shorthand for a string with a unique index.
   if (rawType === 'uniq' || rawType === 'index') { mods.unshift(rawType); rawType = 'string'; }
   const words = splitWords(rawName);
@@ -80,9 +92,12 @@ export function parseField(arg) {
     else throw new Error(`"${arg}": unknown modifier "${m}". Use :uniq or :index.`);
   }
   const label = words.map((w, i) => (i === 0 ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+  if (target !== null && kind !== 'references') {
+    throw new Error(`"${arg}": only a references field takes a {table}, e.g. assignee:references{users}.`);
+  }
   if (kind === 'references') {
     const relation = camel(words);
-    const table = camel([...words.slice(0, -1), pluralize(words[words.length - 1])]);
+    const table = target ?? camel([...words.slice(0, -1), pluralize(words[words.length - 1])]);
     return { name: relation + 'Id', label, kind, notNull, unique, index: index || !unique, references: { table, relation } };
   }
   const name = camel(words);

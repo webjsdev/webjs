@@ -23,13 +23,20 @@ import { coreModule, hasExport, addImports, insertBlock, registerTable, addOneRe
 export function planModel(ctx, opts) {
   const n = resourceNames(opts.name, { plural: opts.plural });
   const fields = parseFields(opts.fields);
+  /** @type {Plan} */
+  const plan = { files: [], edits: [], notes: [] };
   for (const f of fields) {
     if (f.references && f.references.table !== n.plural && !hasExport(ctx.schema, f.references.table)) {
+      // A --pretend chain (`g model room ... -p && g model booking room:references! -p`)
+      // previews models whose referenced table is itself only a preview, so a
+      // dry run notes the order instead of stopping the chain.
+      if (ctx.pretend) {
+        plan.notes.push(`        note  ${f.references.table} is not in db/schema.server.ts yet, so generate it before this model.`);
+        continue;
+      }
       throw new Error(`${f.references.relation}:references needs a ${f.references.table} table in db/schema.server.ts. Generate it first.`);
     }
   }
-  /** @type {Plan} */
-  const plan = { files: [], edits: [], notes: [] };
   const schema = schemaEdit(ctx, n, fields, plan.notes);
   if (schema !== null) {
     plan.edits.push({ path: 'db/schema.server.ts', content: schema });
@@ -113,6 +120,7 @@ function schemaEdit(ctx, n, fields, notes) {
     relation: /** @type {NonNullable<Field['references']>} */ (f.references).relation,
     target: /** @type {NonNullable<Field['references']>} */ (f.references).table,
     column: f.name,
+    notNull: f.notNull,
   }));
   if (rels.length) {
     const withRels = registered === null ? null : addOneRelations(src, n.plural, rels);

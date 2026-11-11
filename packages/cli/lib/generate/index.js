@@ -85,6 +85,8 @@ export function parseGenerateArgs(argv) {
  * @property {'sqlite'|'postgres'} dialect
  * @property {{ button: boolean, input: boolean, label: boolean }} ui which UI kit helpers exist
  * @property {boolean} skipTests
+ * @property {boolean} [pretend] a dry run: a missing referenced table is a note, not a refusal
+ * @property {boolean} [force] overwrite what exists, the app's own middleware included
  */
 
 /**
@@ -113,6 +115,8 @@ export function planGenerate(appDir, args) {
       label: existsSync(join(appDir, 'components', 'ui', 'label.ts')),
     },
     skipTests: args.skipTests,
+    pretend: args.pretend,
+    force: args.force,
   };
   if (args.generator === 'authentication') return planAuthentication(ctx);
   if (!args.name) throw new Error('Name it, for example `webjs generate model post title:string body:text`.');

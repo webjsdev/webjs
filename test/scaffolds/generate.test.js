@@ -71,12 +71,40 @@ test('model and references generate tables that check, typecheck and migrate', {
     assert.equal(comment.status, 0, out(comment));
     const tag = cli('g', 'model', 'tag', 'name:string!:uniq', 'rank:integer:index');
     assert.equal(tag.status, 0, out(tag));
+    // A brace names the referenced table when it is not the field's plural.
+    const review = cli('g', 'model', 'review', 'body:text!', 'reviewer:references{users}!');
+    assert.equal(review.status, 0, out(review));
+    assert.match(out(review), /relations: review\.reviewer -> users/);
+
+    // A --pretend chain completes although the first model is only a preview.
+    const dryRoom = cli('g', 'model', 'room', 'name:string!', '--pretend');
+    assert.equal(dryRoom.status, 0, out(dryRoom));
+    const dryBooking = cli('g', 'model', 'booking', 'room:references!', '--pretend');
+    assert.equal(dryBooking.status, 0, out(dryBooking));
+    assert.match(out(dryBooking), /rooms is not in db\/schema\.server\.ts yet, so generate it before this model/);
+    const wet = cli('g', 'model', 'booking', 'room:references!');
+    assert.equal(wet.status, 1, 'without --pretend the missing table still refuses');
+    assert.match(out(wet), /needs a rooms table/);
+    assert.ok(!/rooms|bookings/.test(readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8')), 'the dry runs wrote nothing');
+
+    // A NOT NULL reference loads as the row, never possibly null (TS18047).
+    writeFileSync(join(app, 'modules', 'relations-probe.server.ts'), [
+      "import { db } from '#db/connection.server.ts';",
+      'export async function probe(): Promise<string> {',
+      '  const c = await db.query.comments.findFirst({ with: { post: true } });',
+      '  const r = await db.query.reviews.findFirst({ with: { reviewer: true } });',
+      '  return c!.post.title + r!.reviewer.email;',
+      '}',
+      '',
+    ].join('\n'));
 
     const schema = readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8');
     assert.match(schema, /^export type Post = typeof posts\.\$inferSelect;$/m);
-    assert.match(schema, /^export const relations = defineRelations\(\{ users, posts, comments, tags \}, \(r\) => \(\{\n {2}comments: \{ post: r\.one\.posts\(/m);
+    assert.match(schema, /^export const relations = defineRelations\(\{ users, posts, comments, tags, reviews \}, \(r\) => \(\{\n {2}reviews: \{ reviewer: r\.one\.users\(/m);
+    assert.match(schema, /post: r\.one\.posts\(\{ from: r\.comments\.postId, to: r\.posts\.id, optional: false \}\)/);
+    assert.match(schema, /reviewerId: integer\(\)\.references\(\(\) => users\.id\)\.notNull\(\),/);
     const migrations = readdirSync(join(app, 'db', 'migrations')).join(' ');
-    for (const name of ['create_posts', 'create_comments', 'create_tags']) assert.match(migrations, new RegExp(`_${name}`));
+    for (const name of ['create_posts', 'create_comments', 'create_tags', 'create_reviews']) assert.match(migrations, new RegExp(`_${name}`));
 
     // The same table again is left alone, with a note.
     const again = cli('g', 'model', 'post', 'title:string!');
@@ -123,15 +151,16 @@ test('model on Postgres writes pg columns that check and typecheck', { timeout: 
   }
 });
 
-test('authentication adds a password hash to users, and its pages, middleware and test work', { timeout: 300_000 }, async () => {
+test('authentication puts every page behind sign-in, and its pages, gate and test work', { timeout: 300_000 }, async () => {
   const { cwd, app, cli } = await makeApp({});
   try {
     const r = cli('g', 'authentication');
     assert.equal(r.status, 0, out(r));
     for (const f of ['modules/auth/auth.server.ts', 'modules/auth/password.server.ts', 'app/api/auth/[...path]/route.ts',
-      'app/login/page.ts', 'app/signup/page.ts', 'app/dashboard/middleware.ts', 'test/auth/auth.test.ts']) {
+      'app/login/page.ts', 'app/signup/page.ts', 'app/logout/page.ts', 'app/middleware.ts', 'test/auth/auth.test.ts']) {
       assert.ok(existsSync(join(app, f)), f);
     }
+    assert.ok(!existsSync(join(app, 'app/dashboard')), 'no dashboard: signing in lands on the home page');
     assert.match(readFileSync(join(app, 'db', 'schema.server.ts'), 'utf8'), /^ {2}passwordHash: text\(\),$/m);
     assert.match(out(r), /--name=add_password_hash_to_users/);
 
@@ -159,12 +188,20 @@ test('authentication adds a password hash to users, and its pages, middleware an
     assert.equal(tc.status, 0, out(tc));
     const tests = cli('test', '--server');
     assert.equal(tests.status, 0, out(tests));
-    ran(tests, /sign up, see the dashboard, log out, then log in again/, 'test/auth/auth.test.ts');
+    ran(tests, /a signed-out visitor is sent to log in, except on the public pages/, 'test/auth/auth.test.ts');
+    ran(tests, /sign up, see the app, log out, then log in again/, 'test/auth/auth.test.ts');
 
     const migrate = cli('db', 'migrate');
     assert.equal(migrate.status, 0, out(migrate));
     const status = cli('status', '--boot', '/login', '/signup');
     assert.equal(status.status, 0, out(status));
+
+    // An app middleware the generator did not write is kept, and the refusal
+    // says how to merge it.
+    writeFileSync(join(app, 'app', 'middleware.ts'), 'export default function middleware() {}\n');
+    const own = cli('g', 'authentication');
+    assert.equal(own.status, 1);
+    assert.match(out(own), /app\/middleware\.ts already exists[\s\S]*move your code into the generated app\/middleware\.ts/);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

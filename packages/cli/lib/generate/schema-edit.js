@@ -91,10 +91,12 @@ export function registerTable(src, table) {
 /**
  * Add a new table's `one` relations (one per foreign key) to the
  * `defineRelations` callback: `posts: { author: r.one.users({ from:
- * r.posts.authorId, to: r.users.id }) }`.
+ * r.posts.authorId, to: r.users.id }) }`. A NOT NULL foreign key adds
+ * `optional: false`, which is what types the loaded relation as the row rather
+ * than the row or null (Drizzle 1.0 defaults `optional` to true).
  * @param {string} src
  * @param {string} table the new table's export name
- * @param {{ relation: string, target: string, column: string }[]} rels
+ * @param {{ relation: string, target: string, column: string, notNull?: boolean }[]} rels
  * @returns {string | null} null when the callback shape is not recognised
  */
 export function addOneRelations(src, table, rels) {
@@ -103,7 +105,7 @@ export function addOneRelations(src, table, rels) {
   if (!m) return null;
   const r = m[2] || m[3] || 'r';
   const body = rels
-    .map((x) => `${x.relation}: ${r}.one.${x.target}({ from: ${r}.${table}.${x.column}, to: ${r}.${x.target}.id })`)
+    .map((x) => `${x.relation}: ${r}.one.${x.target}({ from: ${r}.${table}.${x.column}, to: ${r}.${x.target}.id${x.notNull ? ', optional: false' : ''} })`)
     .join(',\n    ');
   const entry = rels.length === 1 ? `\n  ${table}: { ${body} },` : `\n  ${table}: {\n    ${body},\n  },`;
   // An empty `({})` gets its closing brace on a line of its own.

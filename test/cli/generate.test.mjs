@@ -11,6 +11,8 @@ import { parseField, parseFields, columnFor } from '../../packages/cli/lib/gener
 import { addImports, registerTable, addOneRelations, insertBlock, dialectOf } from '../../packages/cli/lib/generate/schema-edit.js';
 import { parseGenerateArgs, applyPlan, migrationStamp, waitForNextMigrationSecond } from '../../packages/cli/lib/generate/index.js';
 import { modelSummary, planModel } from '../../packages/cli/lib/generate/model.js';
+import { planAuthentication } from '../../packages/cli/lib/generate/authentication.js';
+import { MIDDLEWARE } from '../../packages/cli/lib/generate/authentication-pages.js';
 
 test('pluralize follows the common English rules and the irregulars', () => {
   assert.equal(pluralize('post'), 'posts');
@@ -69,6 +71,22 @@ test('a references field becomes a foreign key and a relation', () => {
   assert.equal(parseField('blog_post:belongs_to').references?.table, 'blogPosts');
 });
 
+test('a brace names the referenced table, as in assignee:references{users}', () => {
+  const f = parseField('assignee:references{users}');
+  assert.equal(f.name, 'assigneeId');
+  assert.equal(f.label, 'Assignee');
+  assert.deepEqual(f.references, { table: 'users', relation: 'assignee' });
+  assert.equal(f.notNull, false);
+  assert.equal(parseField('assignee:references{users}!').notNull, true, '! after the brace');
+  assert.equal(parseField('assignee!:references{users}').notNull, true, '! after the name');
+  assert.equal(parseField('owner:belongs_to{blog_posts}').references?.table, 'blogPosts');
+  assert.equal(columnFor(parseField('assignee:references{users}'), 'sqlite').code, 'integer().references(() => users.id)');
+  assert.throws(() => parseField('title:string{users}'), /only a references field takes a \{table\}/);
+  assert.throws(() => parseField('owner:references{}'), /is not a table name/);
+  assert.throws(() => parseField("owner:references{us'ers}"), /is not a table name/);
+  assert.throws(() => parseFields(['assignee:references{users}', 'assignee:references']), /given twice/);
+});
+
 test('parseField refuses what it cannot write correctly', () => {
   assert.throws(() => parseField('title:strng'), /unknown type "strng"/);
   assert.throws(() => parseField('password:digest'), /webjs generate authentication/);
@@ -117,6 +135,14 @@ test('the schema edits insert at the real anchors and never at an example in a c
   assert.match(src, /^\/\/ {3}export const relations = defineRelations\(\{ users, posts \}, \(r\)/m, 'the comment is untouched');
   src = /** @type {string} */ (addOneRelations(src, 'posts', [{ relation: 'author', target: 'users', column: 'authorId' }]));
   assert.match(src, /defineRelations\(\{ users, posts \}, \(r\) => \(\{\n {2}posts: \{ author: r\.one\.users\(\{ from: r\.posts\.authorId, to: r\.users\.id \}\) \},\n\}\)\);/);
+  // A NOT NULL foreign key is a required relation: Drizzle 1.0 types it as the
+  // row, not the row or null, only with optional: false.
+  const required = /** @type {string} */ (addOneRelations(SCHEMA, 'posts', [
+    { relation: 'author', target: 'users', column: 'authorId', notNull: true },
+    { relation: 'editor', target: 'users', column: 'editorId' },
+  ]));
+  assert.match(required, /author: r\.one\.users\(\{ from: r\.posts\.authorId, to: r\.users\.id, optional: false \}\),/);
+  assert.match(required, /editor: r\.one\.users\(\{ from: r\.posts\.editorId, to: r\.users\.id \}\),/);
   assert.equal(registerTable('const x = 1;\n', 'posts'), null, 'no call: the caller prints the edit instead');
 });
 
@@ -134,6 +160,15 @@ test('model writes only the table, its row type and its relations, and names the
   assert.match(src, /^export type Post = typeof posts\.\$inferSelect;$/m);
   assert.match(src, /^export const relations = defineRelations\(\{ users, posts \}, \(r\) => \(\{\n {2}posts: \{ user: r\.one\.users\(/m);
   assert.throws(() => planModel(ctxWith(SCHEMA), { name: 'post', fields: ['tag:references'] }), /needs a tags table/);
+  assert.match(planModel(ctxWith(SCHEMA), { name: 'post', fields: ['user:references!'] }).edits[0].content, /user: r\.one\.users\(\{ from: r\.posts\.userId, to: r\.users\.id, optional: false \}\)/);
+  assert.match(planModel(ctxWith(SCHEMA), { name: 'task', fields: ['assignee:references{users}'] }).edits[0].content,
+    /assigneeId: integer\(\)\.references\(\(\) => users\.id\),[\s\S]*assignee: r\.one\.users\(\{ from: r\.tasks\.assigneeId, to: r\.users\.id \}\)/);
+  assert.throws(() => planModel(ctxWith(SCHEMA), { name: 'task', fields: ['assignee:references{people}'] }), /needs a people table/);
+  // A --pretend chain previews a model whose referenced table is itself only
+  // a preview, so the refusal becomes a note and the chain completes.
+  const dry = planModel({ ...ctxWith(SCHEMA), pretend: true }, { name: 'booking', fields: ['room:references!'] });
+  assert.match(dry.notes.join('\n'), /rooms is not in db\/schema\.server\.ts yet, so generate it before this model/);
+  assert.match(dry.edits[0].content, /^export const bookings = sqliteTable/m);
   const again = planModel(ctxWith(src), { name: 'post', fields: ['title'] });
   assert.deepEqual(again.edits, [], 'a table already in the schema is left as it is');
   assert.match(again.notes[0], /already defines posts/);
@@ -193,4 +228,29 @@ test('applyPlan refuses to overwrite a differing file without --force, and write
   assert.equal(readFileSync(join(dir, 'app', 'mine.ts'), 'utf8'), 'generated\n');
   assert.ok(lines.some((l) => /identical {2}app\/same\.ts/.test(l)));
   assert.ok(lines.some((l) => /force {2}app\/mine\.ts/.test(l)));
+});
+
+test('authentication gates every route from app/middleware.ts, and keeps an app middleware it did not write', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-gen-auth-'));
+  mkdirSync(join(dir, 'app'));
+  const ctx = { ...ctxWith(SCHEMA.replace('  id: integer().primaryKey({ autoIncrement: true }),', '$&\n  email: text().notNull().unique(),')), appDir: dir };
+  const plan = planAuthentication(ctx);
+  const paths = plan.files.map((f) => f.path);
+  assert.ok(paths.includes('app/middleware.ts'), 'the gate is the root segment middleware');
+  assert.ok(paths.includes('app/logout/page.ts'), 'log out has a page the generator owns');
+  assert.ok(!paths.some((p) => p.startsWith('app/dashboard')), 'no dashboard: signing in lands on the home page');
+  assert.match(MIDDLEWARE, /^const publicPaths = \['\/login', '\/signup', '\/api\/auth'\];$/m);
+  assert.match(plan.files.find((f) => f.path === 'modules/auth/auth.server.ts')?.content ?? '', /^export const signedInPath = '\/';$/m);
+  assert.match(plan.files.find((f) => f.path === 'test/auth/auth.test.ts')?.content ?? '', /match: '\/logOut"', index: 0/);
+
+  // An identical gate (a second run) is not a conflict.
+  writeFileSync(join(dir, 'app', 'middleware.ts'), MIDDLEWARE);
+  assert.doesNotThrow(() => planAuthentication(ctx));
+  // The app's own middleware is kept: the plan is refused with the way to merge.
+  writeFileSync(join(dir, 'app', 'middleware.ts'), 'export default function middleware() {}\n');
+  assert.throws(() => planAuthentication(ctx), /app\/middleware\.ts already exists[\s\S]*move your code into the generated app\/middleware\.ts[\s\S]*--force to replace it/);
+  assert.doesNotThrow(() => planAuthentication({ ...ctx, force: true }), '--force replaces it');
+  // A middleware.js is never replaced, since a middleware.ts beside it would make two.
+  writeFileSync(join(dir, 'app', 'middleware.js'), 'export default function middleware() {}\n');
+  assert.throws(() => planAuthentication({ ...ctx, force: true }), /app\/middleware\.js already exists/);
 });
