@@ -216,30 +216,6 @@ lib/
                          `workspaces` key is not part of it, it only enriches the
                          message with the member directories that ARE apps.
                          Tests: `test/cli/check-target.test.mjs`.
-  generate/              `webjs generate` / `webjs g` (#1692), Rails' generators
-                         with Rails' grammar, two of them: `model` and
-                         `authentication`. `index.js` parses args (`--force`,
-                         `--pretend`, `--skip-tests`, `--skip-migration`,
-                         `--plural`), builds a PLAN (files, edits, notes, a
-                         summary) through a generator, applies it (a differing
-                         existing file refuses the whole plan unless
-                         `--force`), then runs this CLI's own
-                         `db generate --name=<...>`.
-                         `names.js` inflects the resource name (validated, since
-                         it is written into code; tiny pluralizer, `--plural`
-                         override). `fields.js` parses `name:type!:uniq` and
-                         maps each kind onto plain Drizzle per dialect.
-                         `schema-edit.js` inserts into the user's own
-                         `db/schema.server.ts` at real anchors only (the
-                         `export const ... = defineRelations(` line, never an
-                         example in a comment), printing a note when one is
-                         missing. `model.js` writes the table, its row type
-                         and its relations, and prints the model summary.
-                         `authentication.js` and `authentication-pages.js`
-                         write the auth module, actions, pages (log in, sign
-                         up, log out), the `app/middleware.ts` gate and the
-                         test, with the UI kit helpers when present.
-                         Tests: `test/cli/generate.test.mjs`.
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Drizzle db layer,
@@ -304,7 +280,6 @@ README.md                npm-facing package readme.
 | `webjs regenerate` | `regenerateOutputs()` from `@webjsdev/server` (#1672): builds every `webjs.dev.regenerate` output that is not fresh against the build record in `.webjs/regenerate.json`, one at a time, and records each build, so a build in `dev.before`, `start.before` or a CI step counts as fresh for the dev server and for `webjs doctor` (`STATIC_ASSET_FRESHNESS`). The ONE way a build outside the dev request path records freshness: an app lists `webjs regenerate` in its `before` steps instead of the raw compile command. `--force` rebuilds every rule, `--json` prints one result per rule. Exit 1 when a rule fails or exits 0 without writing its `output` (the output is moved aside first, so a rule pointing at a path its command does not write is caught). Tests: `test/cli/regenerate.test.mjs` |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |
 | `webjs create <name> [--template …] [--db …] [--runtime node\|bun]` | `scaffoldApp()` from `lib/create.js`. `<name>` is validated by `lib/app-name.js` BEFORE any file is written (#1066; npm package-name rules minus the lowercase-only clause, which never protected anything and which `webjs create MyApp` relied on), at all three entries (this bin, `scaffoldApp()`, and the `create-webjs` wrapper). `--runtime bun` (or `bun create webjs`, auto-detected) emits a Bun-flavored app (#541): `dev`/`start` scripts force `bun --bun`, `bun.lock`, a pure `oven/bun:1` Dockerfile + bun-install CI, and bun-command agent docs. Orthogonal to `--template` (invariant 1 stays exactly 3 templates). |
-| `webjs generate <generator> [name] [fields...]` (alias `g`) | `runGenerate` in `lib/generate/` (#1692), Rails' generators with Rails' names, field grammar and flags: `model` (the table in `db/schema.server.ts`, its row type, the relations its `references` fields name, and the migration; no module folder) and `authentication` (a password hash on `users`, `createAuth` with credentials, log-in / sign-up / log-out actions and pages, an `app/middleware.ts` that requires a session on every page, form post and `route.ts` except its `publicPaths` list, Rails 8's `require_authentication` with `allow_unauthenticated_access` as the list, `signedInPath` `'/'`, a test). The root SEGMENT middleware is the gate rather than the root `middleware.ts` beside `app/`, because segment middleware wraps only routes, so a static file, `/__webjs/*` and a metadata route can never be redirected and the list needs no asset in it; an app that already has an `app/middleware.*` refuses the plan with the way to merge (`--force` replaces a `.ts` one). A references field may name its table in a brace (`assignee:references{users}`), and a NOT NULL one writes `optional: false` on its relation so Drizzle types the loaded row as non-null. A plan is refused whole when any file it would write exists and differs, unless `--force`; `--pretend` prints it, and a referenced table that is not generated yet is a note there rather than a refusal, so a dry-run chain completes. Then this CLI's own `db generate --name=<rails_name>`. Tests: `test/cli/generate.test.mjs`, `test/scaffolds/generate.test.js` (real apps on both dialects), `test/bun/generate.mjs` |
 | `webjs db <generate\|migrate\|push\|studio>` | Runs the app's resolved `drizzle-kit` bin via `process.execPath` (no codegen step; `generate` is schema-to-SQL). Resolves the bin from the app's node_modules + spawns it with the current runtime (no `npx`, #570), so it works on Node and Bun, including a Node-less `oven/bun` image. `webjs db seed` runs the app's `db/seed.server.ts` directly. |
 | `webjs ui <init\|add\|list\|view\|diff\|info\|lint>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
 | `webjs version` | Prints the installed `@webjsdev/cli` version (#975, `readCliVersion()` reads the package's own package.json). Also reachable as the top-level `webjs --version` / `-v` flag, handled at the top of `main()` before the Node preflight so it works on an old Node. Tests: `test/cli/help.test.mjs` |

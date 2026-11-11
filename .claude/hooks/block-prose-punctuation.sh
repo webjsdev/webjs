@@ -306,7 +306,7 @@ fi
 # positives (a wrongly blocked write), the same tradeoff as the rules above:
 # e.g. a sentence-ending "built on webjs." is not flagged (trailing period),
 # and the `bin/webjs.js` "webjs commands:" usage banner may rarely trip it.
-webjs_cli='create|dev|start|test|check|ci|routes|db|ui|doctor|types|typecheck|mcp|vendor|help|version|add|init|generate|g|migrate|push|studio|seed|pin|unpin|list|audit|outdated|update|view|diff|info|build|source|status|stop|regenerate'
+webjs_cli='create|dev|start|test|check|ci|routes|db|ui|doctor|types|typecheck|mcp|vendor|help|version|add|init|generate|migrate|push|studio|seed|pin|unpin|list|audit|outdated|update|view|diff|info|build|source|status|stop|regenerate'
 
 # Scan copy: drop fenced code blocks, inline code spans, and emphasis markers
 # so a `webjs` inside code is never considered and **webjs** still matches.

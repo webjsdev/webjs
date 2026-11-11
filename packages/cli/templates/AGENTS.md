@@ -39,9 +39,7 @@ Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
 or an in-memory array. Put each feature in `modules/<feature>/` (`actions/` with
 one `'use server'` action per `*.server.ts`, `queries/`, `components/`, `types.ts`)
 and keep routes thin. `modules/users/` is an example of that shape: read it, then
-delete it, its test and whatever uses it before you build the app. Generate, as
-in Rails, then edit: add every table with `npx webjs g model booking room:references! startsAt:datetime!`
-(never hand-write a Drizzle table), and `npx webjs g authentication` adds sign-up and log-in.
+delete it, its test and whatever uses it before you build the app.
 
 In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
 not `document.getElementById`, `document.querySelector` or `addEventListener`.

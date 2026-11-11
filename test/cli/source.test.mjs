@@ -28,8 +28,7 @@ test('webjs source <Export> prints the declaration and its doc, not the file', (
 test('a bare webjs source lists what WebJs provides, by need', () => {
   const r = run();
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /^Start a feature by generating it/, 'the catalogue, not a usage error, generators first');
-  assert.match(r.stdout, /^What WebJs provides, by need\./m, 'then what WebJs provides');
+  assert.match(r.stdout, /^What WebJs provides, by need\./, 'the catalogue, not a usage error');
   assert.match(r.stdout, /^  Auth: createAuth, /m, 'auth is one line');
   assert.match(r.stdout, /^  Rate limits and CORS: rateLimit, /m, 'and so is each feature the brief does not name');
 });

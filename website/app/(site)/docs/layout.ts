@@ -30,7 +30,6 @@ const NAV_SECTIONS = [
     items: [
       { href: '/docs/getting-started', label: 'Introduction' },
       { href: '/docs/ai-first', label: 'AI-First Development' },
-      { href: '/docs/generators', label: 'Generators' },
       { href: '/docs/architecture', label: 'Architecture' },
       { href: '/docs/no-build', label: 'No-Build Model' },
       { href: '/docs/runtime', label: 'Runtime (Node & Bun)' },

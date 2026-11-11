@@ -1766,7 +1766,7 @@ export interface CredentialsOptions<C extends Record<string, unknown> = Record<s
  *
  * @example
  * ```ts
- * // modules/auth/auth.server.ts (`npx webjs g authentication` writes this and the pages)
+ * // modules/auth/auth.server.ts
  * import { createAuth, Credentials } from '@webjsdev/server';
  * import { findUserByEmail } from '#modules/users/queries/find-user-by-email.server.ts';
  * import { verifyPassword } from './password.server.ts';

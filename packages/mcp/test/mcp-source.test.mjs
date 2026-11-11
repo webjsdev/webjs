@@ -157,9 +157,7 @@ test('runSourceTool: dispatches path -> read, query -> grep, package -> list, no
   const t = fakeTree();
   assert.match(await runSourceTool(t, { path: 'core/src/html.js' }), /export const html/);
   assert.match(await runSourceTool(t, { query: 'renderToString' }), /server\/src\/ssr\.js/);
-  const catalogue = await runSourceTool(t, {});
-  assert.match(catalogue, /^Start a feature by generating it/);
-  assert.match(catalogue, /^What WebJs provides, by need\./m);
+  assert.match(await runSourceTool(t, {}), /^What WebJs provides, by need\./);
   assert.match(await runSourceTool(t, { package: 'core' }), /@webjsdev\/core\/src:/);
   assert.match(await runSourceTool(t, { package: 'cli' }), /@webjsdev\/cli\/lib:/);
 });

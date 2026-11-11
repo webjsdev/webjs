@@ -88,9 +88,6 @@ test('the catalogue text names every entry and stays short', () => {
     }
   }
   assert.match(text, /npx webjs source <Name>/, 'says how to fetch one entry');
-  // The generators write every table and auth outright, so they are found here too (#1692).
-  assert.match(text, /npx webjs g model booking room:references! startsAt:datetime!/, 'names the model generator');
-  assert.match(text, /npx webjs g authentication/, 'names the auth generator');
   // Read on a discovery call, so it is a list, not documentation.
   assert.ok(text.length < 2500, `the catalogue stays under 2500 characters (${text.length})`);
 });

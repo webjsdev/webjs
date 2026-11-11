@@ -101,7 +101,7 @@ export declare function submitForm(
  * @example
  * ```ts
  * // test/dashboard.test.ts, run with `webjs test`. Needs createAuth's handlers at
- * // app/api/auth/[...path]/route.ts (`npx webjs g authentication` writes it).
+ * // app/api/auth/[...path]/route.ts (export const { GET, POST } = handlers).
  * import { test } from 'node:test';
  * import assert from 'node:assert/strict';
  * import { createRequestHandler } from '@webjsdev/server';

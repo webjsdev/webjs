@@ -90,8 +90,10 @@ src/
                          (`routing`, `modules`, `progressive-enhancement`,
                          `optimistic-ui`, `type-safety`, `data-flow`,
                          `authentication`, `testing`, `uploads`), each how WebJs wants
-                         one need built and, where one does, the generator
-                         that writes it. GUIDE_ALIASES maps the file
+                         one need built. A guide is printed only when looked
+                         up by name; the catalogue does not list them, since
+                         a list had agents read several up front.
+                         GUIDE_ALIASES maps the file
                          convention names agents look up (`not-found`,
                          `error`, `middleware.ts`, `route.ts`, `page`, ...)
                          onto `routing` (and `upload`, `attachments` onto
@@ -109,10 +111,7 @@ src/
                          grouped by need (auth, sessions, caching, rate limits,
                          uploads, realtime, SEO, tests, the core component and
                          state APIs), the text a no-args `source` call and a
-                         bare `webjs source` print (#1686), ending with the
-                         `webjs generate` commands (#1692), which are commands
-                         rather than exports and so sit outside the
-                         name-checked sections. Curated, since the
+                         bare `webjs source` print (#1686). Curated, since the
                          export lists mix app-facing API with plumbing;
                          test/catalog.test.mjs holds every name to be a real
                          export of its section's module AND to resolve through
@@ -148,15 +147,15 @@ src/
    the `source` tool's job. The pattern guides in `guides.js` (#1692, added at
    the owner's direction) are not that corpus: each is one capped page (under
    40 lines) on how WebJs wants one need built, and ends in actions (the
-   generator that writes it when one does, the exports to look up next, the
-   docs page), all
-   checked to exist by `test/guides.test.mjs`. A new guide must keep to that
-   shape; anything longer belongs on the docs site.
+   exports to look up next, the docs page), all checked to exist by
+   `test/guides.test.mjs`. A guide is returned only for a lookup by its name
+   or an alias, never listed up front. A new guide must keep to that shape;
+   anything longer belongs on the docs site.
 
 ## Tests
 
 `test/mcp.test.mjs`, `test/mcp-source.test.mjs`, `test/catalog.test.mjs`,
-`test/check-report.test.mjs`. `runMcpServer` is driven in-process with injected
+`test/guides.test.mjs`, `test/check-report.test.mjs`. `runMcpServer` is driven in-process with injected
 deps, so no real server boots. Run `npm test` from the repo root.
 
 ---

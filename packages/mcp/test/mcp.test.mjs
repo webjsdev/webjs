@@ -335,8 +335,7 @@ test('mcp: tools/call source reads/greps/lists the framework source (driven agai
     { jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'source', arguments: {} } },
   ]);
   let text = frames[0].result.content[0].text;
-  assert.match(text, /^Start a feature by generating it/, 'returns the feature catalogue, generators first');
-  assert.match(text, /^What WebJs provides, by need\./m, 'then what WebJs provides');
+  assert.match(text, /^What WebJs provides, by need\./, 'returns the feature catalogue');
   assert.match(text, /^  Auth: createAuth, /m, 'one line per need');
 
   // package -> that package's source listing
