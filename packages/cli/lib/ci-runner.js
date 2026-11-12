@@ -186,6 +186,7 @@ export function stepSummaryMarkdown(result) {
  *   env?: NodeJS.ProcessEnv,
  *   actions?: boolean,
  *   closeGraceMs?: number,
+ *   markCi?: boolean,
  * }} [opts]
  * @returns {{ done: Promise<CiResult>, interrupt: () => void }}
  */
@@ -202,6 +203,9 @@ export function runCi(steps, cwd, opts = {}) {
     baseEnv: envWithLocalBin(cwd, opts.env || process.env),
     actions: !!opts.actions,
     closeGraceMs: opts.closeGraceMs ?? CLOSE_GRACE_MS,
+    // `webjs verify` runs the same engine for a local check and turns this
+    // off, so its steps see the shell's own CI, as `npm test` would.
+    markCi: opts.markCi !== false,
     cwd,
     /** @type {StepResult[]} */
     results: [],
@@ -369,7 +373,7 @@ function report(r, ctx) {
 async function runOne(step, group, ctx, capture) {
   const env = {
     ...ctx.baseEnv,
-    CI: 'true',
+    ...(ctx.markCi ? { CI: 'true' } : {}),
     // Colour for a captured child follows the runner's own colour decision
     // (a TTY with no NO_COLOR), so a user's NO_COLOR is honoured inside the
     // tools too rather than overridden by FORCE_COLOR.

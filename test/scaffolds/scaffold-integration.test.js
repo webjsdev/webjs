@@ -129,38 +129,28 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // Full-stack template-specific
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
-    assert.ok(existsSync(join(appDir, 'components', 'theme-toggle.ts')), 'theme-toggle written');
-
-    // Dark-mode wiring: the head init script (in layout) AND the theme-toggle
-    // must toggle the shadcn `.dark` class, not only the `data-theme`
-    // attribute. Without `.dark`, the theme (and the copied components/ui/*)
-    // render light tokens on the dark chrome (white buttons/cards, invisible text). Light
-    // mode hides this, so guard it here. See https://webjs.dev/docs/styling.
+    // #1697: the scaffold ships no theme toggle and no kit code. Dark mode
+    // follows the OS from the layout's pre-paint script, on the shadcn .dark
+    // class the kit's tokens switch on; without .dark the theme renders light
+    // tokens on dark chrome.
+    assert.ok(!existsSync(join(appDir, 'components', 'theme-toggle.ts')), 'no theme toggle');
+    assert.ok(!existsSync(join(appDir, 'components', 'ui')), 'no pre-installed kit components');
+    assert.ok(!existsSync(join(appDir, 'lib', 'utils', 'cn.ts')), 'no pre-written cn(): the first ui add writes it');
+    assert.ok(!existsSync(join(appDir, 'instrumentation.ts')), 'no optional instrumentation hook');
     const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
-    const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
-    assert.match(layoutSrc, /classList\.toggle\(['"]dark['"]/,
-      'layout head script must toggle the .dark class (shadcn dark-mode signal)');
-    assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
-      'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
-    assert.doesNotMatch(toggleSrc, /\sstyle="/, 'the toggle carries no inline style (its icons use SVG attributes)');
-    assert.doesNotMatch(toggleSrc, /document\.(getElementById|querySelector)/, 'and no document query');
-    // The head script only applies the theme before paint; following the OS is
-    // the toggle's job, on Lit's lifecycle (#1686).
-    assert.doesNotMatch(layoutSrc, /addEventListener/, 'the pre-paint script attaches no listener');
-    assert.match(toggleSrc, /connectedCallback\(\) \{[\s\S]*?matchMedia\('\(prefers-color-scheme: dark\)'\)[\s\S]*?addEventListener\('change'/, 'the toggle follows the OS from connectedCallback');
-    assert.match(toggleSrc, /disconnectedCallback\(\) \{[\s\S]*?removeEventListener\('change'/, 'and stops in disconnectedCallback');
-    // The toggle is the UI kit's own Button (the AGENTS.md rule), which also
-    // gives it the pointer cursor Tailwind v4's reset takes from a button.
-    assert.match(toggleSrc, /import \{ buttonClass \} from '#components\/ui\/button\.ts'/, 'the toggle uses the kit Button');
-    assert.match(toggleSrc, /class=\$\{buttonClass\(\{ variant: 'ghost', size: 'icon' \}\)\}/, 'as a ghost icon button');
-    assert.match(readFileSync(join(appDir, 'components', 'ui', 'button.ts'), 'utf8'), /\bcursor-pointer\b/, 'whose classes carry the pointer cursor');
-    assert.match(toggleSrc, /static properties = \{ theme: \{ state: true \} \};/, 'its theme is Lit reactive state');
+    assert.match(layoutSrc, /classList\.toggle\(['"]dark['"], m\.matches\)/,
+      'layout head script toggles the .dark class (shadcn dark-mode signal) from the OS');
+    assert.match(layoutSrc, /matchMedia\('\(prefers-color-scheme: dark\)'\)/, 'following prefers-color-scheme');
+    assert.doesNotMatch(layoutSrc, /theme-toggle|components\/ui/, 'the layout imports no component');
 
     // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
-    // Geist), with a floating top navbar and a main that fills the viewport
-    // minus the navbar.
-    assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
-      'layout main fills the viewport minus the navbar');
+    // Geist), with a floating top navbar and a container that fills the
+    // viewport minus the navbar. The page renders its own <main>, as a
+    // create-next-app page does (#1697: agents nested one inside the layout's).
+    assert.match(layoutSrc, /<div class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
+      'layout container fills the viewport minus the navbar');
+    assert.doesNotMatch(layoutSrc, /<main\b/, 'the layout leaves <main> to the page');
+    assert.match(readFileSync(join(appDir, 'app', 'page.ts'), 'utf8'), /<main\b/, 'the home page renders its own <main>');
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
     // #1660: the navbar is sized by --header-h and nothing measures it, so a
     // client-router swap that replaces the header cannot zero the offset.
@@ -218,26 +208,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // The home page is a minimal starting point that imports nothing from a
     // gallery, and the navbar links the docs and the source.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
-    // The home is a thin route over the example module (modules/users/).
-    assert.match(pageSrc, /from '#modules\/users\/actions\/add-user\.server\.ts'/, 'the home binds the example module\'s action');
-    assert.match(pageSrc, /from '#modules\/users\/queries\/list-users\.server\.ts'/, 'and reads its query');
-    assert.match(pageSrc, /<form action=\$\{addUser\}/, 'as a bound form');
-    assert.match(pageSrc, /<user-list \.users=\$\{latest\}><\/user-list>/, 'and renders the users with the module\'s component');
-    const listSrc = readFileSync(join(appDir, 'modules', 'users', 'components', 'user-list.ts'), 'utf8');
-    assert.match(listSrc, /static properties = \{ users: \{ type: Array \} \};/, 'a Lit-style reactive property');
-    assert.match(listSrc, /UserList\.register\('user-list'\)/, 'registered under its tag');
-    assert.match(pageSrc, /<form action=\$\{clearUsers\}>/, 'and a Clear list button bound to its clear action');
-    assert.match(readFileSync(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), 'utf8'), /^'use server';/, 'which is a server action');
-    // The example agents copy: only a duplicate is a field error, every other
-    // database error throws (no catch that relabels it).
-    const addSrc = readFileSync(join(appDir, 'modules', 'users', 'actions', 'add-user.server.ts'), 'utf8');
-    assert.match(addSrc, /\.onConflictDoNothing\(\)\.returning\(\)/, 'a duplicate is detected by the insert itself');
-    assert.doesNotMatch(addSrc, /catch\s*[{(]/, 'and no catch turns other errors into a duplicate message');
-    assert.ok(existsSync(join(appDir, 'test', 'users', 'users.test.ts')), 'the module ships its own test');
+    // #1697: no example module. modules/ is a placeholder; AGENTS.md carries
+    // the layout and the source guides the worked examples.
+    assert.doesNotMatch(pageSrc, /#modules\//, 'the home imports no module');
+    assert.deepEqual(readdirSync(join(appDir, 'modules')), ['.gitkeep'], 'modules/ is an empty placeholder');
+    assert.ok(!existsSync(join(appDir, 'test', 'users')), 'and no example test');
     assert.match(pageSrc, /Edit app\/page\.ts/, 'the home points at the file to edit');
     assert.match(layoutSrc, /webjs\.dev\/docs/, 'the navbar links the docs');
     assert.match(layoutSrc, /github\.com\/webjsdev\/webjs/, 'the navbar links the source');
-    assert.doesNotMatch(layoutSrc + toggleSrc, /#modules\//, 'the shell imports no demo module');
+    assert.doesNotMatch(layoutSrc, /#modules\//, 'the shell imports no demo module');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
@@ -502,6 +481,38 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(envExample, /DATABASE_URL/, '.env.example carries DATABASE_URL');
   } finally {
     restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+// #1697: an agent's first move on a fresh app is one `cat` of the source it
+// will build on. Eval agents read 26 to 58K characters that way, went past the
+// tool-output limit, and re-read file by file, after which the text sat in
+// context for the rest of the run. Most of it was UI kit library code (cn(),
+// the Button, Input and Label, the theme toggle) no agent needed to read, so
+// the scaffold no longer ships it.
+test('scaffoldApp full-stack: the source an agent reads first fits one tool call', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'webjs-first-read-'));
+  try {
+    await scaffoldApp('first-read', cwd, { template: 'full-stack' });
+    const appDir = join(cwd, 'first-read');
+    const sizes = [];
+    const walk = (rel) => {
+      const abs = join(appDir, rel);
+      if (!existsSync(abs)) return;
+      if (statSync(abs).isDirectory()) {
+        for (const e of readdirSync(abs)) walk(join(rel, e));
+      } else if (/\.(ts|js)$/.test(rel)) {
+        sizes.push([rel, statSync(abs).size]);
+      }
+    };
+    for (const rel of ['app', 'db', 'modules', 'test/users', 'components', 'lib', 'drizzle.config.ts', 'instrumentation.ts']) walk(rel);
+    const total = sizes.reduce((n, [, s]) => n + s, 0);
+    const largest = sizes.sort((a, b) => b[1] - a[1]).slice(0, 3).map(([f, s]) => `${f} ${s}`).join(', ');
+    // The real tool-output limit is about 30K characters (round 9 builds
+    // overflowed at 31K and fit at 28K), so the read stays well under it.
+    assert.ok(total < 20_000, `the first-read source totals ${total} bytes, over 20 KB (largest: ${largest})`);
+  } finally {
     await rm(cwd, { recursive: true, force: true });
   }
 });
@@ -860,7 +871,13 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     await scaffoldApp('api-app', cwd, { template: 'api' });
     const fs = readFileSync(join(cwd, 'fs-app', 'AGENTS.md'), 'utf8');
     const api = readFileSync(join(cwd, 'api-app', 'AGENTS.md'), 'utf8');
-    assert.equal(fs.replace('fs-app', 'X'), api.replace('api-app', 'X'), 'one AGENTS.md for both templates');
+    // One AGENTS.md for both templates, save the line that names the api
+    // template's users module as an example to replace (#1697): the
+    // full-stack app ships no example module, so it has no such line.
+    const exampleLine = '`modules/users/` with `app/api/users/` is an example of that layout: replace it with the app\'s own features.\n';
+    assert.ok(api.includes(exampleLine), 'the api AGENTS.md names its example module');
+    assert.ok(!fs.includes('modules/users'), 'the full-stack AGENTS.md names none');
+    assert.equal(fs.replace('fs-app', 'X'), api.replace('api-app', 'X').replace(exampleLine, ''), 'otherwise one AGENTS.md for both templates');
     assert.doesNotMatch(fs, /\{\{[A-Z_]+\}\}/, 'no leftover placeholder');
     assert.match(fs, /## The WebJs brief/, 'opens with the brief');
     assert.match(fs, /node_modules\/@webjsdev\/\*/, 'points at the framework source');
@@ -869,7 +886,14 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /document\.getElementById/, 'naming the raw DOM calls to avoid');
     assert.match(fs, /Style with Tailwind utilities on the kit's design tokens/, 'steers styling to Tailwind on the kit tokens');
     assert.match(fs, /npx webjs ui init --preset/, 'and theming to a kit preset');
-    assert.match(fs, /`modules\/users\/` is an example of that shape: read it, then\ndelete it, its test and whatever uses it before you build the app\./, 'tells the agent to delete the example module before building');
+    // #1697: the module layout itself, every folder a module holds, since the
+    // scaffold no longer ships an example module to copy.
+    for (const dir of ['actions', 'queries', 'components', 'utils']) {
+      assert.match(fs, new RegExp(`modules/<feature>/${dir}/`), `names the module's ${dir}/ folder`);
+    }
+    assert.match(fs, /modules\/<feature>\/types\.ts/, 'and its types.ts');
+    assert.match(fs, /`npx webjs source modules` prints a worked module/, 'and where the worked example is');
+    assert.doesNotMatch(fs, /modules\/users/, 'and names no example module');
     assert.match(fs, /\n## This app\n\nReplace this paragraph with what /, 'ends with a This app section the agent fills in');
     assert.match(fs, /`CLAUDE\.md` imports this file, so notes go here\./, 'which says app notes live in AGENTS.md, not CLAUDE.md');
     // The brief plus the scaffold's rules plus the This app stub: still short,
@@ -879,7 +903,9 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     // the file says it: check-on-edit, the refusals, and the soft flags.
     assert.match(fs, /Hooks, so you need not open them: each edit returns that file's `webjs check` and type/, 'summarises the shipped hooks');
     assert.match(fs, /`extends HTMLElement`, an em-dash/, 'naming what they refuse');
-    assert.ok(fs.split('\n').length < 70, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
+    // 75 since #1697: the module layout's eight lines replaced the example
+    // module (about 5 KB of code an agent read on its first look).
+    assert.ok(fs.split('\n').length < 75, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);
     }

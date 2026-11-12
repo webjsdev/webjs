@@ -101,8 +101,8 @@ export function tabsListVariant(variant: TabsListVariant | string | null | undef
 }
 
 /** Optional helper exposing the tabs-list class for advanced overrides. */
-export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string {
-  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[tabsListVariant(opts.variant)]);
+export function tabsListClass(opts: { variant?: TabsListVariant } & { className?: string } = {}): string {
+  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[tabsListVariant(opts.variant)], opts.className);
 }
 
 /**
@@ -111,7 +111,7 @@ export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string 
  * merges a `className` into the result.
  */
 export function tabsListVariants(opts: { variant?: TabsListVariant } & { className?: string } = {}): string {
-  return cn(tabsListClass(opts), opts.className);
+  return tabsListClass(opts);
 }
 
 // The trigger is rendered as a native <button role="tab">, which gives

@@ -15,7 +15,7 @@ import { revalidateTags } from './cache-tags.js';
 import { runWithActionSignal } from './action-signal.js';
 import { runActionChain } from './action-middleware.js';
 import { isStreamable, streamActionResponse } from './action-stream.js';
-import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
+import { isControlFlowThrow, controlFlowStatus, CONTROL_HEADER, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits, refreshHeaderValue } from './context.js';
 import { basePath } from './importmap.js';
@@ -372,7 +372,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // `method` is a default POST), so the first client call resolves from the
   // seed with no hydration round-trip. The browser-cache staleness check is
   // GET-only (only a GET is browser-cached).
-  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh', 'followActionRedirect as __redirect', 'installActionBind as __bindable',
+  const imports = ['stringify as __s', 'parse as __p', 'takeSeed as __seedTake', 'SEED_MISS as __MISS', 'markStale as __markStale', 'parseTagHeader as __tagHdr', 'activeActionSignal as __sig', 'applyActionRefresh as __refresh', 'followActionRedirect as __redirect', 'installActionBind as __bindable', 'notFound as __nf', 'forbidden as __fb', 'unauthorized as __ua',
     // Streaming RPC (#489): an action returning a stream / async iterable sends
     // back a framed body; the stub decodes it into an async iterable the caller
     // `for await`s. The imports are small constants + one decoder factory.
@@ -399,6 +399,10 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // revalidatePath() in the action: refresh the page on screen in place when
   // it was revalidated, BEFORE the caller's await resolves (Next behaviour).
   lines.push(`  const rf = res.headers.get('x-webjs-refresh'); if (rf) await __refresh(rf);`);
+  // notFound() / forbidden() / unauthorized() in the action: reject with the
+  // same sentinel, so `isForbidden(err)` holds in the caller's catch. After
+  // the refresh, since a mutation may have run before the throw.
+  lines.push(`  const cf = res.headers.get(${J(CONTROL_HEADER)}); if (cf === 'not-found') __nf(); if (cf === 'forbidden') __fb(); if (cf === 'unauthorized') __ua();`);
   lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t, since); }`);
   lines.push(`  const ct = res.headers.get('content-type') || '';`);
   // A streamed result (#489): the action returned a stream / async iterable.
@@ -583,6 +587,8 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
         // A THROWN validator behaves like a thrown action: a sanitized error
         // response (non-200, so the client stub throws), with prod stack
         // sanitization. The onError sink sees the original error too.
+        const cf = controlFlowStatus(v.thrown);
+        if (cf) return controlFlowResponse(v.thrown, cf);
         if (typeof onError === 'function') onError(v.thrown);
         return actionErrorResponse(v.thrown, idx.dev);
       }
@@ -647,21 +653,52 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     // go (`x-webjs-redirect: <url>;<push|replace>`, push by default as in a
     // Next server action), and the client router navigates there. A mutation
     // that ran still evicts its `invalidates` tags and reports revalidatePath.
+    // A revalidatePath() the action called before the throw is reported to the
+    // browser either way, since that path was already evicted on the server.
+    const refreshHeaders = () => {
+      const refresh = refreshHeaderValue();
+      return refresh ? { 'x-webjs-refresh': refresh } : {};
+    };
     if (isRedirect(e)) {
       const r = /** @type {any} */ (e);
       /** @type {Record<string, string>} */
       const headers = { 'x-webjs-redirect': `${headerSafeLocation(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}` };
+      // redirect() is how an action that succeeded navigates away, so it
+      // still evicts the action's declared `invalidates` tags.
       if (ranAction && method !== 'GET') {
         const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
         if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
       }
-      const refresh = refreshHeaderValue();
-      if (refresh) headers['x-webjs-refresh'] = refresh;
-      return rpcResponse(null, { headers: { ...headers, 'cache-control': 'no-store' } });
+      return rpcResponse(null, { headers: { ...headers, ...refreshHeaders(), 'cache-control': 'no-store' } });
     }
+    // notFound() / forbidden() / unauthorized() (Next.js parity with the
+    // no-JS form path): the same 404 / 403 / 401, not a logged 500. The
+    // declared `invalidates` tags are NOT evicted, as on the form path: the
+    // throw is usually a guard at the top of the action, so evicting would let
+    // any anonymous caller flush the tagged caches over and over.
+    const cf = controlFlowStatus(e);
+    if (cf) return controlFlowResponse(e, cf, refreshHeaders());
     if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }
+}
+
+/**
+ * The RPC answer for a boundary sentinel thrown in an action: its status, the
+ * kind in `x-webjs-control` for the stub to rethrow, never cached.
+ *
+ * @param {unknown} err
+ * @param {{ kind: string, status: number }} cf
+ * @param {Record<string, string>} [effects] the refresh header of a
+ *   revalidatePath() the action called before the throw
+ * @returns {Promise<Response>}
+ */
+function controlFlowResponse(err, cf, effects = {}) {
+  const msg = err instanceof Error ? err.message : String(err);
+  return rpcResponse({ error: msg }, {
+    status: cf.status,
+    headers: { ...effects, [CONTROL_HEADER]: cf.kind, 'cache-control': 'no-store' },
+  });
 }
 
 /**

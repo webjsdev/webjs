@@ -10,7 +10,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -101,6 +101,14 @@ test('a row round-trips through the app db', async () => {
 
     // A second run starts empty again: the row count assertion would fail on a reused database.
     assert.equal(run({}).status, 0, 'each run gets its own database');
+
+    // #1697: test files run in parallel processes, and on one shared file they
+    // hit `database is locked`. Each file gets its own copy, so a second file
+    // inserting the same unique email still sees exactly one row.
+    writeFileSync(join(app, 'test', 'users', 'again.test.ts'),
+      readFileSync(join(app, 'test', 'users', 'users.test.ts'), 'utf8'));
+    const pair = run({});
+    assert.equal(pair.status, 0, 'two files writing the same unique row each have their own database\n' + pair.stdout + pair.stderr);
 
     // Counterfactual: opted out, the test runs against the unmigrated dev database and fails.
     assert.notEqual(run({ WEBJS_TEST_DB: '0' }).status, 0, 'without the test database the table does not exist');

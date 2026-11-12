@@ -40,8 +40,8 @@ const VARIANTS = {
 export type MarkerVariant = keyof typeof VARIANTS;
 
 /** The marker row. Pair with `data-variant` set to the same variant. */
-export function markerClass(opts: { variant?: MarkerVariant } = {}): string {
-  return cn(BASE, VARIANTS[opts.variant ?? 'default']);
+export function markerClass(opts: { variant?: MarkerVariant } & { className?: string } = {}): string {
+  return cn(BASE, VARIANTS[opts.variant ?? 'default'], opts.className);
 }
 
 /**
@@ -49,7 +49,7 @@ export function markerClass(opts: { variant?: MarkerVariant } = {}): string {
  * cva, it merges a `className` into the result.
  */
 export function markerVariants(opts: { variant?: MarkerVariant } & { className?: string } = {}): string {
-  return cn(markerClass(opts), opts.className);
+  return markerClass(opts);
 }
 
 /** The leading icon. */

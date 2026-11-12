@@ -69,8 +69,8 @@ const ITEM_SIZES = {
 } as const;
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function itemClass(opts: { variant?: keyof typeof ITEM_VARIANTS; size?: keyof typeof ITEM_SIZES } = {}): string {
-  return cn(ITEM_BASE, ITEM_VARIANTS[opts.variant ?? 'default'], ITEM_SIZES[opts.size ?? 'default']);
+export function itemClass(opts: { variant?: keyof typeof ITEM_VARIANTS; size?: keyof typeof ITEM_SIZES } & { className?: string } = {}): string {
+  return cn(ITEM_BASE, ITEM_VARIANTS[opts.variant ?? 'default'], ITEM_SIZES[opts.size ?? 'default'], opts.className);
 }
 
 /**
@@ -78,7 +78,7 @@ export function itemClass(opts: { variant?: keyof typeof ITEM_VARIANTS; size?: k
  * it merges a `className` into the result.
  */
 export function itemVariants(opts: { variant?: keyof typeof ITEM_VARIANTS; size?: keyof typeof ITEM_SIZES } & { className?: string } = {}): string {
-  return cn(itemClass(opts), opts.className);
+  return itemClass(opts);
 }
 
 const ITEM_MEDIA_BASE =
@@ -91,8 +91,8 @@ const ITEM_MEDIA_VARIANTS = {
 } as const;
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function itemMediaClass(opts: { variant?: keyof typeof ITEM_MEDIA_VARIANTS } = {}): string {
-  return cn(ITEM_MEDIA_BASE, ITEM_MEDIA_VARIANTS[opts.variant ?? 'default']);
+export function itemMediaClass(opts: { variant?: keyof typeof ITEM_MEDIA_VARIANTS } & { className?: string } = {}): string {
+  return cn(ITEM_MEDIA_BASE, ITEM_MEDIA_VARIANTS[opts.variant ?? 'default'], opts.className);
 }
 
 /**
@@ -100,7 +100,7 @@ export function itemMediaClass(opts: { variant?: keyof typeof ITEM_MEDIA_VARIANT
  * it merges a `className` into the result.
  */
 export function itemMediaVariants(opts: { variant?: keyof typeof ITEM_MEDIA_VARIANTS } & { className?: string } = {}): string {
-  return cn(itemMediaClass(opts), opts.className);
+  return itemMediaClass(opts);
 }
 
 /** Set `data-slot="item-content"` on the element. */

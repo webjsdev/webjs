@@ -23,7 +23,7 @@ export default function AIFirst() {
     <h3>1. AGENTS.md: The Machine-Readable Contract</h3>
     <p>Every WebJs app has an <code>AGENTS.md</code> at the root, and it is short on purpose. WebJs follows Next.js App Router routing and Lit's component APIs, so an agent's existing habits already write most of an app correctly. The file holds only what differs:</p>
     <ul>
-      <li><strong>The WebJs brief</strong>: the handful of places WebJs departs from Next.js and Lit (light DOM by default, erasable TypeScript, server code in <code>*.server.ts</code>, imports from <code>@webjsdev/*</code>), and the instruction to run <code>webjs check</code> and <code>webjs status</code> after each edit.</li>
+      <li><strong>The WebJs brief</strong>: the handful of places WebJs departs from Next.js and Lit (light DOM by default, erasable TypeScript, server code in <code>*.server.ts</code>, imports from <code>@webjsdev/*</code>), the instruction to run <code>webjs check</code> after each edit, and <code>webjs verify</code> to check, typecheck, test and boot every route in one call.</li>
       <li><strong>A build checklist</strong> for the template the app was created from.</li>
       <li><strong>Types and data</strong>: derive every type from its source, and keep data in the database.</li>
     </ul>

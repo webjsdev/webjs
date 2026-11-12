@@ -31,15 +31,22 @@ routing and Lit components, with the differences below.
 Before hand-writing auth, sessions, caching, rate limits, uploads, realtime or
 SEO, run `npx webjs source`, which lists what WebJs provides for each need.
 `npx webjs source <Export>` then prints one export's signature and example.
-After each edit run `npx webjs check` and `npx webjs status`. The framework
-source is in `node_modules/@webjsdev/*` (no build, so it is the code that
-runs) and the human docs are at https://webjs.dev/docs.
+After each edit run `npx webjs check`. To verify the app, run `npx webjs verify`:
+check, typecheck, the tests, and every route booted in-process, in one call,
+with no dev server to start, curl or stop. The framework source is in
+`node_modules/@webjsdev/*` (no build, so it is the code that runs) and the
+human docs are at https://webjs.dev/docs.
 
-Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file
-or an in-memory array. Put each feature in `modules/<feature>/` (`actions/` with
-one `'use server'` action per `*.server.ts`, `queries/`, `components/`, `types.ts`)
-and keep routes thin. `modules/users/` is an example of that shape: read it, then
-delete it, its test and whatever uses it before you build the app.
+Keep app data in the wired-up Drizzle database (`db/`), never in a JSON file or
+an in-memory array. One folder per feature under `modules/`, and thin routes in `app/`:
+  modules/<feature>/actions/*.server.ts   'use server', one action per file
+  modules/<feature>/queries/*.server.ts   server-only reads that pages call
+  modules/<feature>/components/*.ts       Lit components (the code that ships)
+  modules/<feature>/utils/*.ts            pure helpers the feature shares
+  modules/<feature>/types.ts              types derived from the schema
+  test/<feature>/*.test.ts                the feature's tests
+`npx webjs source modules` prints a worked module, and `npx webjs source testing` and
+`npx webjs source progressive-enhancement` a test and a form bound to an action.
 
 In components, use Lit's APIs over raw DOM calls: `@click=${...}` and `ref()`,
 not `document.getElementById`, `document.querySelector` or `addEventListener`.
@@ -51,9 +58,7 @@ Style with Tailwind utilities on the kit's design tokens (`bg-background`, `text
 `border-border`, `rounded-lg`; the theme lives in `styles/globals.css`), never hard-coded colours or hand-written
 CSS. Change the whole look with a theme: `npx webjs ui init --preset <code>` from webjs.dev/ui/create.
 
-`npx webjs help` lists every CLI command, and `npx webjs stop` stops a server you started. The `webjs`
-MCP server in `.claude.json` answers the same questions as tools (`list_routes`, `list_actions`,
-`list_components`, `check`, `source`, `ui`).
+`npx webjs help` lists every CLI command, and `npx webjs stop` stops a server you started.
 Hooks, so you need not open them: each edit returns that file's `webjs check` and type
 errors (fix them at once); `extends HTMLElement`, an em-dash, a spaced hyphen or semicolon
 as a pause in comments or markdown, and a commit on `main` are refused; a server-only import

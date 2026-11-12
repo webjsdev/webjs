@@ -28,7 +28,8 @@
  *
  * Local only: it calls a model and costs money per build.
  */
-import { mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, createWriteStream } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, readlinkSync, lstatSync, unlinkSync, rmSync, createWriteStream } from 'node:fs';
+import { createServer } from 'node:net';
 import { parse as parsePath } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -54,7 +55,7 @@ Work ONLY inside that directory. Start by reading its AGENTS.md. Dependencies ar
 
 ${spec.trim()}
 
-When done, verify it yourself: \`npx webjs check\` must report no violations, \`npx webjs typecheck\` must pass, \`npm test\` must pass, and the app must boot (\`npx webjs dev --port ${port}\`, then exercise the routes with curl, then STOP the server). Do not leave any server running.
+When done, verify it yourself: \`npx webjs check\` must report no violations, \`npx webjs typecheck\` must pass, \`npm test\` must pass, and the app must boot and serve its routes. If you start a server, use port ${port}, and stop it before you finish: leave no server running.
 
 Then reply with a short report: what you built, the verification results, and every point of friction (anything in WebJs that did not work the way your Lit / Next.js habits expected).`;
 }
@@ -69,19 +70,36 @@ export function metricsOf(transcriptPath) {
   let toolCalls = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let costUsd = null;
+  // stream-json repeats one API message once per content block (thinking,
+  // text, tool_use), each carrying the same id, so usage is counted once per
+  // message id. Counting it per event inflated input 2.2 to 2.9 times and
+  // tracked how much an agent narrated (#1697). A later event of a message can
+  // report more output than the first (it is written as the message streams),
+  // so each field keeps its largest value seen for the id.
+  /** @type {Map<string, { input: number, output: number }>} */
+  const perMessage = new Map();
   let durationMs = 0;
   let resultText = '';
   for (const line of readFileSync(transcriptPath, 'utf8').split('\n')) {
     if (!line) continue;
     let e;
     try { e = JSON.parse(line); } catch { continue; }
-    if (e.type === 'result') { durationMs = e.duration_ms || 0; resultText = e.result || ''; continue; }
+    if (e.type === 'result') { durationMs = e.duration_ms || 0; resultText = e.result || ''; costUsd = e.total_cost_usd ?? null; continue; }
     const content = e.message?.content;
     if (!Array.isArray(content)) continue;
     if (e.type === 'assistant') {
       const u = e.message.usage || {};
-      inputTokens += (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-      outputTokens += u.output_tokens || 0;
+      const input = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      const output = u.output_tokens || 0;
+      const id = e.message.id;
+      if (!id) {
+        inputTokens += input;
+        outputTokens += output;
+      } else {
+        const seen = perMessage.get(id) || { input: 0, output: 0 };
+        perMessage.set(id, { input: Math.max(seen.input, input), output: Math.max(seen.output, output) });
+      }
       for (const c of content) {
         if (c?.type !== 'tool_use') continue;
         toolCalls++;
@@ -106,7 +124,8 @@ export function metricsOf(transcriptPath) {
       }
     }
   }
-  return { firsts, rework, toolCalls, inputTokens, outputTokens, minutes: Math.round(durationMs / 600) / 100, report: resultText };
+  for (const m of perMessage.values()) { inputTokens += m.input; outputTokens += m.output; }
+  return { firsts, rework, toolCalls, inputTokens, outputTokens, costUsd, minutes: Math.round(durationMs / 600) / 100, report: resultText };
 }
 
 function grade(appDir, cli) {
@@ -146,20 +165,57 @@ export async function prepareApp({ framework, parent, appName, template = 'full-
 
 /**
  * The environment a headless agent runs in: none of this session's markers,
- * and, given a build directory, a temp directory of its own inside it.
- * Concurrent builds shared /tmp, so one build's curl cookie jar was read by
- * another, which then chased a session it never created for about 45 turns.
+ * and, given a build directory, a temp directory of its own. Concurrent builds
+ * shared /tmp, so one build's curl cookie jar was read by another, which then
+ * chased a session it never created for about 45 turns. The directory is a
+ * short one under /tmp, linked from `<buildDir>/tmp`: inside the build
+ * directory its path was long enough that Playwright's socket under it passed
+ * the 108-byte Unix socket limit, and the browser never launched (#1697, nine
+ * turns over four builds).
  * @param {string} [buildDir]
  */
 export function agentEnv(buildDir) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_CODE') || k === 'CLAUDECODE') delete env[k];
   if (buildDir) {
-    const tmp = join(buildDir, 'tmp');
-    mkdirSync(tmp, { recursive: true });
+    mkdirSync(buildDir, { recursive: true });
+    const tmp = mkdtempSync(join(existsSync('/tmp') ? '/tmp' : tmpdir(), 'wje-'));
+    // A re-run into the same build dir finds the previous link: lstat sees it
+    // even when its /tmp target is gone (existsSync follows it and says no,
+    // so symlinkSync then threw EEXIST). It is replaced, and the previous
+    // run's temp dir removed, so the link always names this run's TMPDIR
+    // and old wje-* dirs do not pile up. A real directory (a build dir from
+    // before the link) is left alone.
+    const link = join(buildDir, 'tmp');
+    let previous = null;
+    try { previous = lstatSync(link); } catch { /* none yet */ }
+    if (previous?.isSymbolicLink()) {
+      const old = readlinkSync(link);
+      unlinkSync(link);
+      if (/\/wje-[^/]+$/.test(old)) rmSync(old, { recursive: true, force: true });
+      previous = null;
+    }
+    if (!previous) symlinkSync(tmp, link);
     env.TMPDIR = env.TMP = env.TEMP = tmp;
   }
   return env;
+}
+
+/**
+ * A port nothing is listening on, from the OS. Builds started as separate
+ * runs used the same fixed port base, so two dev servers met on one port and
+ * an agent wrote into another build's database (#1697, eleven turns).
+ * @returns {Promise<number>}
+ */
+export function freePort() {
+  return new Promise((ok, fail) => {
+    const srv = createServer();
+    srv.once('error', fail);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = /** @type {import('node:net').AddressInfo} */ (srv.address());
+      srv.close(() => ok(port));
+    });
+  });
 }
 
 /** Where the eval host keeps a system Chromium, which Playwright's MCP cannot find on its own. */
@@ -231,17 +287,39 @@ const WORKSPACE_APPS = new Set(['example-blog', 'gallery', 'website']);
  * the workspace apps.
  * @param {string} framework @param {string} app
  */
-function linkNodeModules(framework, app) {
+export function linkNodeModules(framework, app) {
   const src = join(framework, 'node_modules');
   const dst = join(app, 'node_modules');
   mkdirSync(dst);
   for (const name of readdirSync(src)) {
+    if (name === '.bin') { linkBin(join(src, name), join(dst, name)); continue; }
     if (name !== '@webjsdev') { symlinkSync(join(src, name), join(dst, name)); continue; }
     mkdirSync(join(dst, name));
     for (const pkg of readdirSync(join(src, name))) {
       if (WORKSPACE_APPS.has(pkg)) continue;
       linkPublished(join(src, name, pkg), join(dst, name, pkg));
     }
+  }
+}
+
+/**
+ * `node_modules/.bin`, entry by entry. npm writes each bin as a relative link
+ * (`../@webjsdev/cli/bin/webjs.js`), and linking the directory whole resolved
+ * those against the checkout it physically lives in, so in a linked worktree
+ * every eval app's `npx webjs` ran the PRIMARY checkout's CLI instead of the
+ * framework under test (#1697). A framework package's bin keeps its relative
+ * target, which now lands on the app's own link to that package; any other
+ * bin links to the original entry.
+ * @param {string} srcBin @param {string} dstBin
+ */
+function linkBin(srcBin, dstBin) {
+  mkdirSync(dstBin);
+  for (const entry of readdirSync(srcBin)) {
+    const from = join(srcBin, entry);
+    let target = null;
+    try { target = readlinkSync(from); } catch { /* a real file */ }
+    if (target && target.startsWith('../@webjsdev/')) symlinkSync(target, join(dstBin, entry));
+    else symlinkSync(from, join(dstBin, entry));
   }
 }
 
@@ -289,10 +367,10 @@ export function assertNoAncestorInstructions(out) {
 const yn = (v) => (v === true ? 'pass' : v === false ? 'FAIL' : '-');
 
 function printTable(results) {
-  console.log('build                 first: check type test | draft: check type test | final: check type test | rework calls  in(M) min');
+  console.log('build                 first: check type test | draft: check type test | final: check type test | rework calls  in(M) cost  min');
   for (const r of results) {
     const f = r.firsts || {};
-    console.log(`${r.name.padEnd(21)} ${yn(f.check).padEnd(5)} ${yn(f.typecheck).padEnd(4)} ${yn(f.test).padEnd(4)}  | ${yn(r.draft?.check).padEnd(5)} ${yn(r.draft?.typecheck).padEnd(4)} ${yn(r.draft?.test).padEnd(4)}  | ${yn(r.final?.check).padEnd(5)} ${yn(r.final?.typecheck).padEnd(4)} ${yn(r.final?.test).padEnd(4)}  | ${String(r.rework).padEnd(6)} ${String(r.toolCalls).padEnd(5)} ${(r.inputTokens / 1e6).toFixed(1).padEnd(5)} ${r.wallMinutes}`);
+    console.log(`${r.name.padEnd(21)} ${yn(f.check).padEnd(5)} ${yn(f.typecheck).padEnd(4)} ${yn(f.test).padEnd(4)}  | ${yn(r.draft?.check).padEnd(5)} ${yn(r.draft?.typecheck).padEnd(4)} ${yn(r.draft?.test).padEnd(4)}  | ${yn(r.final?.check).padEnd(5)} ${yn(r.final?.typecheck).padEnd(4)} ${yn(r.final?.test).padEnd(4)}  | ${String(r.rework).padEnd(6)} ${String(r.toolCalls).padEnd(5)} ${(r.inputTokens / 1e6).toFixed(1).padEnd(5)} ${(r.costUsd == null ? '-' : '$' + r.costUsd.toFixed(2)).padEnd(5)} ${r.wallMinutes}`);
   }
   const all3 = (o) => o && o.check === true && o.typecheck === true && o.test === true;
   console.log(`first attempt all three: ${results.filter((r) => all3(r.firsts)).length}/${results.length}; draft all three: ${results.filter((r) => all3(r.draft)).length}/${results.length}; final all three: ${results.filter((r) => all3(r.final)).length}/${results.length}`);
@@ -306,21 +384,22 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     process.exit(0);
   }
   const specName = arg('spec');
-  if (!specName) { console.error('usage: build.mjs --spec <roomly|pollster|trackr|inbox> [--runs N] [--jobs N] [--model haiku] [--framework <checkout>] [--label after] [--out <dir>] [--port-base 8900]'); process.exit(2); }
+  if (!specName) { console.error('usage: build.mjs --spec <roomly|pollster|trackr|inbox> [--runs N] [--jobs N] [--model haiku] [--framework <checkout>] [--label after] [--out <dir>] [--port-base <n>]'); process.exit(2); }
   const spec = readFileSync(join(HERE, 'specs', `${specName}.md`), 'utf8');
   const runs = Number(arg('runs', '1'));
   const jobs = Number(arg('jobs', '3'));
   const out = resolve(arg('out', join('/var/tmp', 'webjs-builds')));
   assertNoAncestorInstructions(out);
   const opts = { spec, specName, out, framework: resolve(arg('framework', REPO)), model: arg('model', 'haiku'), label: arg('label', 'after'), timeoutS: Number(arg('timeout', '5400')) };
-  // A distinct --port-base per concurrent invocation keeps two arms' dev servers apart.
-  const portBase = Number(arg('port-base', '8900'));
+  // Each build asks the OS for a free port; --port-base pins them instead.
+  const portBase = arg('port-base') ? Number(arg('port-base')) : null;
   const results = [];
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(jobs, runs) }, async (_, w) => {
     while (next < runs) {
       const index = ++next;
-      results.push(await oneBuild({ ...opts, index, port: portBase + index * 10 + w }));
+      const port = portBase === null ? await freePort() : portBase + index * 10 + w;
+      results.push(await oneBuild({ ...opts, index, port }));
     }
   }));
   results.sort((a, b) => a.name.localeCompare(b.name));

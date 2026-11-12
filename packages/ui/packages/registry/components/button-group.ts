@@ -46,8 +46,8 @@ const ORIENTATIONS = {
 export type ButtonGroupOrientation = keyof typeof ORIENTATIONS;
 
 /** The group container. Pair with `role="group"` and `data-orientation`. */
-export function buttonGroupClass(opts: { orientation?: ButtonGroupOrientation } = {}): string {
-  return cn(BASE, ORIENTATIONS[opts.orientation ?? 'horizontal']);
+export function buttonGroupClass(opts: { orientation?: ButtonGroupOrientation } & { className?: string } = {}): string {
+  return cn(BASE, ORIENTATIONS[opts.orientation ?? 'horizontal'], opts.className);
 }
 
 /**
@@ -56,7 +56,7 @@ export function buttonGroupClass(opts: { orientation?: ButtonGroupOrientation } 
  * Like cva, it merges a `className` into the result.
  */
 export function buttonGroupVariants(opts: { orientation?: ButtonGroupOrientation } & { className?: string } = {}): string {
-  return cn(buttonGroupClass(opts), opts.className);
+  return buttonGroupClass(opts);
 }
 
 /** A non-interactive label or value sitting inside the group. */

@@ -72,7 +72,10 @@ above it is refused: Claude Code loads those from every ancestor, so a build
 under `~/.claude/` would follow the machine owner's own instructions. The app's
 `node_modules` links the framework checkout's entries except the in-repo apps
 (`@webjsdev/example-blog`, `gallery`, `website`), which no real install has. The transcript is stream-json, so `replay.mjs`
-reads it as it is.
+reads it as it is. Each build gets a dev-server port from the OS (pin them with
+`--port-base <n>`) and its own short temp directory under `/tmp`, linked from
+`<build>/tmp`, so two arms run at once never share a port, a database or a
+cookie jar, and Playwright's socket path stays under the Unix limit.
 
 ```sh
 node scripts/agent-eval/build.mjs --spec roomly                          # 1 build, Haiku

@@ -744,7 +744,7 @@
       "demoed": true
     },
     "setOnError": {
-      "demoed": true
+      "exempt": "deferred: agent-facing (the APM hook an app's instrumentation.ts registers, documented on the docs-site error-handling page); the scaffold dropped its optional instrumentation.ts to stay minimal (#1697)"
     },
     "setSerializer": {
       "exempt": "internal: framework/CLI plumbing"

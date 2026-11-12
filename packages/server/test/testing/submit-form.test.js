@@ -37,6 +37,7 @@ async function makeApp() {
   await mkdir(join(dir, 'app/plain'), { recursive: true });
   await mkdir(join(dir, 'app/tricky'), { recursive: true });
   await mkdir(join(dir, 'app/poll'), { recursive: true });
+  await mkdir(join(dir, 'app/lonely'), { recursive: true });
   await mkdir(join(dir, 'modules/acct/actions'), { recursive: true });
 
   await writeFile(join(dir, 'modules/acct/actions/signup.server.ts'),
@@ -71,6 +72,13 @@ export default () => html\`
   <form action=\${signup}><input name="email"></form>
   <form action=\${subscribe}><input name="list"></form>
 \`;
+`);
+  // Only a layout-style bound form with no fields (a logout button), as on a
+  // page whose own form is not rendered for this user.
+  await writeFile(join(dir, 'app/lonely/page.ts'),
+    `import { html } from ${CORE};
+import { subscribe } from '../../modules/acct/actions/newsletter.server.ts';
+export default () => html\`<form action=\${subscribe}><button>Log out</button></form>\`;
 `);
   // A page whose markup breaks a naive form scan two ways.
   await writeFile(join(dir, 'app/tricky/page.ts'),
@@ -173,6 +181,33 @@ test('fields that single out no form are refused, naming every candidate', async
     () => submitForm(a.handle, '/two', { nope: 'x' }),
     /fit none of them/,
   );
+});
+
+test('a lone bound form holding none of the submitted fields is refused, not posted (#1697)', async () => {
+  // A round 9 eval build tested a cross-user cancel on a page that rendered no
+  // cancel form for that user; the helper posted the layout's logout instead,
+  // and the 303 it got read as the cancel being refused.
+  const a = await handler();
+  await assert.rejects(
+    () => submitForm(a.handle, '/lonely', { bookingId: '1' }),
+    (err) => /no form on \/lonely .*has the submitted fields \(bookingId\)/.test(err.message)
+      && /which has no fields/.test(err.message)
+      && /not rendered for\s+this request/.test(err.message),
+  );
+  const noFields = await submitForm(a.handle, '/lonely', {});
+  assert.equal(noFields.status, 303, 'a field-less submit still posts the field-less form');
+  const forced = await submitForm(a.handle, '/lonely', { bookingId: '1' }, { match: 'Log out' });
+  assert.equal(forced.status, 303, 'and { match } posts it on purpose');
+});
+
+test('a lone bound form with fields of its own is posted even when the test sends other fields', async () => {
+  // A review of #1698: refusing whenever no submitted field matched also
+  // refused a test that posts a field the form lacks on purpose (a
+  // mass-assignment check) and fields the scan cannot see. Only a field-less
+  // form (a logout button) is refused now.
+  const a = await handler();
+  const res = await submitForm(a.handle, '/signup', { role: 'admin' });
+  assert.equal(res.status, 422, 'posted to the signup action, which refused the missing email');
 });
 
 test('an unbound form is reported as unbound, not silently submitted', async () => {

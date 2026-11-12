@@ -10,7 +10,10 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync, existsSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { metricsOf, promptFor, agentEnv, evalMcpConfig } from '../../scripts/agent-eval/build.mjs';
+import { realpathSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { symlinkSync } from 'node:fs';
+import { metricsOf, promptFor, agentEnv, evalMcpConfig, freePort, linkNodeModules } from '../../scripts/agent-eval/build.mjs';
 
 /** A stream-json transcript from a list of events. */
 function transcript(events) {
@@ -54,7 +57,11 @@ test('the prompt carries the spec and names no WebJs API beyond its CLI', () => 
   const p = promptFor('Build "X", a thing.', '/tmp/app', 8900);
   assert.match(p, /Build "X", a thing\./);
   assert.match(p, /\/tmp\/app/);
-  assert.match(p, /webjs dev --port 8900/);
+  // #1697: the app must boot and serve its routes, and the prompt does not
+  // say how (a dev server plus curl was a loop no real user asks for).
+  assert.match(p, /boot and serve its routes/);
+  assert.match(p, /use port 8900/);
+  assert.doesNotMatch(p, /curl/);
   assert.doesNotMatch(p, /WebComponent|createAuth|html`|'use server'/, 'the frame teaches nothing the brief should');
 });
 
@@ -62,13 +69,27 @@ test('each build gets a temp directory of its own, so concurrent builds never sh
   const dir = mkdtempSync(join(tmpdir(), 'eval-env-'));
   try {
     const env = agentEnv(dir);
-    assert.equal(env.TMPDIR, join(dir, 'tmp'));
     assert.equal(env.TMP, env.TMPDIR);
     assert.ok(existsSync(env.TMPDIR), 'and it exists');
-    assert.notEqual(agentEnv(join(dir, 'b')).TMPDIR, env.TMPDIR, 'a second build gets another');
+    assert.equal(realpathSync(join(dir, 'tmp')), realpathSync(env.TMPDIR), 'linked from the build directory');
+    // #1697: Playwright puts a Unix socket under TMPDIR, and a socket path
+    // has a 108-byte limit, so the directory has to be short.
+    assert.ok(env.TMPDIR.length < 32, `a short path (${env.TMPDIR})`);
+    const other = agentEnv(join(dir, 'b'));
+    assert.notEqual(other.TMPDIR, env.TMPDIR, 'a second build gets another');
+    rmSync(env.TMPDIR, { recursive: true, force: true });
+    rmSync(other.TMPDIR, { recursive: true, force: true });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('freePort hands out a port nothing is listening on', async () => {
+  const port = await freePort();
+  assert.ok(port > 0);
+  const srv = createServer();
+  await new Promise((ok, fail) => { srv.once('error', fail); srv.listen(port, '127.0.0.1', ok); });
+  await new Promise((ok) => srv.close(ok));
 });
 
 test('the agent MCP config is a copy pointing Playwright at the system Chromium', () => {
@@ -86,6 +107,93 @@ test('the agent MCP config is a copy pointing Playwright at the system Chromium'
     assert.deepEqual(JSON.parse(readFileSync(join(app, '.claude.json'), 'utf8')), original, 'the app is untouched');
     // With no browser on the host the copy is the app's config as it is.
     assert.deepEqual(JSON.parse(readFileSync(evalMcpConfig(app, dir, null), 'utf8')), original);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// #1697: a framework checkout whose node_modules is a link into another
+// checkout (a linked worktree) must still hand the app ITS CLI through npx.
+test('an eval app runs the framework under test through npx, not the checkout its .bin lives in', () => {
+  const root = mkdtempSync(join(tmpdir(), 'eval-bin-'));
+  try {
+    const mk = (dir, ver) => {
+      mkdirSync(join(dir, 'packages/cli/bin'), { recursive: true });
+      writeFileSync(join(dir, 'packages/cli/package.json'), JSON.stringify({ name: '@webjsdev/cli', files: ['bin'] }));
+      writeFileSync(join(dir, 'packages/cli/bin/webjs.js'), `// ${ver}\n`);
+    };
+    const primary = join(root, 'primary');
+    const worktree = join(root, 'worktree');
+    mk(primary, 'primary');
+    mk(worktree, 'worktree');
+    // The primary's install: npm's relative bin link and a workspace link.
+    mkdirSync(join(primary, 'node_modules/.bin'), { recursive: true });
+    mkdirSync(join(primary, 'node_modules/@webjsdev'), { recursive: true });
+    symlinkSync('../../packages/cli', join(primary, 'node_modules/@webjsdev/cli'));
+    symlinkSync('../@webjsdev/cli/bin/webjs.js', join(primary, 'node_modules/.bin/webjs'));
+    mkdirSync(join(primary, 'node_modules/left-pad'));
+    // The worktree: .bin linked whole into the primary, @webjsdev its own.
+    mkdirSync(join(worktree, 'node_modules/@webjsdev'), { recursive: true });
+    symlinkSync(join(primary, 'node_modules/.bin'), join(worktree, 'node_modules/.bin'));
+    symlinkSync(join(primary, 'node_modules/left-pad'), join(worktree, 'node_modules/left-pad'));
+    symlinkSync(join(worktree, 'packages/cli'), join(worktree, 'node_modules/@webjsdev/cli'));
+    const app = join(root, 'app');
+    mkdirSync(app);
+    linkNodeModules(worktree, app);
+    assert.match(readFileSync(join(app, 'node_modules/.bin/webjs'), 'utf8'), /worktree/, 'the bin resolves to the worktree CLI');
+    assert.ok(existsSync(join(app, 'node_modules/left-pad')), 'other packages are still linked');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// #1697: stream-json writes one event per content block of a message, each
+// with the message's full usage, so summing per event counted it 2 to 3 times.
+test('usage is counted once per API message, however many blocks it has', () => {
+  const block = (type) => ({ type: 'assistant', message: { id: 'msg_1', usage: { input_tokens: 10, cache_read_input_tokens: 990, output_tokens: 5 }, content: [{ type }] } });
+  const { file, dir } = transcript([
+    block('thinking'), block('text'),
+    { type: 'assistant', message: { id: 'msg_1', usage: { input_tokens: 10, cache_read_input_tokens: 990, output_tokens: 5 }, content: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'ls' } }] } },
+    { type: 'assistant', message: { id: 'msg_2', usage: { input_tokens: 20, cache_read_input_tokens: 1980, output_tokens: 7 }, content: [{ type: 'text' }] } },
+    { type: 'result', duration_ms: 60_000, result: 'ok', total_cost_usd: 0.42 },
+  ]);
+  try {
+    const m = metricsOf(file);
+    assert.equal(m.inputTokens, 3000, 'msg_1 once (1000) plus msg_2 (2000), not msg_1 three times');
+    assert.equal(m.outputTokens, 12);
+    assert.equal(m.toolCalls, 1);
+    assert.equal(m.costUsd, 0.42, 'the run cost from the result event');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A review of #1698: a message's later events can report more output than its
+// first, since usage is written as the message streams.
+test('each message keeps the largest usage any of its events reports', () => {
+  const ev = (out) => ({ type: 'assistant', message: { id: 'msg_1', usage: { input_tokens: 10, cache_read_input_tokens: 990, output_tokens: out }, content: [{ type: 'text' }] } });
+  const { file, dir } = transcript([ev(2), ev(40), ev(15)]);
+  try {
+    const m = metricsOf(file);
+    assert.equal(m.inputTokens, 1000);
+    assert.equal(m.outputTokens, 40, 'the largest output the message reported, not its first');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A review of #1698: re-running into the same build dir after /tmp was
+// cleaned left a dangling link, and symlinkSync threw EEXIST.
+test('a re-run into the same build dir replaces the previous temp link', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'eval-rerun-'));
+  try {
+    const first = agentEnv(dir);
+    rmSync(first.TMPDIR, { recursive: true, force: true });
+    const second = agentEnv(dir);
+    assert.equal(realpathSync(join(dir, 'tmp')), realpathSync(second.TMPDIR), 'the link names the new run');
+    const third = agentEnv(dir);
+    assert.ok(!existsSync(second.TMPDIR), 'and the previous run\'s temp dir is removed');
+    rmSync(third.TMPDIR, { recursive: true, force: true });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

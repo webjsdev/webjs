@@ -32,15 +32,15 @@ export const FEATURE_CATALOG = [
       { need: 'Auth', names: ['createAuth', 'Credentials', 'GitHub', 'Google', 'AuthError'], note: "Auth.js's API: auth(), signIn(), signOut(), handlers" },
       { need: 'Sessions and cookies', names: ['session', 'getSession', 'cookies', 'headers'] },
       { need: 'Redirects and errors', names: ['redirect', 'permanentRedirect', 'notFound', 'forbidden', 'unauthorized'] },
-      { need: 'Caching', names: ['cache', 'revalidatePath', 'revalidateTag', 'revalidateAll'] },
+      { need: 'Caching', names: ['cache', 'revalidatePath', 'revalidateTag', 'revalidateAll'], note: 'a page renders per request unless it exports revalidate' },
       { need: 'Rate limits and CORS', names: ['rateLimit', 'cors', 'clientIp'] },
       { need: 'File uploads', names: ['getFileStore', 'setFileStore', 'diskStore', 'generateKey', 'signedUrl', 'verifySignedUrl'] },
       { need: 'Realtime', names: ['broadcast'], note: 'a route.ts exporting WS handles WebSocket connections' },
       { need: 'Streaming responses', names: ['stream', 'streamResponse', 'acceptsStream'] },
-      { need: 'Route handlers', names: ['json', 'readBody', 'route'] },
+      { need: 'Route handlers', names: ['json', 'readBody', 'route'], note: 'route.ts exports GET(req, { params }), params awaited' },
       { need: 'SEO', names: ['sitemap', 'sitemapIndex', 'robots'] },
       { need: 'Env validation', names: ['validateEnv'], note: 'an env.ts schema checks process.env at boot' },
-      { need: 'Server tests', names: ['testRequest', 'submitForm', 'invokeActionForTest', 'loginAndGetCookies', 'createRequestHandler'] },
+      { need: 'Server tests', names: ['testRequest', 'submitForm', 'invokeActionForTest', 'loginAndGetCookies', 'createRequestHandler'], note: 'npx webjs test gives a SQLite app a fresh migrated database, never db/dev.db' },
     ],
   },
   {
@@ -78,5 +78,11 @@ export function featureCatalog(catalog = FEATURE_CATALOG) {
       out.push(`  ${g.need}: ${g.names.join(', ')}${g.note ? ` (${g.note})` : ''}`);
     }
   }
+  out.push(
+    '',
+    'Database: Drizzle tables in db/schema.server.ts; npx webjs db generate then',
+    'npx webjs db migrate; npx webjs db seed then runs db/seed.server.ts once as a',
+    'plain script (its top-level code inserts the rows; make it safe to re-run).',
+  );
   return out.join('\n');
 }

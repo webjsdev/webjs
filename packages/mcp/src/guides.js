@@ -61,14 +61,15 @@ One folder per feature under modules/<feature>/, and thin routes:
   modules/posts/actions/create-post.server.ts   'use server', one action per file
   modules/posts/queries/list-posts.server.ts    server-only reads, called by pages
   modules/posts/components/post-list.ts         Lit components (these ship)
+  modules/posts/utils/slug.ts                   pure helpers the feature shares
   modules/posts/types.ts                        types derived from the schema
   app/posts/page.ts                             awaits a query, renders components
   db/schema.server.ts                           every table, one defineRelations
 
 Each table goes in db/schema.server.ts with its row type beside it
 (export type Post = typeof posts.$inferSelect), and its relations in the one
-defineRelations call. modules/users/ in a fresh app is a working example of
-the whole shape: read it, then replace it with the app's own features.
+defineRelations call. A test per feature goes in test/posts/ (see the testing
+guide).
 
 Next: npx webjs source progressive-enhancement (or optimistic-ui, type-safety, data-flow)
 Docs: https://webjs.dev/docs/conventions`,

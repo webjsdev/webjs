@@ -3,8 +3,8 @@
  *
  * Creates a directory with:
  *   - app/ with a root layout + page
- *   - modules/ skeleton
- *   - components/ with a theme toggle
+ *   - an empty modules/ for the features (AGENTS.md lays out a module)
+ *   - the UI kit's components.json and theme, with no kit code installed
  *   - test/unit/ and test/e2e/ with example tests
  *   - AGENTS.md, CLAUDE.md
  *   - package.json with WebJs deps + test scripts
@@ -95,48 +95,17 @@ function resolveUiRegistryRoot() {
 const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 
 /**
- * Add kit components to a freshly initialised app through the kit's own CLI
- * (`webjsui add`), so the files are byte for byte what an agent's
- * `npx webjs ui add <name>` writes: baked for the app's style, imports
- * rewritten to its cn() helper. Local-first, so it makes no network call.
- * @param {string} appDir
- * @param {string[]} names
- */
-function addUiComponents(appDir, names) {
-  const bin = resolve(UI_REGISTRY_ROOT, '..', '..', 'bin', 'webjsui.js');
-  const r = spawnSync(process.execPath, [bin, 'add', ...names, '--cwd', appDir, '--yes', '--no-deps'], { encoding: 'utf8' });
-  if (r.status !== 0) {
-    throw new Error(`[webjs create] could not add ${names.join(', ')} from the UI kit: ${(r.stderr || r.stdout || '').trim()}`);
-  }
-}
-
-/**
- * Write `lib/utils/cn.ts` (the `cn()` helper) and `components.json` so the
- * scaffolded app is pre-initialised for `webjs ui add`. Reads the registry's
- * `lib/utils.ts` verbatim and writes it under `lib/utils/cn.ts` in the
- * scaffolded app so cn() sits in the same folder as the other browser-safe
- * helpers (ui.ts, format.ts).
+ * Write `components.json` and the kit theme so the scaffolded app is
+ * pre-initialised for `webjs ui add`. No kit code is pre-installed: the first
+ * `add` writes `lib/utils/cn.ts` (and `dom.ts` when a component needs it) as
+ * registry dependencies, so an agent never reads library code it did not ask
+ * for (#1697).
  *
  * @param {string} appDir
  */
 async function writeUiBootstrap(appDir) {
   // Caller (scaffoldApp) has already invoked assertUiRegistryAvailable(),
   // so the source files below are guaranteed to exist.
-
-  // 1) lib/utils/cn.ts: the cn() helper (pure; safe to import into a page).
-  const utilsContent = await readFile(
-    join(UI_REGISTRY_ROOT, 'lib', 'utils.ts'), 'utf8',
-  );
-  await mkdir(join(appDir, 'lib', 'utils'), { recursive: true });
-  await writeFile(join(appDir, 'lib', 'utils', 'cn.ts'), utilsContent);
-
-  // 1b) lib/utils/dom.ts: the client-only DOM helper (onBeforeCache). Split out
-  // of cn.ts so importing cn() does not pin a page to the browser (#819). Any
-  // `webjs ui add` component that uses onBeforeCache imports it from here.
-  const domContent = await readFile(
-    join(UI_REGISTRY_ROOT, 'lib', 'dom.ts'), 'utf8',
-  );
-  await writeFile(join(appDir, 'lib', 'utils', 'dom.ts'), domContent);
 
   // 2) components.json: byte for byte what `webjsui init` writes (see the
   // DEFAULT_ALIASES / DEFAULT_TAILWIND_CSS constants in
@@ -277,11 +246,10 @@ function setThemeVars(css, selector, vars) {
 
 /**
  * Fail loudly when the @webjsdev/ui registry is not on disk. The scaffold
- * reads component sources, the cn() helper, and the @webjsdev/ui theme from
- * UI_REGISTRY_ROOT and weaves them into a generated app/page.ts that
- * imports `components/ui/button.ts`. If the registry is missing, the
- * generated app boots to ERR_MODULE_NOT_FOUND on first request, which is
- * a confusing failure for end-users to debug.
+ * reads the @webjsdev/ui theme from UI_REGISTRY_ROOT, and the app's first
+ * `webjs ui add` copies components and the cn() helper from it. If the
+ * registry is missing, the scaffold writes an unstyled app and every add
+ * fails, which is a confusing failure for end-users to debug.
  *
  * The check guards against an @webjsdev/ui published tarball that forgets
  * to ship `packages/registry/` in its `files` array (the bug fixed in
@@ -785,8 +753,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'test/hello/browser/hello.test.js',
     'test/hello/e2e/hello.test.ts',
     'web-test-runner.config.js',
-    // Optional boot-time APM hook (setOnError). Delete if unused.
-    'instrumentation.ts',
     '.env.example',
     // Shipped without a dot (npm strips a published .gitignore) and renamed on copy.
     'gitignore',
@@ -1246,10 +1212,23 @@ export type ActionResult<T> =
   | { success: false; error: string; status: number };
 `);
 
+    // The shared AGENTS.md lays out a module but names no example, since the
+    // full-stack app ships none. Say what this template's users module is, so
+    // it is replaced rather than kept in the finished app (#1697).
+    const agentsPath = join(appDir, 'AGENTS.md');
+    const agents = await readFile(agentsPath, 'utf8');
+    const anchor = /the feature's tests\r?\n/.exec(agents);
+    if (!anchor) {
+      throw new Error('[webjs create] templates/AGENTS.md lost the module layout line the api template annotates ("the feature\'s tests"); update the anchor in create.js.');
+    }
+    const at = anchor.index + anchor[0].length;
+    await writeFile(agentsPath, agents.slice(0, at)
+      + '`modules/users/` with `app/api/users/` is an example of that layout: replace it with the app\'s own features.\n'
+      + agents.slice(at));
   }
 
   if (!isApi) {
-    // The UI template: layout + page + theme toggle + Tailwind
+    // The UI template: layout + page + Tailwind
 
     // The Tailwind stylesheet is compiled from public/input.css (written below)
     // to a STATIC public/tailwind.css by css:build, and lib/utils/ui.ts helpers
@@ -1291,17 +1270,9 @@ export type ActionResult<T> =
     assertUiRegistryAvailable();
 
     // Pre-initialise @webjsdev/ui so the scaffold boots ready for
-    // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
-    // styles/globals.css (the @webjsdev/ui theme).
+    // `webjs ui add <name>`: writes components.json + styles/globals.css (the
+    // @webjsdev/ui theme). No kit component is pre-installed (#1697).
     await writeUiBootstrap(appDir);
-    // The kit components the shell uses (the theme toggle's Button, the home
-    // page form's Input and Label), installed by the kit's own `add`
-    // (local-first, no network), exactly as `npx webjs ui add <name>` would.
-    addUiComponents(appDir, ['button', 'input', 'label']);
-
-    // Pages style with Tailwind on the kit's tokens. The app is pre-initialised
-    // for `webjs ui add <name>` via writeUiBootstrap above and ships one kit
-    // component, the Button its theme toggle uses; the rest are added on demand.
 
     // The @webjsdev/ui theme (`--color-primary`, `--color-card`, the @theme maps,
     // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
@@ -1326,8 +1297,7 @@ export type ActionResult<T> =
 @source "../lib/**/*.{ts,js}";
 
 /* Base styles, on the kit's tokens. The light tokens are on :root and the
-   dark ones on .dark, which the head script keeps in step with the saved
-   choice or the OS. color-scheme switches on the same class, so native
+   dark ones on .dark, which the head script keeps in step with the OS. color-scheme switches on the same class, so native
    controls and scrollbars always match the tokens: with JavaScript off the
    page is light throughout rather than light tokens over dark controls. */
 @layer base {
@@ -1390,81 +1360,34 @@ html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-to
 
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
-import '#components/theme-toggle.ts';
 
-/**
- * Root layout: the ONLY file that writes the document shell. It wires a neutral
- * design-token palette, the light/dark theme, and the Tailwind stylesheet, then
- * renders \${children} in a bare container. Grow it in place: add a header, nav,
- * footer, or reading column here as your app needs them. Design tokens live as
- * plain CSS custom properties (they resolve with JavaScript disabled) and are
- * mapped into Tailwind via @theme in public/input.css, so bg-background,
- * text-foreground, bg-card, bg-primary, and border-border all work.
- */
-
-// The favicon and manifest are app/icon.svg and app/manifest.webmanifest: the
-// framework links them into <head> itself, so nothing is declared here. Replace
-// the placeholder icon with this app's own.
-
-// LayoutProps types every layout argument (children, params, searchParams,
-// url) from the framework, so children is a TemplateResult rather than an
-// untyped value. Derive types like this everywhere instead of widening to
-// unknown.
+// The root layout, the only file that writes the document shell. Grow it in
+// place (header, nav, footer). The favicon and manifest are app/icon.svg and
+// app/manifest.webmanifest, which the framework links itself. Design tokens
+// are in styles/globals.css, mapped into Tailwind by public/input.css.
 export default function RootLayout({ children }: LayoutProps) {
-  // Read the in-flight request's CSP nonce so the theme-detection inline script
-  // passes strict CSP. Returns '' when no CSP nonce is set.
-  const nonce = cspNonce();
+  const nonce = cspNonce(); // '' unless CSP is on
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme, applied BEFORE first paint so a saved dark choice
-      // never flashes light. This is the one thing that cannot be a component:
-      // a component (the theme toggle included) upgrades only once its module
-      // has loaded, after the first paint. <theme-toggle> takes over from there
-      // (Lit's lifecycle), following the OS while the choice is "system". The
-      // dark tokens and color-scheme both switch on the .dark class; data-theme
-      // records a saved choice. With JavaScript off nothing sets .dark and the
-      // page is light throughout. Delete this block for a single-theme app.
+      // Dark mode follows the OS, set before first paint. The kit's dark
+      // tokens switch on the .dark class.
       (function(){
-        try {
-          var t = null;
-          try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
-          var el = document.documentElement;
-          if (t === 'light' || t === 'dark') el.dataset.theme = t;
-          el.classList.toggle('dark', t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches));
-        } catch (_) {}
+        var m = matchMedia('(prefers-color-scheme: dark)');
+        var set = function(){ document.documentElement.classList.toggle('dark', m.matches); };
+        set();
+        m.addEventListener('change', set);
       })();
     </script>
     <meta name="color-scheme" content="light">
-    <!-- Geist for text and headings and Geist Mono for code, the webjs.dev/ui
-         type. Swap these for your own fonts (and update --font-sans in
-         styles/globals.css, or apply a preset with webjs ui init --preset,
-         which prints the faces to load). -->
+    <!-- Geist and Geist Mono; swap them with --font-sans in styles/globals.css. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@400;500;700&display=swap">
-    <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
-         public/tailwind.css by css:build (run automatically by the dev and start
-         tasks; in dev it is also recompiled on request when a source changes, so
-         it never goes stale). A real stylesheet, so the app is fully styled with
-         JavaScript DISABLED (no in-browser compile).
-
-         asset() adds a content hash in production (/tailwind.css?v=...)
-         and the framework then serves it immutable for a year, so a deploy that
-         changes the CSS changes the url and no browser or CDN can serve the old
-         bytes. Mark the thing that FETCHES: do not wrap a <link rel="preload">
-         whose asset is really fetched by an @font-face url() in the CSS, or the
-         preload can never match the request and the file downloads twice. -->
-
+    <!-- Compiled from public/input.css by css:build, so the page is styled
+         with JavaScript off. asset() versions the url in production. -->
     <link rel="stylesheet" href=\${asset('/tailwind.css')}>
-    <!-- No style block here: the base styles, color-scheme and the pinned-header
-         offset are in public/input.css, on the kit's tokens, and every token
-         (the --header-h navbar height included) is in styles/globals.css. -->
-    <!-- Top navbar, on every page: brand on the left, links + theme toggle on
-         the right. It floats (no separator) and is in normal flow, so it just
-         scrolls with the page. To pin it, add fixed inset-x-0 top-0 z-20 to its
-         class (position: fixed, never sticky, which flickers on iOS during a nav).
-         Its height is the --header-h token, so keep it one row: nothing measures
-         it, which is what keeps the offset right after a client-router swap. -->
+    <!-- One row, --header-h tall. To pin it, add fixed inset-x-0 top-0 z-20
+         (fixed, never sticky, which flickers on iOS). -->
     <header class="max-w-5xl mx-auto px-4 sm:px-6 h-(--header-h) flex items-center justify-between gap-4">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-display font-bold tracking-tight">
         <span class="size-5.5 rounded-md bg-linear-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
@@ -1473,205 +1396,37 @@ export default function RootLayout({ children }: LayoutProps) {
       <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">Docs</a>
         <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">GitHub</a>
-        <theme-toggle></theme-toggle>
       </nav>
     </header>
-    <!-- Fill the viewport minus the navbar, so a short page has no spurious
-         scrollbar (min-h-dvh alone would overflow by the navbar height). -->
-    <main class="min-h-[calc(100dvh-var(--header-h))] max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    <!-- The viewport minus the header. Each page renders its own main element. -->
+    <div class="min-h-[calc(100dvh-var(--header-h))] max-w-5xl mx-auto px-4 sm:px-6 py-8">
       \${children}
-    </main>
+    </div>
   \`;
 }
 `);
 
-  // The example module: modules/<feature>/ holds a feature's server actions,
-  // queries, components, utils and types, and the routes in app/ stay thin.
-  // One tiny feature over the schema's users table: an action the home page
-  // binds as a form, a server-only query it reads, a component that renders
-  // the result, the types, and a test.
-  await mkdir(join(appDir, 'modules', 'users', 'actions'), { recursive: true });
-  await mkdir(join(appDir, 'modules', 'users', 'queries'), { recursive: true });
-  await mkdir(join(appDir, 'modules', 'users', 'components'), { recursive: true });
-  await writeFile(join(appDir, 'modules', 'users', 'components', 'user-list.ts'), `import { WebComponent, html } from '@webjsdev/core';
-import type { User } from '../types.ts';
+  // modules/ is where each feature goes (actions, queries, components, utils,
+  // types); the scaffold ships it empty, and AGENTS.md describes the layout.
+  await mkdir(join(appDir, 'modules'), { recursive: true });
+  await writeFile(join(appDir, 'modules', '.gitkeep'), '');
 
-/**
- * The users feature's component, written as in Lit. The page passes the users
- * in as a property (.users=\${users}); a component never queries the database
- * itself, since it also runs in the browser.
- */
-export class UserList extends WebComponent {
-  static properties = { users: { type: Array } };
-  declare users: User[];
-
-  constructor() {
-    super();
-    this.users = [];
-  }
-
-  render() {
-    if (this.users.length === 0) {
-      return html\`<p class="text-sm text-muted-foreground m-0">No users yet. Add the first one above.</p>\`;
-    }
-    return html\`
-      <ul class="grid gap-1 m-0 p-0 list-none text-sm text-muted-foreground">
-        \${this.users.map((user) => html\`<li>\${user.email}</li>\`)}
-      </ul>
-    \`;
-  }
-}
-UserList.register('user-list');
-`);
-  await writeFile(join(appDir, 'modules', 'users', 'types.ts'), `// The users feature's types, derived from the schema rather than written by hand.
-export type { User } from '#db/schema.server.ts';
-`);
-  await writeFile(join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts'), `import { desc } from 'drizzle-orm';
-import { db } from '#db/connection.server.ts';
-import { users } from '#db/schema.server.ts';
-import type { User } from '../types.ts';
-
-// A query: server-only code (a .server.ts file with no 'use server'), called
-// from a page, which runs on the server. Without 'use server' it is never
-// callable from the browser. One function per file.
-export async function listUsers(limit = 5): Promise<User[]> {
-  return db.select().from(users).orderBy(desc(users.createdAt)).limit(limit);
-}
-`);
-  await writeFile(join(appDir, 'modules', 'users', 'actions', 'add-user.server.ts'), `'use server';
-
-import { revalidatePath } from '@webjsdev/server';
-import type { ActionResult } from '@webjsdev/server';
-import { db } from '#db/connection.server.ts';
-import { users } from '#db/schema.server.ts';
-import type { User } from '../types.ts';
-
-// A server action, bound by the home page as <form action=\${addUser}>, so it
-// works with JavaScript off. A failure re-renders the page with this result on
-// actionData; a success redirects back and revalidatePath('/') refreshes it.
-// One function per file.
-export async function addUser(formData: FormData): Promise<ActionResult<User>> {
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
-    return { success: false, fieldErrors: { email: 'Enter a valid email address.' }, status: 422 };
-  }
-  // A duplicate email inserts nothing and returns no row, so only a duplicate
-  // is a field error; any other database error throws and renders the error
-  // page, where onError and the dev overlay see it.
-  const [user] = await db.insert(users).values({ email }).onConflictDoNothing().returning();
-  if (!user) {
-    return { success: false, fieldErrors: { email: 'That email is already added.' }, status: 422 };
-  }
-  revalidatePath('/');
-  return { success: true, data: user };
-}
-`);
-  await writeFile(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), `'use server';
-
-import { revalidatePath } from '@webjsdev/server';
-import type { ActionResult } from '@webjsdev/server';
-import { db } from '#db/connection.server.ts';
-import { users } from '#db/schema.server.ts';
-
-// A server action with no input, bound by the home page's Clear list button
-// as <form action=\${clearUsers}>. One function per file.
-export async function clearUsers(): Promise<ActionResult> {
-  await db.delete(users);
-  revalidatePath('/');
-  return { success: true };
-}
-`);
-  await mkdir(join(appDir, 'test', 'users'), { recursive: true });
-  await writeFile(join(appDir, 'test', 'users', 'users.test.ts'), `// The example module's test: its actions against the test database, which
-// \`webjs test\` prepares from db/schema.server.ts. Tests in one file run in
-// order, so the clear test runs last.
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { addUser } from '#modules/users/actions/add-user.server.ts';
-import { clearUsers } from '#modules/users/actions/clear-users.server.ts';
-import { listUsers } from '#modules/users/queries/list-users.server.ts';
-
-const form = (email: string) => {
-  const fd = new FormData();
-  fd.set('email', email);
-  return fd;
-};
-
-test('addUser refuses an invalid email', async () => {
-  const result = await addUser(form('not-an-email'));
-  assert.equal(result.success, false);
-  assert.ok(result.fieldErrors?.email);
-});
-
-test('addUser adds a user, which listUsers then returns', async () => {
-  const email = \`ada-\${Date.now()}@example.com\`;
-  const result = await addUser(form(email));
-  assert.equal(result.success, true);
-  assert.ok((await listUsers()).some((u) => u.email === email));
-});
-
-test('addUser refuses an email that is already added', async () => {
-  const email = \`grace-\${Date.now()}@example.com\`;
-  assert.equal((await addUser(form(email))).success, true);
-  const again = await addUser(form(email));
-  assert.equal(again.success, false);
-  assert.match(again.fieldErrors?.email ?? '', /already added/);
-});
-
-test('clearUsers empties the list', async () => {
-  await addUser(form(\`grace-\${Date.now()}@example.com\`));
-  const result = await clearUsers();
-  assert.equal(result.success, true);
-  assert.deepEqual(await listUsers(), []);
-});
-`);
-
-  // Home page: the logo, then the example module at work (a form bound to its
-  // action, its component rendering what its query returns). Reshape it into the app's real landing page.
-  await writeFile(join(appDir, 'app', 'page.ts'), `import { html, nothing } from '@webjsdev/core';
-import type { PageProps } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { inputClass } from '#components/ui/input.ts';
-import { labelClass } from '#components/ui/label.ts';
-import { addUser } from '#modules/users/actions/add-user.server.ts';
-import { clearUsers } from '#modules/users/actions/clear-users.server.ts';
-import { listUsers } from '#modules/users/queries/list-users.server.ts';
-import '#modules/users/components/user-list.ts';
+  // Home page: the logo. Reshape it into the app's real landing page.
+  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
 
 export const metadata = {
   title: '${displayName}',
 };
 
-// A thin route: the data and the mutation live in modules/users/.
-export default async function Home({ actionData }: PageProps) {
-  const latest = await listUsers();
-  const error = actionData?.fieldErrors?.email;
+export default function Home() {
   return html\`
-    <section class="py-16 flex flex-col items-center text-center gap-4">
-      <!-- The WebJs logo, one file per theme (public/brand/), as the heading. -->
+    <main class="py-16 flex flex-col items-center text-center gap-4">
       <h1 class="m-0">
         <img src="/brand/webjs-lockup-on-light.svg" alt="WebJs" width="228" height="60" class="block h-15 w-auto dark:hidden">
         <img src="/brand/webjs-lockup-on-dark.svg" alt="WebJs" width="228" height="60" class="hidden h-15 w-auto dark:block">
       </h1>
       <p class="text-muted-foreground max-w-lg m-0">Your WebJs app starts here. Edit app/page.ts.</p>
-    </section>
-    <!-- The example module (modules/users/): replace it with your own features. -->
-    <section class="mx-auto max-w-sm grid gap-4">
-      <form action=\${addUser} class="grid gap-3">
-        <div class="grid gap-2">
-          <label class=\${labelClass()} for="email">Email</label>
-          <input class=\${inputClass()} id="email" name="email" type="email" required
-            aria-invalid=\${error ? 'true' : nothing} aria-describedby=\${error ? 'email-error' : nothing}>
-          \${error ? html\`<p id="email-error" role="alert" class="text-sm text-destructive m-0">\${error}</p>\` : nothing}
-        </div>
-        <button class=\${buttonClass()} type="submit">Add user</button>
-      </form>
-      <user-list .users=\${latest}></user-list>
-      \${latest.length > 0 ? html\`
-        <form action=\${clearUsers}>
-          <button class=\${buttonClass({ variant: 'outline' })} type="submit">Clear list</button>
-        </form>\` : nothing}
-    </section>
+    </main>
   \`;
 }
 `);
@@ -1679,95 +1434,6 @@ export default async function Home({ actionData }: PageProps) {
   // AGENTS.md is copied via the `templateFiles` loop above, from
   // `packages/cli/templates/AGENTS.md` with `{{APP_NAME}}` substitution.
 
-  // --- Theme toggle component ---
-
-  await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-
-type Theme = 'system' | 'light' | 'dark';
-
-/**
- * <theme-toggle> is a light-DOM component styled with Tailwind utilities.
- *
- * Light DOM is the default: no static shadow = true, no static styles. It
- * is the UI kit's ghost icon Button (components/ui/button.ts), and it reacts
- * through Lit's APIs (reactive state, an @click binding, the connected /
- * disconnected lifecycle), never a <style> block or a document query. The
- * one DOM write is the .dark class on <html>, which is the theme switch
- * itself and no component renders.
- */
-export class ThemeToggle extends WebComponent {
-  // Lit's internal reactive state (its @state()): no attribute, re-renders on change.
-  static properties = { theme: { state: true } };
-  declare theme: Theme;
-  #os: MediaQueryList | null = null;
-  readonly #onOsChange = () => this.#apply();
-
-  constructor() {
-    super();
-    this.theme = 'system';
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    let saved: string | null = null;
-    try { saved = localStorage.getItem('webjs_theme'); } catch {}
-    this.theme = saved === 'light' || saved === 'dark' ? saved : 'system';
-    // The head script in app/layout.ts applied the theme before paint; from
-    // here the toggle keeps it current, following the OS while on "system".
-    this.#os = window.matchMedia('(prefers-color-scheme: dark)');
-    this.#os.addEventListener('change', this.#onOsChange);
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.#os?.removeEventListener('change', this.#onOsChange);
-  }
-
-  cycle() {
-    const next: Theme = this.theme === 'system' ? 'light'
-      : this.theme === 'light' ? 'dark' : 'system';
-    this.theme = next;
-    try {
-      if (next === 'system') localStorage.removeItem('webjs_theme');
-      else localStorage.setItem('webjs_theme', next);
-    } catch {}
-    this.#apply();
-  }
-
-  /** The tokens in styles/globals.css and color-scheme both switch on .dark; data-theme records a saved choice. */
-  #apply() {
-    const t = this.theme;
-    const el = document.documentElement;
-    if (t === 'system') delete el.dataset.theme;
-    else el.dataset.theme = t;
-    el.classList.toggle('dark', t === 'dark' || (t === 'system' && !!this.#os?.matches));
-  }
-
-  render() {
-    const t = this.theme;
-    const label = t === 'system' ? 'AUTO' : t === 'light' ? 'LIGHT' : 'DARK';
-    const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
-    return html\`
-      <button
-        type="button"
-        class=\${buttonClass({ variant: 'ghost', size: 'icon' })}
-        @click=\${() => this.cycle()}
-        aria-label="Cycle theme (currently \${label})"
-        title="Theme: \${label.toLowerCase()}"
-      >\${icon}</button>
-    \`;
-  }
-}
-
-const ICONS = {
-  sun: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M3 12h2M19 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>\`,
-  moon: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>\`,
-  system: html\`<svg class="w-4 h-4 stroke-current fill-none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg>\`,
-};
-
-ThemeToggle.register('theme-toggle');
-`);
   } // end if (!isApi)
 
   // AGENTS.md is already in place via the shared `templateFiles` loop
@@ -1794,7 +1460,6 @@ ThemeToggle.register('theme-toggle');
   } else {
     console.log(`  ${name}/
     app/{layout,page}.ts          ← the starting page, grow it in place
-    components/theme-toggle.ts
     public/input.css              ← Tailwind entry (compiles to public/tailwind.css)
     db/{schema,connection}.server.ts  ← Drizzle
     ${guide}
@@ -1804,11 +1469,9 @@ ThemeToggle.register('theme-toggle');
   • Read AGENTS.md. Its brief is the whole difference from Next.js routing
     and Lit components; run 'npx webjs check' after each edit. Fill in its
     "This app" section as you build, and keep it current.
-  • This scaffold is a minimal starting point. Its one example feature,
-    modules/users/, shows the module shape: read it, then delete it, its test
-    and whatever uses it before building.
-    Add routes under app/, components under components/, and features under
-    modules/<feature>/, and keep server-only code behind .server.ts.
+  • This scaffold is a minimal starting point. Add routes under app/ and each
+    feature under modules/<feature>/ (actions, queries, components, utils,
+    types), and keep server-only code behind .server.ts.
   • Use the wired-up database (Drizzle): define real models in
     db/schema.server.ts, then run 'npm run db:generate' and 'npm run db:migrate'.
     Never store app data in JSON files, in-memory arrays, or localStorage.

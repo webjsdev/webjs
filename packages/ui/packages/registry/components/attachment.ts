@@ -50,8 +50,8 @@ const ATTACHMENT_ORIENTATIONS = {
 } as const;
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function attachmentClass(opts: { size?: keyof typeof ATTACHMENT_SIZES; orientation?: keyof typeof ATTACHMENT_ORIENTATIONS } = {}): string {
-  return cn(ATTACHMENT_BASE, ATTACHMENT_SIZES[opts.size ?? 'default'], ATTACHMENT_ORIENTATIONS[opts.orientation ?? 'horizontal']);
+export function attachmentClass(opts: { size?: keyof typeof ATTACHMENT_SIZES; orientation?: keyof typeof ATTACHMENT_ORIENTATIONS } & { className?: string } = {}): string {
+  return cn(ATTACHMENT_BASE, ATTACHMENT_SIZES[opts.size ?? 'default'], ATTACHMENT_ORIENTATIONS[opts.orientation ?? 'horizontal'], opts.className);
 }
 
 /**
@@ -59,7 +59,7 @@ export function attachmentClass(opts: { size?: keyof typeof ATTACHMENT_SIZES; or
  * it merges a `className` into the result.
  */
 export function attachmentVariants(opts: { size?: keyof typeof ATTACHMENT_SIZES; orientation?: keyof typeof ATTACHMENT_ORIENTATIONS } & { className?: string } = {}): string {
-  return cn(attachmentClass(opts), opts.className);
+  return attachmentClass(opts);
 }
 
 const ATTACHMENT_MEDIA_BASE =
@@ -71,8 +71,8 @@ const ATTACHMENT_MEDIA_VARIANTS = {
 } as const;
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function attachmentMediaClass(opts: { variant?: keyof typeof ATTACHMENT_MEDIA_VARIANTS } = {}): string {
-  return cn(ATTACHMENT_MEDIA_BASE, ATTACHMENT_MEDIA_VARIANTS[opts.variant ?? 'icon']);
+export function attachmentMediaClass(opts: { variant?: keyof typeof ATTACHMENT_MEDIA_VARIANTS } & { className?: string } = {}): string {
+  return cn(ATTACHMENT_MEDIA_BASE, ATTACHMENT_MEDIA_VARIANTS[opts.variant ?? 'icon'], opts.className);
 }
 
 /**
@@ -80,7 +80,7 @@ export function attachmentMediaClass(opts: { variant?: keyof typeof ATTACHMENT_M
  * it merges a `className` into the result.
  */
 export function attachmentMediaVariants(opts: { variant?: keyof typeof ATTACHMENT_MEDIA_VARIANTS } & { className?: string } = {}): string {
-  return cn(attachmentMediaClass(opts), opts.className);
+  return attachmentMediaClass(opts);
 }
 
 /** Set `data-slot="attachment-content"` on the element. */

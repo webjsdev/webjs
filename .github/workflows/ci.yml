@@ -143,6 +143,10 @@ jobs:
       # machines, which are independent and must be kept in step by hand.
       - name: WebJs form-action guard parity on Bun
         run: bun test/bun/form-action-guard.mjs
+      # notFound() / forbidden() / unauthorized() in an action called over RPC
+      # (#1697): 404 / 403 / 401 through the Bun.serve listener, never a 500.
+      - name: Action control flow over RPC on Bun
+        run: bun test/bun/action-control-flow-rpc.mjs
       # live() in an attribute hole (#1443): the SSR unwrap must produce
       # byte-identical attribute emission on Bun, across both server machines.
       # The bug class this guards was a server/client disagreement (a falsy

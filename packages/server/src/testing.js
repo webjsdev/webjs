@@ -33,7 +33,8 @@
  */
 
 import { hashFile, RPC_CONTENT_TYPE } from './actions.js';
-import { FORM_ACTION_FIELD, redirect } from '@webjsdev/core';
+import { FORM_ACTION_FIELD, redirect, notFound, forbidden, unauthorized } from '@webjsdev/core';
+import { CONTROL_HEADER } from './action-error.js';
 import { getSerializer } from './serializer.js';
 import { join, sep } from 'node:path';
 
@@ -314,9 +315,29 @@ export async function submitForm(handle, path, fields = {}, opts = {}) {
   // fields it is filling in (a layout's logout form beside a page's task form).
   // When the field names do not single one out, refuse rather than post the
   // first, which used to submit a logout silently and pass a later assertion.
+  const keys = typeof fields.keys === 'function' ? [...new Set(fields.keys())] : Object.keys(fields);
+  const wanted = keys.map((k) => k.replace(/\[\]$/, ''));
+  // The only bound form has no fields at all while the test submits some: the
+  // form the test means is not on the page (no row to cancel, a section the
+  // user cannot see), and the one left is a layout's logout button. Posting it
+  // signed the user out and passed the assertion that followed (#1697).
+  // Narrow on purpose: an unbound form falls through to the clearer "carries
+  // no __webjs_action" error, a form with fields of its own is posted (a test
+  // may send a field the form lacks, a mass-assignment check), and a form
+  // whose controls live outside it (`form="<id>"`) is left alone.
+  const only = candidates.length === 1 ? candidates[0] : null;
+  const onlyTag = only ? only.slice(0, only.indexOf('>') + 1) : '';
+  const onlyId = /\bid="([^"]+)"/.exec(onlyTag)?.[1];
+  if (only && isBound(only) && opts.index === undefined && !opts.match && wanted.length
+    && formFieldNames(only).length === 0 && !(onlyId && html.includes(`form="${onlyId}"`))) {
+    throw new Error(
+      `submitForm: no form on ${path} (${status}) has the submitted fields (${wanted.join(', ')}). `
+      + `The only bound form is ${onlyTag}, which has no fields, so the form the test means is not `
+      + 'rendered for this request. Check the page state the test set up, or pass { match } to post '
+      + 'that form anyway.',
+    );
+  }
   if (candidates.length > 1 && opts.index === undefined) {
-    const keys = typeof fields.keys === 'function' ? [...new Set(fields.keys())] : Object.keys(fields);
-    const wanted = keys.map((k) => k.replace(/\[\]$/, ''));
     const covering = candidates.filter((f) => {
       const names = new Set(formFieldNames(f));
       return wanted.every((k) => names.has(k));
@@ -487,6 +508,14 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
     const type = rd.slice(cut + 1) === 'replace' ? 'replace' : 'push';
     redirect(cut === -1 ? rd : rd.slice(0, cut), type);
   }
+  // notFound() / forbidden() / unauthorized(): rethrow the sentinel, as the
+  // client stub does, so a test asserts with isForbidden(err). With
+  // throwOnError: false the test asked for the response instead, so the
+  // parsed body (and its status) comes back like any other non-2xx.
+  const cf = throwOnError ? res.headers.get(CONTROL_HEADER) : null;
+  if (cf === 'not-found') notFound();
+  if (cf === 'forbidden') forbidden();
+  if (cf === 'unauthorized') unauthorized();
   const ct = res.headers.get('content-type') || '';
   let parsed;
   if (ct.includes(RPC_CONTENT_TYPE)) parsed = serializer.deserialize(text);

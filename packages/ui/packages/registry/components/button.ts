@@ -74,10 +74,10 @@ export interface ButtonClassOptions {
 }
 
 /** Compose Tailwind classes for a button. Stable shape: object-arg, both optional. */
-export function buttonClass(opts: ButtonClassOptions = {}): string {
+export function buttonClass(opts: ButtonClassOptions & { className?: string } = {}): string {
   const variant = opts.variant ?? 'default';
   const size = opts.size ?? 'default';
-  return cn(BASE, VARIANTS[variant], SIZES[size]);
+  return cn(BASE, VARIANTS[variant], SIZES[size], opts.className);
 }
 
 /**
@@ -86,5 +86,5 @@ export function buttonClass(opts: ButtonClassOptions = {}): string {
  * merges a `className` into the result.
  */
 export function buttonVariants(opts: ButtonClassOptions & { className?: string } = {}): string {
-  return cn(buttonClass(opts), opts.className);
+  return buttonClass(opts);
 }
