@@ -938,8 +938,15 @@ async function main() {
             testDb = prepareTestDatabase(cwd, { cliBin: fileURLToPath(import.meta.url) });
             console.log(`webjs test: using a fresh ${testDb.pushed ? 'test database with the schema pushed (no migrations yet)' : 'migrated test database'} (set WEBJS_TEST_DB=0 to use DATABASE_URL instead)\n`);
           }
-          const child = spawn(process.execPath, testArgs, {
-            stdio: 'inherit', cwd, env: { ...process.env, ...(testDb ? { DATABASE_URL: testDb.url } : {}) },
+          // On Node each test file is a process of its own, and they gave one
+          // shared SQLite file `database is locked` errors; each one copies the
+          // migrated template instead (lib/test-db-preload.js, #1697).
+          const dbEnv = testDb ? { DATABASE_URL: testDb.url, WEBJS_TEST_DB_TEMPLATE: testDb.url.replace(/^file:/, '') } : {};
+          const preload = testDb && !process.versions.bun
+            ? ['--import', new URL('../lib/test-db-preload.js', import.meta.url).href]
+            : [];
+          const child = spawn(process.execPath, [...preload, ...testArgs], {
+            stdio: 'inherit', cwd, env: { ...process.env, ...dbEnv },
           });
           const code = await new Promise(r => child.on('exit', r));
           testDb?.cleanup();
