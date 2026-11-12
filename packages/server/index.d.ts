@@ -1666,12 +1666,10 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
    * redirect, so `await signIn('credentials', formData)` in a form action signs
    * in and navigates; a credentials failure throws {@link CredentialsSignin}.
    * `{ redirect: false }` (in the options or, as Auth.js accepts it, in the
-   * data) returns the target url instead of throwing. The redirecting form is
-   * typed `Promise<never>`, as Auth.js v5 types it, so `return signIn(...)`
-   * fits an action typed `Promise<ActionResult>`. (Outside a request, which
-   * only the `/api/auth/*` routes do, and for a provider id the config does
-   * not name, it resolves to a Response instead, which a form action passes
-   * through as is.)
+   * data) returns the target url instead of throwing. With no request in scope
+   * it returns the Response the `/api/auth/*` routes send. The redirecting
+   * form is typed `Promise<Response>`, so `return signIn(...)` fits an action
+   * that returns `ActionResult | Response`.
    */
   signIn: {
     (
@@ -1688,15 +1686,12 @@ export interface AuthInstance<TUser = ResolvedAuthUser> {
       provider: string,
       data?: FormData | Record<string, unknown>,
       opts?: { redirectTo?: string; redirect?: true; req?: Request },
-    ): Promise<never>;
+    ): Promise<Response>;
   };
-  /**
-   * Auth.js v5's `signOut`: clears the session and throws a redirect inside a
-   * request, so the redirecting form is typed `Promise<never>` as in Auth.js.
-   */
+  /** Auth.js v5's `signOut`: clears the session and throws a redirect inside a request. */
   signOut: {
     (opts: { redirectTo?: string; redirect: false; req?: Request }): Promise<string>;
-    (opts?: { redirectTo?: string; redirect?: true; req?: Request }): Promise<never>;
+    (opts?: { redirectTo?: string; redirect?: true; req?: Request }): Promise<Response>;
   };
   handlers: { GET: (req: Request) => Promise<Response>; POST: (req: Request) => Promise<Response> };
 }
