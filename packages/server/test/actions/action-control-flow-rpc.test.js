@@ -32,6 +32,11 @@ async function scaffold() {
     export async function denied() { forbidden(); }
     export async function anon() { unauthorized(); }
   `);
+  await writeFile(join(dir, 'actions/mutate.server.js'), `'use server';
+    import { forbidden } from ${JSON.stringify(CORE)};
+    export const invalidates = () => ['posts'];
+    export async function archive() { forbidden(); }
+  `);
   await writeFile(join(dir, 'actions/checked.server.js'), `'use server';
     import { forbidden } from ${JSON.stringify(CORE)};
     export const validate = () => forbidden();
@@ -67,6 +72,15 @@ for (const [fn, status, kind] of [['missing', 404, 'not-found'], ['denied', 403,
   }
 }
 
+// A review of #1698: the redirect branch evicted a mutation's tags, the new
+// control-flow branch did not, so a read cached before the action stayed stale.
+test('an action that throws forbidden() after running still evicts its invalidates tags', async () => {
+  const dir = await scaffold();
+  const res = await call(dir, '/actions/mutate.server.js', 'archive', false, () => assert.fail('not an error'));
+  assert.equal(res.status, 403);
+  assert.equal(res.headers.get('x-webjs-invalidate'), 'posts');
+});
+
 test('a validator that throws forbidden() answers 403 too', async () => {
   const dir = await scaffold();
   const res = await call(dir, '/actions/checked.server.js', 'checked', false, () => assert.fail('not an error'));
@@ -79,7 +93,9 @@ test('the generated stub rethrows the sentinel the header names', async () => {
   const idx = await buildActionIndex(dir, false);
   const stub = await serveActionStub(idx, resolveServerModule(idx, '/actions/guard.server.js'));
   assert.match(stub, /notFound as __nf, forbidden as __fb, unauthorized as __ua/);
-  assert.match(stub, /x-webjs-control'\); if \(cf === 'not-found'\) __nf\(\); if \(cf === 'forbidden'\) __fb\(\); if \(cf === 'unauthorized'\) __ua\(\);/);
+  assert.match(stub, /res\.headers\.get\("x-webjs-control"\); if \(cf === 'not-found'\) __nf\(\); if \(cf === 'forbidden'\) __fb\(\); if \(cf === 'unauthorized'\) __ua\(\);/);
+  // The refresh a mutation earned is applied before the stub rejects.
+  assert.ok(stub.indexOf('x-webjs-refresh') < stub.indexOf('x-webjs-control'), 'refresh before the sentinel rethrow');
 });
 
 test('invokeActionForTest rejects with the sentinel, so isForbidden(err) holds', async () => {

@@ -396,12 +396,13 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // redirect() in the action (Next parity): navigate there; the call's promise
   // rejects with the redirect sentinel, which the page ignores unhandled.
   lines.push(`  const rd = res.headers.get('x-webjs-redirect'); if (rd) return __redirect(rd);`);
-  // notFound() / forbidden() / unauthorized() in the action: reject with the
-  // same sentinel, so `isForbidden(err)` holds in the caller's catch.
-  lines.push(`  const cf = res.headers.get('x-webjs-control'); if (cf === 'not-found') __nf(); if (cf === 'forbidden') __fb(); if (cf === 'unauthorized') __ua();`);
   // revalidatePath() in the action: refresh the page on screen in place when
   // it was revalidated, BEFORE the caller's await resolves (Next behaviour).
   lines.push(`  const rf = res.headers.get('x-webjs-refresh'); if (rf) await __refresh(rf);`);
+  // notFound() / forbidden() / unauthorized() in the action: reject with the
+  // same sentinel, so `isForbidden(err)` holds in the caller's catch. After
+  // the refresh, since a mutation may have run before the throw.
+  lines.push(`  const cf = res.headers.get(${J(CONTROL_HEADER)}); if (cf === 'not-found') __nf(); if (cf === 'forbidden') __fb(); if (cf === 'unauthorized') __ua();`);
   lines.push(`  if (key != null) { const t = __tagHdr(res.headers.get('x-webjs-tags')); if (t.length) __regTags(key, t, since); }`);
   lines.push(`  const ct = res.headers.get('content-type') || '';`);
   // A streamed result (#489): the action returned a stream / async iterable.
@@ -652,22 +653,30 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     // go (`x-webjs-redirect: <url>;<push|replace>`, push by default as in a
     // Next server action), and the client router navigates there. A mutation
     // that ran still evicts its `invalidates` tags and reports revalidatePath.
-    if (isRedirect(e)) {
-      const r = /** @type {any} */ (e);
+    // A mutation that ran before the throw still evicts its `invalidates` tags
+    // and reports revalidatePath, whether the throw is a redirect or a
+    // notFound() / forbidden() / unauthorized().
+    const effects = async () => {
       /** @type {Record<string, string>} */
-      const headers = { 'x-webjs-redirect': `${headerSafeLocation(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}` };
+      const headers = {};
       if (ranAction && method !== 'GET') {
         const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
         if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
       }
       const refresh = refreshHeaderValue();
       if (refresh) headers['x-webjs-refresh'] = refresh;
+      return headers;
+    };
+    if (isRedirect(e)) {
+      const r = /** @type {any} */ (e);
+      /** @type {Record<string, string>} */
+      const headers = { 'x-webjs-redirect': `${headerSafeLocation(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}`, ...(await effects()) };
       return rpcResponse(null, { headers: { ...headers, 'cache-control': 'no-store' } });
     }
     // notFound() / forbidden() / unauthorized() (Next.js parity with the
     // no-JS form path): the same 404 / 403 / 401, not a logged 500.
     const cf = controlFlowStatus(e);
-    if (cf) return controlFlowResponse(e, cf);
+    if (cf) return controlFlowResponse(e, cf, await effects());
     if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }
@@ -679,13 +688,15 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
  *
  * @param {unknown} err
  * @param {{ kind: string, status: number }} cf
+ * @param {Record<string, string>} [effects] the invalidate / refresh headers of
+ *   a mutation that ran before the throw
  * @returns {Promise<Response>}
  */
-function controlFlowResponse(err, cf) {
+function controlFlowResponse(err, cf, effects = {}) {
   const msg = err instanceof Error ? err.message : String(err);
   return rpcResponse({ error: msg }, {
     status: cf.status,
-    headers: { [CONTROL_HEADER]: cf.kind, 'cache-control': 'no-store' },
+    headers: { ...effects, [CONTROL_HEADER]: cf.kind, 'cache-control': 'no-store' },
   });
 }
 

@@ -34,6 +34,7 @@
 
 import { hashFile, RPC_CONTENT_TYPE } from './actions.js';
 import { FORM_ACTION_FIELD, redirect, notFound, forbidden, unauthorized } from '@webjsdev/core';
+import { CONTROL_HEADER } from './action-error.js';
 import { getSerializer } from './serializer.js';
 import { join, sep } from 'node:path';
 
@@ -509,7 +510,7 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
   }
   // notFound() / forbidden() / unauthorized(): rethrow the sentinel, as the
   // client stub does, so a test asserts with isForbidden(err).
-  const cf = res.headers.get('x-webjs-control');
+  const cf = res.headers.get(CONTROL_HEADER);
   if (cf === 'not-found') notFound();
   if (cf === 'forbidden') forbidden();
   if (cf === 'unauthorized') unauthorized();
