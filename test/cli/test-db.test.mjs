@@ -102,13 +102,17 @@ test('a row round-trips through the app db', async () => {
     // A second run starts empty again: the row count assertion would fail on a reused database.
     assert.equal(run({}).status, 0, 'each run gets its own database');
 
-    // #1697: test files run in parallel processes, and on one shared file they
-    // hit `database is locked`. Each file gets its own copy, so a second file
-    // inserting the same unique email still sees exactly one row.
-    writeFileSync(join(app, 'test', 'users', 'again.test.ts'),
-      readFileSync(join(app, 'test', 'users', 'users.test.ts'), 'utf8'));
-    const pair = run({});
-    assert.equal(pair.status, 0, 'two files writing the same unique row each have their own database\n' + pair.stdout + pair.stderr);
+    // #1697: on Node, test files run in parallel processes, and on one shared
+    // file they hit `database is locked`. Each file gets its own copy, so a
+    // second file inserting the same unique email still sees exactly one row.
+    // `bun test` runs every file in one process, one after another, so there is
+    // no lock to hit and the files share the run's database by design.
+    if (!process.versions.bun) {
+      writeFileSync(join(app, 'test', 'users', 'again.test.ts'),
+        readFileSync(join(app, 'test', 'users', 'users.test.ts'), 'utf8'));
+      const pair = run({});
+      assert.equal(pair.status, 0, 'two files writing the same unique row each have their own database\n' + pair.stdout + pair.stderr);
+    }
 
     // Counterfactual: opted out, the test runs against the unmigrated dev database and fails.
     assert.notEqual(run({ WEBJS_TEST_DB: '0' }).status, 0, 'without the test database the table does not exist');
