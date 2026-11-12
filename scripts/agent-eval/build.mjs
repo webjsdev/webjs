@@ -55,7 +55,7 @@ Work ONLY inside that directory. Start by reading its AGENTS.md. Dependencies ar
 
 ${spec.trim()}
 
-When done, verify it yourself: \`npx webjs check\` must report no violations, \`npx webjs typecheck\` must pass, \`npm test\` must pass, and the app must boot (\`npx webjs dev --port ${port}\`, then exercise the routes with curl, then STOP the server). Do not leave any server running.
+When done, verify it yourself: \`npx webjs check\` must report no violations, \`npx webjs typecheck\` must pass, \`npm test\` must pass, and the app must boot and serve its routes. If you start a server, use port ${port}, and stop it before you finish: leave no server running.
 
 Then reply with a short report: what you built, the verification results, and every point of friction (anything in WebJs that did not work the way your Lit / Next.js habits expected).`;
 }

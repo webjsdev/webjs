@@ -57,7 +57,11 @@ test('the prompt carries the spec and names no WebJs API beyond its CLI', () => 
   const p = promptFor('Build "X", a thing.', '/tmp/app', 8900);
   assert.match(p, /Build "X", a thing\./);
   assert.match(p, /\/tmp\/app/);
-  assert.match(p, /webjs dev --port 8900/);
+  // #1697: the app must boot and serve its routes, and the prompt does not
+  // say how (a dev server plus curl was a loop no real user asks for).
+  assert.match(p, /boot and serve its routes/);
+  assert.match(p, /use port 8900/);
+  assert.doesNotMatch(p, /curl/);
   assert.doesNotMatch(p, /WebComponent|createAuth|html`|'use server'/, 'the frame teaches nothing the brief should');
 });
 
