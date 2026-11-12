@@ -871,7 +871,13 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     await scaffoldApp('api-app', cwd, { template: 'api' });
     const fs = readFileSync(join(cwd, 'fs-app', 'AGENTS.md'), 'utf8');
     const api = readFileSync(join(cwd, 'api-app', 'AGENTS.md'), 'utf8');
-    assert.equal(fs.replace('fs-app', 'X'), api.replace('api-app', 'X'), 'one AGENTS.md for both templates');
+    // One AGENTS.md for both templates, save the line that names the api
+    // template's users module as an example to replace (#1697): the
+    // full-stack app ships no example module, so it has no such line.
+    const exampleLine = '`modules/users/` with `app/api/users/` is an example of that layout: replace it with the app\'s own features.\n';
+    assert.ok(api.includes(exampleLine), 'the api AGENTS.md names its example module');
+    assert.ok(!fs.includes('modules/users'), 'the full-stack AGENTS.md names none');
+    assert.equal(fs.replace('fs-app', 'X'), api.replace('api-app', 'X').replace(exampleLine, ''), 'otherwise one AGENTS.md for both templates');
     assert.doesNotMatch(fs, /\{\{[A-Z_]+\}\}/, 'no leftover placeholder');
     assert.match(fs, /## The WebJs brief/, 'opens with the brief');
     assert.match(fs, /node_modules\/@webjsdev\/\*/, 'points at the framework source');

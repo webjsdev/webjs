@@ -1213,6 +1213,18 @@ export type ActionResult<T> =
   | { success: false; error: string; status: number };
 `);
 
+    // The shared AGENTS.md lays out a module but names no example, since the
+    // full-stack app ships none. Say what this template's users module is, so
+    // it is replaced rather than kept in the finished app (#1697).
+    const agentsPath = join(appDir, 'AGENTS.md');
+    const agents = await readFile(agentsPath, 'utf8');
+    const layoutEnd = agents.indexOf('the feature\'s tests\n');
+    if (layoutEnd !== -1) {
+      const at = layoutEnd + 'the feature\'s tests\n'.length;
+      await writeFile(agentsPath, agents.slice(0, at)
+        + '`modules/users/` with `app/api/users/` is an example of that layout: replace it with the app\'s own features.\n'
+        + agents.slice(at));
+    }
   }
 
   if (!isApi) {
