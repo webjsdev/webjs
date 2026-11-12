@@ -510,7 +510,9 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   // only as a bare 405. The dev-time client guard covers it instead.
   if (typeof id !== 'string' || !id) {
     reportFormActionMissing(url, req, formData, onError, logger, !!ssrOpts.dev, route);
-    return methodNotAllowed(MISSING_ACTION_HINT);
+    // The hint names framework internals, so only dev serves it; production
+    // answers any scanner or bot with the bare status.
+    return methodNotAllowed(ssrOpts.dev ? MISSING_ACTION_HINT : undefined);
   }
   // The field is framework wire, not app data. Removing it keeps an action
   // that iterates the FormData (building a record, echoing values back into a
