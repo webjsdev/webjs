@@ -91,6 +91,15 @@ test('output a step writes after it exits is still in the report', async () => {
   assert.match(text, /# fail 1/);
 });
 
+// A review of #1698: the ci engine sets CI=true on every step, which made an
+// app's tests and boot run as CI during a local loop.
+test('steps run without CI=true, unless the shell set it', async () => {
+  const plain = await run({}, { env: { KEEP: '1' } });
+  for (const l of plain.log) assert.equal(l.env.CI, undefined);
+  const inCi = await run({}, { env: { CI: '1' } });
+  for (const l of inCi.log) assert.equal(l.env.CI, '1', 'a real CI shell keeps its own value');
+});
+
 test('no step inherits a parent node --test context', async () => {
   const { log } = await run({}, { env: { NODE_TEST_CONTEXT: 'child-v8', KEEP: '1' } });
   for (const l of log) {
@@ -107,4 +116,10 @@ test('tail keeps the last lines and strips colour codes', () => {
 test('tail drops stack frames, which the code frame already locates', () => {
   const out = 'Error: kaboom\n    at Broken (file:///app/page.ts:1:42)\n    at async render (x.js:9:1)\n  GET /broken  500';
   assert.equal(tail(out), 'Error: kaboom\n  GET /broken  500');
+});
+
+// A review of #1698: the filter dropped every line starting with "at".
+test('tail keeps a message line that starts with "at"', () => {
+  const out = 'not ok 1 - rows\n  at least one row expected\n    at Test.run (node:internal/test_runner/test:1409:7)\n    at <anonymous>';
+  assert.equal(tail(out), 'not ok 1 - rows\n  at least one row expected');
 });

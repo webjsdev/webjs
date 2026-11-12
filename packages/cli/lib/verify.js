@@ -31,6 +31,13 @@ import { runCi } from './ci-runner.js';
 export const FAIL_TAIL_LINES = 40;
 
 /**
+ * A V8 / JavaScriptCore stack frame: indented `at`, ending in a source
+ * location (`file:12:5`, in parentheses or not) or `<anonymous>`. A message
+ * line that merely starts with "at" ("  at least one row expected") is kept.
+ */
+const STACK_FRAME = /^\s+at\s.*(?::\d+:\d+\)?|<anonymous>\)?|\(native\))\s*$/;
+
+/**
  * The last `n` non-empty lines of a step's output, without stack frames: a
  * failing render is reported with its file, line and code frame, so the raw
  * frames the server also logs are only noise to an agent.
@@ -40,7 +47,7 @@ export const FAIL_TAIL_LINES = 40;
  */
 export function tail(output, n = FAIL_TAIL_LINES) {
   const lines = output.replace(/\x1b\[[0-9;]*m/g, '').split('\n')
-    .filter((l) => l.trim() && !/^\s+at\s/.test(l));
+    .filter((l) => l.trim() && !STACK_FRAME.test(l));
   return (lines.length > n ? ['...', ...lines.slice(-n)] : lines).join('\n');
 }
 
@@ -84,6 +91,9 @@ export async function runVerify(opts) {
   const { done } = runCi(verifySteps(cli, beforeSteps), appDir, {
     env,
     captureAll: true,
+    // A local check, not CI: a test or config that branches on CI behaves
+    // as it does under `npm test`.
+    markCi: false,
     write: () => {},
     ...(opts.spawn ? { spawn: opts.spawn } : {}),
   });
