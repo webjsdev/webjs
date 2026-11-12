@@ -21,6 +21,7 @@ import { stringify as wjStringify, parse as wjParse } from '../../../core/src/se
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORE = pathToFileURL(resolve(__dirname, '../../../core/index.js')).toString();
+const SERVER = pathToFileURL(resolve(__dirname, '../../index.js')).toString();
 
 async function scaffold() {
   const dir = await mkdtemp(join(tmpdir(), 'webjs-rpc-control-'));
@@ -34,8 +35,10 @@ async function scaffold() {
   `);
   await writeFile(join(dir, 'actions/mutate.server.js'), `'use server';
     import { forbidden } from ${JSON.stringify(CORE)};
+    import { revalidatePath } from ${JSON.stringify(SERVER)};
     export const invalidates = () => ['posts'];
-    export async function archive() { forbidden(); }
+    export async function guarded() { forbidden(); }
+    export async function archive() { revalidatePath('/posts'); forbidden(); }
   `);
   await writeFile(join(dir, 'actions/checked.server.js'), `'use server';
     import { forbidden } from ${JSON.stringify(CORE)};
@@ -72,13 +75,24 @@ for (const [fn, status, kind] of [['missing', 404, 'not-found'], ['denied', 403,
   }
 }
 
-// A review of #1698: the redirect branch evicted a mutation's tags, the new
-// control-flow branch did not, so a read cached before the action stayed stale.
-test('an action that throws forbidden() after running still evicts its invalidates tags', async () => {
+// Reviews of #1698. A guard that throws forbidden() at the top of an action
+// counts as the action having run, so evicting the declared tags on a throw
+// let any anonymous caller flush the tagged caches; the no-JS form path never
+// evicted them. A revalidatePath() the action really called is still reported.
+test('a guard that throws forbidden() evicts no tags, as on the form path', async () => {
+  const dir = await scaffold();
+  const res = await call(dir, '/actions/mutate.server.js', 'guarded', false, () => assert.fail('not an error'));
+  assert.equal(res.status, 403);
+  assert.equal(res.headers.get('x-webjs-invalidate'), null, 'no declared tags evicted');
+  assert.equal(res.headers.get('x-webjs-refresh'), null);
+});
+
+test('a revalidatePath() called before the throw is still reported to the browser', async () => {
   const dir = await scaffold();
   const res = await call(dir, '/actions/mutate.server.js', 'archive', false, () => assert.fail('not an error'));
   assert.equal(res.status, 403);
-  assert.equal(res.headers.get('x-webjs-invalidate'), 'posts');
+  assert.equal(res.headers.get('x-webjs-refresh'), '%2Fposts');
+  assert.equal(res.headers.get('x-webjs-invalidate'), null);
 });
 
 test('a validator that throws forbidden() answers 403 too', async () => {

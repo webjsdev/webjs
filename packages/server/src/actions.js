@@ -653,30 +653,31 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     // go (`x-webjs-redirect: <url>;<push|replace>`, push by default as in a
     // Next server action), and the client router navigates there. A mutation
     // that ran still evicts its `invalidates` tags and reports revalidatePath.
-    // A mutation that ran before the throw still evicts its `invalidates` tags
-    // and reports revalidatePath, whether the throw is a redirect or a
-    // notFound() / forbidden() / unauthorized().
-    const effects = async () => {
-      /** @type {Record<string, string>} */
-      const headers = {};
-      if (ranAction && method !== 'GET') {
-        const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
-        if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
-      }
+    // A revalidatePath() the action called before the throw is reported to the
+    // browser either way, since that path was already evicted on the server.
+    const refreshHeaders = () => {
       const refresh = refreshHeaderValue();
-      if (refresh) headers['x-webjs-refresh'] = refresh;
-      return headers;
+      return refresh ? { 'x-webjs-refresh': refresh } : {};
     };
     if (isRedirect(e)) {
       const r = /** @type {any} */ (e);
       /** @type {Record<string, string>} */
-      const headers = { 'x-webjs-redirect': `${headerSafeLocation(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}`, ...(await effects()) };
-      return rpcResponse(null, { headers: { ...headers, 'cache-control': 'no-store' } });
+      const headers = { 'x-webjs-redirect': `${headerSafeLocation(r.url)};${r.redirectType === 'replace' ? 'replace' : 'push'}` };
+      // redirect() is how an action that succeeded navigates away, so it
+      // still evicts the action's declared `invalidates` tags.
+      if (ranAction && method !== 'GET') {
+        const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
+        if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
+      }
+      return rpcResponse(null, { headers: { ...headers, ...refreshHeaders(), 'cache-control': 'no-store' } });
     }
     // notFound() / forbidden() / unauthorized() (Next.js parity with the
-    // no-JS form path): the same 404 / 403 / 401, not a logged 500.
+    // no-JS form path): the same 404 / 403 / 401, not a logged 500. The
+    // declared `invalidates` tags are NOT evicted, as on the form path: the
+    // throw is usually a guard at the top of the action, so evicting would let
+    // any anonymous caller flush the tagged caches over and over.
     const cf = controlFlowStatus(e);
-    if (cf) return controlFlowResponse(e, cf, await effects());
+    if (cf) return controlFlowResponse(e, cf, refreshHeaders());
     if (typeof onError === 'function') onError(e);
     return actionErrorResponse(e, idx.dev);
   }
@@ -688,8 +689,8 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
  *
  * @param {unknown} err
  * @param {{ kind: string, status: number }} cf
- * @param {Record<string, string>} [effects] the invalidate / refresh headers of
- *   a mutation that ran before the throw
+ * @param {Record<string, string>} [effects] the refresh header of a
+ *   revalidatePath() the action called before the throw
  * @returns {Promise<Response>}
  */
 function controlFlowResponse(err, cf, effects = {}) {
