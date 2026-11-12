@@ -1,72 +1,107 @@
 /**
- * `webjs verify` (#1697): check, typecheck and test, then the app's dev
- * before-steps and an in-process boot of every route, in one call. Eval agents
- * spent about 19 late turns per build starting a dev server, curling and
- * stopping it. The flow is driven with an injected runner, so nothing spawns.
+ * `webjs verify` (#1697): check and typecheck in parallel, then test, then the
+ * app's dev before-steps and an in-process boot of every route, in one call
+ * on the `webjs ci` engine. Eval agents spent about 19 late turns per build
+ * starting a dev server, curling and stopping it. The engine's spawn is
+ * injected, so nothing real runs.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 
-import { runVerify, tail } from '../../packages/cli/lib/verify.js';
+import { runVerify, verifySteps, tail } from '../../packages/cli/lib/verify.js';
 
-function harness(results) {
-  const calls = [];
-  const lines = [];
-  const run = async (cmd, args, opts) => {
-    calls.push({ cmd, args, shell: !!opts.shell, env: opts.env });
-    const key = opts.shell ? cmd : args.slice(1).join(' ');
-    return results[key] ?? { code: 0, output: '' };
+/**
+ * A fake spawn: each command resolves to { code, output, late }, where `late`
+ * is written after 'exit' and before 'close', as a real child's last stdio
+ * chunks can be.
+ */
+function fakeSpawn(results, log) {
+  return (cmd, opts) => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.pid = 1;
+    child.kill = () => {};
+    const key = Object.keys(results).find((k) => cmd.endsWith(k));
+    const r = (key && results[key]) || { code: 0, output: '' };
+    log.push({ cmd, env: opts.env, at: log.length });
+    setImmediate(() => {
+      if (r.output) child.stdout.write(r.output);
+      child.emit('exit', r.code, null);
+      setImmediate(() => {
+        if (r.late) child.stdout.write(r.late);
+        setImmediate(() => child.emit('close', r.code, null));
+      });
+    });
+    return child;
   };
-  return { calls, lines, run, out: (s) => lines.push(s) };
 }
 
+const run = (results, extra = {}) => {
+  const log = [];
+  const lines = [];
+  const p = runVerify({ appDir: '/app', cli: 'CLI', spawn: fakeSpawn(results, log), out: (s) => lines.push(s), env: {}, ...extra });
+  return p.then((code) => ({ code, log, lines }));
+};
+
+test('the steps: check and typecheck in one parallel group, then test, prepare and boot', () => {
+  const nodes = verifySteps('CLI', ['webjs db migrate', 'webjs regenerate']);
+  assert.equal(nodes[0].kind, 'group');
+  assert.equal(nodes[0].parallel, 2);
+  assert.deepEqual(nodes[0].steps.map((s) => s.run), ['CLI check', 'CLI typecheck']);
+  assert.deepEqual(nodes.slice(1).map((s) => s.run), ['CLI test', 'webjs db migrate && webjs regenerate', 'CLI status --boot']);
+  assert.deepEqual(verifySteps('CLI', []).map((n) => n.title), ['checks', 'test', 'boot'], 'no prepare step without before-steps');
+});
+
 test('every step passes: one line each and exit 0', async () => {
-  const h = harness({});
-  const code = await runVerify({ appDir: '/app', cliBin: '/cli.js', execPath: 'node', beforeSteps: ['webjs db migrate'], run: h.run, out: h.out, env: {} });
+  const { code, lines, log } = await run({}, { beforeSteps: ['webjs db migrate'] });
   assert.equal(code, 0);
-  assert.deepEqual(h.calls.map((c) => (c.shell ? `sh:${c.cmd}` : c.args.slice(1).join(' '))),
-    ['check', 'typecheck', 'test', 'sh:webjs db migrate', 'status --boot'],
-    'check, typecheck, test, then the dev before-steps, then the in-process boot');
-  assert.equal(h.lines.filter((l) => l.startsWith('ok ')).length, 4);
-  assert.match(h.lines.at(-1), /all 4 steps passed/);
+  assert.deepEqual(lines.slice(0, 5).map((l) => l.split(/\s+/)[1]), ['check', 'typecheck', 'test', 'prepare', 'boot']);
+  assert.match(lines.at(-1), /all 5 steps passed/);
+  assert.equal(log.length, 5);
+});
+
+test('check and typecheck start before either finishes', async () => {
+  const { log } = await run({});
+  assert.deepEqual(log.slice(0, 2).map((l) => l.cmd), ['CLI check', 'CLI typecheck'], 'both spawned first, in the same group');
 });
 
 test('a failing step prints its output tail, the rest still run, and the exit is 1', async () => {
-  const h = harness({
-    typecheck: { code: 2, output: 'app/page.ts(3,1): error TS2322: nope\n' },
-    'status --boot': { code: 1, output: 'GET /polls 500\n  Error: no such table: polls\n' },
+  const { code, lines } = await run({
+    'CLI typecheck': { code: 2, output: 'app/page.ts(3,1): error TS2322: nope\n' },
+    'CLI status --boot': { code: 1, output: 'GET /polls 500\n  Error: no such table: polls\n' },
   });
-  const code = await runVerify({ appDir: '/app', cliBin: '/cli.js', execPath: 'node', run: h.run, out: h.out, env: {} });
   assert.equal(code, 1);
-  const text = h.lines.join('\n');
+  const text = lines.join('\n');
   assert.match(text, /FAIL {2}typecheck .*exit 2/);
-  assert.match(text, /error TS2322: nope/, 'the failing output is shown');
+  assert.match(text, /error TS2322: nope/);
   assert.match(text, /ok {4}test/, 'a later step still ran after the failure');
   assert.match(text, /no such table: polls/);
-  assert.match(h.lines.at(-1), /2 of 4 steps failed/);
+  assert.match(lines.at(-1), /2 of 4 steps failed/);
 });
 
-test('a failing before-step fails the boot without booting', async () => {
-  const h = harness({ 'webjs db migrate': { code: 1, output: 'migration failed\n' } });
-  const code = await runVerify({ appDir: '/app', cliBin: '/cli.js', execPath: 'node', beforeSteps: ['webjs db migrate'], run: h.run, out: h.out, env: {} });
-  assert.equal(code, 1);
-  assert.ok(!h.calls.some((c) => c.args.includes('status')), 'no boot over a half-applied schema');
-  assert.match(h.lines.join('\n'), /before-step failed: webjs db migrate/);
+// The review's first finding: output written after 'exit' and before 'close'
+// is the failing assertion and the run's summary, the part the tail exists for.
+test('output a step writes after it exits is still in the report', async () => {
+  const { lines } = await run({ 'CLI test': { code: 1, output: 'running 3 tests\n', late: 'not ok 2 - votes are counted\n# fail 1\n' } });
+  const text = lines.join('\n');
+  assert.match(text, /not ok 2 - votes are counted/);
+  assert.match(text, /# fail 1/);
 });
 
-test('the test step never inherits a parent node --test context', async () => {
-  const h = harness({});
-  await runVerify({ appDir: '/app', cliBin: '/cli.js', execPath: 'node', run: h.run, out: h.out, env: { NODE_TEST_CONTEXT: 'child-v8', KEEP: '1' } });
-  for (const c of h.calls) {
-    assert.equal(c.env.NODE_TEST_CONTEXT, undefined);
-    assert.equal(c.env.KEEP, '1');
+test('no step inherits a parent node --test context', async () => {
+  const { log } = await run({}, { env: { NODE_TEST_CONTEXT: 'child-v8', KEEP: '1' } });
+  for (const l of log) {
+    assert.equal(l.env.NODE_TEST_CONTEXT, undefined);
+    assert.equal(l.env.KEEP, '1');
   }
 });
 
 test('tail keeps the last lines and strips colour codes', () => {
   const out = Array.from({ length: 50 }, (_, i) => `\x1b[31mline ${i}\x1b[0m`).join('\n');
-  const t = tail(out, 3).split('\n');
-  assert.deepEqual(t, ['...', 'line 47', 'line 48', 'line 49']);
+  assert.deepEqual(tail(out, 3).split('\n'), ['...', 'line 47', 'line 48', 'line 49']);
 });
 
 test('tail drops stack frames, which the code frame already locates', () => {

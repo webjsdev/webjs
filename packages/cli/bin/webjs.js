@@ -1971,15 +1971,16 @@ Full docs: https://webjs.dev/docs`);
         console.error(notInsideAppMessage('verify', workspaceApps));
         process.exit(1);
       }
+      // No env file is loaded here: each step is this CLI run as its own
+      // command, which loads the files for its own mode (`test` for the tests,
+      // `development` for the boot), as it would run alone.
       process.chdir(appDir);
-      loadAppEnv(appDir);
       const { readAppTasks } = await import('../lib/app-tasks.js');
-      const { envWithLocalBin } = await import('../lib/run-tasks.js');
+      const { shellQuote } = await import('../lib/run-tasks.js');
       const { runVerify } = await import('../lib/verify.js');
       process.exit(await runVerify({
         appDir,
-        cliBin: fileURLToPath(import.meta.url),
-        env: envWithLocalBin(appDir),
+        cli: `${shellQuote(process.execPath)} ${shellQuote(fileURLToPath(import.meta.url))}`,
         beforeSteps: readAppTasks(appDir).dev.before,
       }));
     }
