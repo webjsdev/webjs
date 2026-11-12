@@ -509,8 +509,10 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
     redirect(cut === -1 ? rd : rd.slice(0, cut), type);
   }
   // notFound() / forbidden() / unauthorized(): rethrow the sentinel, as the
-  // client stub does, so a test asserts with isForbidden(err).
-  const cf = res.headers.get(CONTROL_HEADER);
+  // client stub does, so a test asserts with isForbidden(err). With
+  // throwOnError: false the test asked for the response instead, so the
+  // parsed body (and its status) comes back like any other non-2xx.
+  const cf = throwOnError ? res.headers.get(CONTROL_HEADER) : null;
   if (cf === 'not-found') notFound();
   if (cf === 'forbidden') forbidden();
   if (cf === 'unauthorized') unauthorized();

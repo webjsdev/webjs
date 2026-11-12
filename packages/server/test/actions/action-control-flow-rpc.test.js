@@ -119,3 +119,10 @@ test('invokeActionForTest rejects with the sentinel, so isForbidden(err) holds',
   await assert.rejects(invokeActionForTest(app, 'actions/guard.server.js', 'missing'), (e) => isNotFound(e));
   await assert.rejects(invokeActionForTest(app, 'actions/guard.server.js', 'anon'), (e) => isUnauthorized(e));
 });
+
+test('invokeActionForTest with throwOnError: false returns the 403 body instead of throwing', async () => {
+  const dir = await scaffold();
+  const app = await createRequestHandler({ appDir: dir, dev: true });
+  const result = await invokeActionForTest(app, 'actions/guard.server.js', 'denied', [], { throwOnError: false });
+  assert.match(result.error, /forbidden/);
+});
