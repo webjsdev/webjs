@@ -81,7 +81,8 @@ export function featureCatalog(catalog = FEATURE_CATALOG) {
   out.push(
     '',
     'Database: Drizzle tables in db/schema.server.ts; npx webjs db generate then',
-    'npx webjs db migrate; npx webjs db seed runs db/seed.server.ts.',
+    'npx webjs db migrate; npx webjs db seed then runs db/seed.server.ts once as a',
+    'plain script (its top-level code inserts the rows; make it safe to re-run).',
   );
   return out.join('\n');
 }

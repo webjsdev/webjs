@@ -97,7 +97,7 @@ test('the catalogue text names every entry and stays short', () => {
 test('the catalogue answers the lookups agents grepped the framework source for', () => {
   const text = featureCatalog();
   assert.match(text, /fresh migrated database, never db\/dev\.db/, 'which database `webjs test` uses');
-  assert.match(text, /webjs db seed runs db\/seed\.server\.ts/, 'which file the seed command runs');
+  assert.match(text, /webjs db seed then runs db\/seed\.server\.ts once as a\nplain script/, 'which file the seed command runs, and how (#1697 round 9: agents still asked how)');
   assert.match(text, /renders per request unless it exports revalidate/, 'whether pages are cached by default');
   assert.match(text, /GET\(req, \{ params \}\)/, 'what a route handler receives');
 });
