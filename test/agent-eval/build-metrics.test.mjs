@@ -167,3 +167,17 @@ test('usage is counted once per API message, however many blocks it has', () => 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// A review of #1698: a message's later events can report more output than its
+// first, since usage is written as the message streams.
+test('each message keeps the largest usage any of its events reports', () => {
+  const ev = (out) => ({ type: 'assistant', message: { id: 'msg_1', usage: { input_tokens: 10, cache_read_input_tokens: 990, output_tokens: out }, content: [{ type: 'text' }] } });
+  const { file, dir } = transcript([ev(2), ev(40), ev(15)]);
+  try {
+    const m = metricsOf(file);
+    assert.equal(m.inputTokens, 1000);
+    assert.equal(m.outputTokens, 40, 'the largest output the message reported, not its first');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

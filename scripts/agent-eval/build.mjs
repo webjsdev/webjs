@@ -72,10 +72,13 @@ export function metricsOf(transcriptPath) {
   let outputTokens = 0;
   let costUsd = null;
   // stream-json repeats one API message once per content block (thinking,
-  // text, tool_use), each carrying the same id and the same usage, so usage
-  // is counted once per message id. Counting it per event inflated input
-  // 2.2 to 2.9 times and tracked how much an agent narrated (#1697).
-  const counted = new Set();
+  // text, tool_use), each carrying the same id, so usage is counted once per
+  // message id. Counting it per event inflated input 2.2 to 2.9 times and
+  // tracked how much an agent narrated (#1697). A later event of a message can
+  // report more output than the first (it is written as the message streams),
+  // so each field keeps its largest value seen for the id.
+  /** @type {Map<string, { input: number, output: number }>} */
+  const perMessage = new Map();
   let durationMs = 0;
   let resultText = '';
   for (const line of readFileSync(transcriptPath, 'utf8').split('\n')) {
@@ -86,12 +89,16 @@ export function metricsOf(transcriptPath) {
     const content = e.message?.content;
     if (!Array.isArray(content)) continue;
     if (e.type === 'assistant') {
+      const u = e.message.usage || {};
+      const input = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      const output = u.output_tokens || 0;
       const id = e.message.id;
-      if (!id || !counted.has(id)) {
-        if (id) counted.add(id);
-        const u = e.message.usage || {};
-        inputTokens += (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-        outputTokens += u.output_tokens || 0;
+      if (!id) {
+        inputTokens += input;
+        outputTokens += output;
+      } else {
+        const seen = perMessage.get(id) || { input: 0, output: 0 };
+        perMessage.set(id, { input: Math.max(seen.input, input), output: Math.max(seen.output, output) });
       }
       for (const c of content) {
         if (c?.type !== 'tool_use') continue;
@@ -117,6 +124,7 @@ export function metricsOf(transcriptPath) {
       }
     }
   }
+  for (const m of perMessage.values()) { inputTokens += m.input; outputTokens += m.output; }
   return { firsts, rework, toolCalls, inputTokens, outputTokens, costUsd, minutes: Math.round(durationMs / 600) / 100, report: resultText };
 }
 
