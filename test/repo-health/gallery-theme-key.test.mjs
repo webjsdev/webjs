@@ -68,8 +68,9 @@ test('the gallery bootstrap and toggle agree on one theme storage key', () => {
 test('the shared theme key matches every other app in the repo', () => {
   // The gallery is the reference a scaffolded app is grown from, so a private
   // key here would teach the wrong convention even though nothing would break.
+  // The scaffold (packages/cli/lib/create.js) is not listed: since #1697 it
+  // ships no theme toggle and stores no choice, its dark mode following the OS.
   for (const [rel, expected] of [
-    ['packages/cli/lib/create.js', 'webjs_theme'],
     ['examples/blog/components/theme-toggle.ts', 'webjs_theme'],
   ]) {
     assert.ok(
