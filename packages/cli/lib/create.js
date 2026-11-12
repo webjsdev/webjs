@@ -3,8 +3,8 @@
  *
  * Creates a directory with:
  *   - app/ with a root layout + page
- *   - modules/ skeleton
- *   - components/ with a theme toggle
+ *   - an empty modules/ for the features (AGENTS.md lays out a module)
+ *   - the UI kit's components.json and theme, with no kit code installed
  *   - test/unit/ and test/e2e/ with example tests
  *   - AGENTS.md, CLAUDE.md
  *   - package.json with WebJs deps + test scripts
@@ -246,11 +246,10 @@ function setThemeVars(css, selector, vars) {
 
 /**
  * Fail loudly when the @webjsdev/ui registry is not on disk. The scaffold
- * reads component sources, the cn() helper, and the @webjsdev/ui theme from
- * UI_REGISTRY_ROOT and weaves them into a generated app/page.ts that
- * imports `components/ui/button.ts`. If the registry is missing, the
- * generated app boots to ERR_MODULE_NOT_FOUND on first request, which is
- * a confusing failure for end-users to debug.
+ * reads the @webjsdev/ui theme from UI_REGISTRY_ROOT, and the app's first
+ * `webjs ui add` copies components and the cn() helper from it. If the
+ * registry is missing, the scaffold writes an unstyled app and every add
+ * fails, which is a confusing failure for end-users to debug.
  *
  * The check guards against an @webjsdev/ui published tarball that forgets
  * to ship `packages/registry/` in its `files` array (the bug fixed in
@@ -1218,17 +1217,18 @@ export type ActionResult<T> =
     // it is replaced rather than kept in the finished app (#1697).
     const agentsPath = join(appDir, 'AGENTS.md');
     const agents = await readFile(agentsPath, 'utf8');
-    const layoutEnd = agents.indexOf('the feature\'s tests\n');
-    if (layoutEnd !== -1) {
-      const at = layoutEnd + 'the feature\'s tests\n'.length;
-      await writeFile(agentsPath, agents.slice(0, at)
-        + '`modules/users/` with `app/api/users/` is an example of that layout: replace it with the app\'s own features.\n'
-        + agents.slice(at));
+    const anchor = /the feature's tests\r?\n/.exec(agents);
+    if (!anchor) {
+      throw new Error('[webjs create] templates/AGENTS.md lost the module layout line the api template annotates ("the feature\'s tests"); update the anchor in create.js.');
     }
+    const at = anchor.index + anchor[0].length;
+    await writeFile(agentsPath, agents.slice(0, at)
+      + '`modules/users/` with `app/api/users/` is an example of that layout: replace it with the app\'s own features.\n'
+      + agents.slice(at));
   }
 
   if (!isApi) {
-    // The UI template: layout + page + theme toggle + Tailwind
+    // The UI template: layout + page + Tailwind
 
     // The Tailwind stylesheet is compiled from public/input.css (written below)
     // to a STATIC public/tailwind.css by css:build, and lib/utils/ui.ts helpers
@@ -1297,8 +1297,7 @@ export type ActionResult<T> =
 @source "../lib/**/*.{ts,js}";
 
 /* Base styles, on the kit's tokens. The light tokens are on :root and the
-   dark ones on .dark, which the head script keeps in step with the saved
-   choice or the OS. color-scheme switches on the same class, so native
+   dark ones on .dark, which the head script keeps in step with the OS. color-scheme switches on the same class, so native
    controls and scrollbars always match the tokens: with JavaScript off the
    page is light throughout rather than light tokens over dark controls. */
 @layer base {
