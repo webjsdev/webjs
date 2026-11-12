@@ -40,7 +40,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
     assert.equal(existsSync(join(appDir, 'components', 'ui')), false, 'no kit component is pre-installed');
     // One example module, the modules/<feature>/ convention AGENTS.md names.
-    assert.deepEqual(readdirSync(join(appDir, 'modules')), ['users'], 'modules/ ships the one example module');
+    assert.deepEqual(readdirSync(join(appDir, 'modules')), ['.gitkeep'], 'modules/ is an empty placeholder (#1697)');
 
     // The scaffold and `webjsui init` must emit the SAME components.json, so
     // that initialising a bare app and scaffolding a new one land on one

@@ -150,7 +150,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(layoutSrc, /<div class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
       'layout container fills the viewport minus the navbar');
     assert.doesNotMatch(layoutSrc, /<main\b/, 'the layout leaves <main> to the page');
-    assert.match(readFileSync(join(appDir, 'app', 'page.ts'), 'utf8'), /<main>/, 'the home page renders its own <main>');
+    assert.match(readFileSync(join(appDir, 'app', 'page.ts'), 'utf8'), /<main\b/, 'the home page renders its own <main>');
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
     // #1660: the navbar is sized by --header-h and nothing measures it, so a
     // client-router swap that replaces the header cannot zero the offset.
@@ -208,22 +208,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // The home page is a minimal starting point that imports nothing from a
     // gallery, and the navbar links the docs and the source.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
-    // The home is a thin route over the example module (modules/users/).
-    assert.match(pageSrc, /from '#modules\/users\/actions\/add-user\.server\.ts'/, 'the home binds the example module\'s action');
-    assert.match(pageSrc, /from '#modules\/users\/queries\/list-users\.server\.ts'/, 'and reads its query');
-    assert.match(pageSrc, /<form action=\$\{addUser\}/, 'as a bound form');
-    assert.match(pageSrc, /<user-list \.users=\$\{latest\}><\/user-list>/, 'and renders the users with the module\'s component');
-    const listSrc = readFileSync(join(appDir, 'modules', 'users', 'components', 'user-list.ts'), 'utf8');
-    assert.match(listSrc, /static properties = \{ users: \{ type: Array \} \};/, 'a Lit-style reactive property');
-    assert.match(listSrc, /UserList\.register\('user-list'\)/, 'registered under its tag');
-    assert.match(pageSrc, /<form action=\$\{clearUsers\}>/, 'and a Clear list button bound to its clear action');
-    assert.match(readFileSync(join(appDir, 'modules', 'users', 'actions', 'clear-users.server.ts'), 'utf8'), /^'use server';/, 'which is a server action');
-    // The example agents copy: only a duplicate is a field error, every other
-    // database error throws (no catch that relabels it).
-    const addSrc = readFileSync(join(appDir, 'modules', 'users', 'actions', 'add-user.server.ts'), 'utf8');
-    assert.match(addSrc, /\.onConflictDoNothing\(\)\.returning\(\)/, 'a duplicate is detected by the insert itself');
-    assert.doesNotMatch(addSrc, /catch\s*[{(]/, 'and no catch turns other errors into a duplicate message');
-    assert.ok(existsSync(join(appDir, 'test', 'users', 'users.test.ts')), 'the module ships its own test');
+    // #1697: no example module. modules/ is a placeholder; AGENTS.md carries
+    // the layout and the source guides the worked examples.
+    assert.doesNotMatch(pageSrc, /#modules\//, 'the home imports no module');
+    assert.deepEqual(readdirSync(join(appDir, 'modules')), ['.gitkeep'], 'modules/ is an empty placeholder');
+    assert.ok(!existsSync(join(appDir, 'test', 'users')), 'and no example test');
     assert.match(pageSrc, /Edit app\/page\.ts/, 'the home points at the file to edit');
     assert.match(layoutSrc, /webjs\.dev\/docs/, 'the navbar links the docs');
     assert.match(layoutSrc, /github\.com\/webjsdev\/webjs/, 'the navbar links the source');
@@ -891,10 +880,14 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     assert.match(fs, /document\.getElementById/, 'naming the raw DOM calls to avoid');
     assert.match(fs, /Style with Tailwind utilities on the kit's design tokens/, 'steers styling to Tailwind on the kit tokens');
     assert.match(fs, /npx webjs ui init --preset/, 'and theming to a kit preset');
-    assert.match(fs, /`modules\/users\/` is an example of that shape: read it, then\nremove it with `git rm -r modules\/users test\/users`/, 'tells the agent to delete the example module before building');
-    // #1697: five of eight eval builds ran `git add` on the removed paths and
-    // spent turns on the pathspec error.
-    assert.match(fs, /already staged, so never\n`git add` those paths/, 'and that the removal is already staged');
+    // #1697: the module layout itself, every folder a module holds, since the
+    // scaffold no longer ships an example module to copy.
+    for (const dir of ['actions', 'queries', 'components', 'utils']) {
+      assert.match(fs, new RegExp(`modules/<feature>/${dir}/`), `names the module's ${dir}/ folder`);
+    }
+    assert.match(fs, /modules\/<feature>\/types\.ts/, 'and its types.ts');
+    assert.match(fs, /`npx webjs source modules` prints a worked module/, 'and where the worked example is');
+    assert.doesNotMatch(fs, /modules\/users/, 'and names no example module');
     assert.match(fs, /\n## This app\n\nReplace this paragraph with what /, 'ends with a This app section the agent fills in');
     assert.match(fs, /`CLAUDE\.md` imports this file, so notes go here\./, 'which says app notes live in AGENTS.md, not CLAUDE.md');
     // The brief plus the scaffold's rules plus the This app stub: still short,
@@ -904,7 +897,9 @@ test('scaffoldApp: AGENTS.md is the brief alone, the same for both templates', a
     // the file says it: check-on-edit, the refusals, and the soft flags.
     assert.match(fs, /Hooks, so you need not open them: each edit returns that file's `webjs check` and type/, 'summarises the shipped hooks');
     assert.match(fs, /`extends HTMLElement`, an em-dash/, 'naming what they refuse');
-    assert.ok(fs.split('\n').length < 70, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
+    // 75 since #1697: the module layout's eight lines replaced the example
+    // module (about 5 KB of code an agent read on its first look).
+    assert.ok(fs.split('\n').length < 75, `AGENTS.md stays short (${fs.split('\n').length} lines)`);
     for (const dir of ['fs-app', 'api-app']) {
       assert.ok(!existsSync(join(cwd, dir, '.agents')), `${dir}: no .agents rules or skills`);
     }

@@ -149,7 +149,7 @@ cd my-app && npm run dev</code-block>
     <p>This generates:</p>
     <ul>
       <li><code>app/</code> with root layout + page</li>
-      <li><code>modules/users/</code>, one example feature module (a <code>'use server'</code> action in <code>actions/</code>, a query in <code>queries/</code>, a component in <code>components/</code>, <code>types.ts</code>) that the home page uses, to copy for your own features and then delete</li>
+      <li><code>modules/</code>, empty: each feature goes in <code>modules/&lt;feature&gt;/</code> with its <code>'use server'</code> actions in <code>actions/</code>, server-only reads in <code>queries/</code>, components in <code>components/</code>, pure helpers in <code>utils/</code> and <code>types.ts</code>, the layout <code>AGENTS.md</code> describes and <code>npx webjs source modules</code> shows worked</li>
       <li><code>components.json</code> and <code>styles/globals.css</code>, the UI kit's config and theme, with no kit component pre-installed: <code>npx webjs ui add &lt;name&gt;</code> copies one (and its <code>cn()</code> helper) into the app when you need it</li>
       <li><code>db/schema.server.ts</code>: the Drizzle schema, SQLite by default, example <code>User</code> model. <code>db/connection.server.ts</code> exports the <code>db</code> connection.</li>
       <li><code>test/&lt;feature&gt;/</code> with example tests, and <code>browser/</code> and <code>e2e/</code> subfolders</li>

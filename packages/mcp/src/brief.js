@@ -46,7 +46,9 @@ export const BRIEF = [
   'Before hand-writing auth, sessions, caching, rate limits, uploads, realtime or',
   'SEO, run `npx webjs source`, which lists what WebJs provides for each need.',
   '`npx webjs source <Export>` then prints one export\'s signature and example.',
-  'After each edit run `npx webjs check` and `npx webjs status`. The framework',
-  'source is in `node_modules/@webjsdev/*` (no build, so it is the code that',
-  'runs) and the human docs are at https://webjs.dev/docs.',
+  'After each edit run `npx webjs check`. To verify the app, run `npx webjs verify`:',
+  'check, typecheck, the tests, and every route booted in-process, in one call,',
+  'with no dev server to start, curl or stop. The framework source is in',
+  '`node_modules/@webjsdev/*` (no build, so it is the code that runs) and the',
+  'human docs are at https://webjs.dev/docs.',
 ].join('\n');

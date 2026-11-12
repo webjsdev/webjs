@@ -49,6 +49,7 @@ webjs check                    # validate source-code conventions (CI gate)
 webjs doctor                   # verify the project/toolchain setup (per-check severity via webjs.doctor.gate, so CI can gate a subset)
 webjs test                     # run server + browser tests
 webjs status [path...]         # after an edit, wait for the dev server to settle and print every error since the last rebuild
+webjs verify                   # check, typecheck, test, then boot the app in-process and request every route
                                # (file, line, code frame); exit 1 on a problem, 2 if no dev server; --json for agents
 webjs stop                     # stop this app's running dev or start server (no pkill needed)
 webjs ci                       # local CI: run the webjs.ci step list in package.json (check, doctor,

@@ -84,6 +84,8 @@ const USAGE = `webjs commands:
                                                   --only runs one step or group by title; --signoff runs "gh signoff" after a green run
   webjs routes [--json|--table] [--no-headers]    Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape; --no-headers drops the --table header
   webjs stop                                      Stop this app's running dev or start server (the one its .webjs/ record names)
+  webjs verify                                    Check, typecheck, test, then boot the app in-process and request every route;
+                                                  one line per step, a failing step's output, exit 1 on any failure
   webjs status [path...] [--port N] [--json]      Wait for a running dev server to settle after an edit, request each path, and
                                                   report every error since the last rebuild; exit 1 on any problem, 2 if no server
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
@@ -339,6 +341,16 @@ const HELP = {
       '1 when a server did not exit within 10 seconds of SIGTERM and a SIGKILL, or when run outside any app.',
     ],
     examples: ['webjs stop', 'npx webjs dev --port 8910 & npx webjs status /; npx webjs stop'],
+  },
+  verify: {
+    usage: 'webjs verify',
+    summary: "Whether the app works, in one call: `webjs check`, `webjs typecheck` and `webjs test`, then the app's `webjs.dev.before` steps (its migrations and stylesheet) and an in-process boot that requests every page and GET route needing no parameter (`webjs status --boot`). No dev server is started, so none has to be stopped. Every step runs even after a failure; a passing step prints one line, a failing one the tail of its output. Run it when a feature is done instead of starting a server and curling routes.",
+    notesTitle: 'Exit status',
+    notes: [
+      '0 when every step passed.',
+      '1 when any step failed, or when run outside any app.',
+    ],
+    examples: ['webjs verify', 'npx webjs verify'],
   },
   status: {
     usage: 'webjs status [path...] [--port N] [--boot] [--json] [--timeout <seconds>]',
@@ -1949,6 +1961,27 @@ Full docs: https://webjs.dev/docs`);
     case 'stop': {
       const { stopServers } = await import('../lib/stop.js');
       process.exit(await stopServers({ cwd: process.cwd() }));
+    }
+    case 'verify': {
+      // One call for whether the app works (#1697): check, typecheck, test,
+      // then the dev before-steps and an in-process boot of every route.
+      const { findAppRoot, notInsideAppMessage } = await import('../lib/check-target.js');
+      const { root: appDir, workspaceApps } = await findAppRoot(process.cwd());
+      if (!appDir) {
+        console.error(notInsideAppMessage('verify', workspaceApps));
+        process.exit(1);
+      }
+      process.chdir(appDir);
+      loadAppEnv(appDir);
+      const { readAppTasks } = await import('../lib/app-tasks.js');
+      const { envWithLocalBin } = await import('../lib/run-tasks.js');
+      const { runVerify } = await import('../lib/verify.js');
+      process.exit(await runVerify({
+        appDir,
+        cliBin: fileURLToPath(import.meta.url),
+        env: envWithLocalBin(appDir),
+        beforeSteps: readAppTasks(appDir).dev.before,
+      }));
     }
     case 'status': {
       // Dev status (#1664): wait for the running dev server to settle, request
