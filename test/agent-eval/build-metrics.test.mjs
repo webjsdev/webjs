@@ -181,3 +181,20 @@ test('each message keeps the largest usage any of its events reports', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// A review of #1698: re-running into the same build dir after /tmp was
+// cleaned left a dangling link, and symlinkSync threw EEXIST.
+test('a re-run into the same build dir replaces the previous temp link', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'eval-rerun-'));
+  try {
+    const first = agentEnv(dir);
+    rmSync(first.TMPDIR, { recursive: true, force: true });
+    const second = agentEnv(dir);
+    assert.equal(realpathSync(join(dir, 'tmp')), realpathSync(second.TMPDIR), 'the link names the new run');
+    const third = agentEnv(dir);
+    assert.ok(!existsSync(second.TMPDIR), 'and the previous run\'s temp dir is removed');
+    rmSync(third.TMPDIR, { recursive: true, force: true });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

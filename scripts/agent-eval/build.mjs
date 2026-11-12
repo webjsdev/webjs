@@ -28,7 +28,7 @@
  *
  * Local only: it calls a model and costs money per build.
  */
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, readlinkSync, createWriteStream } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, symlinkSync, readdirSync, readlinkSync, lstatSync, unlinkSync, rmSync, createWriteStream } from 'node:fs';
 import { createServer } from 'node:net';
 import { parse as parsePath } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -180,8 +180,22 @@ export function agentEnv(buildDir) {
   if (buildDir) {
     mkdirSync(buildDir, { recursive: true });
     const tmp = mkdtempSync(join(existsSync('/tmp') ? '/tmp' : tmpdir(), 'wje-'));
+    // A re-run into the same build dir finds the previous link: lstat sees it
+    // even when its /tmp target is gone (existsSync follows it and says no,
+    // so symlinkSync then threw EEXIST). It is replaced, and the previous
+    // run's temp dir removed, so the link always names this run's TMPDIR
+    // and old wje-* dirs do not pile up. A real directory (a build dir from
+    // before the link) is left alone.
     const link = join(buildDir, 'tmp');
-    if (!existsSync(link)) symlinkSync(tmp, link);
+    let previous = null;
+    try { previous = lstatSync(link); } catch { /* none yet */ }
+    if (previous?.isSymbolicLink()) {
+      const old = readlinkSync(link);
+      unlinkSync(link);
+      if (/\/wje-[^/]+$/.test(old)) rmSync(old, { recursive: true, force: true });
+      previous = null;
+    }
+    if (!previous) symlinkSync(tmp, link);
     env.TMPDIR = env.TMP = env.TEMP = tmp;
   }
   return env;
