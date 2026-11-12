@@ -142,3 +142,24 @@ test('an eval app runs the framework under test through npx, not the checkout it
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// #1697: stream-json writes one event per content block of a message, each
+// with the message's full usage, so summing per event counted it 2 to 3 times.
+test('usage is counted once per API message, however many blocks it has', () => {
+  const block = (type) => ({ type: 'assistant', message: { id: 'msg_1', usage: { input_tokens: 10, cache_read_input_tokens: 990, output_tokens: 5 }, content: [{ type }] } });
+  const { file, dir } = transcript([
+    block('thinking'), block('text'),
+    { type: 'assistant', message: { id: 'msg_1', usage: { input_tokens: 10, cache_read_input_tokens: 990, output_tokens: 5 }, content: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'ls' } }] } },
+    { type: 'assistant', message: { id: 'msg_2', usage: { input_tokens: 20, cache_read_input_tokens: 1980, output_tokens: 7 }, content: [{ type: 'text' }] } },
+    { type: 'result', duration_ms: 60_000, result: 'ok', total_cost_usd: 0.42 },
+  ]);
+  try {
+    const m = metricsOf(file);
+    assert.equal(m.inputTokens, 3000, 'msg_1 once (1000) plus msg_2 (2000), not msg_1 three times');
+    assert.equal(m.outputTokens, 12);
+    assert.equal(m.toolCalls, 1);
+    assert.equal(m.costUsd, 0.42, 'the run cost from the result event');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

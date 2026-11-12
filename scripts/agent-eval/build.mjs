@@ -70,19 +70,29 @@ export function metricsOf(transcriptPath) {
   let toolCalls = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let costUsd = null;
+  // stream-json repeats one API message once per content block (thinking,
+  // text, tool_use), each carrying the same id and the same usage, so usage
+  // is counted once per message id. Counting it per event inflated input
+  // 2.2 to 2.9 times and tracked how much an agent narrated (#1697).
+  const counted = new Set();
   let durationMs = 0;
   let resultText = '';
   for (const line of readFileSync(transcriptPath, 'utf8').split('\n')) {
     if (!line) continue;
     let e;
     try { e = JSON.parse(line); } catch { continue; }
-    if (e.type === 'result') { durationMs = e.duration_ms || 0; resultText = e.result || ''; continue; }
+    if (e.type === 'result') { durationMs = e.duration_ms || 0; resultText = e.result || ''; costUsd = e.total_cost_usd ?? null; continue; }
     const content = e.message?.content;
     if (!Array.isArray(content)) continue;
     if (e.type === 'assistant') {
-      const u = e.message.usage || {};
-      inputTokens += (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-      outputTokens += u.output_tokens || 0;
+      const id = e.message.id;
+      if (!id || !counted.has(id)) {
+        if (id) counted.add(id);
+        const u = e.message.usage || {};
+        inputTokens += (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+        outputTokens += u.output_tokens || 0;
+      }
       for (const c of content) {
         if (c?.type !== 'tool_use') continue;
         toolCalls++;
@@ -107,7 +117,7 @@ export function metricsOf(transcriptPath) {
       }
     }
   }
-  return { firsts, rework, toolCalls, inputTokens, outputTokens, minutes: Math.round(durationMs / 600) / 100, report: resultText };
+  return { firsts, rework, toolCalls, inputTokens, outputTokens, costUsd, minutes: Math.round(durationMs / 600) / 100, report: resultText };
 }
 
 function grade(appDir, cli) {
@@ -335,10 +345,10 @@ export function assertNoAncestorInstructions(out) {
 const yn = (v) => (v === true ? 'pass' : v === false ? 'FAIL' : '-');
 
 function printTable(results) {
-  console.log('build                 first: check type test | draft: check type test | final: check type test | rework calls  in(M) min');
+  console.log('build                 first: check type test | draft: check type test | final: check type test | rework calls  in(M) cost  min');
   for (const r of results) {
     const f = r.firsts || {};
-    console.log(`${r.name.padEnd(21)} ${yn(f.check).padEnd(5)} ${yn(f.typecheck).padEnd(4)} ${yn(f.test).padEnd(4)}  | ${yn(r.draft?.check).padEnd(5)} ${yn(r.draft?.typecheck).padEnd(4)} ${yn(r.draft?.test).padEnd(4)}  | ${yn(r.final?.check).padEnd(5)} ${yn(r.final?.typecheck).padEnd(4)} ${yn(r.final?.test).padEnd(4)}  | ${String(r.rework).padEnd(6)} ${String(r.toolCalls).padEnd(5)} ${(r.inputTokens / 1e6).toFixed(1).padEnd(5)} ${r.wallMinutes}`);
+    console.log(`${r.name.padEnd(21)} ${yn(f.check).padEnd(5)} ${yn(f.typecheck).padEnd(4)} ${yn(f.test).padEnd(4)}  | ${yn(r.draft?.check).padEnd(5)} ${yn(r.draft?.typecheck).padEnd(4)} ${yn(r.draft?.test).padEnd(4)}  | ${yn(r.final?.check).padEnd(5)} ${yn(r.final?.typecheck).padEnd(4)} ${yn(r.final?.test).padEnd(4)}  | ${String(r.rework).padEnd(6)} ${String(r.toolCalls).padEnd(5)} ${(r.inputTokens / 1e6).toFixed(1).padEnd(5)} ${(r.costUsd == null ? '-' : '$' + r.costUsd.toFixed(2)).padEnd(5)} ${r.wallMinutes}`);
   }
   const all3 = (o) => o && o.check === true && o.typecheck === true && o.test === true;
   console.log(`first attempt all three: ${results.filter((r) => all3(r.firsts)).length}/${results.length}; draft all three: ${results.filter((r) => all3(r.draft)).length}/${results.length}; final all three: ${results.filter((r) => all3(r.final)).length}/${results.length}`);
