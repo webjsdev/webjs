@@ -129,32 +129,19 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // Full-stack template-specific
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
-    assert.ok(existsSync(join(appDir, 'components', 'theme-toggle.ts')), 'theme-toggle written');
-
-    // Dark-mode wiring: the head init script (in layout) AND the theme-toggle
-    // must toggle the shadcn `.dark` class, not only the `data-theme`
-    // attribute. Without `.dark`, the theme (and the copied components/ui/*)
-    // render light tokens on the dark chrome (white buttons/cards, invisible text). Light
-    // mode hides this, so guard it here. See https://webjs.dev/docs/styling.
+    // #1697: the scaffold ships no theme toggle and no kit code. Dark mode
+    // follows the OS from the layout's pre-paint script, on the shadcn .dark
+    // class the kit's tokens switch on; without .dark the theme renders light
+    // tokens on dark chrome.
+    assert.ok(!existsSync(join(appDir, 'components', 'theme-toggle.ts')), 'no theme toggle');
+    assert.ok(!existsSync(join(appDir, 'components', 'ui')), 'no pre-installed kit components');
+    assert.ok(!existsSync(join(appDir, 'lib', 'utils', 'cn.ts')), 'no pre-written cn(): the first ui add writes it');
+    assert.ok(!existsSync(join(appDir, 'instrumentation.ts')), 'no optional instrumentation hook');
     const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
-    const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
-    assert.match(layoutSrc, /classList\.toggle\(['"]dark['"]/,
-      'layout head script must toggle the .dark class (shadcn dark-mode signal)');
-    assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
-      'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
-    assert.doesNotMatch(toggleSrc, /\sstyle="/, 'the toggle carries no inline style (its icons use SVG attributes)');
-    assert.doesNotMatch(toggleSrc, /document\.(getElementById|querySelector)/, 'and no document query');
-    // The head script only applies the theme before paint; following the OS is
-    // the toggle's job, on Lit's lifecycle (#1686).
-    assert.doesNotMatch(layoutSrc, /addEventListener/, 'the pre-paint script attaches no listener');
-    assert.match(toggleSrc, /connectedCallback\(\) \{[\s\S]*?matchMedia\('\(prefers-color-scheme: dark\)'\)[\s\S]*?addEventListener\('change'/, 'the toggle follows the OS from connectedCallback');
-    assert.match(toggleSrc, /disconnectedCallback\(\) \{[\s\S]*?removeEventListener\('change'/, 'and stops in disconnectedCallback');
-    // The toggle is the UI kit's own Button (the AGENTS.md rule), which also
-    // gives it the pointer cursor Tailwind v4's reset takes from a button.
-    assert.match(toggleSrc, /import \{ buttonClass \} from '#components\/ui\/button\.ts'/, 'the toggle uses the kit Button');
-    assert.match(toggleSrc, /class=\$\{buttonClass\(\{ variant: 'ghost', size: 'icon' \}\)\}/, 'as a ghost icon button');
-    assert.match(readFileSync(join(appDir, 'components', 'ui', 'button.ts'), 'utf8'), /\bcursor-pointer\b/, 'whose classes carry the pointer cursor');
-    assert.match(toggleSrc, /static properties = \{ theme: \{ state: true \} \};/, 'its theme is Lit reactive state');
+    assert.match(layoutSrc, /classList\.toggle\(['"]dark['"], m\.matches\)/,
+      'layout head script toggles the .dark class (shadcn dark-mode signal) from the OS');
+    assert.match(layoutSrc, /matchMedia\('\(prefers-color-scheme: dark\)'\)/, 'following prefers-color-scheme');
+    assert.doesNotMatch(layoutSrc, /theme-toggle|components\/ui/, 'the layout imports no component');
 
     // The shell wears the webjs.dev/ui theme (shadcn's neutral palette and
     // Geist), with a floating top navbar and a container that fills the
@@ -240,7 +227,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(pageSrc, /Edit app\/page\.ts/, 'the home points at the file to edit');
     assert.match(layoutSrc, /webjs\.dev\/docs/, 'the navbar links the docs');
     assert.match(layoutSrc, /github\.com\/webjsdev\/webjs/, 'the navbar links the source');
-    assert.doesNotMatch(layoutSrc + toggleSrc, /#modules\//, 'the shell imports no demo module');
+    assert.doesNotMatch(layoutSrc, /#modules\//, 'the shell imports no demo module');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
@@ -510,10 +497,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
 });
 
 // #1697: an agent's first move on a fresh app is one `cat` of the source it
-// will build on. Eval agents read 43 to 60 KB that way, went past the 50 KB
+// will build on. Eval agents read 26 to 58K characters that way, went past the
 // tool-output limit, and re-read file by file, after which the text sat in
-// context for the rest of the run. lib/utils/cn.ts alone was 24.7 KB of
-// mostly commentary on the class merger.
+// context for the rest of the run. Most of it was UI kit library code (cn(),
+// the Button, Input and Label, the theme toggle) no agent needed to read, so
+// the scaffold no longer ships it.
 test('scaffoldApp full-stack: the source an agent reads first fits one tool call', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'webjs-first-read-'));
   try {
@@ -532,9 +520,9 @@ test('scaffoldApp full-stack: the source an agent reads first fits one tool call
     for (const rel of ['app', 'db', 'modules', 'test/users', 'components', 'lib', 'drizzle.config.ts', 'instrumentation.ts']) walk(rel);
     const total = sizes.reduce((n, [, s]) => n + s, 0);
     const largest = sizes.sort((a, b) => b[1] - a[1]).slice(0, 3).map(([f, s]) => `${f} ${s}`).join(', ');
-    assert.ok(total < 45_000, `the first-read source totals ${total} bytes, over 45 KB (largest: ${largest})`);
-    const cn = statSync(join(appDir, 'lib', 'utils', 'cn.ts')).size;
-    assert.ok(cn < 14_000, `lib/utils/cn.ts is ${cn} bytes, so its commentary grew back`);
+    // The real tool-output limit is about 30K characters (round 9 builds
+    // overflowed at 31K and fit at 28K), so the read stays well under it.
+    assert.ok(total < 20_000, `the first-read source totals ${total} bytes, over 20 KB (largest: ${largest})`);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

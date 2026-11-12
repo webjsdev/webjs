@@ -343,7 +343,7 @@ verbatim.
    transforms, never a new template.
 2. **Scaffold is reference, not the final product.** The scaffold
    output ships a starting `app/page.ts`, an example
-   `User` Drizzle model, an example `theme-toggle` component. AI agents
+   `User` Drizzle model and an example `modules/users/` feature. AI agents
    asked to build a real app MUST replace those with the actual app.
    The post-scaffold success message in `lib/create.js` prints this
    rule verbatim.

@@ -31,16 +31,14 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const appDir = join(cwd, 'demo');
 
-    // Bootstrap for `webjs ui add`: the config + cn() helper + theme ship, so an
-    // app can add components on demand. No component ships until it is added.
+    // Bootstrap for `webjs ui add`: the config + theme ship, so an app can add
+    // components on demand. No kit code ships until it is added (#1697): the
+    // first add writes cn() as a registry dependency.
     assert.ok(await exists(join(appDir, 'components.json')), 'components.json should exist');
-    assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
+    assert.equal(existsSync(join(appDir, 'lib', 'utils', 'cn.ts')), false, 'lib/utils/cn.ts is not pre-written');
     assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
-    // The kit's Button, which the theme toggle uses, and nothing else.
-    // The kit components the shell uses (the toggle's Button, the home form's
-    // Input and Label), and nothing else.
-    assert.deepEqual(readdirSync(join(appDir, 'components', 'ui')).sort(), ['button.ts', 'input.ts', 'label.ts'], 'components/ui holds the kit components the shell uses');
+    assert.equal(existsSync(join(appDir, 'components', 'ui')), false, 'no kit component is pre-installed');
     // One example module, the modules/<feature>/ convention AGENTS.md names.
     assert.deepEqual(readdirSync(join(appDir, 'modules')), ['users'], 'modules/ ships the one example module');
 
@@ -149,10 +147,13 @@ test('api scaffold route imports resolve to real modules/ files', async () => {
   }
 });
 
-test('lib/utils/cn.ts ships the pure cn() helper; onBeforeCache is in lib/utils/dom.ts (#819)', async () => {
+test('the first ui add writes the pure cn() helper, and onBeforeCache in lib/utils/dom.ts (#819, #1697)', async () => {
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
+    // The scaffold pre-writes neither; the kit installs them as registry
+    // dependencies of the first component that needs them.
+    await add.parseAsync(['dialog', '--cwd', join(cwd, 'demo'), '--yes', '--no-deps'], { from: 'user' });
     const utils = await readFile(join(cwd, 'demo', 'lib', 'utils', 'cn.ts'), 'utf8');
     assert.match(utils, /export function cn/);
     assert.match(utils, /ClassValue/);
@@ -225,25 +226,19 @@ function tsFiles(dir) {
     e.isDirectory() ? tsFiles(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []);
 }
 
-test('webjs ui add --overwrite in a fresh app keeps the shell working', async () => {
-  // A fresh app's `add dialog` pulls the kit's card, input, button and badge
-  // into components/ui/, overwriting the Button the theme toggle uses. The
-  // shell imports only the kit's public helper (buttonClass), so it keeps
-  // resolving; nothing else in the shell imports from components/ui/.
+test('the scaffold shell imports no kit component, so any ui add leaves it working', async () => {
+  // #1697: the shell (the layout and the home page) uses plain Tailwind on the
+  // kit's tokens, so an `add --overwrite` of any component cannot break it.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const appDir = join(cwd, 'demo');
-    const shell = [...tsFiles(join(appDir, 'app')), ...tsFiles(join(appDir, 'components'))];
+    const shell = tsFiles(join(appDir, 'app'));
     await add.parseAsync(['dialog', 'card', 'input', 'button', 'badge', '--cwd', appDir, '--overwrite', '--yes', '--no-deps'], { from: 'user' });
     assert.ok(existsSync(join(appDir, 'components', 'ui', 'card.ts')), 'the kit card landed where add writes');
+    assert.ok(existsSync(join(appDir, 'lib', 'utils', 'cn.ts')), 'and cn() came with it');
     for (const file of shell) {
-      const src = await readFile(file, 'utf8');
-      for (const m of src.matchAll(/from '#components\/ui\/([\w-]+)\.ts'/g)) {
-        const helper = { button: 'buttonClass', input: 'inputClass', label: 'labelClass' }[m[1]];
-        assert.ok(helper, `${file} imports only the kit components the scaffold installs (got ${m[1]})`);
-        assert.match(await readFile(join(appDir, 'components', 'ui', `${m[1]}.ts`), 'utf8'), new RegExp(`export function ${helper}\\(`), `${m[1]}.ts still exports ${helper} after the overwrite`);
-      }
+      assert.doesNotMatch(await readFile(file, 'utf8'), /#components\/ui\//, `${file} imports no kit component`);
     }
   } finally {
     await rm(cwd, { recursive: true, force: true });
