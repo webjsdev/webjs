@@ -191,13 +191,23 @@ test('a lone bound form holding none of the submitted fields is refused, not pos
   await assert.rejects(
     () => submitForm(a.handle, '/lonely', { bookingId: '1' }),
     (err) => /no form on \/lonely .*has the submitted fields \(bookingId\)/.test(err.message)
-      && /fields: \(none\)/.test(err.message)
-      && /not rendered for this request/.test(err.message),
+      && /which has no fields/.test(err.message)
+      && /not rendered for\s+this request/.test(err.message),
   );
   const noFields = await submitForm(a.handle, '/lonely', {});
   assert.equal(noFields.status, 303, 'a field-less submit still posts the field-less form');
   const forced = await submitForm(a.handle, '/lonely', { bookingId: '1' }, { match: 'Log out' });
   assert.equal(forced.status, 303, 'and { match } posts it on purpose');
+});
+
+test('a lone bound form with fields of its own is posted even when the test sends other fields', async () => {
+  // A review of #1698: refusing whenever no submitted field matched also
+  // refused a test that posts a field the form lacks on purpose (a
+  // mass-assignment check) and fields the scan cannot see. Only a field-less
+  // form (a logout button) is refused now.
+  const a = await handler();
+  const res = await submitForm(a.handle, '/signup', { role: 'admin' });
+  assert.equal(res.status, 422, 'posted to the signup action, which refused the missing email');
 });
 
 test('an unbound form is reported as unbound, not silently submitted', async () => {
