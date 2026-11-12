@@ -51,8 +51,7 @@ const ATTACHMENT_ORIENTATIONS = {
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
 export function attachmentClass(opts: { size?: keyof typeof ATTACHMENT_SIZES; orientation?: keyof typeof ATTACHMENT_ORIENTATIONS } & { className?: string } = {}): string {
-  if (opts.className) return cn(attachmentClass({ ...opts, className: undefined }), opts.className);
-  return cn(ATTACHMENT_BASE, ATTACHMENT_SIZES[opts.size ?? 'default'], ATTACHMENT_ORIENTATIONS[opts.orientation ?? 'horizontal']);
+  return cn(ATTACHMENT_BASE, ATTACHMENT_SIZES[opts.size ?? 'default'], ATTACHMENT_ORIENTATIONS[opts.orientation ?? 'horizontal'], opts.className);
 }
 
 /**
@@ -73,8 +72,7 @@ const ATTACHMENT_MEDIA_VARIANTS = {
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
 export function attachmentMediaClass(opts: { variant?: keyof typeof ATTACHMENT_MEDIA_VARIANTS } & { className?: string } = {}): string {
-  if (opts.className) return cn(attachmentMediaClass({ ...opts, className: undefined }), opts.className);
-  return cn(ATTACHMENT_MEDIA_BASE, ATTACHMENT_MEDIA_VARIANTS[opts.variant ?? 'icon']);
+  return cn(ATTACHMENT_MEDIA_BASE, ATTACHMENT_MEDIA_VARIANTS[opts.variant ?? 'icon'], opts.className);
 }
 
 /**

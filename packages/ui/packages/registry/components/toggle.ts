@@ -93,8 +93,7 @@ export type ToggleVariant = keyof typeof VARIANTS;
 export type ToggleSize = keyof typeof SIZES;
 
 export function toggleClass(opts: { variant?: ToggleVariant; size?: ToggleSize } & { className?: string } = {}): string {
-  if (opts.className) return cn(toggleClass({ ...opts, className: undefined }), opts.className);
-  return cn(BASE, VARIANTS[opts.variant ?? 'default'], SIZES[opts.size ?? 'default']);
+  return cn(BASE, VARIANTS[opts.variant ?? 'default'], SIZES[opts.size ?? 'default'], opts.className);
 }
 
 /**

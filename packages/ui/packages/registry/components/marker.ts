@@ -41,8 +41,7 @@ export type MarkerVariant = keyof typeof VARIANTS;
 
 /** The marker row. Pair with `data-variant` set to the same variant. */
 export function markerClass(opts: { variant?: MarkerVariant } & { className?: string } = {}): string {
-  if (opts.className) return cn(markerClass({ ...opts, className: undefined }), opts.className);
-  return cn(BASE, VARIANTS[opts.variant ?? 'default']);
+  return cn(BASE, VARIANTS[opts.variant ?? 'default'], opts.className);
 }
 
 /**

@@ -165,11 +165,11 @@ export type SidebarMenuButtonSize = keyof typeof MENU_BUTTON_SIZES;
 
 /** A menu button (an <a> or a <button>); mark the current one `data-active="true"`. */
 export function sidebarMenuButtonClass(opts: { variant?: SidebarMenuButtonVariant; size?: SidebarMenuButtonSize } & { className?: string } = {}): string {
-  if (opts.className) return cn(sidebarMenuButtonClass({ ...opts, className: undefined }), opts.className);
   return cn(
     'cn-sidebar-menu-button peer/menu-button group/menu-button flex w-full items-center overflow-hidden outline-hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
     MENU_BUTTON_VARIANTS[opts.variant ?? 'default'],
     MENU_BUTTON_SIZES[opts.size ?? 'default'],
+    opts.className,
   );
 }
 

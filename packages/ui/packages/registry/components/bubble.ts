@@ -52,8 +52,7 @@ const BUBBLE_VARIANTS = {
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
 export function bubbleClass(opts: { variant?: keyof typeof BUBBLE_VARIANTS } & { className?: string } = {}): string {
-  if (opts.className) return cn(bubbleClass({ ...opts, className: undefined }), opts.className);
-  return cn(BUBBLE_BASE, BUBBLE_VARIANTS[opts.variant ?? 'default']);
+  return cn(BUBBLE_BASE, BUBBLE_VARIANTS[opts.variant ?? 'default'], opts.className);
 }
 
 /**
@@ -84,8 +83,7 @@ const BUBBLE_REACTIONS_ALIGNS = {
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
 export function bubbleReactionsClass(opts: { side?: keyof typeof BUBBLE_REACTIONS_SIDES; align?: keyof typeof BUBBLE_REACTIONS_ALIGNS } & { className?: string } = {}): string {
-  if (opts.className) return cn(bubbleReactionsClass({ ...opts, className: undefined }), opts.className);
-  return cn(BUBBLE_REACTIONS_BASE, BUBBLE_REACTIONS_SIDES[opts.side ?? 'bottom'], BUBBLE_REACTIONS_ALIGNS[opts.align ?? 'end']);
+  return cn(BUBBLE_REACTIONS_BASE, BUBBLE_REACTIONS_SIDES[opts.side ?? 'bottom'], BUBBLE_REACTIONS_ALIGNS[opts.align ?? 'end'], opts.className);
 }
 
 /**

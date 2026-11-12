@@ -47,8 +47,7 @@ export type ButtonGroupOrientation = keyof typeof ORIENTATIONS;
 
 /** The group container. Pair with `role="group"` and `data-orientation`. */
 export function buttonGroupClass(opts: { orientation?: ButtonGroupOrientation } & { className?: string } = {}): string {
-  if (opts.className) return cn(buttonGroupClass({ ...opts, className: undefined }), opts.className);
-  return cn(BASE, ORIENTATIONS[opts.orientation ?? 'horizontal']);
+  return cn(BASE, ORIENTATIONS[opts.orientation ?? 'horizontal'], opts.className);
 }
 
 /**

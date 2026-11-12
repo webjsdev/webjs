@@ -81,8 +81,8 @@ export interface ButtonClassOptions {
  * (`buttonClass()` is the primary call-to-action). `cn` de-duplicates, so you
  * can append your own layout classes: `class="${buttonClass()} w-full"`.
  */
-export function buttonClass(opts: ButtonClassOptions = {}): string {
+export function buttonClass(opts: ButtonClassOptions & { className?: string } = {}): string {
   const variant = opts.variant ?? 'default';
   const size = opts.size ?? 'default';
-  return cn(BASE, VARIANTS[variant], SIZES[size]);
+  return cn(BASE, VARIANTS[variant], SIZES[size], opts.className);
 }

@@ -70,8 +70,7 @@ const ITEM_SIZES = {
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
 export function itemClass(opts: { variant?: keyof typeof ITEM_VARIANTS; size?: keyof typeof ITEM_SIZES } & { className?: string } = {}): string {
-  if (opts.className) return cn(itemClass({ ...opts, className: undefined }), opts.className);
-  return cn(ITEM_BASE, ITEM_VARIANTS[opts.variant ?? 'default'], ITEM_SIZES[opts.size ?? 'default']);
+  return cn(ITEM_BASE, ITEM_VARIANTS[opts.variant ?? 'default'], ITEM_SIZES[opts.size ?? 'default'], opts.className);
 }
 
 /**
@@ -93,8 +92,7 @@ const ITEM_MEDIA_VARIANTS = {
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
 export function itemMediaClass(opts: { variant?: keyof typeof ITEM_MEDIA_VARIANTS } & { className?: string } = {}): string {
-  if (opts.className) return cn(itemMediaClass({ ...opts, className: undefined }), opts.className);
-  return cn(ITEM_MEDIA_BASE, ITEM_MEDIA_VARIANTS[opts.variant ?? 'default']);
+  return cn(ITEM_MEDIA_BASE, ITEM_MEDIA_VARIANTS[opts.variant ?? 'default'], opts.className);
 }
 
 /**

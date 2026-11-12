@@ -56,8 +56,7 @@ const INPUT_GROUP_ADDON_ALIGNS = {
 
 /** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
 export function inputGroupAddonClass(opts: { align?: keyof typeof INPUT_GROUP_ADDON_ALIGNS } & { className?: string } = {}): string {
-  if (opts.className) return cn(inputGroupAddonClass({ ...opts, className: undefined }), opts.className);
-  return cn(INPUT_GROUP_ADDON_BASE, INPUT_GROUP_ADDON_ALIGNS[opts.align ?? 'inline-start']);
+  return cn(INPUT_GROUP_ADDON_BASE, INPUT_GROUP_ADDON_ALIGNS[opts.align ?? 'inline-start'], opts.className);
 }
 
 /**
@@ -86,8 +85,7 @@ const INPUT_GROUP_BUTTON_SIZES = {
  * group's size wins a conflict.
  */
 export function inputGroupButtonClass(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES; variant?: ButtonVariant } & { className?: string } = {}): string {
-  if (opts.className) return cn(inputGroupButtonClass({ ...opts, className: undefined }), opts.className);
-  return cn(buttonClass({ variant: opts.variant ?? 'ghost' }), INPUT_GROUP_BUTTON_BASE, INPUT_GROUP_BUTTON_SIZES[opts.size ?? 'xs']);
+  return cn(buttonClass({ variant: opts.variant ?? 'ghost' }), INPUT_GROUP_BUTTON_BASE, INPUT_GROUP_BUTTON_SIZES[opts.size ?? 'xs'], opts.className);
 }
 
 /**

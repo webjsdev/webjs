@@ -102,8 +102,7 @@ export function tabsListVariant(variant: TabsListVariant | string | null | undef
 
 /** Optional helper exposing the tabs-list class for advanced overrides. */
 export function tabsListClass(opts: { variant?: TabsListVariant } & { className?: string } = {}): string {
-  if (opts.className) return cn(tabsListClass({ ...opts, className: undefined }), opts.className);
-  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[tabsListVariant(opts.variant)]);
+  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[tabsListVariant(opts.variant)], opts.className);
 }
 
 /**
