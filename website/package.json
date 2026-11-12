@@ -120,9 +120,9 @@
     }
   },
   "dependencies": {
-    "@webjsdev/cli": "^0.12.1",
+    "@webjsdev/cli": "^0.12.2",
     "@webjsdev/core": "^0.9.1",
-    "@webjsdev/server": "^0.10.1"
+    "@webjsdev/server": "^0.10.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
