@@ -44,6 +44,8 @@ webjs check --rules</code-block>
 
     <p>Run it from the <strong>app root</strong>, the directory holding <code>app/</code>. Every rule assumes one application, meaning one module graph, one custom-element registry, one runtime, so in a monorepo the workspace root has no application to check. Run there, the command refuses with a non-zero exit and names the member apps to run it in, rather than reporting cross-app collisions that no single runtime ever sees. <code>webjs check --rules</code> is documentation, so it works from anywhere.</p>
 
+    <p>The check covers every JavaScript and TypeScript file of the app and skips <code>node_modules</code>. It also skips any folder below the app root that has its own <code>package.json</code>, and everything under it. Such a folder is a separate package (an Expo or React Native app in <code>mobile/</code>, say), so its imports and its TypeScript are not checked as WebJs code. The <code>package.json</code> at the app root is never a boundary.</p>
+
     <h3>Workflow for AI agents</h3>
     <ol>
       <li>Read <code>AGENTS.md</code> for the project conventions and follow them by judgment.</li>

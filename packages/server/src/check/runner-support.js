@@ -7,7 +7,6 @@
  */
 import { readFile, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { walk } from '../fs-walk.js';
 import { buildModuleGraph, transitiveDeps } from '../module-graph.js';
 import { scanComponents } from '../component-scanner.js';
 import { buildRouteTable } from '../router.js';

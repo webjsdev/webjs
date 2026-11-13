@@ -86,7 +86,10 @@ export async function checkConventions(appDir) {
   // positives.
   /** @type {{ abs: string, rel: string, content: string, scan: string }[]} */
   const files = [];
-  for await (const abs of walk(appDir, (p) => /\.m?[jt]sx?$/.test(p))) {
+  // A sub-folder with its own package.json is another package (an Expo app
+  // in mobile/, say), not part of this app, so it is skipped like
+  // node_modules (#1700).
+  for await (const abs of walk(appDir, (p) => /\.m?[jt]sx?$/.test(p), { skipNestedPackages: true })) {
     const rel = relative(appDir, abs);
     let content;
     try {

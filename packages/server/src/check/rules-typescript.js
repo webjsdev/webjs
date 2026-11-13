@@ -139,7 +139,9 @@ export async function checkNoNonErasableTypescript(appDir, violations) {
     // decorator scan alone: no JavaScript runtime WebJs serves to runs
     // decorators either, so `@customElement` in a .js component is the same
     // load-time SyntaxError.
-    for await (const abs of walk(appDir, (p) => /\.m?[jt]s$/.test(p))) {
+    // A nested package (its own package.json) is skipped, the same boundary
+    // the runner's file walk draws (#1700).
+    for await (const abs of walk(appDir, (p) => /\.m?[jt]s$/.test(p), { skipNestedPackages: true })) {
       // Skip anything inside node_modules or common build / cache dirs.
       const relPath = relative(appDir, abs);
       if (
