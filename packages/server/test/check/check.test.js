@@ -1770,3 +1770,52 @@ test('no-next-runtime-guard: flags process.env.NEXT_RUNTIME', async () => {
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+test('nested package: every check walk skips a sub-folder with its own package.json (#1700)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await writeFile(join(appDir, 'package.json'), '{"name":"api","type":"module"}');
+    // The app's own enum (the TS walk) and the nested package's enum, JSX and
+    // React import (the TS walk and the runner's file walk).
+    await writeFileEnsureDir(join(appDir, 'lib', 'status.ts'), `export enum Status { On = 'on' }\n`);
+    await writeFileEnsureDir(join(appDir, 'mobile', 'src', 'theme.ts'), `export enum Mode { Light, Dark }\n`);
+    await writeFileEnsureDir(
+      join(appDir, 'mobile', 'src', 'ui.tsx'),
+      `import { useState } from 'react';\nexport const Button = () => <button className="b" onClick={() => useState(0)} />;\n`,
+    );
+    const filesOf = (vs) => [...new Set(vs.map((v) => v.file))].sort();
+
+    await writeFile(join(appDir, 'mobile', 'package.json'), '{"name":"mobile"}');
+    const skipped = await checkConventions(appDir);
+    assert.deepEqual(filesOf(skipped), ['lib/status.ts'], 'only the app itself is reported');
+
+    // Counterfactual: without the nested package.json, mobile/ is app code.
+    await rm(join(appDir, 'mobile', 'package.json'));
+    const flagged = filesOf(await checkConventions(appDir));
+    assert.ok(flagged.includes('mobile/src/theme.ts'), 'TS walk covers mobile/ again');
+    assert.ok(flagged.includes('mobile/src/ui.tsx'), 'file walk covers mobile/ again');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('fs-walk: skipNestedPackages is opt-in, and the root package.json is never a boundary', async () => {
+  const { walk } = await import('../../src/fs-walk.js');
+  const dir = await makeTempApp();
+  try {
+    await writeFile(join(dir, 'package.json'), '{}');
+    await writeFileEnsureDir(join(dir, 'lib', 'a.js'), '');
+    await writeFileEnsureDir(join(dir, 'mobile', 'package.json'), '{}');
+    await writeFileEnsureDir(join(dir, 'mobile', 'src', 'b.js'), '');
+    const list = async (opts) => {
+      const out = [];
+      for await (const f of walk(dir, (p) => p.endsWith('.js'), opts)) out.push(f.slice(dir.length + 1));
+      return out.sort();
+    };
+    // Default (the router, action and component scans): unchanged.
+    assert.deepEqual(await list(), ['lib/a.js', 'mobile/src/b.js']);
+    assert.deepEqual(await list({ skipNestedPackages: true }), ['lib/a.js']);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

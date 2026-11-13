@@ -85,6 +85,28 @@ test('check: flags every import form and names the fix', async () => {
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test('check: a nested package (its own package.json) is skipped, the app is still checked', async () => {
+  // An Expo / React Native app in mobile/ with its own package.json is a
+  // separate package, so its React imports are not this app's (#1700).
+  const files = {
+    'app/page.ts': `export default () => 'home';\n`,
+    'components/c.ts': `import { LitElement } from 'lit';\nexport { LitElement };\n`,
+    'mobile/src/components/ui.tsx': `import { useState } from 'react';\nimport { View } from 'react-native';\nexport { useState, View };\n`,
+    'mobile/App.tsx': `import React from 'react';\nexport default React;\n`,
+  };
+  const rule = (v) => v.filter((x) => x.rule === 'no-foreign-framework-import').map((x) => x.file).sort();
+  const nested = await app({ ...files, 'mobile/package.json': '{"name":"mobile","dependencies":{"react":"19.0.0"}}' });
+  try {
+    assert.deepEqual(rule(await checkConventions(nested)), ['components/c.ts'], 'mobile/ skipped, components/ still checked');
+  } finally { await rm(nested, { recursive: true, force: true }); }
+  // Counterfactual: the same files with no mobile/package.json are part of
+  // the app, so the React imports there still fail.
+  const flat = await app(files);
+  try {
+    assert.deepEqual(rule(await checkConventions(flat)), ['components/c.ts', 'mobile/App.tsx', 'mobile/src/components/ui.tsx']);
+  } finally { await rm(flat, { recursive: true, force: true }); }
+});
+
 test('analysis: a foreign import is refused before render (dev 500 naming the fix)', async () => {
   const dir = await app({
     'app/page.ts': `import { html } from 'lit';\nexport default () => html\`<p>x</p>\`;\n`,
